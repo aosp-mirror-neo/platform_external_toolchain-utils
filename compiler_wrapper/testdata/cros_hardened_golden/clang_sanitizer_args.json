@@ -1,20 +1,71 @@
 [
   {
+    "cmds": [
+      {
+        "cmd": {
+          "args": [
+            "../../usr/bin/clang",
+            "--sysroot=/usr/x86_64-cros-linux-gnu",
+            "-Qunused-arguments",
+            "-Werror=poison-system-directories",
+            "-Wno-compound-token-split-by-macro",
+            "-Wno-deprecated-builtins",
+            "-Wno-deprecated-declarations",
+            "-Wno-enum-constexpr-conversion",
+            "-Wno-error=implicit-function-declaration",
+            "-Wno-error=implicit-int",
+            "-Wno-final-dtor-non-final-class",
+            "-Wno-single-bit-bitfield-constant-conversion",
+            "-Wno-tautological-constant-compare",
+            "-Wno-tautological-unsigned-enum-zero-compare",
+            "-Wno-unknown-warning-option",
+            "-fdebug-default-version=5",
+            "-Wno-int-conversion",
+            "-Wno-incompatible-function-pointer-types",
+            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
+            "--unwindlib=libunwind",
+            "-Wno-section",
+            "-fno-addrsig",
+            "-ftrivial-auto-var-init=zero",
+            "-fcommon",
+            "-fstack-protector-strong",
+            "-fno-omit-frame-pointer",
+            "-static-libgcc",
+            "--prefix=../../bin/x86_64-cros-linux-gnu-",
+            "-fsanitize=kernel-address",
+            "main.cc",
+            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
+            "-mno-movbe",
+            "-B../../bin",
+            "-target",
+            "x86_64-cros-linux-gnu"
+          ],
+          "env_updates": [
+            "CCACHE_DIR=/var/cache/distfiles/ccache",
+            "CCACHE_UMASK=002",
+            "CCACHE_CPP2=yes"
+          ],
+          "path": "/usr/bin/ccache"
+        }
+      }
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "-fsanitize=kernel-address",
           "-Wl,--no-undefined",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -35,12 +86,11 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
             "-fno-omit-frame-pointer",
@@ -49,13 +99,6 @@
             "-fsanitize=kernel-address",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -65,27 +108,27 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "-fsanitize=kernel-address",
           "-Wl,-z,defs",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -106,12 +149,11 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
             "-fno-omit-frame-pointer",
@@ -120,13 +162,6 @@
             "-fsanitize=kernel-address",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -136,27 +171,27 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "-fsanitize=kernel-address",
           "-D_FORTIFY_SOURCE=1",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -177,12 +212,11 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
             "-fno-omit-frame-pointer",
@@ -191,13 +225,6 @@
             "-fsanitize=kernel-address",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -207,97 +234,27 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "-fsanitize=kernel-address",
           "-D_FORTIFY_SOURCE=2",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
-    "cmds": [
-      {
-        "cmd": {
-          "path": "/usr/bin/ccache",
-          "args": [
-            "../../usr/bin/clang",
-            "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Qunused-arguments",
-            "-Werror=poison-system-directories",
-            "-Wno-compound-token-split-by-macro",
-            "-Wno-deprecated-builtins",
-            "-Wno-deprecated-declarations",
-            "-Wno-enum-constexpr-conversion",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-final-dtor-non-final-class",
-            "-Wno-single-bit-bitfield-constant-conversion",
-            "-Wno-tautological-constant-compare",
-            "-Wno-tautological-unsigned-enum-zero-compare",
-            "-Wno-unknown-warning-option",
-            "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-            "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
-            "-fuse-ld=lld",
-            "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
-            "-fcommon",
-            "-fstack-protector-strong",
-            "-fno-omit-frame-pointer",
-            "-static-libgcc",
-            "--prefix=../../bin/x86_64-cros-linux-gnu-",
-            "-fsanitize=kernel-address",
-            "main.cc",
-            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
-            "-mno-movbe",
-            "-B../../bin",
-            "-target",
-            "x86_64-cros-linux-gnu"
-          ],
-          "env_updates": [
-            "CCACHE_DIR=/var/cache/distfiles/ccache",
-            "CCACHE_UMASK=002",
-            "CCACHE_CPP2=yes"
-          ]
-        }
-      }
-    ]
+    }
   },
   {
-    "wd": "/tmp/stable",
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
-        "args": [
-          "-fsanitize=fuzzer",
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -318,12 +275,11 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
             "-fno-omit-frame-pointer",
@@ -332,13 +288,6 @@
             "-fsanitize=fuzzer",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -348,27 +297,26 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
-          "-fsanitize=address",
-          "-fprofile-instr-generate",
+          "-fsanitize=fuzzer",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -389,12 +337,11 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
             "-fno-omit-frame-pointer",
@@ -404,13 +351,6 @@
             "-fprofile-instr-generate",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -420,26 +360,27 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "-fsanitize=address",
+          "-fprofile-instr-generate",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -460,12 +401,11 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
             "-fno-omit-frame-pointer",
@@ -474,13 +414,6 @@
             "-fsanitize=address",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -490,30 +423,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
-          "-fprofile-instr-generate",
+          "-fsanitize=address",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -531,27 +463,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "-fprofile-instr-generate",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -561,9 +486,20 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "-fprofile-instr-generate",
+          "main.cc"
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
+      }
+    }
   }
 ]

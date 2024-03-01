@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests when updating a tryjob's status."""
 
-
+import contextlib
 import json
 import os
 import subprocess
 import unittest
-import unittest.mock as mock
+from unittest import mock
 
-from test_helpers import CreateTemporaryJsonFile
-from test_helpers import WritePrettyJsonFile
+import test_helpers
 import update_tryjob_status
-from update_tryjob_status import CustomScriptStatus
-from update_tryjob_status import TryjobStatus
 
 
 class UpdateTryjobStatusTest(unittest.TestCase):
@@ -85,23 +81,21 @@ class UpdateTryjobStatusTest(unittest.TestCase):
     def testInvalidExitCodeByCustomScript(
         self, mock_basename, mock_rename_file, mock_exec_custom_script
     ):
-
         error_message_by_custom_script = "Failed to parse .JSON file"
 
-        # Simulate the behavior of 'subprocess.Popen()' when executing the custom
-        # script.
+        # Simulate the behavior of 'subprocess.Popen()' when executing the
+        # custom script.
         #
         # `Popen.communicate()` returns a tuple of `stdout` and `stderr`.
-        mock_exec_custom_script.return_value.communicate.return_value = (
+        popen_result = mock.MagicMock()
+        popen_result.communicate.return_value = (
             None,
             error_message_by_custom_script,
         )
-
-        # Exit code of 1 is not in the mapping, so an exception will be raised.
         custom_script_exit_code = 1
-
-        mock_exec_custom_script.return_value.returncode = (
-            custom_script_exit_code
+        popen_result.returncode = custom_script_exit_code
+        mock_exec_custom_script.return_value = contextlib.nullcontext(
+            popen_result
         )
 
         tryjob_contents = {
@@ -126,9 +120,9 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             % (
                 custom_script_path,
                 custom_script_exit_code,
-                CustomScriptStatus.GOOD.value,
-                CustomScriptStatus.BAD.value,
-                CustomScriptStatus.SKIP.value,
+                update_tryjob_status.CustomScriptStatus.GOOD.value,
+                update_tryjob_status.CustomScriptStatus.BAD.value,
+                update_tryjob_status.CustomScriptStatus.SKIP.value,
                 name_json_file,
                 error_message_by_custom_script,
             )
@@ -159,18 +153,20 @@ class UpdateTryjobStatusTest(unittest.TestCase):
     def testValidExitCodeByCustomScript(
         self, mock_basename, mock_rename_file, mock_exec_custom_script
     ):
-
-        # Simulate the behavior of 'subprocess.Popen()' when executing the custom
-        # script.
+        # Simulate the behavior of 'subprocess.Popen()' when executing the
+        # custom script.
         #
         # `Popen.communicate()` returns a tuple of `stdout` and `stderr`.
-        mock_exec_custom_script.return_value.communicate.return_value = (
+        popen_result = mock.MagicMock()
+        popen_result.communicate.return_value = (
             None,
             None,
         )
-
-        mock_exec_custom_script.return_value.returncode = (
-            CustomScriptStatus.GOOD.value
+        popen_result.returncode = (
+            update_tryjob_status.CustomScriptStatus.GOOD.value
+        )
+        mock_exec_custom_script.return_value = contextlib.nullcontext(
+            popen_result
         )
 
         tryjob_contents = {
@@ -187,7 +183,7 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             update_tryjob_status.GetCustomScriptResult(
                 custom_script_path, status_file_path, tryjob_contents
             ),
-            TryjobStatus.GOOD.value,
+            update_tryjob_status.TryjobStatus.GOOD.value,
         )
 
         mock_exec_custom_script.assert_called_once()
@@ -199,22 +195,22 @@ class UpdateTryjobStatusTest(unittest.TestCase):
     def testNoTryjobsInStatusFileWhenUpdatingTryjobStatus(self):
         bisect_test_contents = {"start": 369410, "end": 369420, "jobs": []}
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369412
 
             custom_script = None
 
-            # Verify the exception is raised when the `status_file` does not have any
-            # `jobs` (empty).
+            # Verify the exception is raised when the `status_file` does not
+            # have any `jobs` (empty).
             with self.assertRaises(SystemExit) as err:
                 update_tryjob_status.UpdateTryjobStatus(
                     revision_to_update,
-                    TryjobStatus.GOOD,
+                    update_tryjob_status.TryjobStatus.GOOD,
                     temp_json_file,
                     custom_script,
                 )
@@ -223,37 +219,36 @@ class UpdateTryjobStatusTest(unittest.TestCase):
                 str(err.exception), "No tryjobs in %s" % temp_json_file
             )
 
-    # Simulate the behavior of `FindTryjobIndex()` when the tryjob does not exist
-    # in the status file.
+    # Simulate the behavior of `FindTryjobIndex()` when the tryjob does not
+    # exist in the status file.
     @mock.patch.object(
         update_tryjob_status, "FindTryjobIndex", return_value=None
     )
     def testNotFindTryjobIndexWhenUpdatingTryjobStatus(
         self, mock_find_tryjob_index
     ):
-
         bisect_test_contents = {
             "start": 369410,
             "end": 369420,
             "jobs": [{"rev": 369411, "status": "pending"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369416
 
             custom_script = None
 
-            # Verify the exception is raised when the `status_file` does not have any
-            # `jobs` (empty).
+            # Verify the exception is raised when the `status_file` does not
+            # have any `jobs` (empty).
             with self.assertRaises(ValueError) as err:
                 update_tryjob_status.UpdateTryjobStatus(
                     revision_to_update,
-                    TryjobStatus.SKIP,
+                    update_tryjob_status.TryjobStatus.SKIP,
                     temp_json_file,
                     custom_script,
                 )
@@ -276,33 +271,35 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             "jobs": [{"rev": 369411, "status": "pending"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369411
 
-            # Index of the tryjob that is going to have its 'status' value updated.
+            # Index of the tryjob that is going to have its 'status' value
+            # updated.
             tryjob_index = 0
 
             custom_script = None
 
             update_tryjob_status.UpdateTryjobStatus(
                 revision_to_update,
-                TryjobStatus.GOOD,
+                update_tryjob_status.TryjobStatus.GOOD,
                 temp_json_file,
                 custom_script,
             )
 
-            # Verify that the tryjob's 'status' has been updated in the status file.
-            with open(temp_json_file) as status_file:
+            # Verify that the tryjob's 'status' has been updated in the status
+            # file.
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 self.assertEqual(
                     bisect_contents["jobs"][tryjob_index]["status"],
-                    TryjobStatus.GOOD.value,
+                    update_tryjob_status.TryjobStatus.GOOD.value,
                 )
 
         mock_find_tryjob_index.assert_called_once()
@@ -317,33 +314,35 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             "jobs": [{"rev": 369411, "status": "pending"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369411
 
-            # Index of the tryjob that is going to have its 'status' value updated.
+            # Index of the tryjob that is going to have its 'status' value
+            # updated.
             tryjob_index = 0
 
             custom_script = None
 
             update_tryjob_status.UpdateTryjobStatus(
                 revision_to_update,
-                TryjobStatus.BAD,
+                update_tryjob_status.TryjobStatus.BAD,
                 temp_json_file,
                 custom_script,
             )
 
-            # Verify that the tryjob's 'status' has been updated in the status file.
-            with open(temp_json_file) as status_file:
+            # Verify that the tryjob's 'status' has been updated in the status
+            # file.
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 self.assertEqual(
                     bisect_contents["jobs"][tryjob_index]["status"],
-                    TryjobStatus.BAD.value,
+                    update_tryjob_status.TryjobStatus.BAD.value,
                 )
 
         mock_find_tryjob_index.assert_called_once()
@@ -360,15 +359,16 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             "jobs": [{"rev": 369411, "status": "skip"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369411
 
-            # Index of the tryjob that is going to have its 'status' value updated.
+            # Index of the tryjob that is going to have its 'status' value
+            # updated.
             tryjob_index = 0
 
             custom_script = None
@@ -380,8 +380,9 @@ class UpdateTryjobStatusTest(unittest.TestCase):
                 custom_script,
             )
 
-            # Verify that the tryjob's 'status' has been updated in the status file.
-            with open(temp_json_file) as status_file:
+            # Verify that the tryjob's 'status' has been updated in the status
+            # file.
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 self.assertEqual(
@@ -406,15 +407,16 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             ],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369411
 
-            # Index of the tryjob that is going to have its 'status' value updated.
+            # Index of the tryjob that is going to have its 'status' value
+            # updated.
             tryjob_index = 0
 
             custom_script = None
@@ -426,8 +428,9 @@ class UpdateTryjobStatusTest(unittest.TestCase):
                 custom_script,
             )
 
-            # Verify that the tryjob's 'status' has been updated in the status file.
-            with open(temp_json_file) as status_file:
+            # Verify that the tryjob's 'status' has been updated in the status
+            # file.
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 self.assertEqual(
@@ -441,7 +444,7 @@ class UpdateTryjobStatusTest(unittest.TestCase):
     @mock.patch.object(
         update_tryjob_status,
         "GetCustomScriptResult",
-        return_value=TryjobStatus.SKIP.value,
+        return_value=update_tryjob_status.TryjobStatus.SKIP.value,
     )
     def testUpdatedTryjobStatusToAutoPassedWithCustomScript(
         self, mock_get_custom_script_result, mock_find_tryjob_index
@@ -454,15 +457,16 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             ],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369411
 
-            # Index of the tryjob that is going to have its 'status' value updated.
+            # Index of the tryjob that is going to have its 'status' value
+            # updated.
             tryjob_index = 0
 
             custom_script_path = "/abs/path/to/custom_script.py"
@@ -474,8 +478,9 @@ class UpdateTryjobStatusTest(unittest.TestCase):
                 custom_script_path,
             )
 
-            # Verify that the tryjob's 'status' has been updated in the status file.
-            with open(temp_json_file) as status_file:
+            # Verify that the tryjob's 'status' has been updated in the status
+            # file.
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 self.assertEqual(
@@ -493,7 +498,6 @@ class UpdateTryjobStatusTest(unittest.TestCase):
     def testSetStatusDoesNotExistWhenUpdatingTryjobStatus(
         self, mock_find_tryjob_index
     ):
-
         bisect_test_contents = {
             "start": 369410,
             "end": 369420,
@@ -502,11 +506,11 @@ class UpdateTryjobStatusTest(unittest.TestCase):
             ],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
-        with CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
-                WritePrettyJsonFile(bisect_test_contents, f)
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
+        with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
+                test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_update = 369411
 

@@ -1,19 +1,8 @@
 [
   {
-    "wd": "/tmp/stable",
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
-        "args": [
-          "-march=goldmont",
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -30,26 +19,26 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
-          "-march=goldmont-plus",
+          "-march=goldmont",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -66,26 +55,26 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
-          "-march=skylake",
+          "-march=goldmont-plus",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -102,9 +91,20 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "-march=skylake",
+          "main.cc"
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
+      }
+    }
   }
 ]

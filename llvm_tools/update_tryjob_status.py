@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Updates the status of a tryjob."""
-
 
 import argparse
 import enum
@@ -15,7 +13,7 @@ import subprocess
 import sys
 
 import chroot
-from test_helpers import CreateTemporaryJsonFile
+import test_helpers
 
 
 class TryjobStatus(enum.Enum):
@@ -70,8 +68,8 @@ def GetCommandLineArgs():
     parser.add_argument(
         "--status_file",
         required=True,
-        help="The absolute path to the JSON file that contains the tryjobs used "
-        "for bisecting LLVM.",
+        help="The absolute path to the JSON file that contains the tryjobs "
+        "used for bisecting LLVM.",
     )
 
     # Add argument that sets the 'status' field to that value.
@@ -135,19 +133,19 @@ def FindTryjobIndex(revision, tryjobs_list):
     'revision.'
 
     Args:
-      revision: The revision to search for in the tryjobs.
-      tryjobs_list: A list of tryjob dictionaries of the format:
+        revision: The revision to search for in the tryjobs.
+        tryjobs_list: A list of tryjob dictionaries of the format:
         {
-          'rev' : [REVISION],
-          'url' : [URL_OF_CL],
-          'cl' : [CL_NUMBER],
-          'link' : [TRYJOB_LINK],
-          'status' : [TRYJOB_STATUS],
-          'buildbucket_id': [BUILDBUCKET_ID]
+            'rev' : [REVISION],
+            'url' : [URL_OF_CL],
+            'cl' : [CL_NUMBER],
+            'link' : [TRYJOB_LINK],
+            'status' : [TRYJOB_STATUS],
+            'buildbucket_id': [BUILDBUCKET_ID]
         }
 
     Returns:
-      The index within the list or None to indicate it was not found.
+        The index within the list or None to indicate it was not found.
     """
 
     for cur_index, cur_tryjob_dict in enumerate(tryjobs_list):
@@ -161,24 +159,24 @@ def GetCustomScriptResult(custom_script, status_file, tryjob_contents):
     """Returns the conversion of the exit code of the custom script.
 
     Args:
-      custom_script: Absolute path to the script to be executed.
-      status_file: Absolute path to the file that contains information about the
-      bisection of LLVM.
-      tryjob_contents: A dictionary of the contents of the tryjob (e.g. 'status',
-      'url', 'link', 'buildbucket_id', etc.).
+        custom_script: Absolute path to the script to be executed.
+        status_file: Absolute path to the file that contains information about
+        the bisection of LLVM.
+        tryjob_contents: A dictionary of the contents of the tryjob (e.g.
+        'status', 'url', 'link', 'buildbucket_id', etc.).
 
     Returns:
-      The exit code conversion to either return 'good', 'bad', or 'skip'.
+        The exit code conversion to either return 'good', 'bad', or 'skip'.
 
     Raises:
-      ValueError: The custom script failed to provide the correct exit code.
+        ValueError: The custom script failed to provide the correct exit code.
     """
 
     # Create a temporary file to write the contents of the tryjob at index
     # 'tryjob_index' (the temporary file path will be passed into the custom
     # script as a command line argument).
-    with CreateTemporaryJsonFile() as temp_json_file:
-        with open(temp_json_file, "w") as tryjob_file:
+    with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
+        with open(temp_json_file, "w", encoding="utf-8") as tryjob_file:
             json.dump(
                 tryjob_contents, tryjob_file, indent=4, separators=(",", ": ")
             )
@@ -186,10 +184,10 @@ def GetCustomScriptResult(custom_script, status_file, tryjob_contents):
         exec_script_cmd = [custom_script, temp_json_file]
 
         # Execute the custom script to get the exit code.
-        exec_script_cmd_obj = subprocess.Popen(
+        with subprocess.Popen(
             exec_script_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-        _, stderr = exec_script_cmd_obj.communicate()
+        ) as exec_script_cmd_obj:
+            _, stderr = exec_script_cmd_obj.communicate()
 
         # Invalid exit code by the custom script.
         if (
@@ -226,13 +224,13 @@ def UpdateTryjobStatus(revision, set_status, status_file, custom_script):
     """Updates a tryjob's 'status' field based off of 'set_status'.
 
     Args:
-      revision: The revision associated with the tryjob.
-      set_status: What to update the 'status' field to.
-        Ex: TryjobStatus.Good, TryjobStatus.BAD, TryjobStatus.PENDING, or
-        TryjobStatus.
-      status_file: The .JSON file that contains the tryjobs.
-      custom_script: The absolute path to a script that will be executed which
-      will determine the 'status' value of the tryjob.
+        revision: The revision associated with the tryjob.
+        set_status: What to update the 'status' field to.
+            Ex: TryjobStatus.Good, TryjobStatus.BAD, TryjobStatus.PENDING, or
+            TryjobStatus.
+        status_file: The .JSON file that contains the tryjobs.
+        custom_script: The absolute path to a script that will be executed
+        which will determine the 'status' value of the tryjob.
     """
 
     # Format of 'bisect_contents':
@@ -246,7 +244,7 @@ def UpdateTryjobStatus(revision, set_status, status_file, custom_script):
     #       {[TRYJOB_INFORMATION]}
     #   ]
     # }
-    with open(status_file) as tryjobs:
+    with open(status_file, encoding="utf-8") as tryjobs:
         bisect_contents = json.load(tryjobs)
 
     if not bisect_contents["jobs"]:
@@ -284,7 +282,7 @@ def UpdateTryjobStatus(revision, set_status, status_file, custom_script):
             'Invalid "set_status" option provided: %s' % set_status
         )
 
-    with open(status_file, "w") as update_tryjobs:
+    with open(status_file, "w", encoding="utf-8") as update_tryjobs:
         json.dump(
             bisect_contents, update_tryjobs, indent=4, separators=(",", ": ")
         )

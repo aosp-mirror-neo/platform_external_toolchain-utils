@@ -5,17 +5,18 @@
 
 """Modifies a tryjob based off of arguments."""
 
-
 import argparse
 import enum
 import json
 import os
 from pathlib import Path
 import sys
+from typing import Dict, Iterable, List, Union
 
 import chroot
 import failure_modes
 import get_llvm_hash
+import git
 import update_chromeos_llvm_hash
 import update_packages_and_run_tests
 import update_tryjob_status
@@ -29,7 +30,7 @@ class ModifyTryjob(enum.Enum):
     ADD = "add"
 
 
-def GetCommandLineArgs():
+def GetCommandLineArgs() -> argparse.Namespace:
     """Parses the command line for the command line arguments."""
 
     # Default path to the chroot if a path is not specified.
@@ -97,14 +98,6 @@ def GetCommandLineArgs():
         help="the path to the chroot (default: %(default)s)",
     )
 
-    # Add argument for whether to display command contents to `stdout`.
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="display contents of a command to the terminal "
-        "(default: %(default)s)",
-    )
-
     args_output = parser.parse_args()
 
     if not os.path.isfile(
@@ -132,12 +125,12 @@ def GetCommandLineArgs():
 
 
 def GetCLAfterUpdatingPackages(
-    packages,
-    git_hash,
-    svn_version,
-    chroot_path,
-    svn_option,
-):
+    packages: Iterable[str],
+    git_hash: str,
+    svn_version: int,
+    chroot_path: Union[Path, str],
+    svn_option: Union[int, str],
+) -> git.CommitContents:
     """Updates the packages' LLVM_NEXT."""
 
     change_list = update_chromeos_llvm_hash.UpdatePackages(
@@ -149,9 +142,12 @@ def GetCLAfterUpdatingPackages(
         chroot_path=Path(chroot_path),
         mode=failure_modes.FailureModes.DISABLE_PATCHES,
         git_hash_source=svn_option,
-        extra_commit_msg=None,
+        extra_commit_msg_lines=None,
     )
 
+    # We are calling UpdatePackages with upload_changes=True, in
+    # which case it should always return a git.CommitContents value.
+    assert change_list is not None
     print("\nSuccessfully updated packages to %d" % svn_version)
     print("Gerrit URL: %s" % change_list.url)
     print("Change list number: %d" % change_list.cl_number)
@@ -160,8 +156,14 @@ def GetCLAfterUpdatingPackages(
 
 
 def CreateNewTryjobEntryForBisection(
-    cl, extra_cls, options, builder, chroot_path, cl_url, revision
-):
+    cl: int,
+    extra_cls: List[int],
+    options: List[str],
+    builder: str,
+    chroot_path: Union[Path, str],
+    cl_url: str,
+    revision,
+) -> Dict:
     """Submits a tryjob and adds additional information."""
 
     # Get the tryjob results after submitting the tryjob.
@@ -193,19 +195,16 @@ def CreateNewTryjobEntryForBisection(
 
 
 def AddTryjob(
-    packages,
-    git_hash,
-    revision,
-    chroot_path,
-    extra_cls,
-    options,
-    builder,
-    verbose,
-    svn_option,
+    packages: Iterable[str],
+    git_hash: str,
+    revision: int,
+    chroot_path: Union[Path, str],
+    extra_cls: List[int],
+    options: List[str],
+    builder: str,
+    svn_option: Union[int, str],
 ):
     """Submits a tryjob."""
-
-    update_chromeos_llvm_hash.verbose = verbose
 
     change_list = GetCLAfterUpdatingPackages(
         packages,
@@ -229,15 +228,14 @@ def AddTryjob(
 
 
 def PerformTryjobModification(
-    revision,
-    modify_tryjob,
-    status_file,
-    extra_cls,
-    options,
-    builder,
-    chroot_path,
-    verbose,
-):
+    revision: int,
+    modify_tryjob: ModifyTryjob,
+    status_file: Union[Path, str],
+    extra_cls: List[int],
+    options: List[str],
+    builder: str,
+    chroot_path: Union[Path, str],
+) -> None:
     """Removes, relaunches, or adds a tryjob.
 
     Args:
@@ -250,8 +248,6 @@ def PerformTryjobModification(
         builder: The builder to use for 'cros tryjob'.
         chroot_path: The absolute path to the chroot (used by 'cros tryjob'
           when relaunching a tryjob).
-        verbose: Determines whether to print the contents of a command to
-        `stdout`.
     """
 
     # Format of 'bisect_contents':
@@ -321,7 +317,6 @@ def PerformTryjobModification(
         # Make sure the revision is within the bounds of the start and end of
         # the bisection.
         elif bisect_contents["start"] < revision < bisect_contents["end"]:
-
             (
                 git_hash,
                 revision,
@@ -335,7 +330,6 @@ def PerformTryjobModification(
                 extra_cls,
                 options,
                 builder,
-                verbose,
                 revision,
             )
 
@@ -355,7 +349,7 @@ def PerformTryjobModification(
         )
 
 
-def main():
+def main() -> None:
     """Removes, relaunches, or adds a tryjob."""
 
     chroot.VerifyOutsideChroot()
@@ -372,7 +366,6 @@ def main():
         args_output.options,
         args_output.builder,
         args_output.chroot_path,
-        args_output.verbose,
     )
 
 

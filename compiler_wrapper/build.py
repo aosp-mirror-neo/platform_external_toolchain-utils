@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Build script that builds a binary from a bundle."""
-
 
 import argparse
 import os.path
@@ -25,11 +23,6 @@ def parse_args():
         "--use_ccache", required=True, choices=["true", "false"]
     )
     parser.add_argument(
-        "--version_suffix",
-        help="A string appended to the computed version of the wrapper. This "
-        "is appeneded directly without any delimiter.",
-    )
-    parser.add_argument(
         "--use_llvm_next", required=True, choices=["true", "false"]
     )
     parser.add_argument("--output_file", required=True, type=str)
@@ -38,6 +31,24 @@ def parse_args():
         choices=["true", "false"],
         help="If true, produce a static wrapper. Autodetects a good value if "
         "unspecified.",
+    )
+
+    version_args = parser.add_mutually_exclusive_group()
+    version_args.add_argument(
+        "--version",
+        help="""
+        A string to pass to `go` that instructs the compiler wrapper about what
+        version to print. Automatically selects the current git commit SHA if
+        this is left unspecified.
+        """,
+    )
+    parser.add_argument(
+        "--version_suffix",
+        help="""
+        A string appended to the **computed** version of the wrapper. This is
+        appended directly without any delimiter. Incompatible with
+        `--version`.
+        """,
     )
     args = parser.parse_args()
 
@@ -98,7 +109,7 @@ def calc_go_args(args, version, build_dir, output_file):
 def read_version(build_dir):
     version_path = os.path.join(build_dir, "VERSION")
     if os.path.exists(version_path):
-        with open(version_path, "r") as r:
+        with open(version_path, "r", encoding="utf-8") as r:
             return r.read()
 
     last_commit_msg = subprocess.check_output(
@@ -114,9 +125,14 @@ def read_version(build_dir):
 def main():
     args = parse_args()
     build_dir = os.path.dirname(__file__)
-    version = read_version(build_dir)
-    if args.version_suffix:
-        version += args.version_suffix
+
+    if args.version:
+        version = args.version
+    else:
+        version = read_version(build_dir)
+        if args.version_suffix:
+            version += args.version_suffix
+
     # Note: Go does not support using absolute package names.
     # So we run go inside the directory of the the build file.
     output_file = os.path.abspath(args.output_file)

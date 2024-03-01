@@ -1,22 +1,8 @@
 [
   {
-    "wd": "/tmp/stable",
-    "env": [
-      "BISECT_STAGE=someBisectStage",
-      "HOME=/user/home"
-    ],
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
-        "args": [
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/env",
           "args": [
             "python3",
             "-c",
@@ -43,19 +29,12 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "-Wno-section",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -66,30 +45,29 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes",
             "PYTHONPATH=/somepath/test_binary"
-          ]
+          ],
+          "path": "/usr/bin/env"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
+    ],
     "env": [
       "BISECT_STAGE=someBisectStage",
-      "BISECT_DIR=someBisectDir",
       "HOME=/user/home"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/env",
           "args": [
             "python3",
             "-c",
@@ -116,19 +94,12 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "-Wno-section",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -139,33 +110,30 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes",
             "PYTHONPATH=/somepath/test_binary"
-          ]
+          ],
+          "path": "/usr/bin/env"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
+    ],
     "env": [
       "BISECT_STAGE=someBisectStage",
       "BISECT_DIR=someBisectDir",
       "HOME=/user/home"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "main.cc"
-        ]
-      },
-      "stdout": "somemessage",
-      "stderr": "someerror",
-      "exitcode": 1
-    },
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
+      }
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/env",
           "args": [
             "python3",
             "-c",
@@ -192,19 +160,12 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "-Wno-section",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -215,12 +176,30 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes",
             "PYTHONPATH=/somepath/test_binary"
-          ]
+          ],
+          "path": "/usr/bin/env"
         },
-        "stdout": "somemessage",
+        "exitcode": 1,
         "stderr": "someerror",
-        "exitcode": 1
+        "stdout": "somemessage"
       }
-    ]
+    ],
+    "env": [
+      "BISECT_STAGE=someBisectStage",
+      "BISECT_DIR=someBisectDir",
+      "HOME=/user/home"
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "main.cc"
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
+      },
+      "exitcode": 1,
+      "stderr": "someerror",
+      "stdout": "somemessage"
+    }
   }
 ]

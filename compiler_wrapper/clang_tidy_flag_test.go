@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -388,6 +389,7 @@ func TestClangTidyFlagsAreFilteredFromGccInvocations(t *testing.T) {
 
 func TestTriciumReportsClangTidyCrashesGracefully(t *testing.T) {
 	withClangTidyTriciumTestContext(t, func(ctx *testContext) {
+		crashArtifactsDir := filepath.Join(ctx.setArbitraryClangArtifactsDir(), clangCrashArtifactsSubdir)
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 			switch ctx.cmdCount {
 			case 1:
@@ -425,7 +427,7 @@ func TestTriciumReportsClangTidyCrashesGracefully(t *testing.T) {
 					t.Errorf("got oArg=%q; wanted -o", oArg)
 				}
 
-				wantPrefix := path.Join(ctx.cfg.crashArtifactsDir, "clang-tidy")
+				wantPrefix := path.Join(crashArtifactsDir, "clang-tidy")
 				if !strings.HasPrefix(outFileArg, wantPrefix) {
 					t.Errorf("got out file %q; wanted one starting with %q", outFileArg, wantPrefix)
 				}

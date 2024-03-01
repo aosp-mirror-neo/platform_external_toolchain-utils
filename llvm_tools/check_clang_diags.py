@@ -18,6 +18,7 @@ import os
 import shutil
 import subprocess
 import sys
+import textwrap
 from typing import Dict, List, Tuple
 
 from cros_utils import bugs
@@ -29,7 +30,7 @@ _DEFAULT_CCS = ["cjdb@google.com"]
 
 # FIXME: clang would be cool to check, too? Doesn't seem to have a super stable
 # way of listing all warnings, unfortunately.
-def _build_llvm(llvm_dir: str, build_dir: str):
+def _build_llvm(llvm_dir: str, build_dir: str) -> None:
     """Builds everything that _collect_available_diagnostics depends on."""
     targets = ["clang-tidy"]
     # use `-C $llvm_dir` so the failure is easier to handle if llvm_dir DNE.
@@ -87,11 +88,11 @@ def _collect_available_diagnostics(
     assert (
         clang_tidy_checks_stdout[0] == "Enabled checks:"
     ), clang_tidy_checks_stdout
-    clang_tidy_checks = clang_tidy_checks_stdout[1:]
+    available_checks = clang_tidy_checks_stdout[1:]
     assert not any(
-        check.isspace() for check in clang_tidy_checks
+        check.isspace() for check in available_checks
     ), clang_tidy_checks
-    return {"clang-tidy": clang_tidy_checks}
+    return {"clang-tidy": available_checks}
 
 
 def _process_new_diagnostics(
@@ -120,9 +121,9 @@ def _process_new_diagnostics(
             newly_added_diags = [x for x in diags if x not in old_diags]
             if newly_added_diags:
                 new_diagnostics[tool] = newly_added_diags
-            # This specifically tries to make diags sticky: if one is landed, then
-            # reverted, then relanded, we ignore the reland. This might not be
-            # desirable? I don't know.
+            # This specifically tries to make diags sticky: if one is landed,
+            # then reverted, then relanded, we ignore the reland. This might
+            # not be desirable? I don't know.
             new_state_file[tool] = old[tool] + newly_added_diags
 
     # Sort things so we have more predictable output.
@@ -138,19 +139,20 @@ def _file_bugs_for_new_diags(new_diags: Dict[str, List[str]]):
             bugs.CreateNewBug(
                 component_id=bugs.WellKnownComponents.CrOSToolchainPublic,
                 title=f"Investigate {tool} check `{diag}`",
-                body="\n".join(
-                    (
-                        f"It seems that the `{diag}` check was recently added to {tool}.",
-                        "It's probably good to TAL at whether this check would be good",
-                        "for us to enable in e.g., platform2, or across ChromeOS.",
-                    )
+                body=textwrap.dedent(
+                    f"""\
+                    It seems that the `{diag}` check was recently added
+                    to {tool}. It's probably good to TAL at whether this
+                    check would be good for us to enable in e.g., platform2, or
+                    across ChromeOS.
+                    """
                 ),
                 assignee=_DEFAULT_ASSIGNEE,
                 cc=_DEFAULT_CCS,
             )
 
 
-def main(argv: List[str]):
+def main(argv: List[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
@@ -191,8 +193,8 @@ def main(argv: List[str]):
         with open(state_file, encoding="utf-8") as f:
             prior_diagnostics = json.load(f)
     except FileNotFoundError:
-        # If the state file didn't exist, just create it without complaining this
-        # time.
+        # If the state file didn't exist, just create it without complaining
+        # this time.
         prior_diagnostics = {}
 
     available_diagnostics = _collect_available_diagnostics(llvm_dir, build_dir)

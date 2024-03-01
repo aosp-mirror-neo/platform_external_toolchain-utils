@@ -5,6 +5,7 @@
 
 """Unit tests for the patch_utils.py file."""
 
+import copy
 import io
 import json
 from pathlib import Path
@@ -50,6 +51,15 @@ a
         }
         e = pu.PatchEntry.from_dict(TestPatchUtils._mock_dir(), d)
         self.assertEqual(d, e.to_dict())
+
+        # Test that they aren't serialised the same, as 'd' isn't sorted.
+        self.assertNotEqual(
+            json.dumps(d["metadata"]), json.dumps(e.to_dict()["metadata"])
+        )
+        self.assertEqual(
+            ["info", "other_extra_info", "title"],
+            list(e.to_dict()["metadata"].keys()),
+        )
 
     def test_patch_path(self):
         """Test that we can get the full path from a PatchEntry."""
@@ -159,10 +169,20 @@ a
         e = pu.PatchEntry.from_dict(
             patch_dir, TestPatchUtils._default_json_dict()
         )
+
+        """Make a deepcopy of the case for testing commit patch option."""
+        e1 = copy.deepcopy(e)
+
         with mock.patch("pathlib.Path.is_file", return_value=True):
             with mock.patch("subprocess.run", mock.MagicMock()):
                 result = e.apply(src_dir)
         self.assertTrue(result.succeeded)
+
+        """Test that commit patch option works."""
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+            with mock.patch("subprocess.run", mock.MagicMock()):
+                result1 = e1.apply(src_dir, pu.git_am)
+        self.assertTrue(result1.succeeded)
 
     def test_parse_failed_patch_output(self):
         """Test that we can call parse `patch` output."""
@@ -250,6 +270,7 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
                     },
                 ),
             ]
+
             patches[0].apply = mock.MagicMock(
                 return_value=pu.PatchResult(
                     succeeded=False, failed_hunks={"a/b/c": []}
@@ -261,9 +282,14 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             patches[2].apply = mock.MagicMock(
                 return_value=pu.PatchResult(succeeded=False)
             )
+
+            # Make a deepcopy of patches to test commit patch option
+            patches2 = copy.deepcopy(patches)
+
             results, _ = pu.update_version_ranges_with_entries(
-                1, dirpath, patches
+                1, dirpath, patches, pu.gnu_patch
             )
+
             # We should only have updated the version_range of the first patch,
             # as that one failed to apply.
             self.assertEqual(len(results), 1)
@@ -271,6 +297,19 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             self.assertEqual(patches[0].version_range, {"from": 0, "until": 1})
             self.assertEqual(patches[1].version_range, {"from": 0, "until": 2})
             self.assertEqual(patches[2].version_range, {"from": 4, "until": 5})
+
+            # Test git am option
+            results2, _ = pu.update_version_ranges_with_entries(
+                1, dirpath, patches2, pu.git_am
+            )
+
+            # We should only have updated the version_range of the first patch
+            # via git am, as that one failed to apply.
+            self.assertEqual(len(results2), 1)
+            self.assertEqual(results2[0].version_range, {"from": 0, "until": 1})
+            self.assertEqual(patches2[0].version_range, {"from": 0, "until": 1})
+            self.assertEqual(patches2[1].version_range, {"from": 0, "until": 2})
+            self.assertEqual(patches2[2].version_range, {"from": 4, "until": 5})
 
     @mock.patch("builtins.print")
     def test_remove_old_patches(self, _):

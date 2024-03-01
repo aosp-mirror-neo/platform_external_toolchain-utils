@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-#
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -27,13 +25,13 @@ All tests are run in parallel.
 
 import argparse
 import collections
-import signal
 import multiprocessing.pool
 import os
-import pipes
+import shlex
+import signal
 import subprocess
 import sys
-from typing import Tuple, Optional
+from typing import Optional, Tuple
 
 
 TestSpec = collections.namedtuple("TestSpec", ["directory", "command"])
@@ -92,39 +90,41 @@ def _run_test(test_spec: TestSpec, timeout: int) -> Tuple[Optional[int], str]:
     # Each subprocess gets its own process group, since many of these tests
     # spawn subprocesses for a variety of reasons. If these tests time out, we
     # want to be able to clean up all of the children swiftly.
-    p = subprocess.Popen(
+    # pylint: disable=subprocess-popen-preexec-fn
+    with subprocess.Popen(
         test_spec.command,
         cwd=test_spec.directory,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         encoding="utf-8",
+        # TODO(b/296616854): This is unsafe, and we should use
+        # process_group=0 when we have upgraded to Python 3.11.
         preexec_fn=lambda: os.setpgid(0, 0),
-    )
-
-    child_pgid = p.pid
-    try:
-        out, _ = p.communicate(timeout=timeout)
-        return p.returncode, out
-    except BaseException as e:
-        # Try to shut the processes down gracefully.
-        os.killpg(child_pgid, signal.SIGINT)
+    ) as p:
+        child_pgid = p.pid
         try:
-            # 2 seconds is arbitrary, but given that these are unittests,
-            # should be plenty of time for them to shut down.
-            p.wait(timeout=2)
-        except subprocess.TimeoutExpired:
-            os.killpg(child_pgid, signal.SIGKILL)
-        except:
-            os.killpg(child_pgid, signal.SIGKILL)
-            raise
+            out, _ = p.communicate(timeout=timeout)
+            return p.returncode, out
+        except BaseException as e:
+            # Try to shut the processes down gracefully.
+            os.killpg(child_pgid, signal.SIGINT)
+            try:
+                # 2 seconds is arbitrary, but given that these are unittests,
+                # should be plenty of time for them to shut down.
+                p.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                os.killpg(child_pgid, signal.SIGKILL)
+            except:
+                os.killpg(child_pgid, signal.SIGKILL)
+                raise
 
-        if isinstance(e, subprocess.TimeoutExpired):
-            # We just killed the entire process group. This should complete
-            # ~immediately. If it doesn't, something is very wrong.
-            out, _ = p.communicate(timeout=5)
-            return (None, out)
-        raise
+            if isinstance(e, subprocess.TimeoutExpired):
+                # We just killed the entire process group. This should complete
+                # ~immediately. If it doesn't, something is very wrong.
+                out, _ = p.communicate(timeout=5)
+                return (None, out)
+            raise
 
 
 def _python_test_to_spec(test_file):
@@ -182,9 +182,7 @@ def _run_test_scripts(pool, all_tests, timeout, show_successful_output=False):
         if show_successful_output and i:
             print("\n")
 
-        pretty_test = " ".join(
-            pipes.quote(test_arg) for test_arg in test.command
-        )
+        pretty_test = shlex.join(test.command)
         pretty_directory = os.path.relpath(test.directory)
         if pretty_directory == ".":
             test_message = pretty_test
@@ -247,8 +245,8 @@ def _fix_python_path(toolchain_utils):
 def _find_forced_subdir_python_tests(test_paths, toolchain_utils):
     assert all(os.path.isabs(path) for path in test_paths)
 
-    # Directories under toolchain_utils for which any change will cause all tests
-    # in that directory to be rerun. Includes changes in subdirectories.
+    # Directories under toolchain_utils for which any change will cause all
+    # tests in that directory to be rerun. Includes changes in subdirectories.
     all_dirs = {
         "crosperf",
         "cros_utils",

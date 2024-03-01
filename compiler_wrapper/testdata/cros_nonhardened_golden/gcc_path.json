@@ -1,18 +1,8 @@
 [
   {
-    "wd": "/tmp/stable",
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
-        "args": [
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -28,28 +18,25 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
           "main.cc"
-        ]
-      },
-      "stdout": "somemessage",
-      "stderr": "someerror",
-      "exitcode": 1
-    },
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
+      }
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -65,28 +52,31 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         },
-        "stdout": "somemessage",
+        "exitcode": 1,
         "stderr": "someerror",
-        "exitcode": 1
+        "stdout": "somemessage"
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "/tmp/stable/x86_64-cros-linux-gnu-gcc",
         "args": [
           "main.cc"
-        ]
-      }
-    },
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
+      },
+      "exitcode": 1,
+      "stderr": "someerror",
+      "stdout": "somemessage"
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "/tmp/stable/x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -102,25 +92,25 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./a/b/c/d/e/f/g/x86_64-cros-linux-gnu-gcc",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "/tmp/stable/x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./a/b/c/d/e/f/g/x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/tmp/stable/a/b/usr/x86_64-cros-linux-gnu",
@@ -136,25 +126,25 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./symlinked/x86_64-cros-linux-gnu-gcc",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "./a/b/c/d/e/f/g/x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./symlinked/x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/tmp/stable/a/b/usr/x86_64-cros-linux-gnu",
@@ -170,28 +160,25 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
-    "env": [
-      "PATH=/tmp/stable/pathenv"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "x86_64-cros-linux-gnu-gcc",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "./symlinked/x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "/tmp/stable/pathenv/x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
@@ -207,9 +194,22 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
+    ],
+    "env": [
+      "PATH=/tmp/stable/pathenv"
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "main.cc"
+        ],
+        "path": "x86_64-cros-linux-gnu-gcc"
+      }
+    }
   }
 ]

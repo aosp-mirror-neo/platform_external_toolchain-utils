@@ -25,18 +25,13 @@ type config struct {
 	// Flags to add to clang only, AFTER user flags (cannot be overridden
 	// by the user).
 	clangPostFlags []string
-	// Flags to be used only for C++ (not used to compile C code)
-	cppFlags []string
 	// Toolchain root path relative to the wrapper binary.
 	clangRootRelPath string
 	gccRootRelPath   string
 	// Directory to store errors that were prevented with -Wno-error.
 	newWarningsDir string
-	// Directory to store crash artifacts in.
-	crashArtifactsDir string
 	// Version. Only exposed via -print-config.
-	version    string
-	isHardened bool
+	version string
 }
 
 // Version can be set via a linker flag.
@@ -128,33 +123,21 @@ func crosCommonClangFlags() []string {
 		"-Wno-int-conversion",
 		"-Wno-incompatible-function-pointer-types",
 		"-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-	}
-}
-
-func crosCommonCppFlags() []string {
-	return []string{
-		"-std=gnu++14",
+		// TODO(b/315504245): Temporarily prevents new mangling rules from taking effect.
+		"-fclang-abi-compat=17",
 	}
 }
 
 func crosCommonClangPostFlags() []string {
-	// Temporarily disable Wdeprecated-copy. b/191479033
-	// Temporarily disabled Wno-array-parameter. b/262076232
-	return []string{
-		"-Wno-array-parameter",
-		"-Wno-compound-token-split-by-space",
-		"-Wno-deprecated-copy",
-		"-Wno-unused-but-set-variable",
-		"-Wno-implicit-int-float-conversion",
-		"-Wno-string-concatenation",
-		"-Wno-gnu-offsetof-extensions",
-	}
+	// Flags added to the _end_ of every build command. If a flag is added here, file a bug at
+	// go/crostc-bug to clean it up. Use of postflags is discouraged, since it prevents users
+	// from determining their own preferences for warnings/etc.
+	return []string{}
 }
 
 // Full hardening.
 // Temporarily disable function splitting because of chromium:434751.
 var crosHardenedConfig = config{
-	isHardened:       true,
 	clangRootRelPath: "../..",
 	gccRootRelPath:   "../../../../..",
 	// Pass "-fcommon" till the packages are fixed to work with new clang/gcc
@@ -162,6 +145,7 @@ var crosHardenedConfig = config{
 	commonFlags: []string{
 		"-fcommon",
 		"-fstack-protector-strong",
+		"-D_FORTIFY_SOURCE=3",
 		"-fno-omit-frame-pointer",
 	},
 	gccFlags: []string{
@@ -178,13 +162,10 @@ var crosHardenedConfig = config{
 		"--unwindlib=libunwind",
 		"-Wno-section",
 		"-fno-addrsig",
-		"-fuse-ld=lld",
 		"-ftrivial-auto-var-init=zero",
 	),
-	clangPostFlags:    crosCommonClangPostFlags(),
-	cppFlags:          crosCommonCppFlags(),
-	newWarningsDir:    "fatal_clang_warnings",
-	crashArtifactsDir: "/tmp/clang_crash_diagnostics",
+	clangPostFlags: crosCommonClangPostFlags(),
+	newWarningsDir: "fatal_clang_warnings",
 }
 
 // Flags to be added to non-hardened toolchain.
@@ -203,10 +184,8 @@ var crosNonHardenedConfig = config{
 		crosCommonClangFlags(),
 		"-Wno-section",
 	),
-	clangPostFlags:    crosCommonClangPostFlags(),
-	cppFlags:          crosCommonCppFlags(),
-	newWarningsDir:    "fatal_clang_warnings",
-	crashArtifactsDir: "/tmp/clang_crash_diagnostics",
+	clangPostFlags: crosCommonClangPostFlags(),
+	newWarningsDir: "fatal_clang_warnings",
 }
 
 // Flags to be added to host toolchain.
@@ -230,25 +209,20 @@ var crosHostConfig = config{
 		crosCommonClangFlags(),
 		"-Wno-unused-local-typedefs",
 		"-fno-addrsig",
-		"-fuse-ld=lld",
 	),
 	// Temporarily disable Wdeprecated-copy. b/191479033
-	clangPostFlags:    crosCommonClangPostFlags(),
-	cppFlags:          crosCommonCppFlags(),
-	newWarningsDir:    "fatal_clang_warnings",
-	crashArtifactsDir: "/tmp/clang_crash_diagnostics",
+	clangPostFlags: crosCommonClangPostFlags(),
+	newWarningsDir: "fatal_clang_warnings",
 }
 
 var androidConfig = config{
-	isHostWrapper:     false,
-	isAndroidWrapper:  true,
-	gccRootRelPath:    "./",
-	clangRootRelPath:  "./",
-	commonFlags:       []string{},
-	gccFlags:          []string{},
-	clangFlags:        []string{},
-	clangPostFlags:    []string{},
-	cppFlags:          []string{},
-	newWarningsDir:    "",
-	crashArtifactsDir: "",
+	isHostWrapper:    false,
+	isAndroidWrapper: true,
+	gccRootRelPath:   "./",
+	clangRootRelPath: "./",
+	commonFlags:      []string{},
+	gccFlags:         []string{},
+	clangFlags:       []string{},
+	clangPostFlags:   []string{},
+	newWarningsDir:   "",
 }

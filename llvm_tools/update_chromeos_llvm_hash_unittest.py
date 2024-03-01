@@ -5,21 +5,19 @@
 
 """Unit tests for updating LLVM hashes."""
 
-
-import collections
-import datetime
 import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from typing import Optional, Union
 import unittest
-import unittest.mock as mock
+from unittest import mock
 
 import chroot
 import failure_modes
 import get_llvm_hash
-import git
+import patch_utils
 import test_helpers
 import update_chromeos_llvm_hash
 
@@ -30,6 +28,21 @@ import update_chromeos_llvm_hash
 
 class UpdateLLVMHashTest(unittest.TestCase):
     """Test class for updating LLVM hashes of packages."""
+
+    @staticmethod
+    def _make_patch_entry(
+        relpath: Union[str, Path], workdir: Optional[Path] = None
+    ) -> patch_utils.PatchEntry:
+        if workdir is None:
+            workdir = Path("llvm_tools/update_chromeos_llvm_hash_unittest.py")
+        return patch_utils.PatchEntry(
+            workdir=workdir,
+            rel_patch_path=str(relpath),
+            metadata={},
+            platforms=["chromiumos"],
+            version_range={"from": None, "until": None},
+            verify_workdir=False,
+        )
 
     @mock.patch.object(os.path, "realpath")
     def testDefaultCrosRootFromCrOSCheckout(self, mock_llvm_tools):
@@ -65,7 +78,8 @@ class UpdateLLVMHashTest(unittest.TestCase):
             )
 
         self.assertEqual(
-            str(err.exception), "Invalid ebuild path provided: %s" % ebuild_path
+            str(err.exception),
+            "Invalid ebuild path provided: %s" % ebuild_path,
         )
 
         mock_isfile.assert_called_once()
@@ -75,7 +89,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testFailedToUpdateLLVMHash(self, mock_isfile):
         # Create a temporary file to simulate an ebuild file of a package.
         with test_helpers.CreateTemporaryJsonFile() as ebuild_file:
-            with open(ebuild_file, "w") as f:
+            with open(ebuild_file, "w", encoding="utf-8") as f:
                 f.write(
                     "\n".join(
                         [
@@ -108,7 +122,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testFailedToUpdateLLVMNextHash(self, mock_isfile):
         # Create a temporary file to simulate an ebuild file of a package.
         with test_helpers.CreateTemporaryJsonFile() as ebuild_file:
-            with open(ebuild_file, "w") as f:
+            with open(ebuild_file, "w", encoding="utf-8") as f:
                 f.write(
                     "\n".join(
                         [
@@ -149,7 +163,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             git_hash = "a123testhash1"
             svn_version = 1000
 
-            with open(ebuild_file, "w") as f:
+            with open(ebuild_file, "w", encoding="utf-8") as f:
                 f.write(
                     "\n".join(
                         [
@@ -172,12 +186,11 @@ class UpdateLLVMHashTest(unittest.TestCase):
                 "Last line in the ebuild",
             ]
 
-            # Verify the new file contents of the ebuild file match the expected file
-            # contents.
-            with open(ebuild_file) as new_file:
-                file_contents_as_a_list = [cur_line for cur_line in new_file]
+            # Verify the new file contents of the ebuild file match the expected
+            # file contents.
+            with open(ebuild_file, encoding="utf-8") as new_file:
                 self.assertListEqual(
-                    file_contents_as_a_list, expected_file_contents
+                    new_file.readlines(), expected_file_contents
                 )
 
         self.assertEqual(mock_isfile.call_count, 2)
@@ -197,7 +210,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             git_hash = "a123testhash1"
             svn_version = 1000
 
-            with open(ebuild_file, "w") as f:
+            with open(ebuild_file, "w", encoding="utf-8") as f:
                 f.write(
                     "\n".join(
                         [
@@ -220,12 +233,11 @@ class UpdateLLVMHashTest(unittest.TestCase):
                 "Last line in the ebuild",
             ]
 
-            # Verify the new file contents of the ebuild file match the expected file
-            # contents.
-            with open(ebuild_file) as new_file:
-                file_contents_as_a_list = [cur_line for cur_line in new_file]
+            # Verify the new file contents of the ebuild file match the expected
+            # file contents.
+            with open(ebuild_file, encoding="utf-8") as new_file:
                 self.assertListEqual(
-                    file_contents_as_a_list, expected_file_contents
+                    new_file.readlines(), expected_file_contents
                 )
 
         self.assertEqual(mock_isfile.call_count, 2)
@@ -242,7 +254,8 @@ class UpdateLLVMHashTest(unittest.TestCase):
         git_hash = "badf00d"
         mock_llvm_version.return_value = "1234"
 
-        # Verify the exception is raised when a invalid symbolic link is passed in.
+        # Verify the exception is raised when a invalid symbolic link is
+        # passed in.
         with self.assertRaises(ValueError) as err:
             update_chromeos_llvm_hash.UprevEbuildToVersion(
                 symlink_path, svn_version, git_hash
@@ -259,7 +272,8 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testFailedToUprevEbuildSymlinkForInvalidSymlink(self, mock_islink):
         symlink_path = "/path/to/chroot/package/package.ebuild"
 
-        # Verify the exception is raised when a invalid symbolic link is passed in.
+        # Verify the exception is raised when a invalid symbolic link is
+        # passed in.
         with self.assertRaises(ValueError) as err:
             update_chromeos_llvm_hash.UprevEbuildSymlink(symlink_path)
 
@@ -314,7 +328,11 @@ class UpdateLLVMHashTest(unittest.TestCase):
     @mock.patch.object(os.path, "realpath")
     @mock.patch.object(subprocess, "check_output", return_value=None)
     def testSuccessfullyUprevEbuildToVersionLLVM(
-        self, mock_command_output, mock_realpath, mock_islink, mock_llvm_version
+        self,
+        mock_command_output,
+        mock_realpath,
+        mock_islink,
+        mock_llvm_version,
     ):
         symlink = "/path/to/llvm/llvm-12.0_pre3_p2-r10.ebuild"
         ebuild = "/abs/path/to/llvm/llvm-12.0_pre3_p2.ebuild"
@@ -337,10 +355,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
 
         # Verify commands
         symlink_dir = os.path.dirname(symlink)
-        timestamp = datetime.datetime.today().strftime("%Y%m%d")
-        new_ebuild = (
-            "/abs/path/to/llvm/llvm-1234.0_pre1000_p%s.ebuild" % timestamp
-        )
+        new_ebuild = "/abs/path/to/llvm/llvm-1234.0_pre1000.ebuild"
         new_symlink = new_ebuild[: -len(".ebuild")] + "-r1.ebuild"
 
         expected_cmd = ["git", "-C", symlink_dir, "mv", ebuild, new_ebuild]
@@ -514,27 +529,30 @@ class UpdateLLVMHashTest(unittest.TestCase):
         mock_run_cmd.assert_called_once()
 
     def testNoPatchResultsForCommit(self):
-        package_1_patch_info_dict = {
-            "applied_patches": ["display_results.patch"],
-            "failed_patches": ["fixes_output.patch"],
-            "non_applicable_patches": [],
-            "disabled_patches": [],
-            "removed_patches": [],
-            "modified_metadata": None,
-        }
+        package_1_patch_info = patch_utils.PatchInfo(
+            applied_patches=[self._make_patch_entry("display_results.patch")],
+            failed_patches=[self._make_patch_entry("fixes_output.patch")],
+            non_applicable_patches=[],
+            disabled_patches=[],
+            removed_patches=[],
+            modified_metadata=None,
+        )
 
-        package_2_patch_info_dict = {
-            "applied_patches": ["redirects_stdout.patch", "fix_display.patch"],
-            "failed_patches": [],
-            "non_applicable_patches": [],
-            "disabled_patches": [],
-            "removed_patches": [],
-            "modified_metadata": None,
-        }
+        package_2_patch_info = patch_utils.PatchInfo(
+            applied_patches=[
+                self._make_patch_entry("redirects_stdout.patch"),
+                self._make_patch_entry("fix_display.patch"),
+            ],
+            failed_patches=[],
+            non_applicable_patches=[],
+            disabled_patches=[],
+            removed_patches=[],
+            modified_metadata=None,
+        )
 
         test_package_info_dict = {
-            "test-packages/package1": package_1_patch_info_dict,
-            "test-packages/package2": package_2_patch_info_dict,
+            "test-packages/package1": package_1_patch_info,
+            "test-packages/package2": package_2_patch_info,
         }
 
         test_commit_message = ["Updated packages"]
@@ -553,27 +571,27 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testAddedPatchResultsForCommit(
         self, mock_remove_patches, mock_stage_patches_for_commit
     ):
-        package_1_patch_info_dict = {
-            "applied_patches": [],
-            "failed_patches": [],
-            "non_applicable_patches": [],
-            "disabled_patches": ["fixes_output.patch"],
-            "removed_patches": [],
-            "modified_metadata": "/abs/path/to/filesdir/PATCHES.json",
-        }
+        package_1_patch_info = patch_utils.PatchInfo(
+            applied_patches=[],
+            failed_patches=[],
+            non_applicable_patches=[],
+            disabled_patches=["fixes_output.patch"],
+            removed_patches=[],
+            modified_metadata="/abs/path/to/filesdir/PATCHES.json",
+        )
 
-        package_2_patch_info_dict = {
-            "applied_patches": ["fix_display.patch"],
-            "failed_patches": [],
-            "non_applicable_patches": [],
-            "disabled_patches": [],
-            "removed_patches": ["/abs/path/to/filesdir/redirect_stdout.patch"],
-            "modified_metadata": "/abs/path/to/filesdir/PATCHES.json",
-        }
+        package_2_patch_info = patch_utils.PatchInfo(
+            applied_patches=[self._make_patch_entry("fix_display.patch")],
+            failed_patches=[],
+            non_applicable_patches=[],
+            disabled_patches=[],
+            removed_patches=["/abs/path/to/filesdir/redirect_stdout.patch"],
+            modified_metadata="/abs/path/to/filesdir/PATCHES.json",
+        )
 
         test_package_info_dict = {
-            "test-packages/package1": package_1_patch_info_dict,
-            "test-packages/package2": package_2_patch_info_dict,
+            "test-packages/package1": package_1_patch_info,
+            "test-packages/package2": package_2_patch_info,
         }
 
         test_commit_message = ["Updated packages"]
@@ -661,14 +679,14 @@ class UpdateLLVMHashTest(unittest.TestCase):
     @mock.patch("subprocess.check_output")
     @mock.patch.object(get_llvm_hash, "GetLLVMMajorVersion")
     def testUpdatePackages(
-        self, mock_llvm_major_version, mock_check_output, mock_run
+        self, mock_llvm_major_version, _mock_check_output, _mock_run
     ):
         mock_llvm_major_version.return_value = "17"
         with tempfile.TemporaryDirectory(
             "update_chromeos_llvm_hash.tmp"
         ) as workdir_str:
             src_tree = Path(workdir_str)
-            package_dir, ebuild_path, symlink_path = self.setup_mock_src_tree(
+            _package_dir, _ebuild_path, symlink_path = self.setup_mock_src_tree(
                 src_tree
             )
 
@@ -726,7 +744,9 @@ class UpdateLLVMHashTest(unittest.TestCase):
             chroot_path=expected_chroot,
             mode=failure_modes.FailureModes.FAIL,
             git_hash_source="google3",
-            extra_commit_msg=None,
+            extra_commit_msg_lines=None,
+            delete_branch=True,
+            upload_changes=True,
         )
         mock_outside_chroot.assert_called()
         mock_chromeos_root.assert_called()
@@ -768,7 +788,9 @@ class UpdateLLVMHashTest(unittest.TestCase):
             chroot_path=expected_chroot,
             mode=failure_modes.FailureModes.FAIL,
             git_hash_source="google3",
-            extra_commit_msg=None,
+            extra_commit_msg_lines=None,
+            delete_branch=True,
+            upload_changes=True,
         )
         mock_outside_chroot.assert_called()
         mock_chromeos_root.assert_called()
@@ -825,7 +847,9 @@ class UpdateLLVMHashTest(unittest.TestCase):
             chroot_path=chroot_path,
             mode=failure_mode,
             git_hash_source=llvm_ver,
-            extra_commit_msg=None,
+            extra_commit_msg_lines=None,
+            delete_branch=True,
+            upload_changes=True,
         )
         mock_outside_chroot.assert_called()
         mock_chromeos_root.assert_called()

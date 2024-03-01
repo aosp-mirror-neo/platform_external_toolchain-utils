@@ -9,10 +9,14 @@ import enum
 import json
 import os
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 
 X20_PATH = "/google/data/rw/teams/c-compiler-chrome/prod_bugs"
+
+# List of 'well-known' bug numbers to tag as parents.
+RUST_MAINTENANCE_METABUG = 322195383
+RUST_SECURITY_METABUG = 322195192
 
 
 # These constants are sourced from
@@ -57,10 +61,10 @@ class _FileNameGenerator:
             my_entropy = self._entropy
             self._entropy += 1
 
-        now = now.isoformat("T", "seconds") + "Z"
+        now_str = now.isoformat("T", "seconds") + "Z"
         entropy_str = str(my_entropy).zfill(self._ENTROPY_STR_SIZE)
         pid = os.getpid()
-        return f"{now}_{entropy_str}_{pid}.json"
+        return f"{now_str}_{entropy_str}_{pid}.json"
 
 
 _GLOBAL_NAME_GENERATOR = _FileNameGenerator()
@@ -69,7 +73,7 @@ _GLOBAL_NAME_GENERATOR = _FileNameGenerator()
 def _WriteBugJSONFile(
     object_type: str,
     json_object: Dict[str, Any],
-    directory: Optional[os.PathLike],
+    directory: Optional[Union[os.PathLike, str]],
 ):
     """Writes a JSON file to `directory` with the given bug-ish object.
 
@@ -122,20 +126,23 @@ def CreateNewBug(
     assignee: Optional[str] = None,
     cc: Optional[List[str]] = None,
     directory: Optional[os.PathLike] = None,
+    parent_bug: int = 0,
 ):
     """Sends a request to create a new bug.
 
     Args:
-      component_id: The component ID to add. Anything from WellKnownComponents
-        also works.
-      title: Title of the bug. Must be nonempty.
-      body: Body of the bug. Must be nonempty.
-      assignee: Assignee of the bug. Must be either an email address, or a
-        "well-known" assignee (detective, mage).
-      cc: A list of emails to add to the CC list. Must either be an email
-        address, or a "well-known" individual (detective, mage).
-      directory: The directory to write the report to. Defaults to our x20 bugs
-        directory.
+        component_id: The component ID to add. Anything from WellKnownComponents
+            also works.
+        title: Title of the bug. Must be nonempty.
+        body: Body of the bug. Must be nonempty.
+        assignee: Assignee of the bug. Must be either an email address, or a
+            "well-known" assignee (detective, mage).
+        cc: A list of emails to add to the CC list. Must either be an email
+            address, or a "well-known" individual (detective, mage).
+        directory: The directory to write the report to. Defaults to our x20
+            bugs directory.
+        parent_bug: The parent bug number for this bug. If none should be
+            specified, pass the value 0.
     """
     obj = {
         "component_id": component_id,
@@ -149,6 +156,9 @@ def CreateNewBug(
     if cc:
         obj["cc"] = cc
 
+    if parent_bug:
+        obj["parent_bug"] = parent_bug
+
     _WriteBugJSONFile("FileNewBugRequest", obj, directory)
 
 
@@ -158,26 +168,35 @@ def SendCronjobLog(
     message: str,
     turndown_time_hours: int = 0,
     directory: Optional[os.PathLike] = None,
+    parent_bug: int = 0,
 ):
     """Sends the record of a cronjob to our bug infra.
 
-    cronjob_name: The name of the cronjob. Expected to remain consistent over
-      time.
-    failed: Whether the job failed or not.
-    message: Any seemingly relevant context. This is pasted verbatim in a bug, if
-      the cronjob infra deems it worthy.
-    turndown_time_hours: If nonzero, this cronjob will be considered
-      turned down if more than `turndown_time_hours` pass without a report of
-      success or failure. If zero, this job will not automatically be turned
-      down.
-    directory: The directory to write the report to. Defaults to our x20 bugs
-      directory.
+    Args:
+        cronjob_name: The name of the cronjob. Expected to remain consistent
+            over time.
+        failed: Whether the job failed or not.
+        message: Any seemingly relevant context. This is pasted verbatim in a
+            bug, if the cronjob infra deems it worthy.
+        turndown_time_hours: If nonzero, this cronjob will be considered turned
+            down if more than `turndown_time_hours` pass without a report of
+            success or failure. If zero, this job will not automatically be
+            turned down.
+        directory: The directory to write the report to. Defaults to our x20
+            bugs directory.
+        parent_bug: The parent bug number for the bug filed for this cronjob,
+            if any. If none should be specified, pass the value 0.
     """
     json_object = {
         "name": cronjob_name,
         "message": message,
         "failed": failed,
     }
+
     if turndown_time_hours:
         json_object["cronjob_turndown_time_hours"] = turndown_time_hours
+
+    if parent_bug:
+        json_object["parent_bug"] = parent_bug
+
     _WriteBugJSONFile("CronjobUpdate", json_object, directory)

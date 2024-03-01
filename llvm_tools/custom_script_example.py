@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """A custom script example that utilizes the .JSON contents of the tryjob."""
 
-
 import json
 import sys
 
-from update_tryjob_status import TryjobStatus
+import update_tryjob_status
 
 
 def main():
@@ -32,7 +30,7 @@ def main():
     #   }
     abs_path_json_file = sys.argv[1]
 
-    with open(abs_path_json_file) as f:
+    with open(abs_path_json_file, encoding="utf-8") as f:
         tryjob_contents = json.load(f)
 
     CUTOFF_PENDING_REVISION = 369416
@@ -40,7 +38,10 @@ def main():
     SKIP_REVISION_CUTOFF_START = 369420
     SKIP_REVISION_CUTOFF_END = 369428
 
-    if tryjob_contents["status"] == TryjobStatus.PENDING.value:
+    if (
+        tryjob_contents["status"]
+        == update_tryjob_status.TryjobStatus.PENDING.value
+    ):
         if tryjob_contents["rev"] <= CUTOFF_PENDING_REVISION:
             # Exit code 0 means to set the tryjob 'status' as 'good'.
             sys.exit(0)
@@ -48,15 +49,19 @@ def main():
         # Exit code 124 means to set the tryjob 'status' as 'bad'.
         sys.exit(124)
 
-    if tryjob_contents["status"] == TryjobStatus.BAD.value:
-        # Need to take a closer look at the contents of the tryjob to then decide
-        # what that tryjob's 'status' value should be.
+    if tryjob_contents["status"] == update_tryjob_status.TryjobStatus.BAD.value:
+        # Need to take a closer look at the contents of the tryjob to then
+        # decide what that tryjob's 'status' value should be.
         #
-        # Since the exit code is not in the mapping, an exception will occur which
-        # will save the file in the directory of this custom script example.
+        # Since the exit code is not in the mapping, an exception will occur
+        # which will save the file in the directory of this custom script
+        # example.
         sys.exit(1)
 
-    if tryjob_contents["status"] == TryjobStatus.SKIP.value:
+    if (
+        tryjob_contents["status"]
+        == update_tryjob_status.TryjobStatus.SKIP.value
+    ):
         # Validate that the 'skip value is really set between the cutoffs.
         if (
             SKIP_REVISION_CUTOFF_START

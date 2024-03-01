@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Unit tests for git helper functions."""
 
-
 import os
 import subprocess
 import tempfile
 import unittest
-import unittest.mock as mock
+from unittest import mock
 
 import git
 
@@ -28,7 +26,8 @@ class HelperFunctionsTest(unittest.TestCase):
         path_to_repo = "/invalid/path/to/repo"
         branch = "branch-name"
 
-        # Verify the exception is raised when provided an invalid directory path.
+        # Verify the exception is raised when provided an invalid directory
+        # path.
         with self.assertRaises(ValueError) as err:
             git.CreateBranch(path_to_repo, branch)
 
@@ -83,11 +82,10 @@ class HelperFunctionsTest(unittest.TestCase):
     def testFailedToUploadChangesForInvalidDirectoryPath(self, mock_isdir):
         path_to_repo = "/some/path/to/repo"
         branch = "update-LLVM_NEXT_HASH-a123testhash3"
-        commit_messages = ["Test message"]
 
         # Verify exception is raised when on an invalid repo path.
         with self.assertRaises(ValueError) as err:
-            git.UploadChanges(path_to_repo, branch, commit_messages)
+            git.UploadChanges(path_to_repo, branch)
 
         self.assertEqual(
             str(err.exception), "Invalid path provided: %s" % path_to_repo
@@ -101,7 +99,6 @@ class HelperFunctionsTest(unittest.TestCase):
     def testSuccessfullyUploadedChangesForReview(
         self, mock_tempfile, mock_commands, mock_isdir
     ):
-
         path_to_repo = "/some/path/to/repo"
         branch = "branch-name"
         commit_messages = ["Test message"]
@@ -116,11 +113,12 @@ class HelperFunctionsTest(unittest.TestCase):
                 "+/193147 Fix stdout"
             ),
         ]
-        change_list = git.UploadChanges(path_to_repo, branch, commit_messages)
+        git.CommitChanges(path_to_repo, commit_messages)
+        change_list = git.UploadChanges(path_to_repo, branch)
 
         self.assertEqual(change_list.cl_number, 193147)
 
-        mock_isdir.assert_called_once_with(path_to_repo)
+        mock_isdir.assert_called_with(path_to_repo)
 
         expected_command = [
             "git",

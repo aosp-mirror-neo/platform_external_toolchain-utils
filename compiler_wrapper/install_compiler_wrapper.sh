@@ -31,7 +31,7 @@ build_py \
   --output_file=./clang_host_wrapper
 sudo mv ./clang_host_wrapper /usr/bin/clang_host_wrapper
 echo "/usr/bin/clang_host_wrapper"
-sudo cp ../binary_search_tool/bisect_driver.py /usr/bin
+sudo cp ../bisect_driver.py /usr/bin
 echo "/usr/bin/clang_host_wrapper/bisect_driver.py"
 
 # Update the target wrappers
@@ -66,7 +66,7 @@ for GCC in cross-x86_64-cros-linux-gnu/gcc cross-armv7a-cros-linux-gnueabihf/gcc
   grep sysroot_wrapper.hardened.noccache <<< "${FILES}"
   sudo cp ./sysroot_wrapper.hardened.ccache "$(grep sysroot_wrapper.hardened.ccache <<< "${FILES}")"
   grep sysroot_wrapper.hardened.ccache <<< "${FILES}"
-  sudo cp ../binary_search_tool/bisect_driver.py "$(grep bisect_driver.py <<< "${FILES}")"
+  sudo cp ../bisect_driver.py "$(grep bisect_driver.py <<< "${FILES}")"
   grep bisect_driver.py <<< "${FILES}"
 done
 rm -f ./sysroot_wrapper.hardened.noccache ./sysroot_wrapper.hardened.ccache

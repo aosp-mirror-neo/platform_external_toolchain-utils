@@ -28,15 +28,15 @@ def _is_in_chroot() -> bool:
     return Path("/etc/cros_chroot_version").exists()
 
 
-def _ensure_pbzip2_is_installed():
-    if shutil.which("pbzip2"):
+def _ensure_lbzip2_is_installed():
+    if shutil.which("lbzip2"):
         return
 
-    logging.info("Auto-installing pbzip2...")
-    subprocess.run(["sudo", "emerge", "-g", "pbzip2"], check=True)
+    logging.info("Auto-installing lbzip2...")
+    subprocess.run(["sudo", "emerge", "-g", "lbzip2"], check=True)
 
 
-def _determine_target_path(sdk_path: str) -> str:
+def determine_target_path(sdk_path: str) -> str:
     """Determine where `sdk_path` should sit in localmirror."""
     gs_prefix = "gs://"
     if not sdk_path.startswith(gs_prefix):
@@ -52,6 +52,7 @@ def _download(remote_path: str, local_file: Path):
     subprocess.run(
         ["gsutil", "cp", remote_path, str(local_file)],
         check=True,
+        stdin=subprocess.DEVNULL,
     )
 
 
@@ -72,7 +73,7 @@ def _debinpkgify(binpkg_file: Path) -> Path:
     # which is what our ebuild expects).
     tmpdir = binpkg_file.parent
 
-    def _mkstemp(suffix=None) -> str:
+    def _mkstemp(suffix=None) -> Path:
         fd, file_path = tempfile.mkstemp(dir=tmpdir, suffix=suffix)
         os.close(fd)
         return Path(file_path)
@@ -124,7 +125,7 @@ def _debinpkgify(binpkg_file: Path) -> Path:
     with tbz2_file.open("wb") as f:
         subprocess.run(
             [
-                "pbzip2",
+                "lbzip2",
                 "-9",
                 "-c",
                 str(decompressed_artifacts_file),
@@ -182,9 +183,9 @@ def main(argv: List[str]):
 
     if not _is_in_chroot():
         parser.error("Run me from within the chroot.")
-    _ensure_pbzip2_is_installed()
+    _ensure_lbzip2_is_installed()
 
-    target_path = _determine_target_path(opts.sdk_artifact)
+    target_path = determine_target_path(opts.sdk_artifact)
     with tempfile.TemporaryDirectory() as tempdir:
         download_path = Path(tempdir) / "sdk_artifact"
         _download(opts.sdk_artifact, download_path)

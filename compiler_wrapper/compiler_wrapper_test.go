@@ -136,7 +136,7 @@ func TestLogRusageAndForceDisableWError(t *testing.T) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 			switch ctx.cmdCount {
 			case 1:
-				io.WriteString(stderr, "-Werror originalerror")
+				io.WriteString(stderr, arbitraryWerrorStderr)
 				return newExitCodeError(1)
 			case 2:
 				return nil
@@ -251,4 +251,48 @@ func TestCalculateAndroidWrapperPath(t *testing.T) {
 			t.Errorf("Failed calculating the wrapper path with (%q, %q); got %q, want %q", tc.mainBuilderPath, tc.absWrapperPath, result, tc.want)
 		}
 	}
+}
+
+// If "crash-diagnostics-dir" flag is already provided, only use that flag and don't add a dupe
+func TestCrashDiagPreFlag(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		ctx.cfg.clangFlags = []string{"-fcrash-diagnostics-dir=/build/something/foo"}
+		ctx.env = []string{
+			"CROS_ARTIFACTS_TMP_DIR=/tmp/foo",
+		}
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(clangX86_64, mainCc)))
+		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/build/something/foo"); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+// If "crash-diagnostics-dir" flag is already provided, only use that flag and don't add a dupe
+func TestCrashDiagPostFlag(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		ctx.cfg.clangPostFlags = []string{"-fcrash-diagnostics-dir=/build/something/foo"}
+		ctx.env = []string{
+			"CROS_ARTIFACTS_TMP_DIR=/tmp/foo",
+		}
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(clangX86_64, mainCc)))
+		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/build/something/foo"); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+// If "crash-diagnostics-dir" flag is not provided, add one in
+func TestCrashDiagDefault(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		ctx.env = []string{
+			"CROS_ARTIFACTS_TMP_DIR=/tmp/foo",
+		}
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(clangX86_64, mainCc)))
+		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/tmp/foo/toolchain/clang_crash_diagnostics"); err != nil {
+			t.Error(err)
+		}
+	})
 }

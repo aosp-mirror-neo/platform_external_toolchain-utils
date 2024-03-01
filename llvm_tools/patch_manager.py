@@ -10,12 +10,12 @@ import enum
 import os
 from pathlib import Path
 import sys
-from typing import Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, List, Optional, Tuple
 
-from failure_modes import FailureModes
+import failure_modes
 import get_llvm_hash
 import patch_utils
-from subprocess_helpers import check_output
+import subprocess_helpers
 
 
 class GitBisectionCode(enum.IntEnum):
@@ -68,8 +68,8 @@ def GetCommandLineArgs(sys_argv: Optional[List[str]]):
     # applicable patches.
     parser.add_argument(
         "--failure_mode",
-        default=FailureModes.FAIL,
-        type=FailureModes,
+        default=failure_modes.FailureModes.FAIL,
+        type=failure_modes.FailureModes,
         help="the mode of the patch manager when handling failed patches "
         "(default: %(default)s)",
     )
@@ -80,20 +80,24 @@ def GetCommandLineArgs(sys_argv: Optional[List[str]]):
         "application of. Not used in other modes.",
     )
 
+    # Add argument for the option to us git am to commit patch or
+    # just using patch.
+    parser.add_argument(
+        "--git_am",
+        action="store_true",
+        help="If set, use 'git am' to patch instead of GNU 'patch'. ",
+    )
+
     # Parse the command line.
     return parser.parse_args(sys_argv)
 
 
 def GetHEADSVNVersion(src_path):
     """Gets the SVN version of HEAD in the src tree."""
-
-    cmd = ["git", "-C", src_path, "rev-parse", "HEAD"]
-
-    git_hash = check_output(cmd)
-
-    version = get_llvm_hash.GetVersionFrom(src_path, git_hash.rstrip())
-
-    return version
+    git_hash = subprocess_helpers.check_output(
+        ["git", "-C", src_path, "rev-parse", "HEAD"]
+    )
+    return get_llvm_hash.GetVersionFrom(src_path, git_hash.rstrip())
 
 
 def GetCommitHashesForBisection(src_path, good_svn_version, bad_svn_version):
@@ -111,6 +115,7 @@ def CheckPatchApplies(
     llvm_src_dir: Path,
     patches_json_fp: Path,
     rel_patch_path: str,
+    patch_cmd: Optional[Callable] = None,
 ) -> GitBisectionCode:
     """Check that a given patch with the rel_patch_path applies in the stack.
 
@@ -120,11 +125,13 @@ def CheckPatchApplies(
     to identify the SVN version
 
     Args:
-      svn_version: SVN version to test at.
-      llvm_src_dir: llvm-project source code diroctory (with a .git).
-      patches_json_fp: PATCHES.json filepath.
-      rel_patch_path: Relative patch path of the patch we want to check. If
-        patches before this patch fail to apply, then the revision is skipped.
+        svn_version: SVN version to test at.
+        llvm_src_dir: llvm-project source code diroctory (with a .git).
+        patches_json_fp: PATCHES.json filepath.
+        rel_patch_path: Relative patch path of the patch we want to check. If
+          patches before this patch fail to apply, then the revision is
+          skipped.
+        patch_cmd: Use 'git am' to patch instead of GNU 'patch'.
     """
     with patches_json_fp.open(encoding="utf-8") as f:
         patch_entries = patch_utils.json_to_patch_entries(
@@ -137,6 +144,7 @@ def CheckPatchApplies(
             llvm_src_dir,
             patch_entries,
             rel_patch_path,
+            patch_utils.git_am,
         )
     if success:
         # Everything is good, patch applied successfully.
@@ -157,29 +165,36 @@ def ApplyPatchAndPrior(
     src_dir: Path,
     patch_entries: Iterable[patch_utils.PatchEntry],
     rel_patch_path: str,
+    patch_cmd: Optional[Callable] = None,
 ) -> Tuple[bool, List[patch_utils.PatchEntry], List[patch_utils.PatchEntry]]:
     """Apply a patch, and all patches that apply before it in the patch stack.
 
     Patches which did not attempt to apply (because their version range didn't
     match and they weren't the patch of interest) do not appear in the output.
 
-    Probably shouldn't be called from outside of CheckPatchApplies, as it modifies
-    the source dir contents.
+    Probably shouldn't be called from outside of CheckPatchApplies, as it
+    modifies the source dir contents.
 
     Returns:
-      A tuple where:
-      [0]: Did the patch of interest succeed in applying?
-      [1]: List of applied patches, potentially containing the patch of interest.
-      [2]: List of failing patches, potentially containing the patch of interest.
+        A tuple where:
+            [0]: Did the patch of interest succeed in applying?
+            [1]: List of applied patches, potentially containing the patch of
+            interest.
+            [2]: List of failing patches, potentially containing the patch of
+            interest.
     """
-    failed_patches = []
+    failed_patches: List[patch_utils.PatchEntry] = []
     applied_patches = []
     # We have to apply every patch up to the one we care about,
     # as patches can stack.
     for pe in patch_entries:
         is_patch_of_interest = pe.rel_patch_path == rel_patch_path
         applied, failed_hunks = patch_utils.apply_single_patch_entry(
-            svn_version, src_dir, pe, ignore_version_range=is_patch_of_interest
+            svn_version,
+            src_dir,
+            pe,
+            patch_cmd,
+            ignore_version_range=is_patch_of_interest,
         )
         meant_to_apply = bool(failed_hunks) or is_patch_of_interest
         if is_patch_of_interest:
@@ -205,7 +220,7 @@ def PrintPatchResults(patch_info: patch_utils.PatchInfo):
     """Prints the results of handling the patches of a package.
 
     Args:
-      patch_info: A dataclass that has information on the patches.
+        patch_info: A dataclass that has information on the patches.
     """
 
     def _fmt(patches):
@@ -262,7 +277,11 @@ def main(sys_argv: List[str]):
             svn_version=args.svn_version,
             llvm_src_dir=llvm_src_dir,
             patches_json_fp=patches_json_fp,
-            continue_on_failure=args.failure_mode == FailureModes.CONTINUE,
+            patch_cmd=patch_utils.git_am
+            if args.git_am
+            else patch_utils.gnu_patch,
+            continue_on_failure=args.failure_mode
+            == failure_modes.FailureModes.CONTINUE,
         )
         PrintPatchResults(result)
 
@@ -272,8 +291,9 @@ def main(sys_argv: List[str]):
         )
 
     def _disable(args):
+        patch_cmd = patch_utils.git_am if args.git_am else patch_utils.gnu_patch
         patch_utils.update_version_ranges(
-            args.svn_version, llvm_src_dir, patches_json_fp
+            args.svn_version, llvm_src_dir, patches_json_fp, patch_cmd
         )
 
     def _test_single(args):
@@ -282,19 +302,24 @@ def main(sys_argv: List[str]):
                 "Running with bisect_patches requires the " "--test_patch flag."
             )
         svn_version = GetHEADSVNVersion(llvm_src_dir)
+        patch_cmd = patch_utils.git_am if args.git_am else patch_utils.gnu_patch
         error_code = CheckPatchApplies(
-            svn_version, llvm_src_dir, patches_json_fp, args.test_patch
+            svn_version,
+            llvm_src_dir,
+            patches_json_fp,
+            args.test_patch,
+            patch_cmd,
         )
         # Since this is for bisection, we want to exit with the
         # GitBisectionCode enum.
         sys.exit(int(error_code))
 
     dispatch_table = {
-        FailureModes.FAIL: _apply_all,
-        FailureModes.CONTINUE: _apply_all,
-        FailureModes.REMOVE_PATCHES: _remove,
-        FailureModes.DISABLE_PATCHES: _disable,
-        FailureModes.BISECT_PATCHES: _test_single,
+        failure_modes.FailureModes.FAIL: _apply_all,
+        failure_modes.FailureModes.CONTINUE: _apply_all,
+        failure_modes.FailureModes.REMOVE_PATCHES: _remove,
+        failure_modes.FailureModes.DISABLE_PATCHES: _disable,
+        failure_modes.FailureModes.BISECT_PATCHES: _test_single,
     }
 
     if args_output.failure_mode in dispatch_table:

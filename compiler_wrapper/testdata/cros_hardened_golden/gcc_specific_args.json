@@ -1,28 +1,17 @@
 [
   {
-    "wd": "/tmp/stable",
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
-        "args": [
-          "-march=goldmont",
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-fno-reorder-blocks-and-partition",
             "-Wno-unused-local-typedefs",
             "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "-march=goldmont",
@@ -33,35 +22,35 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
-          "-march=goldmont-plus",
+          "-march=goldmont",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-fno-reorder-blocks-and-partition",
             "-Wno-unused-local-typedefs",
             "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "-march=goldmont-plus",
@@ -72,35 +61,35 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
-          "-march=skylake",
+          "-march=goldmont-plus",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-fno-reorder-blocks-and-partition",
             "-Wno-unused-local-typedefs",
             "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "-march=skylake",
@@ -111,9 +100,20 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "-march=skylake",
+          "main.cc"
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
+      }
+    }
   }
 ]

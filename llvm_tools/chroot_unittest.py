@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Unit tests for chroot helper functions."""
 
-
 import subprocess
 import unittest
-import unittest.mock as mock
+from unittest import mock
 
 import chroot
 
@@ -25,8 +23,8 @@ class HelperFunctionsTest(unittest.TestCase):
     def testSucceedsToGetChrootEbuildPathForPackage(self, mock_chroot_command):
         package_chroot_path = "/chroot/path/to/package.ebuild"
 
-        # Emulate ChrootRunCommandWOutput behavior when a chroot path is found for
-        # a valid package.
+        # Emulate ChrootRunCommandWOutput behavior when a chroot path is found
+        # for a valid package.
         mock_chroot_command.return_value = package_chroot_path
 
         chroot_path = "/test/chroot/path"
@@ -43,8 +41,8 @@ class HelperFunctionsTest(unittest.TestCase):
         chroot_path = "/path/to/chroot"
         chroot_file_path = "/src/package.ebuild"
 
-        # Verify the exception is raised when a chroot path does not have the prefix
-        # '/mnt/host/source/'.
+        # Verify the exception is raised when a chroot path does not have the
+        # prefix '/mnt/host/source/'.
         with self.assertRaises(ValueError) as err:
             chroot.ConvertChrootPathsToAbsolutePaths(
                 chroot_path, [chroot_file_path]

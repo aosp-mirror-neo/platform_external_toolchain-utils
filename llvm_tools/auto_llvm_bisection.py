@@ -5,7 +5,6 @@
 
 """Performs bisection on LLVM based off a .JSON file."""
 
-
 import enum
 import json
 import os
@@ -16,7 +15,6 @@ import traceback
 
 import chroot
 import llvm_bisection
-from llvm_bisection import BisectionExitStatus
 import update_tryjob_status
 
 
@@ -76,7 +74,7 @@ def GetBuildResult(chroot_path, buildbucket_id):
             ],
             cwd=chroot_path,
             stderr=subprocess.STDOUT,
-            encoding="UTF-8",
+            encoding="utf-8",
         )
     except subprocess.CalledProcessError as err:
         if "No build found. Perhaps not started" not in err.output:
@@ -169,6 +167,9 @@ def main():
             os.rename(temp_filename, args_output.last_tested)
 
         # Launch more tryjobs.
+        bisection_complete = (
+            llvm_bisection.BisectionExitStatus.BISECTION_COMPLETE.value
+        )
         for cur_try in range(1, BISECTION_ATTEMPTS + 1):
             try:
                 print("\nAttempting to launch more tryjobs if possible:")
@@ -179,10 +180,7 @@ def main():
                 print("-" * 40)
 
                 # Stop if the bisection has completed.
-                if (
-                    bisection_ret
-                    == BisectionExitStatus.BISECTION_COMPLETE.value
-                ):
+                if bisection_ret == bisection_complete:
                     sys.exit(0)
 
                 # Successfully launched more tryjobs.

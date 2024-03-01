@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -94,7 +93,7 @@ class State(NamedTuple):
 
 
 def parse_release_tags(lines: Iterable[str]) -> Iterable[RustReleaseVersion]:
-    """Parses `git ls-remote --tags` output into Rust stable release versions."""
+    """Parses `git ls-remote --tags` output into Rust stable versions."""
     refs_tags = "refs/tags/"
     for line in lines:
         _sha, tag = line.split(None, 1)
@@ -247,7 +246,13 @@ def file_bug(title: str, body: str) -> None:
         # (bugs.WellKnownComponents.AndroidRustToolchain, None),
     )
     for component, assignee in targets:
-        bugs.CreateNewBug(component, title, body, assignee)
+        bugs.CreateNewBug(
+            component,
+            title,
+            body,
+            assignee,
+            parent_bug=bugs.RUST_MAINTENANCE_METABUG,
+        )
 
 
 def maybe_compose_bug(
@@ -286,7 +291,7 @@ def maybe_compose_email(
         return None
 
     subject_pieces = []
-    body_pieces = []
+    body_pieces: List[tiny_render.Piece] = []
 
     # Separate the sections a bit for prettier output.
     if body_pieces:
@@ -360,8 +365,8 @@ def main(argv: List[str]) -> None:
                 last_gentoo_sha=most_recent_gentoo_commit,
             ),
         )
-        # Running through this _should_ be a nop, but do it anyway. Should make any
-        # bugs more obvious on the first run of the script.
+        # Running through this _should_ be a nop, but do it anyway. Should make
+        # any bugs more obvious on the first run of the script.
 
     prior_state = read_state(state_file)
     logging.info("Last state was %r", prior_state)
@@ -382,30 +387,30 @@ def main(argv: List[str]) -> None:
     if maybe_bug is None:
         logging.info("No bug to file")
     else:
-        title, body = maybe_bug
+        bug_title, bug_body = maybe_bug
         if opts.skip_side_effects:
             logging.info(
                 "Skipping sending bug with title %r and contents\n%s",
-                title,
-                body,
+                bug_title,
+                bug_body,
             )
         else:
             logging.info("Writing new bug")
-            file_bug(title, body)
+            file_bug(bug_title, bug_body)
 
     if maybe_email is None:
         logging.info("No email to send")
     else:
-        title, body = maybe_email
+        email_title, email_body = maybe_email
         if opts.skip_side_effects:
             logging.info(
                 "Skipping sending email with title %r and contents\n%s",
-                title,
-                tiny_render.render_html_pieces(body),
+                email_title,
+                tiny_render.render_html_pieces(email_body),
             )
         else:
             logging.info("Sending email")
-            send_email(title, body)
+            send_email(email_title, email_body)
 
     if opts.skip_state_update:
         logging.info("Skipping state update, as requested")
@@ -424,4 +429,4 @@ def main(argv: List[str]) -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    main(sys.argv[1:])

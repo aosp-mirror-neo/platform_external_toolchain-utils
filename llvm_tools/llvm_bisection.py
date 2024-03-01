@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Performs bisection on LLVM based off a .JSON file."""
-
 
 import argparse
 import enum
@@ -68,8 +66,8 @@ def GetCommandLineArgs():
         help="The bad revision for the bisection.",
     )
 
-    # Add argument for the absolute path to the file that contains information on
-    # the previous tested svn version.
+    # Add argument for the absolute path to the file that contains information
+    # on the previous tested svn version.
     parser.add_argument(
         "--last_tested",
         required=True,
@@ -124,14 +122,6 @@ def GetCommandLineArgs():
 
     # Add argument for whether to display command contents to `stdout`.
     parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="display contents of a command to the terminal "
-        "(default: %(default)s)",
-    )
-
-    # Add argument for whether to display command contents to `stdout`.
-    parser.add_argument(
         "--nocleanup",
         action="store_false",
         dest="cleanup",
@@ -162,25 +152,26 @@ def GetRemainingRange(start, end, tryjobs):
     """Gets the start and end intervals in 'json_file'.
 
     Args:
-      start: The start version of the bisection provided via the command line.
-      end: The end version of the bisection provided via the command line.
-      tryjobs: A list of tryjobs where each element is in the following format:
-      [
-          {[TRYJOB_INFORMATION]},
-          {[TRYJOB_INFORMATION]},
-          ...,
-          {[TRYJOB_INFORMATION]}
-      ]
+        start: The start version of the bisection provided via the command line.
+        end: The end version of the bisection provided via the command line.
+        tryjobs: A list of tryjobs where each element is in the following
+        format:
+        [
+            {[TRYJOB_INFORMATION]},
+            {[TRYJOB_INFORMATION]},
+            ...,
+            {[TRYJOB_INFORMATION]}
+        ]
 
     Returns:
-      The new start version and end version for bisection, a set of revisions
-      that are 'pending' and a set of revisions that are to be skipped.
+        The new start version and end version for bisection, a set of revisions
+        that are 'pending' and a set of revisions that are to be skipped.
 
     Raises:
-      ValueError: The value for 'status' is missing or there is a mismatch
-      between 'start' and 'end' compared to the 'start' and 'end' in the JSON
-      file.
-      AssertionError: The new start version is >= than the new end version.
+        ValueError: The value for 'status' is missing or there is a mismatch
+        between 'start' and 'end' compared to the 'start' and 'end' in the JSON
+        file.
+        AssertionError: The new start version is >= than the new end version.
     """
 
     if not tryjobs:
@@ -240,8 +231,8 @@ def GetRemainingRange(start, end, tryjobs):
     # Find all revisions that are to be skipped within 'good_rev' and 'bad_rev'.
     #
     # NOTE: The intent is to not launch tryjobs between 'good_rev' and 'bad_rev'
-    # that have already been marked as 'skip' (this set is used when constructing
-    # the list of revisions to launch tryjobs for).
+    # that have already been marked as 'skip' (this set is used when
+    # constructing the list of revisions to launch tryjobs for).
     skip_revisions = {
         tryjob["rev"]
         for tryjob in tryjobs
@@ -292,7 +283,6 @@ def Bisect(
     extra_change_lists,
     options,
     builder,
-    verbose,
 ):
     """Adds tryjobs and updates the status file with the new tryjobs."""
 
@@ -306,7 +296,6 @@ def Bisect(
                 extra_change_lists,
                 options,
                 builder,
-                verbose,
                 svn_revision,
             )
 
@@ -315,7 +304,7 @@ def Bisect(
         # Do not want to lose progress if there is an exception.
         if last_tested:
             new_file = "%s.new" % last_tested
-            with open(new_file, "w") as json_file:
+            with open(new_file, "w", encoding="utf-8") as json_file:
                 json.dump(
                     bisect_state, json_file, indent=4, separators=(",", ": ")
                 )
@@ -327,7 +316,7 @@ def LoadStatusFile(last_tested, start, end):
     """Loads the status file for bisection."""
 
     try:
-        with open(last_tested) as f:
+        with open(last_tested, encoding="utf-8") as f:
             return json.load(f)
     except IOError as err:
         if err.errno != errno.ENOENT:
@@ -340,7 +329,7 @@ def main(args_output):
     """Bisects LLVM commits.
 
     Raises:
-      AssertionError: The script was run inside the chroot.
+        AssertionError: The script was run inside the chroot.
     """
 
     chroot.VerifyOutsideChroot()
@@ -454,7 +443,6 @@ def main(args_output):
         args_output.extra_change_lists,
         args_output.options,
         args_output.builder,
-        args_output.verbose,
     )
 
 

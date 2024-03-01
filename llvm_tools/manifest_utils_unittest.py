@@ -1,21 +1,19 @@
+#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
-
-import io
-from pathlib import Path
-import re
-import unittest
-from xml.etree import ElementTree
-
-import manifest_utils
-
 
 """Provides utilities to read and edit the ChromiumOS Manifest entries.
 
 While this code reads and edits the internal manifest, it should only operate
 on toolchain projects (llvm-project, etc.) which are public.
 """
+
+import unittest
+from xml.etree import ElementTree
+
+import manifest_utils
+
 
 MANIFEST_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 <manifest>

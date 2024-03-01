@@ -1,23 +1,11 @@
 [
   {
-    "wd": "/tmp/stable",
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
-        "args": [
-          "-ftrapv",
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -35,27 +23,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "-ftrapv",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -65,30 +46,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-eabi-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-eabi",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -106,27 +86,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-eabi-",
             "-ftrapv",
             "main.cc",
             "-L/usr/x86_64-cros-eabi/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -136,30 +109,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-win-gnu-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-eabi-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-win-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -177,27 +149,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-win-gnu-",
             "-ftrapv",
             "main.cc",
             "-L/usr/x86_64-cros-win-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
@@ -207,30 +172,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./armv7m-cros-linux-gnu-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-win-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/armv7m-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -248,27 +212,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-static-libgcc",
             "-mthumb",
             "--prefix=../../bin/armv7m-cros-linux-gnu-",
             "-ftrapv",
             "main.cc",
             "-L/usr/armv7m-cros-linux-gnu/usr/lib",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-B../../bin",
             "-target",
             "armv7m-cros-linux-gnu"
@@ -277,30 +234,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./armv7m-cros-eabi-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./armv7m-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/armv7m-cros-eabi",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -318,27 +274,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/armv7m-cros-eabi-",
             "-ftrapv",
             "main.cc",
             "-L/usr/armv7m-cros-eabi/usr/lib",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-B../../bin",
             "-target",
             "armv7m-cros-eabi"
@@ -347,30 +296,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./armv7m-cros-win-gnu-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./armv7m-cros-eabi-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/armv7m-cros-win-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -388,27 +336,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-static-libgcc",
             "-mthumb",
             "--prefix=../../bin/armv7m-cros-win-gnu-",
             "-ftrapv",
             "main.cc",
             "-L/usr/armv7m-cros-win-gnu/usr/lib",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-B../../bin",
             "-target",
             "armv7m-cros-win-gnu"
@@ -417,30 +358,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./armv8m-cros-linux-gnu-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./armv7m-cros-win-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/armv8m-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -458,27 +398,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-static-libgcc",
             "-mthumb",
             "--prefix=../../bin/armv8m-cros-linux-gnu-",
             "-ftrapv",
             "main.cc",
             "-L/usr/armv8m-cros-linux-gnu/usr/lib",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-B../../bin",
             "-target",
             "armv8m-cros-linux-gnu"
@@ -487,30 +420,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./armv8m-cros-eabi-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./armv8m-cros-linux-gnu-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/armv8m-cros-eabi",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -528,27 +460,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/armv8m-cros-eabi-",
             "-ftrapv",
             "main.cc",
             "-L/usr/armv8m-cros-eabi/usr/lib",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-B../../bin",
             "-target",
             "armv8m-cros-eabi"
@@ -557,30 +482,29 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./armv8m-cros-win-gnu-clang",
         "args": [
           "-ftrapv",
           "main.cc"
-        ]
+        ],
+        "path": "./armv8m-cros-eabi-clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/armv8m-cros-win-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -598,27 +522,20 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-static-libgcc",
             "-mthumb",
             "--prefix=../../bin/armv8m-cros-win-gnu-",
             "-ftrapv",
             "main.cc",
             "-L/usr/armv8m-cros-win-gnu/usr/lib",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-B../../bin",
             "-target",
             "armv8m-cros-win-gnu"
@@ -627,9 +544,20 @@
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "-ftrapv",
+          "main.cc"
+        ],
+        "path": "./armv8m-cros-win-gnu-clang"
+      }
+    }
   }
 ]

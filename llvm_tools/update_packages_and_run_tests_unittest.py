@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Unittests for running tests after updating packages."""
 
-
 import json
 import subprocess
 import unittest
-import unittest.mock as mock
+from unittest import mock
 
 import chroot
 import get_llvm_hash
@@ -65,7 +63,7 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
                 "tryjob_options": ["latest-toolchain", "hwtest"],
             }
 
-            with open(last_tested_file, "w") as f:
+            with open(last_tested_file, "w", encoding="utf-8") as f:
                 f.write(json.dumps(arg_dict, indent=2))
 
             self.assertEqual(
@@ -136,7 +134,6 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
     def testSuccessfullySubmittedTryJob(
         self, mock_cmd, mock_add_links_to_cl, mock_launch_time
     ):
-
         expected_cmd = [
             "cros",
             "tryjob",
@@ -189,7 +186,6 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
     def testSuccessfullySubmittedRecipeBuilders(
         self, mock_cmd, mock_add_links_to_cl
     ):
-
         expected_cmd = [
             "bb",
             "add",
@@ -276,9 +272,8 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
         mock_update_packages,
         mock_run_tryjobs,
     ):
-
-        # Create a temporary file to simulate the last tested file that contains a
-        # revision.
+        # Create a temporary file to simulate the last tested file that
+        # contains a revision.
         with test_helpers.CreateTemporaryFile() as last_tested_file:
             builders = [
                 "kevin-llvm-next-toolchain-tryjob",
@@ -299,7 +294,7 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
                 "tryjob_options": tryjob_options,
             }
             # Parepared last tested file
-            with open(last_tested_file, "w") as f:
+            with open(last_tested_file, "w", encoding="utf-8") as f:
                 json.dump(arg_dict, f, indent=2)
 
             # Call with a changed LLVM svn version
@@ -329,9 +324,9 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
 
             update_packages_and_run_tests.main()
 
-            # Verify that the lasted tested file has been updated to the new LLVM
-            # revision.
-            with open(last_tested_file) as f:
+            # Verify that the lasted tested file has been updated to the new
+            # LLVM revision.
+            with open(last_tested_file, encoding="utf-8") as f:
                 arg_dict = json.load(f)
 
                 self.assertEqual(arg_dict["svn_version"], 200)
@@ -347,6 +342,12 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
         mock_run_tryjobs.assert_called_once()
 
         mock_update_packages.assert_called_once()
+        commit_msg_lines = mock_update_packages.call_args[1][
+            "extra_commit_msg_lines"
+        ]
+        self.assertTrue(
+            isinstance(commit_msg_lines, list), repr(commit_msg_lines)
+        )
 
 
 class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
@@ -365,14 +366,14 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
             update_packages_and_run_tests.GetCQDependString(
                 test_single_changelist
             ),
-            "\nCq-Depend: chromium:1234",
+            "Cq-Depend: chromium:1234",
         )
 
         self.assertEqual(
             update_packages_and_run_tests.GetCQDependString(
                 test_multiple_changelists
             ),
-            "\nCq-Depend: chromium:1234, chromium:5678",
+            "Cq-Depend: chromium:1234, chromium:5678",
         )
 
     def testGetCQIncludeTrybotsString(self):
@@ -390,7 +391,7 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
             update_packages_and_run_tests.GetCQIncludeTrybotsString(
                 test_valid_trybot
             ),
-            "\nCq-Include-Trybots:chromeos/cq:cq-llvm-next-orchestrator",
+            "Cq-Include-Trybots:chromeos/cq:cq-llvm-next-orchestrator",
         )
 
         with self.assertRaises(ValueError) as context:

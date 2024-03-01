@@ -12,6 +12,23 @@ import (
 
 const androidGoldenDir = "testdata/android_golden"
 
+func TestAndroidConfigDoesNotSpecifyCrashDir(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		useLlvmNext := false
+		useCCache := false
+		cfg, err := getConfig("android", useCCache, useLlvmNext, "123")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ctx.updateConfig(cfg)
+
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		if err := verifyArgCount(cmd, 0, "-fcrash-diagnostics-dir=.*"); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
 func TestAndroidConfig(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		useLlvmNext := false

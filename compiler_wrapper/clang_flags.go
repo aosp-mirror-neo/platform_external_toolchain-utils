@@ -36,21 +36,9 @@ func processClangFlags(builder *commandBuilder) error {
 		clangDir = filepath.Dir(clangDir)
 	}
 
-	var languageOverriden = false
-	for _, arg := range builder.args {
-		// Reading stdin with "-" requires either -E (which defaults to C) or -x
-		if arg.value == "-x" || arg.value == "-" {
-			languageOverriden = true
-		}
-	}
-
 	clangBasename := "clang"
 	if strings.HasSuffix(builder.target.compiler, "++") {
 		clangBasename = "clang++"
-		// If a package wants to specify the language then it can set the standard too.
-		if !languageOverriden {
-			builder.addPreUserArgs(builder.cfg.cppFlags...)
-		}
 	}
 
 	// Unsupported flags to remove from the clang command line.

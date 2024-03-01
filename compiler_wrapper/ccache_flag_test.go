@@ -32,8 +32,35 @@ func TestNotCallCCacheGivenConfig(t *testing.T) {
 	})
 }
 
-func TestNotCallCCacheGivenConfigAndNoCCacheArg(t *testing.T) {
+func TestCallCCacheGivenEnviron(t *testing.T) {
 	withCCacheEnabledTestContext(t, func(ctx *testContext) {
+		ctx.env = append(ctx.env, "COMPILER_WRAPPER_FORCE_CCACHE=1")
+
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(gccX86_64, mainCc)))
+		if err := verifyPath(cmd, "/usr/bin/ccache"); err != nil {
+			t.Error(err)
+		}
+		if err := verifyArgOrder(cmd, gccX86_64+".real", mainCc); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+func TestNotCallCCacheGivenEnviron(t *testing.T) {
+	withCCacheEnabledTestContext(t, func(ctx *testContext) {
+		ctx.env = append(ctx.env, "COMPILER_WRAPPER_FORCE_CCACHE=0")
+
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(gccX86_64, mainCc)))
+		if err := verifyPath(cmd, gccX86_64+".real"); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+func TestNotCallCCacheGivenConfigAndNoCCacheArg(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
 		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
 			ctx.newCommand(gccX86_64, "-noccache", mainCc)))
 		if err := verifyPath(cmd, gccX86_64+".real"); err != nil {

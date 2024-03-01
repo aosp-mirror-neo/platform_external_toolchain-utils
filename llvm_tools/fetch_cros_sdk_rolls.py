@@ -79,7 +79,8 @@ def main():
         "--number",
         type=int,
         default=20,
-        help="Number of recent manifests to fetch info about. 0 means unlimited.",
+        help="Number of recent manifests to fetch info about. 0 means "
+        "unlimited.",
     )
     args = parser.parse_args()
 

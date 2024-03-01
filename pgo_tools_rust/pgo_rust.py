@@ -303,7 +303,13 @@ def build_rust(
     use = (env_use + " " + use).strip()
     # -E to preserve environment variables like USE, FEATURES, etc.
     run(
-        ["sudo", "-E", "emerge", "dev-lang/rust", "dev-lang/rust-host"],
+        [
+            "sudo",
+            "-E",
+            "emerge",
+            "dev-lang/rust-host",
+            "dev-lang/rust",
+        ],
         env={"USE": use},
     )
 
@@ -323,6 +329,7 @@ def merge_profdata(llvm_or_frontend, *, source_directory: Path, dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
 
     files = list(source_directory.glob("*.profraw"))
+    assert files, f"No profraw files found in {source_directory}"
     run([llvm_profdata, "merge", f"--output={dest}"] + files)
 
 

@@ -1,22 +1,10 @@
 [
   {
-    "wd": "/tmp/stable",
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
-        "args": [
-          "-clang-syntax",
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "../../usr/bin/clang",
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -34,47 +22,40 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu",
             "-fsyntax-only",
             "-stdlib=libstdc++"
-          ]
+          ],
+          "path": "../../usr/bin/clang"
         }
       },
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-fno-reorder-blocks-and-partition",
             "-Wno-unused-local-typedefs",
             "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "main.cc",
@@ -84,33 +65,29 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
-    "env": [
-      "GOMACC_PATH=/tmp/stable/gomacc"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
           "-clang-syntax",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/tmp/stable/gomacc",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -128,78 +105,70 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu",
             "-fsyntax-only",
             "-stdlib=libstdc++"
-          ]
+          ],
+          "path": "/tmp/stable/gomacc"
         }
       },
       {
         "cmd": {
-          "path": "/tmp/stable/gomacc",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-fno-reorder-blocks-and-partition",
             "-Wno-unused-local-typedefs",
             "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
             "-mno-movbe"
-          ]
+          ],
+          "path": "/tmp/stable/gomacc"
         }
       }
-    ]
-  },
-  {
+    ],
+    "env": [
+      "GOMACC_PATH=/tmp/stable/gomacc"
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
           "-clang-syntax",
           "main.cc"
-        ]
-      },
-      "stdout": "somemessage",
-      "stderr": "someerror",
-      "exitcode": 1
-    },
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
+      }
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "../../usr/bin/clang",
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -217,61 +186,53 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu",
             "-fsyntax-only",
             "-stdlib=libstdc++"
-          ]
+          ],
+          "path": "../../usr/bin/clang"
         },
-        "stdout": "somemessage",
+        "exitcode": 1,
         "stderr": "someerror",
-        "exitcode": 1
+        "stdout": "somemessage"
       }
-    ]
-  },
-  {
+    ],
     "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-gcc",
         "args": [
           "-clang-syntax",
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
       },
-      "stdout": "somemessage",
+      "exitcode": 1,
       "stderr": "someerror",
-      "exitcode": 1
-    },
+      "stdout": "somemessage"
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "../../usr/bin/clang",
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -289,47 +250,40 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu",
             "-fsyntax-only",
             "-stdlib=libstdc++"
-          ]
+          ],
+          "path": "../../usr/bin/clang"
         }
       },
       {
         "cmd": {
-          "path": "/usr/bin/ccache",
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-fno-reorder-blocks-and-partition",
             "-Wno-unused-local-typedefs",
             "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "main.cc",
@@ -339,12 +293,26 @@
           "env_updates": [
             "CCACHE_DIR=/var/cache/distfiles/ccache",
             "CCACHE_UMASK=002"
-          ]
+          ],
+          "path": "/usr/bin/ccache"
         },
-        "stdout": "somemessage",
+        "exitcode": 1,
         "stderr": "someerror",
-        "exitcode": 1
+        "stdout": "somemessage"
       }
-    ]
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "-clang-syntax",
+          "main.cc"
+        ],
+        "path": "./x86_64-cros-linux-gnu-gcc"
+      },
+      "exitcode": 1,
+      "stderr": "someerror",
+      "stdout": "somemessage"
+    }
   }
 ]

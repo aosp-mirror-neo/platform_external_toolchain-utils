@@ -1,22 +1,8 @@
 [
   {
-    "wd": "/tmp/stable",
-    "env": [
-      "BISECT_STAGE=someBisectStage",
-      "HOME=/user/home"
-    ],
-    "wrapper": {
-      "cmd": {
-        "path": "/tmp/stable/clang",
-        "args": [
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/env",
           "args": [
             "python3",
             "-c",
@@ -28,30 +14,29 @@
           ],
           "env_updates": [
             "PYTHONPATH=/somepath/test_binary"
-          ]
+          ],
+          "path": "/usr/bin/env"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
+    ],
     "env": [
       "BISECT_STAGE=someBisectStage",
-      "BISECT_DIR=someBisectDir",
       "HOME=/user/home"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "/tmp/stable/clang",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "/tmp/stable/clang"
       }
-    },
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/env",
           "args": [
             "python3",
             "-c",
@@ -63,33 +48,30 @@
           ],
           "env_updates": [
             "PYTHONPATH=/somepath/test_binary"
-          ]
+          ],
+          "path": "/usr/bin/env"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
+    ],
     "env": [
       "BISECT_STAGE=someBisectStage",
       "BISECT_DIR=someBisectDir",
       "HOME=/user/home"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "/tmp/stable/clang",
         "args": [
           "main.cc"
-        ]
-      },
-      "stdout": "somemessage",
-      "stderr": "someerror",
-      "exitcode": 1
-    },
+        ],
+        "path": "/tmp/stable/clang"
+      }
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "/usr/bin/env",
           "args": [
             "python3",
             "-c",
@@ -101,12 +83,30 @@
           ],
           "env_updates": [
             "PYTHONPATH=/somepath/test_binary"
-          ]
+          ],
+          "path": "/usr/bin/env"
         },
-        "stdout": "somemessage",
+        "exitcode": 1,
         "stderr": "someerror",
-        "exitcode": 1
+        "stdout": "somemessage"
       }
-    ]
+    ],
+    "env": [
+      "BISECT_STAGE=someBisectStage",
+      "BISECT_DIR=someBisectDir",
+      "HOME=/user/home"
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "main.cc"
+        ],
+        "path": "/tmp/stable/clang"
+      },
+      "exitcode": 1,
+      "stderr": "someerror",
+      "stdout": "somemessage"
+    }
   }
 ]

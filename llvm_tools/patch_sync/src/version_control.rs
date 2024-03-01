@@ -14,7 +14,7 @@ const ANDROID_LLVM_REL_PATH: &str = "toolchain/llvm_android";
 
 // Need to checkout the upstream, rather than the local clone.
 const CROS_MAIN_BRANCH: &str = "cros/main";
-const ANDROID_MAIN_BRANCH: &str = "aosp/master"; // nocheck
+const ANDROID_MAIN_BRANCH: &str = "aosp/main";
 const WORK_BRANCH_NAME: &str = "__patch_sync_tmp";
 
 /// Context struct to keep track of both ChromiumOS and Android checkouts.
@@ -26,6 +26,8 @@ pub struct RepoSetupContext {
     pub sync_before: bool,
     pub wip_mode: bool,
     pub enable_cq: bool,
+    /// Generally LLVM ebuilds are now 9999 LIVE ebuilds, so only uprev if this is set.
+    pub uprev_ebuilds: bool,
 }
 
 impl RepoSetupContext {
@@ -57,7 +59,11 @@ impl RepoSetupContext {
             "CrOS LLVM dir {} is not a directory",
             llvm_dir.display()
         );
-        Self::rev_bump_llvm(&llvm_dir)?;
+
+        if self.uprev_ebuilds {
+            Self::rev_bump_llvm(&llvm_dir)?;
+        }
+
         let mut extra_args = Vec::new();
         for reviewer in reviewers {
             extra_args.push("--re");
@@ -254,11 +260,11 @@ impl RepoSetupContext {
     /// Create the commit message
     fn build_commit_msg(subj: &str, from: &str, to: &str, footer: &str) -> String {
         format!(
-            "[patch_sync] {}\n\n\
-Copies new PATCHES.json changes from {} to {}.\n
-For questions about this job, contact chromeos-toolchain@google.com\n\n
-{}",
-            subj, from, to, footer
+            "[patch_sync] {subj}\n\n\
+Copies new PATCHES.json changes from {from} to {to}.\n
+For questions about this job, contact chromeos-toolchain@google.com\n
+This change is generated automatically by the script go/llvm-patch-sync\n\n
+{footer}",
         )
     }
 }

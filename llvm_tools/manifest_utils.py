@@ -11,6 +11,7 @@ on toolchain projects (llvm-project, etc.) which are public.
 from pathlib import Path
 import shutil
 import subprocess
+from typing import List, Union
 from xml.etree import ElementTree
 
 import atomic_write_file
@@ -22,13 +23,9 @@ LLVM_PROJECT_PATH = "src/third_party/llvm-project"
 class FormattingError(Exception):
     """Error occurred when formatting the manifest."""
 
-    pass
-
 
 class UpdateManifestError(Exception):
     """Error occurred when updating the manifest."""
-
-    pass
 
 
 def make_xmlparser():
@@ -64,7 +61,7 @@ def update_chromeos_manifest(revision: str, src_tree: Path) -> Path:
     xmltree = ElementTree.parse(manifest_path, parser)
     update_chromeos_manifest_tree(revision, xmltree.getroot())
     with atomic_write_file.atomic_write(manifest_path, mode="wb") as f:
-        xmltree.write(f, encoding="UTF-8")
+        xmltree.write(f, encoding="utf-8")
     format_manifest(manifest_path)
     return manifest_path
 
@@ -99,5 +96,5 @@ def format_manifest(repo_manifest: Path):
         raise FormattingError(
             "unable to format manifest, 'cros'" " executable not in PATH"
         )
-    cmd = ["cros", "format", repo_manifest]
+    cmd: List[Union[str, Path]] = ["cros", "format", repo_manifest]
     subprocess.run(cmd, check=True)

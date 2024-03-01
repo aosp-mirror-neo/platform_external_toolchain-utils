@@ -1,167 +1,136 @@
 [
   {
-    "wd": "/tmp/stable",
+    "cmds": [
+      {
+        "cmd": {
+          "args": [
+            "--print-resource-dir"
+          ],
+          "path": "../../usr/bin/clang"
+        },
+        "stdout": "someResourceDir"
+      },
+      {
+        "cmd": {
+          "args": [
+            "-checks=*,-bugprone-narrowing-conversions,-cppcoreguidelines-*,-fuchsia-*,-google-readability*,-google-runtime-references,-hicpp-*,-llvm-*,-misc-non-private-member-variables-in-classes,-misc-unused-parameters,-modernize-*,-readability-*",
+            "main.cc",
+            "--",
+            "-resource-dir=someResourceDir",
+            "--sysroot=/usr/x86_64-cros-linux-gnu",
+            "-Qunused-arguments",
+            "-Werror=poison-system-directories",
+            "-Wno-compound-token-split-by-macro",
+            "-Wno-deprecated-builtins",
+            "-Wno-deprecated-declarations",
+            "-Wno-enum-constexpr-conversion",
+            "-Wno-error=implicit-function-declaration",
+            "-Wno-error=implicit-int",
+            "-Wno-final-dtor-non-final-class",
+            "-Wno-single-bit-bitfield-constant-conversion",
+            "-Wno-tautological-constant-compare",
+            "-Wno-tautological-unsigned-enum-zero-compare",
+            "-Wno-unknown-warning-option",
+            "-fdebug-default-version=5",
+            "-Wno-int-conversion",
+            "-Wno-incompatible-function-pointer-types",
+            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
+            "--unwindlib=libunwind",
+            "-Wno-section",
+            "-fno-addrsig",
+            "-ftrivial-auto-var-init=zero",
+            "-fcommon",
+            "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
+            "-fno-omit-frame-pointer",
+            "-static-libgcc",
+            "--prefix=../../bin/x86_64-cros-linux-gnu-",
+            "main.cc",
+            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
+            "-mno-movbe",
+            "-B../../bin",
+            "-target",
+            "x86_64-cros-linux-gnu"
+          ],
+          "path": "../../usr/bin/clang-tidy"
+        }
+      },
+      {
+        "cmd": {
+          "args": [
+            "--sysroot=/usr/x86_64-cros-linux-gnu",
+            "-Qunused-arguments",
+            "-Werror=poison-system-directories",
+            "-Wno-compound-token-split-by-macro",
+            "-Wno-deprecated-builtins",
+            "-Wno-deprecated-declarations",
+            "-Wno-enum-constexpr-conversion",
+            "-Wno-error=implicit-function-declaration",
+            "-Wno-error=implicit-int",
+            "-Wno-final-dtor-non-final-class",
+            "-Wno-single-bit-bitfield-constant-conversion",
+            "-Wno-tautological-constant-compare",
+            "-Wno-tautological-unsigned-enum-zero-compare",
+            "-Wno-unknown-warning-option",
+            "-fdebug-default-version=5",
+            "-Wno-int-conversion",
+            "-Wno-incompatible-function-pointer-types",
+            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
+            "--unwindlib=libunwind",
+            "-Wno-section",
+            "-fno-addrsig",
+            "-ftrivial-auto-var-init=zero",
+            "-fcommon",
+            "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
+            "-fno-omit-frame-pointer",
+            "-static-libgcc",
+            "--prefix=../../bin/x86_64-cros-linux-gnu-",
+            "main.cc",
+            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
+            "-mno-movbe",
+            "-B../../bin",
+            "-target",
+            "x86_64-cros-linux-gnu"
+          ],
+          "path": "../../usr/bin/clang"
+        }
+      }
+    ],
     "env": [
       "WITH_TIDY=1"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       }
-    },
-    "cmds": [
-      {
-        "cmd": {
-          "path": "../../usr/bin/clang",
-          "args": [
-            "--print-resource-dir"
-          ]
-        },
-        "stdout": "someResourceDir"
-      },
-      {
-        "cmd": {
-          "path": "../../usr/bin/clang-tidy",
-          "args": [
-            "-checks=*,-bugprone-narrowing-conversions,-cppcoreguidelines-*,-fuchsia-*,-google-readability*,-google-runtime-references,-hicpp-*,-llvm-*,-misc-non-private-member-variables-in-classes,-misc-unused-parameters,-modernize-*,-readability-*",
-            "main.cc",
-            "--",
-            "-resource-dir=someResourceDir",
-            "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
-            "-Qunused-arguments",
-            "-Werror=poison-system-directories",
-            "-Wno-compound-token-split-by-macro",
-            "-Wno-deprecated-builtins",
-            "-Wno-deprecated-declarations",
-            "-Wno-enum-constexpr-conversion",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-final-dtor-non-final-class",
-            "-Wno-single-bit-bitfield-constant-conversion",
-            "-Wno-tautological-constant-compare",
-            "-Wno-tautological-unsigned-enum-zero-compare",
-            "-Wno-unknown-warning-option",
-            "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-            "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
-            "-fuse-ld=lld",
-            "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
-            "-fcommon",
-            "-fstack-protector-strong",
-            "-fno-omit-frame-pointer",
-            "-static-libgcc",
-            "--prefix=../../bin/x86_64-cros-linux-gnu-",
-            "main.cc",
-            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
-            "-mno-movbe",
-            "-B../../bin",
-            "-target",
-            "x86_64-cros-linux-gnu"
-          ]
-        }
-      },
-      {
-        "cmd": {
-          "path": "../../usr/bin/clang",
-          "args": [
-            "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
-            "-Qunused-arguments",
-            "-Werror=poison-system-directories",
-            "-Wno-compound-token-split-by-macro",
-            "-Wno-deprecated-builtins",
-            "-Wno-deprecated-declarations",
-            "-Wno-enum-constexpr-conversion",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-final-dtor-non-final-class",
-            "-Wno-single-bit-bitfield-constant-conversion",
-            "-Wno-tautological-constant-compare",
-            "-Wno-tautological-unsigned-enum-zero-compare",
-            "-Wno-unknown-warning-option",
-            "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-            "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
-            "-fuse-ld=lld",
-            "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
-            "-fcommon",
-            "-fstack-protector-strong",
-            "-fno-omit-frame-pointer",
-            "-static-libgcc",
-            "--prefix=../../bin/x86_64-cros-linux-gnu-",
-            "main.cc",
-            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
-            "-mno-movbe",
-            "-B../../bin",
-            "-target",
-            "x86_64-cros-linux-gnu"
-          ]
-        }
-      }
-    ]
+    }
   },
   {
-    "wd": "/tmp/stable",
-    "env": [
-      "WITH_TIDY=1",
-      "GOMACC_PATH=/tmp/stable/gomacc"
-    ],
-    "wrapper": {
-      "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
-        "args": [
-          "main.cc"
-        ]
-      }
-    },
     "cmds": [
       {
         "cmd": {
-          "path": "../../usr/bin/clang",
           "args": [
             "--print-resource-dir"
-          ]
+          ],
+          "path": "../../usr/bin/clang"
         },
         "stdout": "someResourceDir"
       },
       {
         "cmd": {
-          "path": "../../usr/bin/clang-tidy",
           "args": [
             "-checks=*,-bugprone-narrowing-conversions,-cppcoreguidelines-*,-fuchsia-*,-google-readability*,-google-runtime-references,-hicpp-*,-llvm-*,-misc-non-private-member-variables-in-classes,-misc-unused-parameters,-modernize-*,-readability-*",
             "main.cc",
             "--",
             "-resource-dir=someResourceDir",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -179,40 +148,32 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu"
-          ]
+          ],
+          "path": "../../usr/bin/clang-tidy"
         }
       },
       {
         "cmd": {
-          "path": "/tmp/stable/gomacc",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -230,71 +191,61 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu"
-          ]
+          ],
+          "path": "/tmp/stable/gomacc"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
+    ],
     "env": [
       "WITH_TIDY=1",
       "GOMACC_PATH=/tmp/stable/gomacc"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "main.cc"
-        ]
-      },
-      "stdout": "somemessage",
-      "stderr": "someerrorclang-tidy failed"
-    },
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
+      }
+    }
+  },
+  {
     "cmds": [
       {
         "cmd": {
-          "path": "../../usr/bin/clang",
           "args": [
             "--print-resource-dir"
-          ]
+          ],
+          "path": "../../usr/bin/clang"
         },
         "stdout": "someResourceDir"
       },
       {
         "cmd": {
-          "path": "../../usr/bin/clang-tidy",
           "args": [
             "-checks=*,-bugprone-narrowing-conversions,-cppcoreguidelines-*,-fuchsia-*,-google-readability*,-google-runtime-references,-hicpp-*,-llvm-*,-misc-non-private-member-variables-in-classes,-misc-unused-parameters,-modernize-*,-readability-*",
             "main.cc",
             "--",
             "-resource-dir=someResourceDir",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -312,43 +263,35 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu"
-          ]
+          ],
+          "path": "../../usr/bin/clang-tidy"
         },
-        "stdout": "somemessage",
+        "exitcode": 1,
         "stderr": "someerror",
-        "exitcode": 1
+        "stdout": "somemessage"
       },
       {
         "cmd": {
-          "path": "/tmp/stable/gomacc",
           "args": [
             "../../usr/bin/clang",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
             "-Wno-compound-token-split-by-macro",
@@ -366,170 +309,163 @@
             "-Wno-int-conversion",
             "-Wno-incompatible-function-pointer-types",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
             "--unwindlib=libunwind",
             "-Wno-section",
             "-fno-addrsig",
-            "-fuse-ld=lld",
             "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
             "-fcommon",
             "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
             "-fno-omit-frame-pointer",
             "-static-libgcc",
             "--prefix=../../bin/x86_64-cros-linux-gnu-",
             "main.cc",
             "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
             "-mno-movbe",
             "-B../../bin",
             "-target",
             "x86_64-cros-linux-gnu"
-          ]
+          ],
+          "path": "/tmp/stable/gomacc"
         }
       }
-    ]
-  },
-  {
-    "wd": "/tmp/stable",
+    ],
     "env": [
       "WITH_TIDY=1",
       "GOMACC_PATH=/tmp/stable/gomacc"
     ],
+    "wd": "/tmp/stable",
     "wrapper": {
       "cmd": {
-        "path": "./x86_64-cros-linux-gnu-clang",
         "args": [
           "main.cc"
-        ]
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
       },
-      "stdout": "somemessage",
+      "stderr": "someerrorclang-tidy failed",
+      "stdout": "somemessage"
+    }
+  },
+  {
+    "cmds": [
+      {
+        "cmd": {
+          "args": [
+            "--print-resource-dir"
+          ],
+          "path": "../../usr/bin/clang"
+        },
+        "stdout": "someResourceDir"
+      },
+      {
+        "cmd": {
+          "args": [
+            "-checks=*,-bugprone-narrowing-conversions,-cppcoreguidelines-*,-fuchsia-*,-google-readability*,-google-runtime-references,-hicpp-*,-llvm-*,-misc-non-private-member-variables-in-classes,-misc-unused-parameters,-modernize-*,-readability-*",
+            "main.cc",
+            "--",
+            "-resource-dir=someResourceDir",
+            "--sysroot=/usr/x86_64-cros-linux-gnu",
+            "-Qunused-arguments",
+            "-Werror=poison-system-directories",
+            "-Wno-compound-token-split-by-macro",
+            "-Wno-deprecated-builtins",
+            "-Wno-deprecated-declarations",
+            "-Wno-enum-constexpr-conversion",
+            "-Wno-error=implicit-function-declaration",
+            "-Wno-error=implicit-int",
+            "-Wno-final-dtor-non-final-class",
+            "-Wno-single-bit-bitfield-constant-conversion",
+            "-Wno-tautological-constant-compare",
+            "-Wno-tautological-unsigned-enum-zero-compare",
+            "-Wno-unknown-warning-option",
+            "-fdebug-default-version=5",
+            "-Wno-int-conversion",
+            "-Wno-incompatible-function-pointer-types",
+            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
+            "--unwindlib=libunwind",
+            "-Wno-section",
+            "-fno-addrsig",
+            "-ftrivial-auto-var-init=zero",
+            "-fcommon",
+            "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
+            "-fno-omit-frame-pointer",
+            "-static-libgcc",
+            "--prefix=../../bin/x86_64-cros-linux-gnu-",
+            "main.cc",
+            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
+            "-mno-movbe",
+            "-B../../bin",
+            "-target",
+            "x86_64-cros-linux-gnu"
+          ],
+          "path": "../../usr/bin/clang-tidy"
+        }
+      },
+      {
+        "cmd": {
+          "args": [
+            "../../usr/bin/clang",
+            "--sysroot=/usr/x86_64-cros-linux-gnu",
+            "-Qunused-arguments",
+            "-Werror=poison-system-directories",
+            "-Wno-compound-token-split-by-macro",
+            "-Wno-deprecated-builtins",
+            "-Wno-deprecated-declarations",
+            "-Wno-enum-constexpr-conversion",
+            "-Wno-error=implicit-function-declaration",
+            "-Wno-error=implicit-int",
+            "-Wno-final-dtor-non-final-class",
+            "-Wno-single-bit-bitfield-constant-conversion",
+            "-Wno-tautological-constant-compare",
+            "-Wno-tautological-unsigned-enum-zero-compare",
+            "-Wno-unknown-warning-option",
+            "-fdebug-default-version=5",
+            "-Wno-int-conversion",
+            "-Wno-incompatible-function-pointer-types",
+            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
+            "-fclang-abi-compat=17",
+            "--unwindlib=libunwind",
+            "-Wno-section",
+            "-fno-addrsig",
+            "-ftrivial-auto-var-init=zero",
+            "-fcommon",
+            "-fstack-protector-strong",
+            "-D_FORTIFY_SOURCE=3",
+            "-fno-omit-frame-pointer",
+            "-static-libgcc",
+            "--prefix=../../bin/x86_64-cros-linux-gnu-",
+            "main.cc",
+            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
+            "-mno-movbe",
+            "-B../../bin",
+            "-target",
+            "x86_64-cros-linux-gnu"
+          ],
+          "path": "/tmp/stable/gomacc"
+        },
+        "exitcode": 1,
+        "stderr": "someerror",
+        "stdout": "somemessage"
+      }
+    ],
+    "env": [
+      "WITH_TIDY=1",
+      "GOMACC_PATH=/tmp/stable/gomacc"
+    ],
+    "wd": "/tmp/stable",
+    "wrapper": {
+      "cmd": {
+        "args": [
+          "main.cc"
+        ],
+        "path": "./x86_64-cros-linux-gnu-clang"
+      },
+      "exitcode": 1,
       "stderr": "someerror",
-      "exitcode": 1
-    },
-    "cmds": [
-      {
-        "cmd": {
-          "path": "../../usr/bin/clang",
-          "args": [
-            "--print-resource-dir"
-          ]
-        },
-        "stdout": "someResourceDir"
-      },
-      {
-        "cmd": {
-          "path": "../../usr/bin/clang-tidy",
-          "args": [
-            "-checks=*,-bugprone-narrowing-conversions,-cppcoreguidelines-*,-fuchsia-*,-google-readability*,-google-runtime-references,-hicpp-*,-llvm-*,-misc-non-private-member-variables-in-classes,-misc-unused-parameters,-modernize-*,-readability-*",
-            "main.cc",
-            "--",
-            "-resource-dir=someResourceDir",
-            "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
-            "-Qunused-arguments",
-            "-Werror=poison-system-directories",
-            "-Wno-compound-token-split-by-macro",
-            "-Wno-deprecated-builtins",
-            "-Wno-deprecated-declarations",
-            "-Wno-enum-constexpr-conversion",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-final-dtor-non-final-class",
-            "-Wno-single-bit-bitfield-constant-conversion",
-            "-Wno-tautological-constant-compare",
-            "-Wno-tautological-unsigned-enum-zero-compare",
-            "-Wno-unknown-warning-option",
-            "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-            "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
-            "-fuse-ld=lld",
-            "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
-            "-fcommon",
-            "-fstack-protector-strong",
-            "-fno-omit-frame-pointer",
-            "-static-libgcc",
-            "--prefix=../../bin/x86_64-cros-linux-gnu-",
-            "main.cc",
-            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
-            "-mno-movbe",
-            "-B../../bin",
-            "-target",
-            "x86_64-cros-linux-gnu"
-          ]
-        }
-      },
-      {
-        "cmd": {
-          "path": "/tmp/stable/gomacc",
-          "args": [
-            "../../usr/bin/clang",
-            "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-D_FORTIFY_SOURCE=2",
-            "-Qunused-arguments",
-            "-Werror=poison-system-directories",
-            "-Wno-compound-token-split-by-macro",
-            "-Wno-deprecated-builtins",
-            "-Wno-deprecated-declarations",
-            "-Wno-enum-constexpr-conversion",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-final-dtor-non-final-class",
-            "-Wno-single-bit-bitfield-constant-conversion",
-            "-Wno-tautological-constant-compare",
-            "-Wno-tautological-unsigned-enum-zero-compare",
-            "-Wno-unknown-warning-option",
-            "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-            "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
-            "-fuse-ld=lld",
-            "-ftrivial-auto-var-init=zero",
-            "-fcrash-diagnostics-dir=/tmp/stable/clang_crash_diagnostics",
-            "-fcommon",
-            "-fstack-protector-strong",
-            "-fno-omit-frame-pointer",
-            "-static-libgcc",
-            "--prefix=../../bin/x86_64-cros-linux-gnu-",
-            "main.cc",
-            "-L/usr/x86_64-cros-linux-gnu/usr/lib64",
-            "-Wno-array-parameter",
-            "-Wno-compound-token-split-by-space",
-            "-Wno-deprecated-copy",
-            "-Wno-unused-but-set-variable",
-            "-Wno-implicit-int-float-conversion",
-            "-Wno-string-concatenation",
-            "-Wno-gnu-offsetof-extensions",
-            "-mno-movbe",
-            "-B../../bin",
-            "-target",
-            "x86_64-cros-linux-gnu"
-          ]
-        },
-        "stdout": "somemessage",
-        "stderr": "someerror",
-        "exitcode": 1
-      }
-    ]
+      "stdout": "somemessage"
+    }
   }
 ]

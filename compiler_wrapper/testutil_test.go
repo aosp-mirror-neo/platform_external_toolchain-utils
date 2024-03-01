@@ -84,6 +84,12 @@ func (ctx *testContext) umask(mask int) (oldmask int) {
 	return syscall.Umask(mask)
 }
 
+func (ctx *testContext) setArbitraryClangArtifactsDir() string {
+	d := filepath.Join(ctx.tempDir, "cros-artifacts")
+	ctx.env = append(ctx.env, crosArtifactsEnvVar+"="+d)
+	return d
+}
+
 func (ctx *testContext) initUmaskDependency(lockFn func(), unlockFn func()) {
 	if ctx.umaskRestoreAction != nil {
 		// Use a panic so we get a backtrace.
@@ -191,7 +197,6 @@ func (ctx *testContext) mustFail(exitCode int) string {
 func (ctx *testContext) updateConfig(cfg *config) {
 	*ctx.cfg = *cfg
 	ctx.cfg.newWarningsDir = filepath.Join(ctx.tempDir, "fatal_clang_warnings")
-	ctx.cfg.crashArtifactsDir = filepath.Join(ctx.tempDir, "clang_crash_diagnostics")
 
 	// Ensure this is always empty, so any test that depends on it will see no output unless
 	// it's properly set up.

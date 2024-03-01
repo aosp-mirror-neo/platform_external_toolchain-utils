@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -171,30 +172,81 @@ func fillGoldenResults(ctx *testContext, files []goldenFile) []goldenFile {
 }
 
 func writeGoldenRecords(ctx *testContext, writer io.Writer, records []goldenRecord) {
-	// Replace the temp dir with a stable path so that the goldens stay stable.
-	stableTempDir := filepath.Join(filepath.Dir(ctx.tempDir), "stable")
-	writer = &replacingWriter{
-		Writer: writer,
-		old:    [][]byte{[]byte(ctx.tempDir)},
-		new:    [][]byte{[]byte(stableTempDir)},
+	// We need to rewrite /tmp/${test_specific_tmpdir} records as /tmp/stable, so it's
+	// deterministic across reruns. Round-trip this through JSON so there's no need to maintain
+	// logic that hunts through `record`s. A side-benefit of round-tripping through a JSON `map`
+	// is that `encoding/json` sorts JSON map keys, and `cros format` complains if keys aren't
+	// sorted.
+	encoded, err := json.Marshal(records)
+	if err != nil {
+		ctx.t.Fatal(err)
 	}
-	enc := json.NewEncoder(writer)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(records); err != nil {
+
+	decoded := interface{}(nil)
+	if err := json.Unmarshal(encoded, &decoded); err != nil {
+		ctx.t.Fatal(err)
+	}
+
+	stableTempDir := filepath.Join(filepath.Dir(ctx.tempDir), "stable")
+	decoded, err = dfsJSONValues(decoded, func(i interface{}) interface{} {
+		asString, ok := i.(string)
+		if !ok {
+			return i
+		}
+		return strings.ReplaceAll(asString, ctx.tempDir, stableTempDir)
+	})
+
+	encoder := json.NewEncoder(writer)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(decoded); err != nil {
 		ctx.t.Fatal(err)
 	}
 }
 
-type replacingWriter struct {
-	io.Writer
-	old [][]byte
-	new [][]byte
-}
-
-func (writer *replacingWriter) Write(p []byte) (n int, err error) {
-	// TODO: Use bytes.ReplaceAll once cros sdk uses golang >= 1.12
-	for i, old := range writer.old {
-		p = bytes.Replace(p, old, writer.new[i], -1)
+// Performs a DFS on `decodedJSON`, replacing elements with the result of calling `mapFunc()` on
+// each value. Only returns an error if an element type is unexpected (read: the input JSON should
+// only contain the types listed for unmarshalling as an interface value here
+// https://pkg.go.dev/encoding/json#Unmarshal).
+//
+// Two subtleties:
+//  1. This calls `mapFunc()` on nested values after the transformation of their individual elements.
+//     Moreover, given the JSON `[1, 2]` and a mapFunc that just returns nil, the mapFunc will be
+//     called as `mapFunc(1)`, then `mapFunc(2)`, then `mapFunc({}interface{nil, nil})`.
+//  2. This is not called directly on keys in maps. If you want to transform keys, you may do so when
+//     `mapFunc` is called on a `map[string]interface{}`. This is to make differentiating between
+//     keys and values easier.
+func dfsJSONValues(decodedJSON interface{}, mapFunc func(interface{}) interface{}) (interface{}, error) {
+	if decodedJSON == nil {
+		return mapFunc(nil), nil
 	}
-	return writer.Writer.Write(p)
+
+	switch d := decodedJSON.(type) {
+	case bool, float64, string:
+		return mapFunc(decodedJSON), nil
+
+	case []interface{}:
+		newSlice := make([]interface{}, len(d))
+		for i, elem := range d {
+			transformed, err := dfsJSONValues(elem, mapFunc)
+			if err != nil {
+				return nil, err
+			}
+			newSlice[i] = transformed
+		}
+		return mapFunc(newSlice), nil
+
+	case map[string]interface{}:
+		newMap := make(map[string]interface{}, len(d))
+		for k, v := range d {
+			transformed, err := dfsJSONValues(v, mapFunc)
+			if err != nil {
+				return nil, err
+			}
+			newMap[k] = transformed
+		}
+		return mapFunc(newMap), nil
+
+	default:
+		return nil, fmt.Errorf("unexpected type in JSON: %T", decodedJSON)
+	}
 }

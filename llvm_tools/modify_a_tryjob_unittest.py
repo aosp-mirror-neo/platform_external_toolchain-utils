@@ -1,15 +1,13 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests for modifying a tryjob."""
 
-
 import json
 import unittest
-import unittest.mock as mock
+from unittest import mock
 
 import get_llvm_hash
 import modify_a_tryjob
@@ -24,10 +22,10 @@ class ModifyATryjobTest(unittest.TestCase):
     def testNoTryjobsInStatusFile(self):
         bisect_test_contents = {"start": 369410, "end": 369420, "jobs": []}
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_modify = 369411
@@ -36,8 +34,8 @@ class ModifyATryjobTest(unittest.TestCase):
             args_output.builders = None
             args_output.options = None
 
-            # Verify the exception is raised there are no tryjobs in the status file
-            # and the mode is not to 'add' a tryjob.
+            # Verify the exception is raised there are no tryjobs in the status
+            # file and the mode is not to 'add' a tryjob.
             with self.assertRaises(SystemExit) as err:
                 modify_a_tryjob.PerformTryjobModification(
                     revision_to_modify,
@@ -47,7 +45,6 @@ class ModifyATryjobTest(unittest.TestCase):
                     args_output.options,
                     args_output.builders,
                     args_output.chroot_path,
-                    args_output.verbose,
                 )
 
             self.assertEqual(
@@ -68,10 +65,10 @@ class ModifyATryjobTest(unittest.TestCase):
             ],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_modify = 369412
@@ -80,8 +77,9 @@ class ModifyATryjobTest(unittest.TestCase):
             args_output.builders = None
             args_output.options = None
 
-            # Verify the exception is raised when the index of the tryjob was not
-            # found in the status file and the mode is not to 'add' a tryjob.
+            # Verify the exception is raised when the index of the tryjob was
+            # not found in the status file and the mode is not to 'add' a
+            # tryjob.
             with self.assertRaises(ValueError) as err:
                 modify_a_tryjob.PerformTryjobModification(
                     revision_to_modify,
@@ -91,7 +89,6 @@ class ModifyATryjobTest(unittest.TestCase):
                     args_output.options,
                     args_output.builders,
                     args_output.chroot_path,
-                    args_output.verbose,
                 )
 
             self.assertEqual(
@@ -114,10 +111,10 @@ class ModifyATryjobTest(unittest.TestCase):
             ],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_modify = 369414
@@ -134,11 +131,10 @@ class ModifyATryjobTest(unittest.TestCase):
                 args_output.options,
                 args_output.builders,
                 args_output.chroot_path,
-                args_output.verbose,
             )
 
             # Verify that the tryjob was removed from the status file.
-            with open(temp_json_file) as status_file:
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 expected_file_contents = {
@@ -160,7 +156,6 @@ class ModifyATryjobTest(unittest.TestCase):
     def testSuccessfullyRelaunchedTryjob(
         self, mock_find_tryjob_index, mock_run_tryjob
     ):
-
         bisect_test_contents = {
             "start": 369410,
             "end": 369420,
@@ -184,10 +179,10 @@ class ModifyATryjobTest(unittest.TestCase):
 
         mock_run_tryjob.return_value = tryjob_result
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_modify = 369411
@@ -204,12 +199,11 @@ class ModifyATryjobTest(unittest.TestCase):
                 args_output.options,
                 args_output.builders,
                 args_output.chroot_path,
-                args_output.verbose,
             )
 
-            # Verify that the tryjob's information was updated after submtting the
-            # tryjob.
-            with open(temp_json_file) as status_file:
+            # Verify that the tryjob's information was updated after submtting
+            # the tryjob.
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 expected_file_contents = {
@@ -247,10 +241,10 @@ class ModifyATryjobTest(unittest.TestCase):
             ],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             revision_to_add = 369411
@@ -261,8 +255,8 @@ class ModifyATryjobTest(unittest.TestCase):
             args_output = test_helpers.ArgsOutputTest()
             args_output.options = None
 
-            # Verify the exception is raised when the tryjob that is going to added
-            # already exists in the status file (found its index).
+            # Verify the exception is raised when the tryjob that is going to
+            # added already exists in the status file (found its index).
             with self.assertRaises(ValueError) as err:
                 modify_a_tryjob.PerformTryjobModification(
                     revision_to_add,
@@ -272,7 +266,6 @@ class ModifyATryjobTest(unittest.TestCase):
                     args_output.options,
                     args_output.builders,
                     args_output.chroot_path,
-                    args_output.verbose,
                 )
 
             self.assertEqual(
@@ -283,24 +276,24 @@ class ModifyATryjobTest(unittest.TestCase):
 
         mock_find_tryjob_index.assert_called_once()
 
-    # Simulate the behavior of `FindTryjobIndex()` when the tryjob was not found.
+    # Simulate the behavior of `FindTryjobIndex()` when the tryjob was not
+    # found.
     @mock.patch.object(
         update_tryjob_status, "FindTryjobIndex", return_value=None
     )
     def testSuccessfullyDidNotAddTryjobOutsideOfBisectionBounds(
         self, mock_find_tryjob_index
     ):
-
         bisect_test_contents = {
             "start": 369410,
             "end": 369420,
             "jobs": [{"rev": 369411, "status": "bad"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             # Add a revision that is outside of 'start' and 'end'.
@@ -309,8 +302,8 @@ class ModifyATryjobTest(unittest.TestCase):
             args_output = test_helpers.ArgsOutputTest()
             args_output.options = None
 
-            # Verify the exception is raised when adding a tryjob that does not exist
-            # and is not within 'start' and 'end'.
+            # Verify the exception is raised when adding a tryjob that does not
+            # exist and is not within 'start' and 'end'.
             with self.assertRaises(ValueError) as err:
                 modify_a_tryjob.PerformTryjobModification(
                     revision_to_add,
@@ -320,7 +313,6 @@ class ModifyATryjobTest(unittest.TestCase):
                     args_output.options,
                     args_output.builders,
                     args_output.chroot_path,
-                    args_output.verbose,
                 )
 
             self.assertEqual(
@@ -334,30 +326,31 @@ class ModifyATryjobTest(unittest.TestCase):
     # tryjob and constructed the tryjob information (a dictionary).
     @mock.patch.object(modify_a_tryjob, "AddTryjob")
     # Simulate the behavior of `GetLLVMHashAndVersionFromSVNOption()` when
-    # successfully retrieved the git hash of the revision to launch a tryjob for.
+    # successfully retrieved the git hash of the revision to launch a tryjob
+    # for.
     @mock.patch.object(
         get_llvm_hash,
         "GetLLVMHashAndVersionFromSVNOption",
         return_value=("a123testhash1", 369418),
     )
-    # Simulate the behavior of `FindTryjobIndex()` when the tryjob was not found.
+    # Simulate the behavior of `FindTryjobIndex()` when the tryjob was not
+    # found.
     @mock.patch.object(
         update_tryjob_status, "FindTryjobIndex", return_value=None
     )
     def testSuccessfullyAddedTryjob(
         self, mock_find_tryjob_index, mock_get_llvm_hash, mock_add_tryjob
     ):
-
         bisect_test_contents = {
             "start": 369410,
             "end": 369420,
             "jobs": [{"rev": 369411, "status": "bad"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             # Add a revision that is outside of 'start' and 'end'.
@@ -384,11 +377,10 @@ class ModifyATryjobTest(unittest.TestCase):
                 args_output.options,
                 args_output.builders,
                 args_output.chroot_path,
-                args_output.verbose,
             )
 
             # Verify that the tryjob was added to the status file.
-            with open(temp_json_file) as status_file:
+            with open(temp_json_file, encoding="utf-8") as status_file:
                 bisect_contents = json.load(status_file)
 
                 expected_file_contents = {
@@ -414,10 +406,10 @@ class ModifyATryjobTest(unittest.TestCase):
             "jobs": [{"rev": 369414, "status": "bad"}],
         }
 
-        # Create a temporary .JSON file to simulate a .JSON file that has bisection
-        # contents.
+        # Create a temporary .JSON file to simulate a .JSON file that has
+        # bisection contents.
         with test_helpers.CreateTemporaryJsonFile() as temp_json_file:
-            with open(temp_json_file, "w") as f:
+            with open(temp_json_file, "w", encoding="utf-8") as f:
                 test_helpers.WritePrettyJsonFile(bisect_test_contents, f)
 
             # Add a revision that is outside of 'start' and 'end'.
@@ -427,8 +419,8 @@ class ModifyATryjobTest(unittest.TestCase):
             args_output.builders = None
             args_output.options = None
 
-            # Verify the exception is raised when the modify a tryjob option does not
-            # exist.
+            # Verify the exception is raised when the modify a tryjob option
+            # does not exist.
             with self.assertRaises(ValueError) as err:
                 modify_a_tryjob.PerformTryjobModification(
                     revision_to_modify,
@@ -438,7 +430,6 @@ class ModifyATryjobTest(unittest.TestCase):
                     args_output.options,
                     args_output.builders,
                     args_output.chroot_path,
-                    args_output.verbose,
                 )
 
             self.assertEqual(

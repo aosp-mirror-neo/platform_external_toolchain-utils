@@ -33,36 +33,6 @@ func TestClangBasename(t *testing.T) {
 	})
 }
 
-func TestAppendCppFlags(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		ctx.cfg.cppFlags = append(ctx.cfg.cppFlags, "cppOnlyFlag")
-		// C++ only flags are disabled on clang.
-		clangCmd := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand("./x86_64-cros-linux-gnu-clang", mainCc)))
-		if err := verifyArgCount(clangCmd, 0, "cppOnlyFlag"); err != nil {
-			t.Error(err)
-		}
-		// C++ only flags are enabled on clang++.
-		clangPlusPlusCmd := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand("./x86_64-cros-linux-gnu-clang++", mainCc)))
-		if err := verifyArgCount(clangPlusPlusCmd, 1, "cppOnlyFlag"); err != nil {
-			t.Error(err)
-		}
-		// C++ only flags are disabled with -x.
-		clangPlusPlusWithXCmd := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand("./x86_64-cros-linux-gnu-clang++", "-x", "c", mainCc)))
-		if err := verifyArgCount(clangPlusPlusWithXCmd, 0, "cppOnlyFlag"); err != nil {
-			t.Error(err)
-		}
-		// C++ only flags are disabled with " - " .
-		clangPlusPlusWithStdin := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand("./x86_64-cros-linux-gnu-clang++", "-", mainCc)))
-		if err := verifyArgCount(clangPlusPlusWithStdin, 0, "cppOnlyFlag"); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
 func TestClangPathGivenClangEnv(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		ctx.env = []string{"CLANG=/a/b/clang"}

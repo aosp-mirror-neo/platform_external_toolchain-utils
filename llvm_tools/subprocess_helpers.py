@@ -1,22 +1,18 @@
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Helpers/wrappers for the subprocess module for migration to python3."""
 
-
 import subprocess
 
 
 def CheckCommand(cmd):
     """Executes the command using Popen()."""
-
-    cmd_obj = subprocess.Popen(
-        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="UTF-8"
-    )
-
-    stdout, _ = cmd_obj.communicate()
+    with subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, encoding="utf-8"
+    ) as cmd_obj:
+        stdout, _ = cmd_obj.communicate()
 
     if cmd_obj.returncode:
         print(stdout)
@@ -26,13 +22,13 @@ def CheckCommand(cmd):
 def check_output(cmd, cwd=None):
     """Wrapper for pre-python3 subprocess.check_output()."""
 
-    return subprocess.check_output(cmd, encoding="UTF-8", cwd=cwd)
+    return subprocess.check_output(cmd, encoding="utf-8", cwd=cwd)
 
 
 def check_call(cmd, cwd=None):
     """Wrapper for pre-python3 subprocess.check_call()."""
 
-    subprocess.check_call(cmd, encoding="UTF-8", cwd=cwd)
+    subprocess.check_call(cmd, encoding="utf-8", cwd=cwd)
 
 
 # FIXME: CTRL+C does not work when executing a command inside the chroot via

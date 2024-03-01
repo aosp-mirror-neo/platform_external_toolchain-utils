@@ -1,10 +1,8 @@
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Module for manipulating llvm-project-copy. Generally intended for tests."""
-
 
 import datetime
 import os
@@ -21,7 +19,7 @@ def get_location() -> str:
     return os.path.join(my_dir, "llvm-project-copy")
 
 
-def ensure_up_to_date():
+def ensure_up_to_date() -> None:
     """Ensures that llvm-project-copy is checked out and semi-up-to-date."""
 
     checkout = get_location()

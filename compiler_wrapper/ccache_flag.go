@@ -15,7 +15,7 @@ func processCCacheFlag(builder *commandBuilder) {
 	// that share compiler flags (like x86 boards) to share caches.
 	const ccacheDir = "/var/cache/distfiles/ccache"
 
-	useCCache := true
+	useCCache := builder.cfg.useCCache
 	builder.transformArgs(func(arg builderArg) string {
 		if arg.value == "-noccache" {
 			useCCache = false
@@ -24,6 +24,15 @@ func processCCacheFlag(builder *commandBuilder) {
 		return arg.value
 	})
 
+	if force, present := builder.env.getenv("COMPILER_WRAPPER_FORCE_CCACHE"); present {
+		switch force {
+		case "0":
+			useCCache = false
+		case "1":
+			useCCache = true
+		}
+	}
+
 	// Disable ccache during portage's src_configure phase. Using ccache here is generally a
 	// waste of time, since these files are very small. Experimentally, this speeds up
 	// configuring by ~13%.
@@ -31,7 +40,7 @@ func processCCacheFlag(builder *commandBuilder) {
 		useCCache = false
 	}
 
-	if builder.cfg.useCCache && useCCache {
+	if useCCache {
 		// Note: we used to also set CCACHE_BASEDIR but don't do it
 		// anymore for reasons outlined in crrev.com/c/2103170.
 		if _, present := builder.env.getenv("CCACHE_DISABLE"); present {

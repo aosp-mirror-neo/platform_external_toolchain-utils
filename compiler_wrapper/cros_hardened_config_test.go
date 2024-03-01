@@ -204,7 +204,7 @@ func createForceDisableWErrorGoldenInputs() goldenFile {
 				Env:        []string{"FORCE_DISABLE_WERROR=1"},
 				Cmds: []commandResult{
 					{
-						Stderr:   "-Werror originalerror",
+						Stderr:   arbitraryWerrorStderr,
 						ExitCode: 1,
 					},
 					okResult,
@@ -215,7 +215,7 @@ func createForceDisableWErrorGoldenInputs() goldenFile {
 				Env:        []string{"FORCE_DISABLE_WERROR=1"},
 				Cmds: []commandResult{
 					{
-						Stderr:   "-Werror originalerror",
+						Stderr:   arbitraryWerrorStderr,
 						ExitCode: 1,
 					},
 					errorResult,

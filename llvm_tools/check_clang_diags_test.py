@@ -5,6 +5,7 @@
 
 """Tests for check_clang_diags."""
 
+import textwrap
 import unittest
 from unittest import mock
 
@@ -68,12 +69,13 @@ class Test(unittest.TestCase):
             mock.call(
                 component_id=bugs.WellKnownComponents.CrOSToolchainPublic,
                 title="Investigate clang check `-Wone`",
-                body="\n".join(
-                    (
-                        "It seems that the `-Wone` check was recently added to clang.",
-                        "It's probably good to TAL at whether this check would be good",
-                        "for us to enable in e.g., platform2, or across ChromeOS.",
-                    )
+                body=textwrap.dedent(
+                    """\
+                    It seems that the `-Wone` check was recently added
+                    to clang. It's probably good to TAL at whether this
+                    check would be good for us to enable in e.g., platform2, or
+                    across ChromeOS.
+                    """
                 ),
                 assignee=check_clang_diags._DEFAULT_ASSIGNEE,
                 cc=check_clang_diags._DEFAULT_CCS,
@@ -81,13 +83,13 @@ class Test(unittest.TestCase):
             mock.call(
                 component_id=bugs.WellKnownComponents.CrOSToolchainPublic,
                 title="Investigate clang-tidy check `bugprone-foo`",
-                body="\n".join(
-                    (
-                        "It seems that the `bugprone-foo` check was recently added to "
-                        "clang-tidy.",
-                        "It's probably good to TAL at whether this check would be good",
-                        "for us to enable in e.g., platform2, or across ChromeOS.",
-                    )
+                body=textwrap.dedent(
+                    """\
+                    It seems that the `bugprone-foo` check was recently added
+                    to clang-tidy. It's probably good to TAL at whether this
+                    check would be good for us to enable in e.g., platform2, or
+                    across ChromeOS.
+                    """
                 ),
                 assignee=check_clang_diags._DEFAULT_ASSIGNEE,
                 cc=check_clang_diags._DEFAULT_CCS,

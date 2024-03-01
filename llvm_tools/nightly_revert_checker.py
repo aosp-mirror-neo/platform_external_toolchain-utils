@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -10,8 +9,8 @@ If any reverts are found that were previously unknown, this cherry-picks them or
 fires off an email. All LLVM SHAs to monitor are autodetected.
 """
 
-
 import argparse
+import dataclasses
 import io
 import json
 import logging
@@ -19,22 +18,81 @@ import os
 import pprint
 import subprocess
 import sys
-import typing as t
+import time
+from typing import Any, Callable, Dict, List, NamedTuple, Set, Tuple
 
-import cros_utils.email_sender as email_sender
-import cros_utils.tiny_render as tiny_render
+from cros_utils import email_sender
+from cros_utils import tiny_render
 import get_llvm_hash
 import get_upstream_patch
 import git_llvm_rev
 import revert_checker
 
 
-State = t.Any
+ONE_DAY_SECS = 24 * 60 * 60
+# How often to send an email about a HEAD not moving.
+HEAD_STALENESS_ALERT_INTERVAL_SECS = 21 * ONE_DAY_SECS
+# How long to wait after a HEAD changes for the first 'update' email to be sent.
+HEAD_STALENESS_ALERT_INITIAL_SECS = 60 * ONE_DAY_SECS
+
+
+# Not frozen, as `next_notification_timestamp` may be mutated.
+@dataclasses.dataclass(frozen=False, eq=True)
+class HeadInfo:
+    """Information about about a HEAD that's tracked by this script."""
+
+    # The most recent SHA observed for this HEAD.
+    last_sha: str
+    # The time at which the current value for this HEAD was first seen.
+    first_seen_timestamp: int
+    # The next timestamp to notify users if this HEAD doesn't move.
+    next_notification_timestamp: int
+
+    @classmethod
+    def from_json(cls, json_object: Any) -> "HeadInfo":
+        return cls(**json_object)
+
+    def to_json(self) -> Any:
+        return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class State:
+    """Persistent state for this script."""
+
+    # Mapping of LLVM SHA -> List of reverts that have been seen for it
+    seen_reverts: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+    # Mapping of friendly HEAD name (e.g., main-legacy) to last-known info
+    # about it.
+    heads: Dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
+
+    @classmethod
+    def from_json(cls, json_object: Any) -> "State":
+        # Autoupgrade old JSON files.
+        if "heads" not in json_object:
+            json_object = {
+                "seen_reverts": json_object,
+                "heads": {},
+            }
+
+        return cls(
+            seen_reverts=json_object["seen_reverts"],
+            heads={
+                k: HeadInfo.from_json(v)
+                for k, v in json_object["heads"].items()
+            },
+        )
+
+    def to_json(self) -> Any:
+        return {
+            "seen_reverts": self.seen_reverts,
+            "heads": {k: v.to_json() for k, v in self.heads.items()},
+        }
 
 
 def _find_interesting_android_shas(
     android_llvm_toolchain_dir: str,
-) -> t.List[t.Tuple[str, str]]:
+) -> List[Tuple[str, str]]:
     llvm_project = os.path.join(
         android_llvm_toolchain_dir, "toolchain/llvm-project"
     )
@@ -60,7 +118,7 @@ def _find_interesting_android_shas(
 
     main_legacy = get_llvm_merge_base("aosp/master-legacy")  # nocheck
     testing_upstream = get_llvm_merge_base("aosp/testing-upstream")
-    result = [("main-legacy", main_legacy)]
+    result: List[Tuple[str, str]] = [("main-legacy", main_legacy)]
 
     # If these are the same SHA, there's no point in tracking both.
     if main_legacy != testing_upstream:
@@ -75,7 +133,7 @@ def _find_interesting_android_shas(
 
 def _parse_llvm_ebuild_for_shas(
     ebuild_file: io.TextIOWrapper,
-) -> t.List[t.Tuple[str, str]]:
+) -> List[Tuple[str, str]]:
     def parse_ebuild_assignment(line: str) -> str:
         no_comments = line.split("#")[0]
         no_assign = no_comments.split("=", 1)[1].strip()
@@ -98,7 +156,7 @@ def _parse_llvm_ebuild_for_shas(
             "llvm=%s; llvm_next=%s" % (llvm_hash, llvm_next_hash)
         )
 
-    results = [("llvm", llvm_hash)]
+    results: List[Tuple[str, str]] = [("llvm", llvm_hash)]
     if llvm_next_hash != llvm_hash:
         results.append(("llvm-next", llvm_next_hash))
     return results
@@ -106,7 +164,7 @@ def _parse_llvm_ebuild_for_shas(
 
 def _find_interesting_chromeos_shas(
     chromeos_base: str,
-) -> t.List[t.Tuple[str, str]]:
+) -> List[Tuple[str, str]]:
     llvm_dir = os.path.join(
         chromeos_base, "src/third_party/chromiumos-overlay/sys-devel/llvm"
     )
@@ -126,7 +184,7 @@ def _find_interesting_chromeos_shas(
         return _parse_llvm_ebuild_for_shas(f)
 
 
-_Email = t.NamedTuple(
+_Email = NamedTuple(
     "_Email",
     [
         ("subject", str),
@@ -139,9 +197,9 @@ def _generate_revert_email(
     repository_name: str,
     friendly_name: str,
     sha: str,
-    prettify_sha: t.Callable[[str], tiny_render.Piece],
-    get_sha_description: t.Callable[[str], tiny_render.Piece],
-    new_reverts: t.List[revert_checker.Revert],
+    prettify_sha: Callable[[str], tiny_render.Piece],
+    get_sha_description: Callable[[str], tiny_render.Piece],
+    new_reverts: List[revert_checker.Revert],
 ) -> _Email:
     email_pieces = [
         "It looks like there may be %s across %s ("
@@ -184,11 +242,11 @@ def _generate_revert_email(
     )
 
 
-_EmailRecipients = t.NamedTuple(
+_EmailRecipients = NamedTuple(
     "_EmailRecipients",
     [
-        ("well_known", t.List[str]),
-        ("direct", t.List[str]),
+        ("well_known", List[str]),
+        ("direct", List[str]),
     ],
 )
 
@@ -205,11 +263,15 @@ def _send_revert_email(recipients: _EmailRecipients, email: _Email) -> None:
 
 
 def _write_state(state_file: str, new_state: State) -> None:
+    tmp_file = state_file + ".new"
     try:
-        tmp_file = state_file + ".new"
         with open(tmp_file, "w", encoding="utf-8") as f:
             json.dump(
-                new_state, f, sort_keys=True, indent=2, separators=(",", ": ")
+                new_state.to_json(),
+                f,
+                sort_keys=True,
+                indent=2,
+                separators=(",", ": "),
             )
         os.rename(tmp_file, state_file)
     except:
@@ -222,22 +284,33 @@ def _write_state(state_file: str, new_state: State) -> None:
 
 def _read_state(state_file: str) -> State:
     try:
-        with open(state_file) as f:
-            return json.load(f)
+        with open(state_file, encoding="utf-8") as f:
+            return State.from_json(json.load(f))
     except FileNotFoundError:
         logging.info(
             "No state file found at %r; starting with an empty slate",
             state_file,
         )
-        return {}
+        return State()
 
 
-def find_shas(
+@dataclasses.dataclass(frozen=True)
+class NewRevertInfo:
+    """A list of new reverts for a given SHA."""
+
+    friendly_name: str
+    sha: str
+    new_reverts: List[revert_checker.Revert]
+
+
+def locate_new_reverts_across_shas(
     llvm_dir: str,
-    interesting_shas: t.List[t.Tuple[str, str]],
+    interesting_shas: List[Tuple[str, str]],
     state: State,
-    new_state: State,
-):
+) -> Tuple[State, List[NewRevertInfo]]:
+    """Locates and returns yet-unseen reverts across `interesting_shas`."""
+    new_state = State()
+    revert_infos = []
     for friendly_name, sha in interesting_shas:
         logging.info("Finding reverts across %s (%s)", friendly_name, sha)
         all_reverts = revert_checker.find_reverts(
@@ -249,42 +322,72 @@ def find_shas(
             pprint.pformat(all_reverts),
         )
 
-        new_state[sha] = [r.sha for r in all_reverts]
+        new_state.seen_reverts[sha] = [r.sha for r in all_reverts]
 
-        if sha not in state:
+        if sha not in state.seen_reverts:
             logging.info("SHA %s is new to me", sha)
             existing_reverts = set()
         else:
-            existing_reverts = set(state[sha])
+            existing_reverts = set(state.seen_reverts[sha])
 
         new_reverts = [r for r in all_reverts if r.sha not in existing_reverts]
         if not new_reverts:
             logging.info("...All of which have been reported.")
             continue
 
-        yield (friendly_name, sha, new_reverts)
+        new_head_info = None
+        if old_head_info := state.heads.get(friendly_name):
+            if old_head_info.last_sha == sha:
+                new_head_info = old_head_info
+
+        if new_head_info is None:
+            now = int(time.time())
+            notify_at = HEAD_STALENESS_ALERT_INITIAL_SECS + now
+            new_head_info = HeadInfo(
+                last_sha=sha,
+                first_seen_timestamp=now,
+                next_notification_timestamp=notify_at,
+            )
+        new_state.heads[friendly_name] = new_head_info
+
+        revert_infos.append(
+            NewRevertInfo(
+                friendly_name=friendly_name,
+                sha=sha,
+                new_reverts=new_reverts,
+            )
+        )
+    return new_state, revert_infos
 
 
 def do_cherrypick(
     chroot_path: str,
     llvm_dir: str,
-    interesting_shas: t.List[t.Tuple[str, str]],
+    repository: str,
+    interesting_shas: List[Tuple[str, str]],
     state: State,
-    reviewers: t.List[str],
-    cc: t.List[str],
+    reviewers: List[str],
+    cc: List[str],
 ) -> State:
-    new_state: State = {}
-    seen: t.Set[str] = set()
-    for friendly_name, _sha, reverts in find_shas(
-        llvm_dir, interesting_shas, state, new_state
-    ):
-        if friendly_name in seen:
+    def prettify_sha(sha: str) -> tiny_render.Piece:
+        rev = get_llvm_hash.GetVersionFrom(llvm_dir, sha)
+        return prettify_sha_for_email(sha, rev)
+
+    new_state = State()
+    seen: Set[str] = set()
+
+    new_state, new_reverts = locate_new_reverts_across_shas(
+        llvm_dir, interesting_shas, state
+    )
+
+    for revert_info in new_reverts:
+        if revert_info.friendly_name in seen:
             continue
-        seen.add(friendly_name)
-        for sha, reverted_sha in reverts:
+        seen.add(revert_info.friendly_name)
+        for sha, reverted_sha in revert_info.new_reverts:
             try:
-                # We upload reverts for all platforms by default, since there's no
-                # real reason for them to be CrOS-specific.
+                # We upload reverts for all platforms by default, since there's
+                # no real reason for them to be CrOS-specific.
                 get_upstream_patch.get_from_upstream(
                     chroot_path=chroot_path,
                     create_cl=True,
@@ -296,28 +399,114 @@ def do_cherrypick(
                 )
             except get_upstream_patch.CherrypickError as e:
                 logging.info("%s, skipping...", str(e))
+
+    maybe_email_about_stale_heads(
+        new_state,
+        repository,
+        recipients=_EmailRecipients(
+            well_known=[],
+            direct=reviewers + cc,
+        ),
+        prettify_sha=prettify_sha,
+        is_dry_run=False,
+    )
     return new_state
+
+
+def prettify_sha_for_email(
+    sha: str,
+    rev: int,
+) -> tiny_render.Piece:
+    """Returns a piece of an email representing the given sha and its rev."""
+    # 12 is arbitrary, but should be unambiguous enough.
+    short_sha = sha[:12]
+    return tiny_render.Switch(
+        text=f"r{rev} ({short_sha})",
+        html=tiny_render.Link(
+            href=f"https://github.com/llvm/llvm-project/commit/{sha}",
+            inner=f"r{rev}",
+        ),
+    )
+
+
+def maybe_email_about_stale_heads(
+    new_state: State,
+    repository_name: str,
+    recipients: _EmailRecipients,
+    prettify_sha: Callable[[str], tiny_render.Piece],
+    is_dry_run: bool,
+) -> bool:
+    """Potentially send an email about stale HEADs in `new_state`.
+
+    These emails are sent to notify users of the current HEADs detected by this
+    script. They:
+    - aren't meant to hurry LLVM rolls along,
+    - are worded to avoid the implication that an LLVM roll is taking an
+      excessive amount of time, and
+    - are initially sent at the 2 month point of seeing the same HEAD.
+
+    We've had multiple instances in the past of upstream changes (e.g., moving
+    to other git branches or repos) leading to this revert checker silently
+    checking a very old HEAD for months. The intent is to send emails when the
+    correctness of the HEADs we're working with _might_ be wrong.
+    """
+    logging.info("Checking HEAD freshness...")
+    now = int(time.time())
+    stale = sorted(
+        (name, info)
+        for name, info in new_state.heads.items()
+        if info.next_notification_timestamp <= now
+    )
+    if not stale:
+        logging.info("All HEADs are fresh-enough; no need to send an email.")
+        return False
+
+    stale_listings = []
+
+    for name, info in stale:
+        days = (now - info.first_seen_timestamp) // ONE_DAY_SECS
+        pretty_rev = prettify_sha(info.last_sha)
+        stale_listings.append(
+            f"{name} at {pretty_rev}, which was last updated ~{days} days ago."
+        )
+
+    shas_are = "SHAs are" if len(stale_listings) > 1 else "SHA is"
+    email_body = [
+        "Hi! This is a friendly notification that the current upstream LLVM "
+        f"{shas_are} being tracked by the LLVM revert checker:",
+        tiny_render.UnorderedList(stale_listings),
+        tiny_render.line_break,
+        "If that's still correct, great! If it looks wrong, the revert "
+        "checker's SHA autodetection may need an update. Please file a bug "
+        "at go/crostc-bug if an update is needed. Thanks!",
+    ]
+
+    email = _Email(
+        subject=f"[revert-checker/{repository_name}] Tracked branch update",
+        body=email_body,
+    )
+    if is_dry_run:
+        logging.info("Dry-run specified; would otherwise send email %s", email)
+    else:
+        _send_revert_email(recipients, email)
+
+    next_notification = now + HEAD_STALENESS_ALERT_INTERVAL_SECS
+    for _, info in stale:
+        info.next_notification_timestamp = next_notification
+    return True
 
 
 def do_email(
     is_dry_run: bool,
     llvm_dir: str,
     repository: str,
-    interesting_shas: t.List[t.Tuple[str, str]],
+    interesting_shas: List[Tuple[str, str]],
     state: State,
     recipients: _EmailRecipients,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_dir, sha)
-
-        # 12 is arbitrary, but should be unambiguous enough.
-        short_sha = sha[:12]
-        return tiny_render.Switch(
-            text=f"r{rev} ({short_sha})",
-            html=tiny_render.Link(
-                href="https://reviews.llvm.org/rG" + sha, inner="r" + str(rev)
-            ),
-        )
+        return prettify_sha_for_email(sha, rev)
 
     def get_sha_description(sha: str) -> tiny_render.Piece:
         return subprocess.check_output(
@@ -326,17 +515,18 @@ def do_email(
             encoding="utf-8",
         ).strip()
 
-    new_state: State = {}
-    for friendly_name, sha, new_reverts in find_shas(
-        llvm_dir, interesting_shas, state, new_state
-    ):
+    new_state, new_reverts = locate_new_reverts_across_shas(
+        llvm_dir, interesting_shas, state
+    )
+
+    for revert_info in new_reverts:
         email = _generate_revert_email(
             repository,
-            friendly_name,
-            sha,
+            revert_info.friendly_name,
+            revert_info.sha,
             prettify_sha,
             get_sha_description,
-            new_reverts,
+            revert_info.new_reverts,
         )
         if is_dry_run:
             logging.info(
@@ -348,10 +538,14 @@ def do_email(
             logging.info("Sending email with subject %r...", email.subject)
             _send_revert_email(recipients, email)
             logging.info("Email sent.")
+
+    maybe_email_about_stale_heads(
+        new_state, repository, recipients, prettify_sha, is_dry_run
+    )
     return new_state
 
 
-def parse_args(argv: t.List[str]) -> t.Any:
+def parse_args(argv: List[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -373,15 +567,19 @@ def parse_args(argv: t.List[str]) -> t.Any:
         "--reviewers",
         type=str,
         nargs="*",
-        help="Requests reviews from REVIEWERS. All REVIEWERS must have existing "
-        "accounts.",
+        help="""
+        Requests reviews from REVIEWERS. All REVIEWERS must have existing
+        accounts.
+        """,
     )
     parser.add_argument(
         "--cc",
         type=str,
         nargs="*",
-        help="CCs the CL to the recipients. All recipients must have existing "
-        "accounts.",
+        help="""
+        CCs the CL or email to the recipients. If in cherry-pick mode, all
+        recipients must have Gerrit accounts.
+        """,
     )
 
     subparsers = parser.add_subparsers(dest="repository")
@@ -405,15 +603,14 @@ def parse_args(argv: t.List[str]) -> t.Any:
 
 
 def find_chroot(
-    opts: t.Any, reviewers: t.List[str], cc: t.List[str]
-) -> t.Tuple[str, t.List[t.Tuple[str, str]], _EmailRecipients]:
-    recipients = reviewers + cc
+    opts: argparse.Namespace, cc: List[str]
+) -> Tuple[str, List[Tuple[str, str]], _EmailRecipients]:
     if opts.repository == "chromeos":
         chroot_path = opts.chromeos_dir
         return (
             chroot_path,
             _find_interesting_chromeos_shas(chroot_path),
-            _EmailRecipients(well_known=["mage"], direct=recipients),
+            _EmailRecipients(well_known=["mage"], direct=cc),
         )
     elif opts.repository == "android":
         if opts.action == "cherry-pick":
@@ -427,18 +624,19 @@ def find_chroot(
             _find_interesting_android_shas(chroot_path),
             _EmailRecipients(
                 well_known=[],
-                direct=["android-llvm-dev@google.com"] + recipients,
+                direct=["android-llvm-dev@google.com"] + cc,
             ),
         )
     else:
         raise ValueError(f"Unknown repository {opts.repository}")
 
 
-def main(argv: t.List[str]) -> int:
+def main(argv: List[str]) -> int:
     opts = parse_args(argv)
 
     logging.basicConfig(
-        format="%(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: %(message)s",
+        format="%(asctime)s: %(levelname)s: "
+        "%(filename)s:%(lineno)d: %(message)s",
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
@@ -449,18 +647,19 @@ def main(argv: t.List[str]) -> int:
     reviewers = opts.reviewers if opts.reviewers else []
     cc = opts.cc if opts.cc else []
 
-    chroot_path, interesting_shas, recipients = find_chroot(opts, reviewers, cc)
+    chroot_path, interesting_shas, recipients = find_chroot(opts, cc)
     logging.info("Interesting SHAs were %r", interesting_shas)
 
     state = _read_state(state_file)
     logging.info("Loaded state\n%s", pprint.pformat(state))
 
-    # We want to be as free of obvious side-effects as possible in case something
-    # above breaks. Hence, action as late as possible.
+    # We want to be as free of obvious side-effects as possible in case
+    # something above breaks. Hence, action as late as possible.
     if action == "cherry-pick":
         new_state = do_cherrypick(
             chroot_path=chroot_path,
             llvm_dir=llvm_dir,
+            repository=repository,
             interesting_shas=interesting_shas,
             state=state,
             reviewers=reviewers,
@@ -470,8 +669,8 @@ def main(argv: t.List[str]) -> int:
         new_state = do_email(
             is_dry_run=action == "dry-run",
             llvm_dir=llvm_dir,
-            repository=repository,
             interesting_shas=interesting_shas,
+            repository=repository,
             state=state,
             recipients=recipients,
         )

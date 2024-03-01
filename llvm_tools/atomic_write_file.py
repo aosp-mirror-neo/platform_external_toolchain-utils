@@ -13,11 +13,15 @@ import logging
 import os
 from pathlib import Path
 import tempfile
-from typing import Union
+from typing import Iterator, Literal, Optional, Union
 
 
 @contextlib.contextmanager
-def atomic_write(fp: Union[Path, str], mode="w", *args, **kwargs):
+def atomic_write(
+    fp: Union[Path, str],
+    mode: Literal["w", "wb"] = "w",
+    encoding: Optional[str] = None,
+) -> Iterator:
     """Write to a filepath atomically.
 
     This works by a temp file swap, created with a .tmp suffix in
@@ -34,13 +38,12 @@ def atomic_write(fp: Union[Path, str], mode="w", *args, **kwargs):
         >>> # "f" is closed here, and my_file.txt is written to.
 
     Args:
-      fp: Filepath to open.
-      mode: File mode; can be 'w', 'wb'. Default 'w'.
-      *args: Passed to Path.open as nargs.
-      **kwargs: Passed to Path.open as kwargs.
+        fp: Filepath to open.
+        mode: File mode; can be 'w', 'wb'. Default 'w'.
+        encoding: the encoding to use (defaults to None).
 
     Raises:
-      ValueError when the mode is invalid.
+        ValueError when the mode is invalid.
     """
     if isinstance(fp, str):
         fp = Path(fp)
@@ -49,14 +52,15 @@ def atomic_write(fp: Union[Path, str], mode="w", *args, **kwargs):
 
     # We use mkstemp here because we want to handle the closing and
     # replacement ourselves.
-    (fd, tmp_path) = tempfile.mkstemp(
+    result = tempfile.mkstemp(
         prefix=fp.name,
         suffix=".tmp",
         dir=fp.parent,
     )
-    tmp_path = Path(tmp_path)
+    fd, tmp_path = (result[0], Path(result[1]))
+
     try:
-        with os.fdopen(fd, mode=mode, *args, **kwargs) as f:
+        with os.fdopen(fd, mode=mode, encoding=encoding) as f:
             yield f
     except:
         try:

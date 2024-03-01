@@ -5,7 +5,6 @@
 
 """Tests for auto bisection of LLVM."""
 
-
 import json
 import os
 import subprocess
@@ -55,7 +54,6 @@ class AutoLLVMBisectionTest(unittest.TestCase):
         mock_outside_chroot,
         mock_chromeos_root,
     ):
-
         mock_isfile.side_effect = [False, False, True, True]
         mock_llvm_bisection.side_effect = [
             0,
@@ -112,7 +110,6 @@ class AutoLLVMBisectionTest(unittest.TestCase):
         mock_outside_chroot,
         mock_chromeos_root,
     ):
-
         mock_isfile.return_value = False
         mock_llvm_bisection.side_effect = ValueError(
             "Failed to launch more tryjobs."
@@ -160,7 +157,6 @@ class AutoLLVMBisectionTest(unittest.TestCase):
         mock_outside_chroot,
         mock_chromeos_root,
     ):
-
         # Simulate behavior of `time.time()` for time passed.
         @test_helpers.CallCountsToMockFunctions
         def MockTimePassed(call_count):
@@ -225,7 +221,7 @@ class AutoLLVMBisectionTest(unittest.TestCase):
             ],
             cwd="/some/path/to/chroot",
             stderr=subprocess.STDOUT,
-            encoding="UTF-8",
+            encoding="utf-8",
         )
 
     @mock.patch.object(subprocess, "check_output")
@@ -247,7 +243,7 @@ class AutoLLVMBisectionTest(unittest.TestCase):
             ],
             cwd=chroot_path,
             stderr=subprocess.STDOUT,
-            encoding="UTF-8",
+            encoding="utf-8",
         )
 
     @mock.patch.object(subprocess, "check_output")
@@ -282,7 +278,7 @@ class AutoLLVMBisectionTest(unittest.TestCase):
             ],
             cwd=chroot_path,
             stderr=subprocess.STDOUT,
-            encoding="UTF-8",
+            encoding="utf-8",
         )
 
 

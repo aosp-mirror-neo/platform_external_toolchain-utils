@@ -39,8 +39,8 @@ class PatchManagerTest(unittest.TestCase):
             )
         mock_isdir.assert_called_once()
 
-    # Simulate behavior of 'os.path.isfile()' when the patch metadata file is does
-    # not exist.
+    # Simulate behavior of 'os.path.isfile()' when the patch metadata file is
+    # does not exist.
     @mock.patch.object(Path, "is_file", return_value=False)
     def testInvalidPathToPatchMetadataFilePassedAsCommandLineArgument(
         self, mock_isfile
@@ -124,6 +124,7 @@ class PatchManagerTest(unittest.TestCase):
                         dirpath,
                         patches_path,
                         "example.patch",
+                        patch_utils.gnu_patch,
                     )
                     self.assertEqual(result, expected)
                     m.assert_called()
@@ -164,11 +165,12 @@ class PatchManagerTest(unittest.TestCase):
                         dirpath,
                         patches_path,
                         "example.patch",
+                        patch_utils.gnu_patch,
                     )
                     self.assertEqual(result, expected)
 
             # Check patch can apply and fail with good return codes.
-            def _apply_patch_entry_mock1(v, _, patch_entry, **__):
+            def _apply_patch_entry_mock1(v, _, patch_entry, _func, **__):
                 return patch_entry.can_patch_version(v), None
 
             _harness2(
@@ -183,7 +185,7 @@ class PatchManagerTest(unittest.TestCase):
             )
 
             # Early exit check, shouldn't apply later failing patch.
-            def _apply_patch_entry_mock2(v, _, patch_entry, **__):
+            def _apply_patch_entry_mock2(v, _, patch_entry, _func, **__):
                 if (
                     patch_entry.can_patch_version(v)
                     and patch_entry.rel_patch_path == "patch_after.patch"
@@ -198,7 +200,7 @@ class PatchManagerTest(unittest.TestCase):
             )
 
             # Skip check, should exit early on the first patch.
-            def _apply_patch_entry_mock3(v, _, patch_entry, **__):
+            def _apply_patch_entry_mock3(v, _, patch_entry, _func, **__):
                 if (
                     patch_entry.can_patch_version(v)
                     and patch_entry.rel_patch_path == "another.patch"
