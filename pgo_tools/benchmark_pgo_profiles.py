@@ -118,8 +118,8 @@ def construct_hyperfine_cmd(
     else:
         raise ValueError(f"Unknown profile type: {type(profile)}")
 
-    quickpkg_restore = " ".join(
-        shlex.quote(str(x))
+    quickpkg_restore = shlex.join(
+        str(x)
         for x in pgo_tools.generate_quickpkg_restoration_command(llvm_binpkg)
     )
 
@@ -231,7 +231,7 @@ def run_benchmark(
             logging.info(
                 "Profile %r: Running %s",
                 str(profile),
-                " ".join(shlex.quote(str(x)) for x in cmd),
+                shlex.join(str(x) for x in cmd),
             )
             pgo_tools.run(cmd)
 

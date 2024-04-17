@@ -139,12 +139,6 @@ def main(argv: List[str]) -> None:
         """,
     )
     parser.add_argument(
-        "--checkout",
-        help="""
-        If specified, the llvm directory will be checked out to the given SHA.
-        """,
-    )
-    parser.add_argument(
         "--clean-llvm",
         action="store_true",
         help="""
@@ -175,6 +169,26 @@ def main(argv: List[str]) -> None:
         Set to 'host' for working on the host system, and not a board.
         """,
     )
+
+    checkout_group = parser.add_mutually_exclusive_group(required=True)
+    checkout_group.add_argument(
+        "--checkout",
+        help="""
+        If specified, the llvm directory will be checked out to the given SHA.
+        """,
+    )
+    # The value of this isn't used anywhere; it's just used as an explicit
+    # nudge for checking LLVM out.
+    checkout_group.add_argument(
+        "--no-checkout",
+        action="store_true",
+        help="""
+        Don't check llvm-project out to anything special before running. Useful
+        if you'd like to, for example, workon multiple LLVM projects
+        simultaneously and have already called `setup_for_workon` on another
+        one.
+        """,
+    )
     opts = parser.parse_args(argv)
 
     ebuild_dir = opts.ebuild_dir
@@ -199,7 +213,7 @@ def main(argv: List[str]) -> None:
             ["git", "reset", "--hard", "HEAD"],
         )
 
-    if opts.checkout:
+    if opts.checkout is not None:
         git_housekeeping_commands.append(
             ["git", "checkout", "--quiet", opts.checkout],
         )

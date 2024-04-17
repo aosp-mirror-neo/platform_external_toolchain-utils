@@ -204,10 +204,6 @@ def compute_rustc_src_name(version: RustVersion) -> str:
     return f"rustc-{version}-src.tar.gz"
 
 
-def compute_rust_bootstrap_prebuilt_name(version: RustVersion) -> str:
-    return f"rust-bootstrap-{version}.tbz2"
-
-
 def find_ebuild_for_package(name: str) -> str:
     """Returns the path to the ebuild for the named package."""
     return run_in_chroot(
@@ -546,7 +542,6 @@ def fetch_bootstrap_distfiles(version: RustVersion) -> None:
     are available on the mirror and the local copies are the same as
     the ones on the mirror.
     """
-    fetch_distfile_from_mirror(compute_rust_bootstrap_prebuilt_name(version))
     fetch_distfile_from_mirror(compute_rustc_src_name(version))
 
 
@@ -1201,7 +1196,7 @@ def main() -> None:
         # Determine the template version, if not given.
         template_version = args.template
         if template_version is None:
-            rust_ebuild = find_ebuild_for_package("rust")
+            rust_ebuild = find_ebuild_for_package("dev-lang/rust")
             template_version = RustVersion.parse_from_ebuild(rust_ebuild)
 
         run_step("create new repo", lambda: create_new_repo(args.uprev))

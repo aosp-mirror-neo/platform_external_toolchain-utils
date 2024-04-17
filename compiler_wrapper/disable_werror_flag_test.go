@@ -377,7 +377,6 @@ func withForceDisableWErrorTestContext(t *testing.T, work func(ctx *testContext)
 	withTestContext(t, func(ctx *testContext) {
 		ctx.NoteTestWritesToUmask()
 
-		ctx.cfg.newWarningsDir = "new_warnings"
 		ctx.env = []string{
 			"FORCE_DISABLE_WERROR=1",
 			artifactsTmpDirEnvName + "=" + path.Join(ctx.tempDir, "artifacts"),

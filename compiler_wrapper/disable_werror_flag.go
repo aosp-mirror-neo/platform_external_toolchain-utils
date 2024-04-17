@@ -20,7 +20,7 @@ import (
 const numWErrorEstimate = 30
 
 func getForceDisableWerrorDir(env env, cfg *config) string {
-	return path.Join(getCompilerArtifactsDir(env), cfg.newWarningsDir)
+	return path.Join(getCompilerArtifactsDir(env), "toolchain/fatal_clang_warnings")
 }
 
 type forceDisableWerrorConfig struct {
@@ -49,9 +49,13 @@ func processForceDisableWerrorFlag(env env, cfg *config, builder *commandBuilder
 	//   `-D_CROSTC_FORCE_DISABLE_WERROR=/path/to/directory`. This flag will be removed from the
 	//   command before the compiler is invoked. If multiple of these are passed, the last one
 	//   wins, but all are removed from the build command.
-	// 2 (deprecated). An environment variable, FORCE_DISABLE_WERROR, set to any nonempty value.
-	//   In this case, the wrapper will write to either somewhere under
-	//   ${CROS_ARTIFACTS_TMP_DIR}, or to /tmp.
+	// 2 (dispreferred, but supported). An environment variable, FORCE_DISABLE_WERROR, set to
+	//   any nonempty value. In this case, the wrapper will write to either
+	//   ${CROS_ARTIFACTS_TMP_DIR}/toolchain/fatal_clang_warnings, or to
+	//   /tmp/toolchain/fatal_clang_warnings.
+	//
+	// Two modes are supported because some ebuilds filter the env, while others will filter
+	// CFLAGS. Vanishingly few (none?) filter both, though.
 	const cflagPrefix = "-D_CROSTC_FORCE_DISABLE_WERROR="
 
 	argDir := ""

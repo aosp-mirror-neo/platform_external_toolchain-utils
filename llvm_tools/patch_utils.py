@@ -34,6 +34,15 @@ HUNK_HEADER_RE = re.compile(r"^@@\s+-(\d+),(\d+)\s+\+(\d+),(\d+)\s+@@")
 HUNK_END_RE = re.compile(r"^--\s*$")
 PATCH_SUBFILE_HEADER_RE = re.compile(r"^\+\+\+ [ab]/(.*)$")
 
+CHROMEOS_PATCHES_JSON_PACKAGES = (
+    "dev-util/lldb-server",
+    "sys-devel/llvm",
+    "sys-libs/compiler-rt",
+    "sys-libs/libcxx",
+    "sys-libs/llvm-libunwind",
+    "sys-libs/scudo",
+)
+
 
 @dataclasses.dataclass
 class Hunk:
@@ -149,6 +158,31 @@ class PatchResult:
         return s
 
 
+def git_apply(patch_path: Path) -> List[Union[str, Path]]:
+    """Patch a patch file using 'git apply'."""
+    return ["git", "apply", patch_path]
+
+
+def git_am(patch_path: Path) -> List[Union[str, Path]]:
+    """Patch a patch file using 'git am'."""
+    return ["git", "am", "--3way", patch_path]
+
+
+def gnu_patch(root_dir: Path, patch_path: Path) -> List[Union[str, Path]]:
+    """Patch a patch file using GNU 'patch'."""
+    return [
+        "patch",
+        "-d",
+        root_dir.absolute(),
+        "-f",
+        "-E",
+        "-p1",
+        "--no-backup-if-mismatch",
+        "-i",
+        patch_path,
+    ]
+
+
 @dataclasses.dataclass
 class PatchEntry:
     """Object mapping of an entry of PATCHES.json."""
@@ -232,16 +266,6 @@ class PatchEntry:
             until_v = sys.maxsize
         return from_v <= svn_version < until_v
 
-    def is_old(self, svn_version: int) -> bool:
-        """Is this patch old compared to `svn_version`?"""
-        if not self.version_range:
-            return False
-        until_v = self.version_range.get("until")
-        # Sometimes the key is there, but it's set to None.
-        if until_v is None:
-            until_v = sys.maxsize
-        return svn_version >= until_v
-
     def apply(
         self,
         root_dir: Path,
@@ -256,11 +280,8 @@ class PatchEntry:
                 f"Cannot apply: patch {abs_patch_path} is not a file"
             )
 
-        if not patch_cmd:
-            patch_cmd = gnu_patch
-
-        if patch_cmd == gnu_patch:
-            cmd = patch_cmd(root_dir, abs_patch_path) + (extra_args or [])
+        if not patch_cmd or patch_cmd is gnu_patch:
+            cmd = gnu_patch(root_dir, abs_patch_path) + (extra_args or [])
         else:
             cmd = patch_cmd(abs_patch_path) + (extra_args or [])
 
@@ -272,7 +293,7 @@ class PatchEntry:
             parsed_hunks = self.parsed_hunks()
             failed_hunks_id_dict = parse_failed_patch_output(e.stdout)
             failed_hunks = {}
-            if patch_cmd == gnu_patch:
+            if patch_cmd is gnu_patch:
                 for path, failed_hunk_ids in failed_hunks_id_dict.items():
                     hunks_for_file = parsed_hunks[path]
                     failed_hunks[path] = [
@@ -281,7 +302,7 @@ class PatchEntry:
                         if hunk.hunk_id in failed_hunk_ids
                     ]
             elif failed_hunks_id_dict:
-                # use git am
+                # using git am
                 failed_hunks = parsed_hunks
 
             return PatchResult(succeeded=False, failed_hunks=failed_hunks)
@@ -290,14 +311,35 @@ class PatchEntry:
     def test_apply(
         self, root_dir: Path, patch_cmd: Optional[Callable] = None
     ) -> PatchResult:
-        """Dry run applying a patch to a given directory."""
-        extra_args = [] if patch_cmd == git_am else ["--dry-run"]
-        return self.apply(root_dir, patch_cmd, extra_args)
+        """Dry run applying a patch to a given directory.
+
+        When using gnu_patch, this will pass --dry-run.
+        When using git_am or git_apply, this will instead
+        use git_apply with --summary.
+        """
+        if patch_cmd is git_am or patch_cmd is git_apply:
+            # There is no dry run option for git am,
+            # so we use git apply for test.
+            return self.apply(root_dir, git_apply, ["--summary"])
+        if patch_cmd is gnu_patch or patch_cmd is None:
+            return self.apply(root_dir, patch_cmd, ["--dry-run"])
+        raise ValueError(f"No such patch command: {patch_cmd.__name__}.")
 
     def title(self) -> str:
         if not self.metadata:
             return ""
         return self.metadata.get("title", "")
+
+
+def patch_applies_after(
+    version_range: Optional[Dict[str, Optional[int]]], svn_version: int
+) -> bool:
+    """Does this patch apply after `svn_version`?"""
+    if not version_range:
+        return True
+    until = version_range.get("until")
+    before_svn_version = until is not None and svn_version > until
+    return not before_svn_version
 
 
 @dataclasses.dataclass(frozen=True)
@@ -376,6 +418,7 @@ def apply_all_from_json(
         svn_version: LLVM Subversion revision to patch.
         llvm_src_dir: llvm-project root-level source directory to patch.
         patches_json_fp: Filepath to the PATCHES.json file.
+        patch_cmd: The function to use when actually applying the patch.
         continue_on_failure: Skip any patches which failed to apply,
           rather than throw an Exception.
     """
@@ -565,6 +608,7 @@ def update_version_ranges_with_entries(
         svn_version: LLVM revision number.
         llvm_src_dir: llvm-project directory path.
         patch_entries: PatchEntry objects to modify.
+        patch_cmd: The function to use when actually applying the patch.
 
     Returns:
         Tuple of (modified entries, applied patches)
@@ -597,9 +641,7 @@ def update_version_ranges_with_entries(
     return modified_entries, applied_patches
 
 
-def remove_old_patches(
-    svn_version: int, llvm_src_dir: Path, patches_json_fp: Path
-) -> PatchInfo:
+def remove_old_patches(svn_version: int, patches_json: Path) -> List[Path]:
     """Remove patches that don't and will never apply for the future.
 
     Patches are determined to be "old" via the "is_old" method for
@@ -607,54 +649,24 @@ def remove_old_patches(
 
     Args:
         svn_version: LLVM SVN version.
-        llvm_src_dir: LLVM source directory.
-        patches_json_fp: Location to edit patches on.
+        patches_json: Location of PATCHES.json.
 
     Returns:
-        PatchInfo for modified patches.
+        A list of all patch paths removed from PATCHES.json.
     """
-    with patches_json_fp.open(encoding="utf-8") as f:
-        contents = f.read()
+    contents = patches_json.read_text(encoding="utf-8")
     indent_len = predict_indent(contents.splitlines())
-    patch_entries = json_str_to_patch_entries(
-        llvm_src_dir,
-        contents,
-    )
-    oldness = [(entry, entry.is_old(svn_version)) for entry in patch_entries]
-    filtered_entries = [entry.to_dict() for entry, old in oldness if not old]
-    with atomic_write_file.atomic_write(patches_json_fp, encoding="utf-8") as f:
-        _write_json_changes(filtered_entries, f, indent_len=indent_len)
-    removed_entries = [entry for entry, old in oldness if old]
-    plural_patches = "patch" if len(removed_entries) == 1 else "patches"
-    print(f"Removed {len(removed_entries)} old {plural_patches}:")
-    for r in removed_entries:
-        print(f"- {r.rel_patch_path}: {r.title()}")
 
-    return PatchInfo(
-        non_applicable_patches=[],
-        applied_patches=[],
-        failed_patches=[],
-        disabled_patches=[],
-        removed_patches=[p.rel_patch_path for p in removed_entries],
-        modified_metadata=str(patches_json_fp) if removed_entries else None,
-    )
+    still_new = []
+    removed_patches = []
+    patches_parent = patches_json.parent
+    for entry in json.loads(contents):
+        if patch_applies_after(entry.get("version_range"), svn_version):
+            still_new.append(entry)
+        else:
+            removed_patches.append(patches_parent / entry["rel_patch_path"])
 
+    with atomic_write_file.atomic_write(patches_json, encoding="utf-8") as f:
+        _write_json_changes(still_new, f, indent_len=indent_len)
 
-def git_am(patch_path: Path) -> List[Union[str, Path]]:
-    cmd = ["git", "am", "--3way", str(patch_path)]
-    return cmd
-
-
-def gnu_patch(root_dir: Path, patch_path: Path) -> List[Union[str, Path]]:
-    cmd = [
-        "patch",
-        "-d",
-        str(root_dir.absolute()),
-        "-f",
-        "-E",
-        "-p1",
-        "--no-backup-if-mismatch",
-        "-i",
-        str(patch_path),
-    ]
-    return cmd
+    return removed_patches

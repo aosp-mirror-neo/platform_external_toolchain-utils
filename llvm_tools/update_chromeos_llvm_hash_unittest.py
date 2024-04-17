@@ -249,7 +249,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testFailedToUprevEbuildToVersionForInvalidSymlink(
         self, mock_islink, mock_llvm_version
     ):
-        symlink_path = "/path/to/chroot/package/package.ebuild"
+        symlink_path = "/path/to/chromeos/package/package.ebuild"
         svn_version = 1000
         git_hash = "badf00d"
         mock_llvm_version.return_value = "1234"
@@ -270,7 +270,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
 
     @mock.patch.object(os.path, "islink", return_value=False)
     def testFailedToUprevEbuildSymlinkForInvalidSymlink(self, mock_islink):
-        symlink_path = "/path/to/chroot/package/package.ebuild"
+        symlink_path = "/path/to/chromeos/package/package.ebuild"
 
         # Verify the exception is raised when a invalid symbolic link is
         # passed in.
@@ -291,7 +291,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testFailedToUprevEbuildToVersion(
         self, mock_realpath, mock_islink, mock_llvm_version
     ):
-        symlink_path = "/path/to/chroot/llvm/llvm_pre123_p.ebuild"
+        symlink_path = "/path/to/chromeos/llvm/llvm_pre123_p.ebuild"
         mock_realpath.return_value = "/abs/path/to/llvm/llvm_pre123_p.ebuild"
         git_hash = "badf00d"
         mock_llvm_version.return_value = "1234"
@@ -312,7 +312,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     # Simulate 'os.path.islink' when a symbolic link is passed in.
     @mock.patch.object(os.path, "islink", return_value=True)
     def testFailedToUprevEbuildSymlink(self, mock_islink):
-        symlink_path = "/path/to/chroot/llvm/llvm_pre123_p.ebuild"
+        symlink_path = "/path/to/chromeos/llvm/llvm_pre123_p.ebuild"
 
         # Verify the exception is raised when the symlink does not match the
         # expected pattern
@@ -386,15 +386,17 @@ class UpdateLLVMHashTest(unittest.TestCase):
     @mock.patch.object(subprocess, "check_output", return_value="")
     def testManifestUpdate(self, mock_subprocess, mock_ebuild_paths):
         manifest_packages = ["sys-devel/llvm"]
-        chroot_path = "/path/to/chroot"
+        chromeos_path = "/path/to/chromeos"
         update_chromeos_llvm_hash.UpdatePortageManifests(
-            manifest_packages, Path(chroot_path)
+            manifest_packages, Path(chromeos_path)
         )
 
         args = mock_subprocess.call_args_list[0]
         manifest_cmd = (
             [
                 "cros_sdk",
+                "--chroot=chroot",
+                "--out-dir=out",
                 "--",
                 "ebuild",
                 "/chroot/path/test.ebuild",
@@ -407,6 +409,8 @@ class UpdateLLVMHashTest(unittest.TestCase):
         git_add_cmd = (
             [
                 "cros_sdk",
+                "--chroot=chroot",
+                "--out-dir=out",
                 "--",
                 "git",
                 "-C",
@@ -722,6 +726,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
         mock_gethash.return_value = (git_hash, svn_version)
         argv = [
             "./update_chromeos_llvm_hash_unittest.py",
+            "--no_repo_manifest",
             "--llvm_version",
             "google3",
         ]
@@ -741,7 +746,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             llvm_variant=expected_llvm_variant,
             git_hash=git_hash,
             svn_version=svn_version,
-            chroot_path=expected_chroot,
+            chroot_opts=update_chromeos_llvm_hash.ChrootOpts(expected_chroot),
             mode=failure_modes.FailureModes.FAIL,
             git_hash_source="google3",
             extra_commit_msg_lines=None,
@@ -785,7 +790,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             llvm_variant=expected_llvm_variant,
             git_hash=git_hash,
             svn_version=svn_version,
-            chroot_path=expected_chroot,
+            chroot_opts=update_chromeos_llvm_hash.ChrootOpts(expected_chroot),
             mode=failure_modes.FailureModes.FAIL,
             git_hash_source="google3",
             extra_commit_msg_lines=None,
@@ -808,8 +813,8 @@ class UpdateLLVMHashTest(unittest.TestCase):
     ):
         packages_to_update = "test-packages/package1,test-libs/lib1"
         manifest_packages = "test-libs/lib1,test-libs/lib2"
-        failure_mode = failure_modes.FailureModes.REMOVE_PATCHES
-        chroot_path = Path("/some/path/to/chroot")
+        failure_mode = failure_modes.FailureModes.DISABLE_PATCHES
+        chromeos_path = Path("/some/path/to/chromeos")
         llvm_ver = 435698
         git_hash = "1234abcd"
         svn_version = 5678
@@ -820,8 +825,8 @@ class UpdateLLVMHashTest(unittest.TestCase):
             "--llvm_version",
             str(llvm_ver),
             "--is_llvm_next",
-            "--chroot_path",
-            str(chroot_path),
+            "--chromeos_path",
+            str(chromeos_path),
             "--update_packages",
             packages_to_update,
             "--manifest_packages",
@@ -830,6 +835,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             failure_mode.value,
             "--patch_metadata_file",
             "META.json",
+            "--no_repo_manifest",
         ]
 
         with mock.patch.object(sys, "argv", argv) as mock.argv:
@@ -844,7 +850,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             llvm_variant=expected_llvm_variant,
             git_hash=git_hash,
             svn_version=svn_version,
-            chroot_path=chroot_path,
+            chroot_opts=update_chromeos_llvm_hash.ChrootOpts(chromeos_path),
             mode=failure_mode,
             git_hash_source=llvm_ver,
             extra_commit_msg_lines=None,
@@ -859,7 +865,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testEnsurePackageMaskContainsExisting(
         self, mock_llvm_version, mock_git_add
     ):
-        chroot_path = "absolute/path/to/chroot"
+        chromeos_path = "absolute/path/to/chromeos"
         git_hash = "badf00d"
         mock_llvm_version.return_value = "1234"
         with mock.patch(
@@ -868,14 +874,14 @@ class UpdateLLVMHashTest(unittest.TestCase):
             create=True,
         ) as mock_file:
             update_chromeos_llvm_hash.EnsurePackageMaskContains(
-                chroot_path, git_hash
+                chromeos_path, git_hash
             )
             handle = mock_file()
             handle.write.assert_not_called()
         mock_llvm_version.assert_called_once_with(git_hash)
 
         overlay_dir = (
-            "absolute/path/to/chroot/src/third_party/chromiumos-overlay"
+            "absolute/path/to/chromeos/src/third_party/chromiumos-overlay"
         )
         mask_path = overlay_dir + "/profiles/targets/chromeos/package.mask"
         mock_git_add.assert_called_once_with(
@@ -887,7 +893,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
     def testEnsurePackageMaskContainsNotExisting(
         self, mock_llvm_version, mock_git_add
     ):
-        chroot_path = "absolute/path/to/chroot"
+        chromeos_path = "absolute/path/to/chromeos"
         git_hash = "badf00d"
         mock_llvm_version.return_value = "1234"
         with mock.patch(
@@ -896,7 +902,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
             create=True,
         ) as mock_file:
             update_chromeos_llvm_hash.EnsurePackageMaskContains(
-                chroot_path, git_hash
+                chromeos_path, git_hash
             )
             handle = mock_file()
             handle.write.assert_called_once_with(
@@ -905,7 +911,7 @@ class UpdateLLVMHashTest(unittest.TestCase):
         mock_llvm_version.assert_called_once_with(git_hash)
 
         overlay_dir = (
-            "absolute/path/to/chroot/src/third_party/chromiumos-overlay"
+            "absolute/path/to/chromeos/src/third_party/chromiumos-overlay"
         )
         mask_path = overlay_dir + "/profiles/targets/chromeos/package.mask"
         mock_git_add.assert_called_once_with(

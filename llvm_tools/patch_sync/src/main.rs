@@ -180,14 +180,16 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
             )
         })?
     };
-    let new_android_patches = new_android_patches.filter_patches(|p| {
-        match (p.get_from_version(), p.get_until_version()) {
+    if args.verbose {
+        println!("Android LLVM version: r{}", android_llvm_version);
+    }
+    let new_cros_patches =
+        new_cros_patches.filter_patches(|p| match (p.get_from_version(), p.get_until_version()) {
             (Some(start), Some(end)) => start <= android_llvm_version && android_llvm_version < end,
             (Some(start), None) => start <= android_llvm_version,
             (None, Some(end)) => android_llvm_version < end,
             (None, None) => true,
-        }
-    });
+        });
 
     // Need to filter version updates to only existing patches to the other platform.
     let cros_version_updates =

@@ -17,9 +17,27 @@ import git
 # These are unittests; protected access is OK to a point.
 # pylint: disable=protected-access
 
+EXAMPLE_GIT_SHA = "d46d9c1a23118e3943f43fe2dfc9f9c9c0b4aefe"
+
 
 class HelperFunctionsTest(unittest.TestCase):
     """Test class for updating LLVM hashes of packages."""
+
+    def testIsFullGitSHASuccessCases(self):
+        shas = ("a" * 40, EXAMPLE_GIT_SHA)
+        for s in shas:
+            self.assertTrue(git.IsFullGitSHA(s), s)
+
+    def testIsFullGitSHAFailureCases(self):
+        shas = (
+            "",
+            "A" * 40,
+            "g" * 40,
+            EXAMPLE_GIT_SHA[1:],
+            EXAMPLE_GIT_SHA + "a",
+        )
+        for s in shas:
+            self.assertFalse(git.IsFullGitSHA(s), s)
 
     @mock.patch.object(os.path, "isdir", return_value=False)
     def testFailedToCreateBranchForInvalidDirectoryPath(self, mock_isdir):

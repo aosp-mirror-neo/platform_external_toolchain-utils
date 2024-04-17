@@ -11,10 +11,10 @@ fires off an email. All LLVM SHAs to monitor are autodetected.
 
 import argparse
 import dataclasses
-import io
 import json
 import logging
 import os
+from pathlib import Path
 import pprint
 import subprocess
 import sys
@@ -131,57 +131,18 @@ def _find_interesting_android_shas(
     return result
 
 
-def _parse_llvm_ebuild_for_shas(
-    ebuild_file: io.TextIOWrapper,
-) -> List[Tuple[str, str]]:
-    def parse_ebuild_assignment(line: str) -> str:
-        no_comments = line.split("#")[0]
-        no_assign = no_comments.split("=", 1)[1].strip()
-        assert no_assign.startswith('"') and no_assign.endswith('"'), no_assign
-        return no_assign[1:-1]
-
-    llvm_hash, llvm_next_hash = None, None
-    for line in ebuild_file:
-        if line.startswith("LLVM_HASH="):
-            llvm_hash = parse_ebuild_assignment(line)
-            if llvm_next_hash:
-                break
-        if line.startswith("LLVM_NEXT_HASH"):
-            llvm_next_hash = parse_ebuild_assignment(line)
-            if llvm_hash:
-                break
-    if not llvm_next_hash or not llvm_hash:
-        raise ValueError(
-            "Failed to detect SHAs for llvm/llvm_next. Got: "
-            "llvm=%s; llvm_next=%s" % (llvm_hash, llvm_next_hash)
-        )
-
-    results: List[Tuple[str, str]] = [("llvm", llvm_hash)]
-    if llvm_next_hash != llvm_hash:
-        results.append(("llvm-next", llvm_next_hash))
-    return results
-
-
 def _find_interesting_chromeos_shas(
     chromeos_base: str,
 ) -> List[Tuple[str, str]]:
-    llvm_dir = os.path.join(
-        chromeos_base, "src/third_party/chromiumos-overlay/sys-devel/llvm"
-    )
-    candidate_ebuilds = [
-        os.path.join(llvm_dir, x)
-        for x in os.listdir(llvm_dir)
-        if "_pre" in x and not os.path.islink(os.path.join(llvm_dir, x))
-    ]
+    chromeos_path = Path(chromeos_base)
+    llvm_hash = get_llvm_hash.LLVMHash()
 
-    if len(candidate_ebuilds) != 1:
-        raise ValueError(
-            "Expected exactly one llvm ebuild candidate; got %s"
-            % pprint.pformat(candidate_ebuilds)
-        )
-
-    with open(candidate_ebuilds[0], encoding="utf-8") as f:
-        return _parse_llvm_ebuild_for_shas(f)
+    current_llvm = llvm_hash.GetCrOSCurrentLLVMHash(chromeos_path)
+    results = [("llvm", current_llvm)]
+    next_llvm = llvm_hash.GetCrOSLLVMNextHash()
+    if current_llvm != next_llvm:
+        results.append(("llvm-next", next_llvm))
+    return results
 
 
 _Email = NamedTuple(

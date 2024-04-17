@@ -16,6 +16,16 @@ def InChroot() -> bool:
     return "CROS_WORKON_SRCROOT" in os.environ
 
 
+def VerifyInsideChroot() -> None:
+    """Checks whether the script invoked was executed in the chroot.
+
+    Raises:
+        AssertionError: The script was run outside the chroot.
+    """
+
+    assert InChroot(), "Script should be run inside the chroot."
+
+
 def VerifyOutsideChroot() -> None:
     """Checks whether the script invoked was executed in the chroot.
 
@@ -39,16 +49,37 @@ def VerifyChromeOSRoot(chromeos_root: Union[Path, str]) -> None:
     assert path.is_dir(), msg
 
 
+def FindChromeOSRootAbove(chromeos_tree_path: Path) -> Path:
+    """Returns the root of a ChromeOS tree, given a path in said tree.
+
+    May return `chromeos_tree_path`, if that's already the root of the tree.
+
+    Raises:
+        ValueError if the given path is not in a ChromeOS tree.
+    """
+    if (chromeos_tree_path / ".repo").exists():
+        return chromeos_tree_path
+
+    for parent in chromeos_tree_path.parents:
+        if (parent / ".repo").exists():
+            return parent
+    raise ValueError(f"{chromeos_tree_path} is not in a repo checkout")
+
+
 def GetChrootEbuildPaths(
-    chromeos_root: Union[Path, str], packages: Iterable[str]
+    chromeos_root: Union[Path, str],
+    packages: Iterable[str],
+    chroot_name: str = "chroot",
+    out_dir: str = "out",
 ) -> List[str]:
     """Gets the chroot path(s) of the package(s).
 
     Args:
-        chromeos_root: The absolute path to the chroot to
-        use for executing chroot commands.
+        chromeos_root: The absolute path to the chromeos tree to use.
         packages: A list of a package/packages to
         be used to find their chroot path.
+        chroot_name: name of the chroot to enter.
+        out_dir: name of the out directory for the chroot.
 
     Returns:
         A list of chroot paths of the packages' ebuild files.
@@ -59,10 +90,16 @@ def GetChrootEbuildPaths(
 
     chroot_paths = []
 
+    cros_sdk = [
+        "cros_sdk",
+        f"--chroot={chroot_name}",
+        f"--out-dir={out_dir}",
+    ]
+
     # Find the chroot path for each package's ebuild.
     for package in packages:
         chroot_path = subprocess.check_output(
-            ["cros_sdk", "--", "equery", "w", package],
+            cros_sdk + ["--", "equery", "w", package],
             cwd=chromeos_root,
             encoding="utf-8",
         )

@@ -247,7 +247,7 @@ class LLVMBisectionTest(unittest.TestCase):
                     bisection_contents,
                     temp_json_file,
                     packages,
-                    args_output.chroot_path,
+                    args_output.chromeos_path,
                     args_output.extra_change_lists,
                     args_output.options,
                     args_output.builders,
@@ -321,7 +321,7 @@ class LLVMBisectionTest(unittest.TestCase):
         args_output.end_rev = end
         args_output.parallel = 3
         args_output.src_path = None
-        args_output.chroot_path = "somepath"
+        args_output.chromeos_path = "somepath"
         args_output.cleanup = True
 
         self.assertEqual(
@@ -345,7 +345,7 @@ class LLVMBisectionTest(unittest.TestCase):
             mock.call(
                 [
                     os.path.join(
-                        args_output.chroot_path, "chromite/bin/gerrit"
+                        args_output.chromeos_path, "chromite/bin/gerrit"
                     ),
                     "abandon",
                     str(cl),

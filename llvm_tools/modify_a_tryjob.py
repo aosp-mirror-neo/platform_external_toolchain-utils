@@ -93,7 +93,7 @@ def GetCommandLineArgs() -> argparse.Namespace:
 
     # Add argument for a specific chroot path.
     parser.add_argument(
-        "--chroot_path",
+        "--chromeos_path",
         default=cros_root,
         help="the path to the chroot (default: %(default)s)",
     )
@@ -128,7 +128,7 @@ def GetCLAfterUpdatingPackages(
     packages: Iterable[str],
     git_hash: str,
     svn_version: int,
-    chroot_path: Union[Path, str],
+    chromeos_path: Union[Path, str],
     svn_option: Union[int, str],
 ) -> git.CommitContents:
     """Updates the packages' LLVM_NEXT."""
@@ -139,7 +139,7 @@ def GetCLAfterUpdatingPackages(
         llvm_variant=update_chromeos_llvm_hash.LLVMVariant.next,
         git_hash=git_hash,
         svn_version=svn_version,
-        chroot_path=Path(chroot_path),
+        chroot_opts=update_chromeos_llvm_hash.ChrootOpts(Path(chromeos_path)),
         mode=failure_modes.FailureModes.DISABLE_PATCHES,
         git_hash_source=svn_option,
         extra_commit_msg_lines=None,
@@ -160,7 +160,7 @@ def CreateNewTryjobEntryForBisection(
     extra_cls: List[int],
     options: List[str],
     builder: str,
-    chroot_path: Union[Path, str],
+    chromeos_path: Union[Path, str],
     cl_url: str,
     revision,
 ) -> Dict:
@@ -178,7 +178,7 @@ def CreateNewTryjobEntryForBisection(
     #   }
     # ]
     tryjob_results = update_packages_and_run_tests.RunTryJobs(
-        cl, extra_cls, options, [builder], chroot_path
+        cl, extra_cls, options, [builder], chromeos_path
     )
     print("\nTryjob:")
     print(tryjob_results[0])
@@ -198,7 +198,7 @@ def AddTryjob(
     packages: Iterable[str],
     git_hash: str,
     revision: int,
-    chroot_path: Union[Path, str],
+    chromeos_path: Union[Path, str],
     extra_cls: List[int],
     options: List[str],
     builder: str,
@@ -210,7 +210,7 @@ def AddTryjob(
         packages,
         git_hash,
         revision,
-        chroot_path,
+        chromeos_path,
         svn_option,
     )
 
@@ -219,7 +219,7 @@ def AddTryjob(
         extra_cls,
         options,
         builder,
-        chroot_path,
+        chromeos_path,
         change_list.url,
         revision,
     )
@@ -234,7 +234,7 @@ def PerformTryjobModification(
     extra_cls: List[int],
     options: List[str],
     builder: str,
-    chroot_path: Union[Path, str],
+    chromeos_path: Union[Path, str],
 ) -> None:
     """Removes, relaunches, or adds a tryjob.
 
@@ -246,8 +246,7 @@ def PerformTryjobModification(
         extra_cls: Extra change lists to be run alongside tryjob
         options: Extra options to pass into 'cros tryjob'.
         builder: The builder to use for 'cros tryjob'.
-        chroot_path: The absolute path to the chroot (used by 'cros tryjob'
-          when relaunching a tryjob).
+        chromeos_path: The absolute path to the chromeos checkout.
     """
 
     # Format of 'bisect_contents':
@@ -289,7 +288,7 @@ def PerformTryjobModification(
             bisect_contents["jobs"][tryjob_index]["extra_cls"],
             bisect_contents["jobs"][tryjob_index]["options"],
             bisect_contents["jobs"][tryjob_index]["builder"],
-            chroot_path,
+            chromeos_path,
         )
 
         bisect_contents["jobs"][tryjob_index][
@@ -326,7 +325,7 @@ def PerformTryjobModification(
                 update_chromeos_llvm_hash.DEFAULT_PACKAGES,
                 git_hash,
                 revision,
-                chroot_path,
+                chromeos_path,
                 extra_cls,
                 options,
                 builder,
@@ -356,7 +355,7 @@ def main() -> None:
 
     args_output = GetCommandLineArgs()
 
-    chroot.VerifyChromeOSRoot(args_output.chroot_path)
+    chroot.VerifyChromeOSRoot(args_output.chromeos_path)
 
     PerformTryjobModification(
         args_output.revision,
@@ -365,7 +364,7 @@ def main() -> None:
         args_output.extra_change_lists,
         args_output.options,
         args_output.builder,
-        args_output.chroot_path,
+        args_output.chromeos_path,
     )
 
 

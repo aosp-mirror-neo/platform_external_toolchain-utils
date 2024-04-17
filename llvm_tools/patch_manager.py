@@ -115,7 +115,6 @@ def CheckPatchApplies(
     llvm_src_dir: Path,
     patches_json_fp: Path,
     rel_patch_path: str,
-    patch_cmd: Optional[Callable] = None,
 ) -> GitBisectionCode:
     """Check that a given patch with the rel_patch_path applies in the stack.
 
@@ -131,7 +130,6 @@ def CheckPatchApplies(
         rel_patch_path: Relative patch path of the patch we want to check. If
           patches before this patch fail to apply, then the revision is
           skipped.
-        patch_cmd: Use 'git am' to patch instead of GNU 'patch'.
     """
     with patches_json_fp.open(encoding="utf-8") as f:
         patch_entries = patch_utils.json_to_patch_entries(
@@ -285,11 +283,6 @@ def main(sys_argv: List[str]):
         )
         PrintPatchResults(result)
 
-    def _remove(args):
-        patch_utils.remove_old_patches(
-            args.svn_version, llvm_src_dir, patches_json_fp
-        )
-
     def _disable(args):
         patch_cmd = patch_utils.git_am if args.git_am else patch_utils.gnu_patch
         patch_utils.update_version_ranges(
@@ -302,13 +295,11 @@ def main(sys_argv: List[str]):
                 "Running with bisect_patches requires the " "--test_patch flag."
             )
         svn_version = GetHEADSVNVersion(llvm_src_dir)
-        patch_cmd = patch_utils.git_am if args.git_am else patch_utils.gnu_patch
         error_code = CheckPatchApplies(
             svn_version,
             llvm_src_dir,
             patches_json_fp,
             args.test_patch,
-            patch_cmd,
         )
         # Since this is for bisection, we want to exit with the
         # GitBisectionCode enum.
@@ -317,7 +308,6 @@ def main(sys_argv: List[str]):
     dispatch_table = {
         failure_modes.FailureModes.FAIL: _apply_all,
         failure_modes.FailureModes.CONTINUE: _apply_all,
-        failure_modes.FailureModes.REMOVE_PATCHES: _remove,
         failure_modes.FailureModes.DISABLE_PATCHES: _disable,
         failure_modes.FailureModes.BISECT_PATCHES: _test_single,
     }

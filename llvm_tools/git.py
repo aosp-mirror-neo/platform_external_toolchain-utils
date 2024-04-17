@@ -17,6 +17,11 @@ from typing import Iterable, Optional, Union
 CommitContents = collections.namedtuple("CommitContents", ["url", "cl_number"])
 
 
+def IsFullGitSHA(s: str) -> bool:
+    """Returns if `s` looks like a git SHA."""
+    return len(s) == 40 and all(x.isdigit() or "a" <= x <= "f" for x in s)
+
+
 def CreateBranch(repo: Union[Path, str], branch: str) -> None:
     """Creates a branch in the given repo.
 

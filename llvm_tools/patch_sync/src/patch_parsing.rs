@@ -73,9 +73,12 @@ impl PatchCollection {
     }
 
     /// Copy this collection with patches filtered by given criterion.
-    pub fn filter_patches(&self, f: impl FnMut(&PatchDictSchema) -> bool) -> Self {
+    pub fn filter_patches<F>(&self, mut f: F) -> Self
+    where
+        F: FnMut(&PatchDictSchema) -> bool,
+    {
         Self {
-            patches: self.patches.iter().cloned().filter(f).collect(),
+            patches: self.patches.iter().filter(|&x| f(x)).cloned().collect(),
             workdir: self.workdir.clone(),
             indent_len: self.indent_len,
         }
@@ -310,11 +313,25 @@ impl std::fmt::Display for PatchCollection {
                 .and_then(serde_json::Value::as_str)
                 .unwrap_or("[No Title]");
             let path = self.workdir.join(&p.rel_patch_path);
+            let from = p.get_from_version();
+            let until = p.get_until_version();
             writeln!(f, "* {}", title)?;
             if i == self.patches.len() - 1 {
-                write!(f, "  {}", path.display())?;
+                write!(
+                    f,
+                    "  {}\n  r{}-r{}",
+                    path.display(),
+                    from.map_or("None".to_string(), |x| x.to_string()),
+                    until.map_or("None".to_string(), |x| x.to_string())
+                )?;
             } else {
-                writeln!(f, "  {}", path.display())?;
+                writeln!(
+                    f,
+                    "  {}\n  r{}-r{}",
+                    path.display(),
+                    from.map_or("None".to_string(), |x| x.to_string()),
+                    until.map_or("None".to_string(), |x| x.to_string())
+                )?;
             }
         }
         Ok(())
@@ -437,7 +454,7 @@ fn copy_create_parents(from: &Path, to: &Path) -> Result<()> {
         std::fs::create_dir_all(to_parent)?;
     }
 
-    copy(&from, &to)
+    copy(from, to)
         .with_context(|| format!("copying file from {} to {}", &from.display(), &to.display()))?;
     Ok(())
 }

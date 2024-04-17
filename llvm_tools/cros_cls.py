@@ -65,6 +65,7 @@ class ChangeListURL:
 
     cl_id: int
     patch_set: Optional[int] = None
+    internal: bool = False
 
     @classmethod
     def parse(cls, url: str) -> "ChangeListURL":
@@ -73,8 +74,9 @@ class ChangeListURL:
             r"(?:https?://)?"
             # Match either chromium-review or crrev, leaving the CL number and
             # patch set as the next parts. These can be parsed in unison.
-            r"(?:chromium-review\.googlesource\.com.*/\+/"
-            r"|crrev\.com/c/)"
+            r"(chromium-review\.googlesource\.com.*/\+/"
+            r"|crrev\.com/[ci]/"
+            r"|chrome-internal-review\.googlesource\.com.*/\+/)"
             # Match the CL number...
             r"(\d+)"
             # and (optionally) the patch-set, as well as consuming any of the
@@ -91,12 +93,16 @@ class ChangeListURL:
                 "crrev.com/c/${cl_number}/${patch_set_number}, and "
                 "chromium-review.googlesource.com/c/project/path/+/"
                 "${cl_number}/${patch_set_number}. The patch-set number is "
-                "optional, and there may be a preceding http:// or https://."
+                "optional, and there may be a preceding http:// or https://. "
+                "Internal CL links are also supported."
             )
-        cl_id, maybe_patch_set = m.groups()
+        host, cl_id, maybe_patch_set = m.groups()
+        internal = host.startswith("chrome-internal-review") or host.startswith(
+            "crrev.com/i/"
+        )
         if maybe_patch_set is not None:
             maybe_patch_set = int(maybe_patch_set)
-        return cls(int(cl_id), maybe_patch_set)
+        return cls(int(cl_id), maybe_patch_set, internal)
 
     @classmethod
     def parse_with_patch_set(cls, url: str) -> "ChangeListURL":
@@ -106,11 +112,15 @@ class ChangeListURL:
             raise ValueError("A patchset number must be specified.")
         return result
 
-    def __str__(self):
-        result = f"https://crrev.com/c/{self.cl_id}"
+    def crrev_url_without_http(self):
+        namespace = "i" if self.internal else "c"
+        result = f"crrev.com/{namespace}/{self.cl_id}"
         if self.patch_set is not None:
             result += f"/{self.patch_set}"
         return result
+
+    def __str__(self):
+        return f"https://{self.crrev_url_without_http()}"
 
 
 def builder_url(build_id: BuildID) -> str:

@@ -27,7 +27,7 @@ def _find_repo_root(script_root):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--chroot_path",
+        "--chromeos_path",
         help="Path to where CrOS' source tree lives. Will autodetect if you're "
         "running this from inside the CrOS source tree.",
     )
@@ -35,13 +35,13 @@ def main():
 
     my_dir = os.path.abspath(os.path.dirname(__file__))
 
-    repo_root = args.chroot_path
+    repo_root = args.chromeos_path
     if repo_root is None:
         repo_root = _find_repo_root(my_dir)
         if repo_root is None:
             sys.exit(
                 "Couldn't detect the CrOS checkout root; please provide a "
-                "value for --chroot_path"
+                "value for --chromeos_path"
             )
 
     chromiumos_overlay = os.path.join(

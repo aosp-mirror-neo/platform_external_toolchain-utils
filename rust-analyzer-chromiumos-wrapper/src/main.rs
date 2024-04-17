@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-use std::collections::HashMap;
 use std::env;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::os::unix::process::CommandExt;
@@ -13,16 +13,15 @@ use std::str::from_utf8;
 use std::thread;
 
 use anyhow::{anyhow, bail, Context, Result};
-use lazy_static::lazy_static;
-use log::trace;
-
-use regex::Regex;
+use log::{trace, warn};
 
 use simplelog::{Config, LevelFilter, WriteLogger};
 
 use serde_json::{from_slice, to_writer, Value};
+use url::Url;
 
-const CHROOT_SERVER_PATH: &str = "/usr/sbin/rust-analyzer";
+const SERVER_FILENAME: &str = "rust-analyzer-chromiumos-wrapper";
+const CHROOT_SERVER_PATH: &str = "/usr/bin/rust-analyzer";
 
 fn main() -> Result<()> {
     let args = env::args().skip(1);
@@ -122,16 +121,14 @@ fn main() -> Result<()> {
     let mut child_stdin = BufWriter::new(child.0.stdin.take().unwrap());
     let mut child_stdout = BufReader::new(child.0.stdout.take().unwrap());
 
-    let replacement_map = {
-        let mut m = HashMap::new();
-        m.insert(outside_prefix, inside_prefix);
-        m.insert(outside_sysroot_prefix, "/usr/lib/rustlib");
-        m.insert(outside_home, "/home");
-        m
-    };
+    let replacement_map = [
+        (outside_prefix, inside_prefix),
+        (outside_sysroot_prefix, "/usr/lib/rustlib"),
+        (outside_home, "/home"),
+    ];
 
     let join_handle = {
-        let rm = replacement_map.clone();
+        let rm = replacement_map;
         thread::spawn(move || {
             let mut stdin = io::stdin().lock();
             stream_with_replacement(&mut stdin, &mut child_stdin, &rm)
@@ -140,7 +137,7 @@ fn main() -> Result<()> {
     };
 
     // For the mapping between inside to outside, we just reverse the map.
-    let replacement_map_rev = replacement_map.iter().map(|(k, v)| (*v, *k)).collect();
+    let replacement_map_rev = replacement_map.map(|(k, v)| (v, k));
     let mut stdout = BufWriter::new(io::stdout().lock());
     stream_with_replacement(&mut child_stdout, &mut stdout, &replacement_map_rev)
         .context("Streaming from rust-analyzer into stdout")?;
@@ -207,32 +204,82 @@ fn read_header<R: BufRead>(r: &mut R, header: &mut Header) -> Result<()> {
     }
 }
 
+// The url crate's percent decoding helper returns a Path, while for non-url strings we don't
+// want to decode all of them as a Path since most of them are non-path strings.
+// We opt for not sharing the code paths as the handling of plain strings and Paths are slightly
+// different (notably that Path normalizes away trailing slashes), but otherwise the two functions
+// are functionally equal.
+fn replace_uri(s: &str, replacement_map: &[(&str, &str)]) -> Result<String> {
+    let uri = Url::parse(s).with_context(|| format!("while parsing path {s:?}"))?;
+    let is_dir = uri.as_str().ends_with('/');
+    let path = uri
+        .to_file_path()
+        .map_err(|()| anyhow!("while converting {s:?} to file path"))?;
+
+    // Always replace the server path everywhere.
+    if path.file_name() == Some(OsStr::new(SERVER_FILENAME)) {
+        return Ok(CHROOT_SERVER_PATH.into());
+    }
+
+    fn path_to_url(path: &Path, is_dir: bool) -> Result<String> {
+        let url = if is_dir {
+            Url::from_directory_path(path)
+        } else {
+            Url::from_file_path(path)
+        };
+        url.map_err(|()| anyhow!("while converting {path:?} to url"))
+            .map(|p| p.into())
+    }
+
+    // Replace by the first prefix match.
+    for (pattern, replacement) in replacement_map {
+        if let Ok(rest) = path.strip_prefix(pattern) {
+            let new_path = Path::new(replacement).join(rest);
+            return path_to_url(&new_path, is_dir);
+        }
+    }
+
+    Ok(s.into())
+}
+
+fn replace_path(s: &str, replacement_map: &[(&str, &str)]) -> String {
+    // Always replace the server path everywhere.
+    if s.strip_suffix(SERVER_FILENAME)
+        .is_some_and(|s| s.ends_with('/'))
+    {
+        return CHROOT_SERVER_PATH.into();
+    }
+
+    // Replace by the first prefix match.
+    for (pattern, replacement) in replacement_map {
+        if let Some(rest) = s.strip_prefix(pattern) {
+            if rest.is_empty() || rest.starts_with('/') {
+                return [replacement, rest].concat();
+            }
+        }
+    }
+
+    s.into()
+}
+
 /// Extend `dest` with `contents`, replacing any occurrence of patterns in a json string in
 /// `contents` with a replacement.
-fn replace(
-    contents: &[u8],
-    replacement_map: &HashMap<&str, &str>,
-    dest: &mut Vec<u8>,
-) -> Result<()> {
-    fn map_value(val: Value, replacement_map: &HashMap<&str, &str>) -> Value {
+fn replace(contents: &[u8], replacement_map: &[(&str, &str)], dest: &mut Vec<u8>) -> Result<()> {
+    fn map_value(val: Value, replacement_map: &[(&str, &str)]) -> Value {
         match val {
-            Value::String(s) =>
-            // `s.replace` is very likely doing more work than necessary. Probably we only need
-            // to look for the pattern at the beginning of the string.
-            {
-                lazy_static! {
-                    static ref SERVER_PATH_REGEX: Regex =
-                        Regex::new(r".*/rust-analyzer-chromiumos-wrapper$").unwrap();
+            Value::String(mut s) => {
+                if s.starts_with("file:") {
+                    // rust-analyzer uses LSP paths most of the time, which are encoded with the
+                    // file: URL scheme.
+                    s = replace_uri(&s, replacement_map).unwrap_or_else(|e| {
+                        warn!("replace_uri failed: {e:?}");
+                        s
+                    });
+                } else {
+                    // For certain config items, paths may be used instead of URIs.
+                    s = replace_path(&s, replacement_map);
                 }
-                // Always replace the server path everywhere.
-                let mut s = SERVER_PATH_REGEX
-                    .replace_all(&s, CHROOT_SERVER_PATH)
-                    .to_string();
-                // Then replace all mappings we get.
-                for (pattern, replacement) in replacement_map {
-                    s = s.replace(pattern, replacement);
-                }
-                Value::String(s.to_string())
+                Value::String(s)
             }
             Value::Array(mut v) => {
                 for val_ref in v.iter_mut() {
@@ -271,7 +318,7 @@ fn replace(
 fn stream_with_replacement<R: BufRead, W: Write>(
     r: &mut R,
     w: &mut W,
-    replacement_map: &HashMap<&str, &str>,
+    replacement_map: &[(&str, &str)],
 ) -> Result<()> {
     let mut head = Header::default();
     let mut buf = Vec::with_capacity(1024);
@@ -350,17 +397,12 @@ mod test {
 
     fn test_stream_with_replacement(
         read: &str,
-        pattern: &str,
-        replacement: &str,
+        replacement_map: &[(&str, &str)],
         json_expected: &str,
     ) -> Result<()> {
-        let mut w = Vec::<u8>::with_capacity(read.len());
-        let replacement_map = {
-            let mut m = HashMap::new();
-            m.insert(pattern, replacement);
-            m
-        };
-        stream_with_replacement(&mut read.as_bytes(), &mut w, &replacement_map)?;
+        let mut w = Vec::new();
+        let input = format!("Content-Length: {}\r\n\r\n{}", read.as_bytes().len(), read);
+        stream_with_replacement(&mut input.as_bytes(), &mut w, &replacement_map)?;
 
         // serde_json may not format the json output the same as we do, so we can't just compare
         // as strings or slices.
@@ -384,48 +426,72 @@ mod test {
     }
 
     #[test]
-    fn test_stream_with_replacement_1() -> Result<()> {
+    fn test_stream_with_replacement_simple() -> Result<()> {
         test_stream_with_replacement(
-            // read
-            "Content-Length: 93\r\n\r\n{\"somekey\": {\"somepath\": \"XYZXYZabc\",\
-            \"anotherpath\": \"somestring\"}, \"anotherkey\": \"XYZXYZdef\"}",
-            // pattern
-            "XYZXYZ",
-            // replacement
-            "REPLACE",
-            // json_expected
-            "{\"somekey\": {\"somepath\": \"REPLACEabc\", \"anotherpath\": \"somestring\"},\
-            \"anotherkey\": \"REPLACEdef\"}",
+            r#"{
+                "somekey": {
+                    "somepath": "/XYZXYZ/",
+                    "anotherpath": "/some/string"
+                },
+                "anotherkey": "/XYZXYZ/def"
+            }"#,
+            &[("/XYZXYZ", "/REPLACE")],
+            r#"{
+                "somekey": {
+                    "somepath": "/REPLACE/",
+                    "anotherpath": "/some/string"
+                },
+                "anotherkey": "/REPLACE/def"
+            }"#,
         )
     }
 
     #[test]
-    fn test_stream_with_replacement_2() -> Result<()> {
+    fn test_stream_with_replacement_file_uri() -> Result<()> {
         test_stream_with_replacement(
-            // read
-            "Content-Length: 83\r\n\r\n{\"key0\": \"sometextABCDEF\",\
-            \"key1\": {\"key2\": 5, \"key3\": \"moreABCDEFtext\"}, \"key4\": 1}",
-            // pattern
-            "ABCDEF",
-            // replacement
-            "replacement",
-            // json_expected
-            "{\"key0\": \"sometextreplacement\", \"key1\": {\"key2\": 5,\
-            \"key3\": \"morereplacementtext\"}, \"key4\": 1}",
+            r#"{
+                "key0": "file:///ABCDEF/",
+                "key1": {
+                    "key2": 5,
+                    "key3": "file:///ABCDEF/text"
+                },
+                "key4": 1
+            }"#,
+            &[("/ABCDEF", "/replacement")],
+            r#"{
+                "key0": "file:///replacement/",
+                "key1": {
+                    "key2": 5,
+                    "key3": "file:///replacement/text"
+                },
+                "key4": 1
+            }"#,
         )
     }
 
     #[test]
-    fn test_stream_with_replacement_3() -> Result<()> {
+    fn test_stream_with_replacement_self_binary() -> Result<()> {
         test_stream_with_replacement(
-            // read
-            "Content-Length: 55\r\n\r\n{\"path\": \"/my_folder/rust-analyzer-chromiumos-wrapper\"}",
-            // pattern
-            "",
-            // replacement
-            "",
-            // json_expected
-            "{\"path\": \"/usr/sbin/rust-analyzer\"}",
+            r#"{
+                "path": "/my_folder/rust-analyzer-chromiumos-wrapper"
+            }"#,
+            &[],
+            r#"{
+                "path": "/usr/bin/rust-analyzer"
+            }"#,
+        )
+    }
+
+    #[test]
+    fn test_stream_with_replacement_replace_once() -> Result<()> {
+        test_stream_with_replacement(
+            r#"{
+                "path": "/mnt/home/file"
+            }"#,
+            &[("/mnt/home", "/home"), ("/home", "/foo")],
+            r#"{
+                "path": "/home/file"
+            }"#,
         )
     }
 }

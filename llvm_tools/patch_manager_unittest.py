@@ -124,7 +124,6 @@ class PatchManagerTest(unittest.TestCase):
                         dirpath,
                         patches_path,
                         "example.patch",
-                        patch_utils.gnu_patch,
                     )
                     self.assertEqual(result, expected)
                     m.assert_called()
@@ -165,7 +164,6 @@ class PatchManagerTest(unittest.TestCase):
                         dirpath,
                         patches_path,
                         "example.patch",
-                        patch_utils.gnu_patch,
                     )
                     self.assertEqual(result, expected)
 

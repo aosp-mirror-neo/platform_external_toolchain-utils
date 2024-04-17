@@ -22,6 +22,21 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
         )
 
+    def test_parsing_long_form_internal_url(self):
+        self.assertEqual(
+            cros_cls.ChangeListURL.parse(
+                "chrome-internal-review.googlesource.com/c/chromeos/"
+                "manifest-internal/+/654321"
+            ),
+            cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
+        )
+
+    def test_parsing_short_internal_url(self):
+        self.assertEqual(
+            cros_cls.ChangeListURL.parse("crrev.com/i/654321"),
+            cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
+        )
+
     def test_parsing_discards_http(self):
         self.assertEqual(
             cros_cls.ChangeListURL.parse("http://crrev.com/c/123456"),
@@ -104,6 +119,17 @@ class TestChangeListURL(unittest.TestCase):
                 )
             ),
             "https://crrev.com/c/1234",
+        )
+
+        self.assertEqual(
+            str(
+                cros_cls.ChangeListURL(
+                    cl_id=1234,
+                    patch_set=2,
+                    internal=True,
+                )
+            ),
+            "https://crrev.com/i/1234/2",
         )
 
 

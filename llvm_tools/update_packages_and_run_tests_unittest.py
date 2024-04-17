@@ -152,14 +152,14 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
 
         mock_cmd.return_value = json.dumps([{"id": bb_id, "url": url}])
 
-        chroot_path = "/some/path/to/chroot"
+        chromeos_path = "/some/path/to/chromeos"
         cl = 900
         extra_cls = [1200]
         options = ["some_option"]
         builders = ["builder1"]
 
         tests = update_packages_and_run_tests.RunTryJobs(
-            cl, extra_cls, options, builders, chroot_path
+            cl, extra_cls, options, builders, chromeos_path
         )
 
         expected_tests = [
@@ -176,7 +176,7 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
         self.assertEqual(tests, expected_tests)
 
         mock_cmd.assert_called_once_with(
-            expected_cmd, cwd=chroot_path, encoding="utf-8"
+            expected_cmd, cwd=chromeos_path, encoding="utf-8"
         )
 
         mock_add_links_to_cl.assert_called_once()
@@ -205,14 +205,14 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
             {"id": bb_id, "createTime": create_time}
         )
 
-        chroot_path = "/some/path/to/chroot"
+        chromeos_path = "/some/path/to/chromeos"
         cl = 900
         extra_cls = [1200]
         options = ["some_option"]
         builders = ["builder1"]
 
         tests = update_packages_and_run_tests.StartRecipeBuilders(
-            cl, extra_cls, options, builders, chroot_path
+            cl, extra_cls, options, builders, chromeos_path
         )
 
         expected_tests = [
@@ -229,25 +229,25 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
         self.assertEqual(tests, expected_tests)
 
         mock_cmd.assert_called_once_with(
-            expected_cmd, cwd=chroot_path, encoding="utf-8"
+            expected_cmd, cwd=chromeos_path, encoding="utf-8"
         )
 
         mock_add_links_to_cl.assert_called_once()
 
     @mock.patch.object(subprocess, "check_output", return_value=None)
     def testSuccessfullyAddedTestLinkToCL(self, mock_exec_cmd):
-        chroot_path = "/abs/path/to/chroot"
+        chromeos_path = "/abs/path/to/chromeos"
 
         test_cl_number = 1000
 
         tests = [{"link": "https://some_tryjob_link.com"}]
 
         update_packages_and_run_tests.AddLinksToCL(
-            tests, test_cl_number, chroot_path
+            tests, test_cl_number, chromeos_path
         )
 
         expected_gerrit_message = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "message",
             str(test_cl_number),
             "Started the following tests:\n%s" % tests[0]["link"],
@@ -299,6 +299,8 @@ class UpdatePackagesAndRunTryjobsTest(unittest.TestCase):
 
             # Call with a changed LLVM svn version
             args_output = test_helpers.ArgsOutputTest()
+            args_output.chroot_name = "custom-chroot"
+            args_output.chroot_out = "custom-chroot_out"
             args_output.is_llvm_next = True
             args_output.extra_change_lists = extra_cls
             args_output.last_tested = last_tested_file
@@ -403,17 +405,17 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
 
     @mock.patch.object(subprocess, "check_output", return_value=None)
     def testStartCQDryRunNoDeps(self, mock_exec_cmd):
-        chroot_path = "/abs/path/to/chroot"
+        chromeos_path = "/abs/path/to/chromeos"
         test_cl_number = 1000
 
         # test with no deps cls.
         extra_cls = []
         update_packages_and_run_tests.StartCQDryRun(
-            test_cl_number, extra_cls, chroot_path
+            test_cl_number, extra_cls, chromeos_path
         )
 
         expected_gerrit_message = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "label-cq",
             str(test_cl_number),
             "1",
@@ -425,22 +427,22 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
     @mock.patch.object(subprocess, "check_output", return_value=None)
     # test with a single deps cl.
     def testStartCQDryRunSingleDep(self, mock_exec_cmd):
-        chroot_path = "/abs/path/to/chroot"
+        chromeos_path = "/abs/path/to/chromeos"
         test_cl_number = 1000
 
         extra_cls = [2000]
         update_packages_and_run_tests.StartCQDryRun(
-            test_cl_number, extra_cls, chroot_path
+            test_cl_number, extra_cls, chromeos_path
         )
 
         expected_gerrit_cmd_1 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "label-cq",
             str(test_cl_number),
             "1",
         ]
         expected_gerrit_cmd_2 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "label-cq",
             str(2000),
             "1",
@@ -457,29 +459,29 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
     # Mock ExecCommandAndCaptureOutput for the gerrit command execution.
     @mock.patch.object(subprocess, "check_output", return_value=None)
     def testStartCQDryRunMultipleDep(self, mock_exec_cmd):
-        chroot_path = "/abs/path/to/chroot"
+        chromeos_path = "/abs/path/to/chromeos"
         test_cl_number = 1000
 
         # test with multiple deps cls.
         extra_cls = [3000, 4000]
         update_packages_and_run_tests.StartCQDryRun(
-            test_cl_number, extra_cls, chroot_path
+            test_cl_number, extra_cls, chromeos_path
         )
 
         expected_gerrit_cmd_1 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "label-cq",
             str(test_cl_number),
             "1",
         ]
         expected_gerrit_cmd_2 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "label-cq",
             str(3000),
             "1",
         ]
         expected_gerrit_cmd_3 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "label-cq",
             str(4000),
             "1",
@@ -500,12 +502,12 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
     @mock.patch.object(subprocess, "check_output", return_value=None)
     # test with no reviewers.
     def testAddReviewersNone(self, mock_exec_cmd):
-        chroot_path = "/abs/path/to/chroot"
+        chromeos_path = "/abs/path/to/chromeos"
         reviewers = []
         test_cl_number = 1000
 
         update_packages_and_run_tests.AddReviewers(
-            test_cl_number, reviewers, chroot_path
+            test_cl_number, reviewers, chromeos_path
         )
         self.assertTrue(mock_exec_cmd.not_called)
 
@@ -513,22 +515,22 @@ class UpdatePackagesAndRunTestCQTest(unittest.TestCase):
     @mock.patch.object(subprocess, "check_output", return_value=None)
     # test with multiple reviewers.
     def testAddReviewersMultiple(self, mock_exec_cmd):
-        chroot_path = "/abs/path/to/chroot"
+        chromeos_path = "/abs/path/to/chromeos"
         reviewers = ["none1@chromium.org", "none2@chromium.org"]
         test_cl_number = 1000
 
         update_packages_and_run_tests.AddReviewers(
-            test_cl_number, reviewers, chroot_path
+            test_cl_number, reviewers, chromeos_path
         )
 
         expected_gerrit_cmd_1 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "reviewers",
             str(test_cl_number),
             "none1@chromium.org",
         ]
         expected_gerrit_cmd_2 = [
-            "%s/chromite/bin/gerrit" % chroot_path,
+            "%s/chromite/bin/gerrit" % chromeos_path,
             "reviewers",
             str(test_cl_number),
             "none2@chromium.org",

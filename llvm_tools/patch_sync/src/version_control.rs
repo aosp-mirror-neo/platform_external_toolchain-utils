@@ -43,8 +43,8 @@ impl RepoSetupContext {
                 let android_git = anpp.parent().unwrap();
                 git_cd_cmd(android_git, ["checkout", ANDROID_MAIN_BRANCH])?;
             }
-            repo_cd_cmd(&self.cros_checkout, &["sync", CHROMIUMOS_OVERLAY_REL_PATH])?;
-            repo_cd_cmd(&self.android_checkout, &["sync", ANDROID_LLVM_REL_PATH])?;
+            repo_cd_cmd(&self.cros_checkout, ["sync", CHROMIUMOS_OVERLAY_REL_PATH])?;
+            repo_cd_cmd(&self.android_checkout, ["sync", ANDROID_LLVM_REL_PATH])?;
         }
         Ok(())
     }
@@ -52,7 +52,7 @@ impl RepoSetupContext {
     pub fn cros_repo_upload<S: AsRef<str>>(&self, reviewers: &[S]) -> Result<()> {
         let llvm_dir = self
             .cros_checkout
-            .join(&CHROMIUMOS_OVERLAY_REL_PATH)
+            .join(CHROMIUMOS_OVERLAY_REL_PATH)
             .join("sys-devel/llvm");
         ensure!(
             llvm_dir.is_dir(),
@@ -142,14 +142,14 @@ impl RepoSetupContext {
     /// Get the Android path to the PATCHES.json file
     pub fn android_patches_path(&self) -> PathBuf {
         self.android_checkout
-            .join(&ANDROID_LLVM_REL_PATH)
+            .join(ANDROID_LLVM_REL_PATH)
             .join("patches/PATCHES.json")
     }
 
     /// Get the ChromiumOS path to the PATCHES.json file
     pub fn cros_patches_path(&self) -> PathBuf {
         self.cros_checkout
-            .join(&CHROMIUMOS_OVERLAY_REL_PATH)
+            .join(CHROMIUMOS_OVERLAY_REL_PATH)
             .join("sys-devel/llvm/files/PATCHES.json")
     }
 
@@ -177,7 +177,7 @@ impl RepoSetupContext {
         commit_msg: &str,
         extra_flags: I,
     ) -> Result<()> {
-        let git_path = &checkout_path.join(&subproject_git_wd);
+        let git_path = &checkout_path.join(subproject_git_wd);
         ensure!(
             git_path.is_dir(),
             "git_path {} is not a directory",
@@ -185,7 +185,7 @@ impl RepoSetupContext {
         );
         repo_cd_cmd(
             checkout_path,
-            &["start", WORK_BRANCH_NAME, subproject_git_wd],
+            ["start", WORK_BRANCH_NAME, subproject_git_wd],
         )?;
         let base_args = ["upload", "--br", WORK_BRANCH_NAME, "-y", "--verify"];
         let new_args = base_args
@@ -193,8 +193,8 @@ impl RepoSetupContext {
             .copied()
             .chain(extra_flags)
             .chain(["--", subproject_git_wd]);
-        git_cd_cmd(git_path, &["add", "."])
-            .and_then(|_| git_cd_cmd(git_path, &["commit", "-m", commit_msg]))
+        git_cd_cmd(git_path, ["add", "."])
+            .and_then(|_| git_cd_cmd(git_path, ["commit", "-m", commit_msg]))
             .and_then(|_| repo_cd_cmd(checkout_path, new_args))?;
         Ok(())
     }
@@ -249,7 +249,7 @@ impl RepoSetupContext {
             file.to_str()
                 .ok_or_else(|| anyhow!("failed to convert filepath to str"))?
         );
-        let output = git_cd_cmd(pwd, &["show", &git_ref])?;
+        let output = git_cd_cmd(pwd, ["show", &git_ref])?;
         if !output.status.success() {
             bail!("could not get old file contents for {}", &git_ref)
         }
@@ -318,7 +318,7 @@ where
     S: AsRef<OsStr>,
 {
     let mut command = Command::new("git");
-    command.current_dir(&pwd).args(args);
+    command.current_dir(pwd).args(args);
     let output = command.output()?;
     if !output.status.success() {
         bail!(
@@ -337,7 +337,7 @@ where
     S: AsRef<OsStr>,
 {
     let mut command = Command::new("repo");
-    command.current_dir(&pwd).args(args);
+    command.current_dir(pwd).args(args);
     let status = command.status()?;
     if !status.success() {
         bail!("repo command failed:\n  {:?}  \n", command)
@@ -363,7 +363,7 @@ mod test {
             // With revision
             let ebuild_name = "llvm-13.0_pre433403_p20211019-r10.ebuild";
             let ebuild_path = llvm_dir.join(ebuild_name);
-            File::create(&ebuild_path).expect("creating test ebuild file");
+            File::create(ebuild_path).expect("creating test ebuild file");
             let new_ebuild_path =
                 RepoSetupContext::rev_bump_llvm(&llvm_dir).expect("rev bumping the ebuild");
             assert!(
@@ -377,7 +377,7 @@ mod test {
             // Without revision
             let ebuild_name = "llvm-13.0_pre433403_p20211019.ebuild";
             let ebuild_path = llvm_dir.join(ebuild_name);
-            File::create(&ebuild_path).expect("creating test ebuild file");
+            File::create(ebuild_path).expect("creating test ebuild file");
             let new_ebuild_path =
                 RepoSetupContext::rev_bump_llvm(&llvm_dir).expect("rev bumping the ebuild");
             assert!(
@@ -394,7 +394,7 @@ mod test {
             File::create(&ebuild_path).expect("creating test ebuild file");
             let ebuild_link_name = "llvm-13.0_pre433403_p20211019-r2.ebuild";
             let ebuild_link_path = llvm_dir.join(ebuild_link_name);
-            File::create(&ebuild_link_path).expect("creating test ebuild link file");
+            File::create(ebuild_link_path).expect("creating test ebuild link file");
             let new_ebuild_path =
                 RepoSetupContext::rev_bump_llvm(&llvm_dir).expect("rev bumping the ebuild");
             assert!(

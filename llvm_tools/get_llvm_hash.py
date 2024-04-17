@@ -17,7 +17,10 @@ import sys
 import tempfile
 from typing import Iterator, Optional, Tuple, Union
 
+import chroot
 import git_llvm_rev
+import llvm_next
+import manifest_utils
 import subprocess_helpers
 
 
@@ -25,7 +28,13 @@ _LLVM_GIT_URL = (
     "https://chromium.googlesource.com/external/github.com/llvm/llvm-project"
 )
 
-KNOWN_HASH_SOURCES = {"google3", "google3-unstable", "tot"}
+KNOWN_HASH_SOURCES = (
+    "google3",
+    "google3-unstable",
+    "llvm",
+    "llvm-next",
+    "tot",
+)
 
 
 def GetVersionFrom(src_dir: Union[Path, str], git_hash: str) -> int:
@@ -81,23 +90,20 @@ def CheckoutBranch(src_dir: Union[Path, str], branch: str) -> None:
     subprocess_helpers.CheckCommand(["git", "-C", src_dir, "pull"])
 
 
-def ParseLLVMMajorVersion(cmakelist: str):
+def ParseLLVMMajorVersion(cmakelist: str) -> Optional[str]:
     """Reads CMakeList.txt file contents for LLVMMajor Version.
 
     Args:
         cmakelist: contents of CMakeList.txt
 
     Returns:
-        The major version number as a string
-
-    Raises:
-        ValueError: The major version cannot be parsed from cmakelist
+        The major version number as a string, or None if it couldn't be found.
     """
     match = re.search(
         r"\n\s+set\(LLVM_VERSION_MAJOR (?P<major>\d+)\)", cmakelist
     )
     if not match:
-        raise ValueError("Failed to parse CMakeList for llvm major version")
+        return None
     return match.group("major")
 
 
@@ -117,17 +123,37 @@ def GetLLVMMajorVersion(git_hash: Optional[str] = None) -> str:
         FileExistsError: The src directory doe not contain CMakeList.txt
     """
     src_dir = GetAndUpdateLLVMProjectInLLVMTools()
-    cmakelists_path = os.path.join(src_dir, "llvm", "CMakeLists.txt")
-    if git_hash:
-        subprocess_helpers.CheckCommand(
-            ["git", "-C", src_dir, "checkout", git_hash]
-        )
-    try:
-        with open(cmakelists_path, encoding="utf-8") as cmakelists_file:
-            return ParseLLVMMajorVersion(cmakelists_file.read())
-    finally:
+
+    # b/325895866#comment36: the LLVM version number was moved from
+    # `llvm/CMakeLists.txt` to `cmake/Modules/LLVMVersion.cmake` in upstream
+    # commit 81e20472a0c5a4a8edc5ec38dc345d580681af81 (r530225). Until we no
+    # longer care about looking before that, we need to support searching both
+    # files.
+    cmakelists_paths = (
+        Path(src_dir) / "llvm" / "CMakeLists.txt",
+        Path(src_dir) / "cmake" / "Modules" / "LLVMVersion.cmake",
+    )
+
+    with contextlib.ExitStack() as on_exit:
         if git_hash:
-            CheckoutBranch(src_dir, git_llvm_rev.MAIN_BRANCH)
+            subprocess_helpers.CheckCommand(
+                ["git", "-C", src_dir, "checkout", git_hash]
+            )
+            on_exit.callback(CheckoutBranch, src_dir, git_llvm_rev.MAIN_BRANCH)
+
+        for path in cmakelists_paths:
+            try:
+                file_contents = path.read_text(encoding="utf-8")
+            except FileNotFoundError:
+                # If this file DNE (yet), ignore it.
+                continue
+
+            if version := ParseLLVMMajorVersion(file_contents):
+                return version
+
+    raise ValueError(
+        f"Major version could not be parsed from any of {cmakelists_paths}"
+    )
 
 
 @contextlib.contextmanager
@@ -338,6 +364,21 @@ def GetLLVMHashAndVersionFromSVNOption(
     return git_hash, version
 
 
+def GetCrOSCurrentLLVMHash(chromeos_tree: Path) -> str:
+    """Retrieves the current ChromeOS LLVM hash.
+
+    Args:
+        chromeos_tree: A ChromeOS source tree. This is allowed to be
+        arbitrary subdirectory of an actual ChromeOS tree, for convenience.
+
+    Raises:
+        ManifestValueError if the toolchain manifest doesn't match the
+        expected structure.
+    """
+    chromeos_root = chroot.FindChromeOSRootAbove(chromeos_tree)
+    return manifest_utils.extract_current_llvm_hash(chromeos_root)
+
+
 class LLVMHash:
     """Provides methods to retrieve a LLVM hash."""
 
@@ -380,15 +421,21 @@ class LLVMHash:
         Returns:
             The hash as a string that corresponds to the LLVM version.
         """
-
         hash_value = GetGitHashFrom(
             GetAndUpdateLLVMProjectInLLVMTools(), version
         )
         return hash_value
 
+    def GetCrOSCurrentLLVMHash(self, chromeos_tree: Path) -> str:
+        """Retrieves the current ChromeOS LLVM hash."""
+        return GetCrOSCurrentLLVMHash(chromeos_tree)
+
+    def GetCrOSLLVMNextHash(self) -> str:
+        """Retrieves the current ChromeOS llvm-next hash."""
+        return llvm_next.LLVM_NEXT_HASH
+
     def GetGoogle3LLVMHash(self) -> str:
         """Retrieves the google3 LLVM hash."""
-
         return self.GetLLVMHash(GetGoogle3LLVMVersion(stable=True))
 
     def GetGoogle3UnstableLLVMHash(self) -> str:
@@ -411,6 +458,7 @@ def main() -> None:
     Parses the command line for the optional command line
     arguments.
     """
+    my_dir = Path(__file__).parent.resolve()
 
     # Create parser and add optional command-line arguments.
     parser = argparse.ArgumentParser(description="Finds the LLVM hash.")
@@ -421,17 +469,36 @@ def main() -> None:
         help="which git hash of LLVM to find. Either a svn revision, or one "
         "of %s" % sorted(KNOWN_HASH_SOURCES),
     )
+    parser.add_argument(
+        "--chromeos_tree",
+        type=Path,
+        required=True,
+        help="""
+        Path to a ChromeOS tree. If not passed, one will be inferred. If none
+        can be inferred, this script will fail.
+        """,
+    )
 
     # Parse command-line arguments.
     args_output = parser.parse_args()
 
     cur_llvm_version = args_output.llvm_version
+    chromeos_tree = args_output.chromeos_tree
+    if not chromeos_tree:
+        # Try to infer this unconditionally, so mishandling of this script can
+        # be more easily detected (which allows more flexibility in the
+        # implementation in the future for things outside of what directly
+        # needs this value).
+        chromeos_tree = chroot.FindChromeOSRootAbove(my_dir)
 
     new_llvm_hash = LLVMHash()
-
     if isinstance(cur_llvm_version, int):
         # Find the git hash of the specific LLVM version.
         print(new_llvm_hash.GetLLVMHash(cur_llvm_version))
+    elif cur_llvm_version == "llvm":
+        print(new_llvm_hash.GetCrOSCurrentLLVMHash(chromeos_tree))
+    elif cur_llvm_version == "llvm-next":
+        print(new_llvm_hash.GetCrOSLLVMNextHash())
     elif cur_llvm_version == "google3":
         print(new_llvm_hash.GetGoogle3LLVMHash())
     elif cur_llvm_version == "google3-unstable":

@@ -58,7 +58,7 @@ builder_status_mapping = {
 }
 
 
-def GetBuildResult(chroot_path, buildbucket_id):
+def GetBuildResult(chromeos_path, buildbucket_id):
     """Returns the conversion of the result of 'cros buildresult'."""
 
     # Calls 'cros buildresult' to get the status of the tryjob.
@@ -72,7 +72,7 @@ def GetBuildResult(chroot_path, buildbucket_id):
                 "--report",
                 "json",
             ],
-            cwd=chroot_path,
+            cwd=chromeos_path,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
         )
@@ -105,7 +105,7 @@ def main():
 
     args_output = llvm_bisection.GetCommandLineArgs()
 
-    chroot.VerifyChromeOSRoot(args_output.chroot_path)
+    chroot.VerifyChromeOSRoot(args_output.chromeos_path)
 
     if os.path.isfile(args_output.last_tested):
         print("Resuming bisection for %s" % args_output.last_tested)
@@ -132,7 +132,7 @@ def main():
                         == update_tryjob_status.TryjobStatus.PENDING.value
                     ):
                         status = GetBuildResult(
-                            args_output.chroot_path, tryjob["buildbucket_id"]
+                            args_output.chromeos_path, tryjob["buildbucket_id"]
                         )
                         if status:
                             tryjob["status"] = status

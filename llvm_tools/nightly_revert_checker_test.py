@@ -5,7 +5,6 @@
 
 """Tests for nightly_revert_checker."""
 
-import io
 import unittest
 from unittest import mock
 
@@ -137,43 +136,6 @@ class Test(unittest.TestCase):
         )
 
         self.assertEqual(email, expected_email)
-
-    def test_llvm_ebuild_parsing_appears_to_function(self):
-        llvm_ebuild = io.StringIO(
-            "\n".join(
-                (
-                    "foo",
-                    '#LLVM_HASH="123"',
-                    'LLVM_HASH="123" # comment',
-                    'LLVM_NEXT_HASH="456"',
-                )
-            )
-        )
-
-        shas = nightly_revert_checker._parse_llvm_ebuild_for_shas(llvm_ebuild)
-        self.assertEqual(
-            shas,
-            [
-                ("llvm", "123"),
-                ("llvm-next", "456"),
-            ],
-        )
-
-    def test_llvm_ebuild_parsing_fails_if_both_hashes_arent_present(self):
-        bad_bodies = [
-            "",
-            'LLVM_HASH="123" # comment',
-            'LLVM_NEXT_HASH="123" # comment',
-            'LLVM_NEXT_HASH="123" # comment\n#LLVM_HASH="123"',
-        ]
-
-        for bad in bad_bodies:
-            with self.assertRaises(ValueError) as e:
-                nightly_revert_checker._parse_llvm_ebuild_for_shas(
-                    io.StringIO(bad)
-                )
-
-            self.assertIn("Failed to detect SHAs", str(e.exception))
 
     @mock.patch("revert_checker.find_reverts")
     @mock.patch("get_upstream_patch.get_from_upstream")

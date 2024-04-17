@@ -115,7 +115,7 @@ def GetCommandLineArgs():
 
     # Add argument for a specific chroot path.
     parser.add_argument(
-        "--chroot_path",
+        "--chromeos_path",
         default=cros_root,
         help="the path to the chroot (default: %(default)s)",
     )
@@ -279,7 +279,7 @@ def Bisect(
     bisect_state,
     last_tested,
     update_packages,
-    chroot_path,
+    chromeos_path,
     extra_change_lists,
     options,
     builder,
@@ -292,7 +292,7 @@ def Bisect(
                 update_packages,
                 git_hash,
                 svn_revision,
-                chroot_path,
+                chromeos_path,
                 extra_change_lists,
                 options,
                 builder,
@@ -333,7 +333,7 @@ def main(args_output):
     """
 
     chroot.VerifyOutsideChroot()
-    chroot.VerifyChromeOSRoot(args_output.chroot_path)
+    chroot.VerifyChromeOSRoot(args_output.chromeos_path)
     start = args_output.start_rev
     end = args_output.end_rev
 
@@ -410,7 +410,7 @@ def main(args_output):
         if args_output.cleanup:
             # Abandon all the CLs created for bisection
             gerrit = os.path.join(
-                args_output.chroot_path, "chromite/bin/gerrit"
+                args_output.chromeos_path, "chromite/bin/gerrit"
             )
             for build in bisect_state["jobs"]:
                 try:
@@ -439,7 +439,7 @@ def main(args_output):
         bisect_state,
         args_output.last_tested,
         update_chromeos_llvm_hash.DEFAULT_PACKAGES,
-        args_output.chroot_path,
+        args_output.chromeos_path,
         args_output.extra_change_lists,
         args_output.options,
         args_output.builder,

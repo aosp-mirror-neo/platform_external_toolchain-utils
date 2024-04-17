@@ -156,16 +156,6 @@ $ ./patch_manager.py \
   --failure_mode disable_patches
 ```
 
-For example, to remove all patches that no longer apply:
-
-```
-$ ./patch_manager.py \
-  --svn_version 367622 \
-  --patch_metadata_file /abs/path/to/patch/file \
-  --src_path /abs/path/to/src/tree \
-  --failure_mode remove_patches
-```
-
 For example, to bisect a failing patch and stop at the first bisected patch:
 
 ```
@@ -244,7 +234,7 @@ $ ./auto_llvm_bisection.py --start_rev 369410 --end_rev 369420 \
   --last_tested /abs/path/to/last_tested_file.json \
   --extra_change_lists 513590 1394249 \
   --options latest-toolchain nochromesdk \
-  --chroot_path /path/to/chromeos/chroot \
+  --chromeos_path /path/to/chromeos/chroot \
   --builder eve-release-tryjob
 ```
 
@@ -449,7 +439,7 @@ of commits as well as differential reviews.
 Usage:
 
 ```
-./get_upstream_patch.py --chroot_path /abs/path/to/chroot --start_sha llvm
+./get_upstream_patch.py --chromeos_path /abs/path/to/chroot --start_sha llvm
 --sha 174c3eb69f19ff2d6a3eeae31d04afe77e62c021 --sha 174c3eb69f19ff2d6a3eeae31d04afe77e62c021
 --differential D123456
 ```

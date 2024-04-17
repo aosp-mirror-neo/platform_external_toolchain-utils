@@ -33,10 +33,21 @@ def check_call(cmd, cwd=None):
 
 # FIXME: CTRL+C does not work when executing a command inside the chroot via
 # `cros_sdk`.
-def ChrootRunCommand(chroot_path, cmd, verbose=False):
+def ChrootRunCommand(
+    chroot_path,
+    cmd,
+    verbose: bool = False,
+    chroot_name: str = "chroot",
+    out_name: str = "out",
+):
     """Runs the command inside the chroot."""
 
-    exec_chroot_cmd = ["cros_sdk", "--"]
+    exec_chroot_cmd = [
+        "cros_sdk",
+        f"--chroot={chroot_name}",
+        f"--out-dir={out_name}",
+        "--",
+    ]
     exec_chroot_cmd.extend(cmd)
 
     return ExecCommandAndCaptureOutput(

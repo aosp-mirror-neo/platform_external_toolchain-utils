@@ -168,8 +168,7 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 			return 0, newErrorwithSourceLocf("unsupported compiler: %s", mainBuilder.target.compiler)
 		}
 	} else {
-		_, tidyFlags, tidyMode := processClangTidyFlags(mainBuilder)
-		cSrcFile, iwyuFlags, iwyuMode := processIWYUFlags(mainBuilder)
+		cSrcFile, tidyFlags, tidyMode := processClangTidyFlags(mainBuilder)
 		crashArtifactsDir := detectCrashArtifactsDir(env, cfg)
 		if mainBuilder.target.compilerType == clangType {
 			err := prepareClangCommand(crashArtifactsDir, mainBuilder)
@@ -195,19 +194,6 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 					panic(fmt.Sprintf("Unknown tidy mode: %v", tidyMode))
 				}
 
-				if err != nil {
-					return 0, err
-				}
-			}
-
-			if iwyuMode != iwyuModeNone {
-				if iwyuMode == iwyuModeError {
-					panic("Unknown IWYU mode")
-				}
-
-				allowCCache = false
-				clangCmdWithoutRemoteBuildAndCCache := mainBuilder.build()
-				err := runIWYU(env, clangCmdWithoutRemoteBuildAndCCache, cSrcFile, iwyuFlags)
 				if err != nil {
 					return 0, err
 				}
@@ -350,9 +336,9 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	}
 }
 
-func hasFlag(flag string, flagList ...string) bool {
-	for _, flagVal := range flagList {
-		if strings.Contains(flagVal, flag) {
+func hasUserArg(argName string, builder *commandBuilder) bool {
+	for _, argValue := range builder.args {
+		if strings.Contains(argValue.value, argName) && argValue.fromUser {
 			return true
 		}
 	}
@@ -367,8 +353,7 @@ func prepareClangCommand(crashArtifactsDir string, builder *commandBuilder) (err
 
 	var crashDiagFlagName = "-fcrash-diagnostics-dir"
 	if crashArtifactsDir != "" &&
-		!hasFlag(crashDiagFlagName, builder.cfg.clangFlags...) &&
-		!hasFlag(crashDiagFlagName, builder.cfg.clangPostFlags...) {
+		!hasUserArg(crashDiagFlagName, builder) {
 		builder.addPreUserArgs(crashDiagFlagName + "=" + crashArtifactsDir)
 	}
 

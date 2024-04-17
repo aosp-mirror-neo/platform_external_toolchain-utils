@@ -35,7 +35,7 @@ def run(
         env = None
 
     if logging.getLogger().isEnabledFor(logging.DEBUG):
-        c = " ".join(shlex.quote(str(x)) for x in command)
+        c = shlex.join(str(x) for x in command)
         dir_extra = f" in {cwd}" if cwd is not None else ""
         logging.debug("Running `%s`%s", c, dir_extra)
 

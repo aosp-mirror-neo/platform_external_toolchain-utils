@@ -377,17 +377,17 @@ def commit_all_changes(
     )
 
 
-def scrape_git_push_cl_id(git_push_output: str) -> int:
+def scrape_git_push_cl_id_strs(git_push_output: str) -> List[str]:
     id_regex = re.compile(
         r"^remote:\s+https://chromium-review\S+/\+/(\d+)\s", re.MULTILINE
     )
     results = id_regex.findall(git_push_output)
-    if len(results) != 1:
+    if not results:
         raise ValueError(
-            f"Found {len(results)} matches of {id_regex} in"
-            f"{git_push_output!r}; expected 1"
+            f"Found 0 matches of {id_regex} in {git_push_output!r}; expected "
+            "at least 1."
         )
-    return int(results[0])
+    return results
 
 
 def upload_changes(git_dir: Path):
@@ -405,22 +405,25 @@ def upload_changes(git_dir: Path):
     print(result.stdout, end=None)
     result.check_returncode()
 
-    cl_id = str(scrape_git_push_cl_id(result.stdout))
-    logging.info("Uploaded crrev.com/c/%s successfully!", cl_id)
-    gerrit_commands = (
-        ["gerrit", "label-v", cl_id, "1"],
-        ["gerrit", "label-cq", cl_id, "1"],
-        ["gerrit", "label-as", cl_id, "1"],
-        ["gerrit", "reviewers", cl_id] + list(DEFAULT_CL_REVIEWERS),
-        ["gerrit", "ready", cl_id],
+    cl_ids = scrape_git_push_cl_id_strs(result.stdout)
+    logging.info(
+        "Uploaded %s successfully!", [f"crrev.com/c/{x}" for x in cl_ids]
     )
-    for command in gerrit_commands:
-        logging.info("Running gerrit command: %s", command)
-        subprocess.run(
-            command,
-            check=True,
-            stdin=subprocess.DEVNULL,
+    for cl_id in cl_ids:
+        gerrit_commands = (
+            ["gerrit", "label-v", cl_id, "1"],
+            ["gerrit", "label-cq", cl_id, "1"],
+            ["gerrit", "label-as", cl_id, "1"],
+            ["gerrit", "reviewers", cl_id] + list(DEFAULT_CL_REVIEWERS),
+            ["gerrit", "ready", cl_id],
         )
+        for command in gerrit_commands:
+            logging.info("Running gerrit command: %s", command)
+            subprocess.run(
+                command,
+                check=True,
+                stdin=subprocess.DEVNULL,
+            )
 
 
 def maybe_add_newest_prebuilts(

@@ -77,6 +77,16 @@ class TestManifestUtils(unittest.TestCase):
         string_root2 = ElementTree.tostring(root)
         self.assertEqual(string_root1, string_root2)
 
+    def test_extract_current_llvm_hash(self):
+        root = ElementTree.fromstring(
+            MANIFEST_FIXTURE,
+            parser=manifest_utils.make_xmlparser(),
+        )
+        self.assertEqual(
+            manifest_utils.extract_current_llvm_hash_from_xml(root),
+            "abcd",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

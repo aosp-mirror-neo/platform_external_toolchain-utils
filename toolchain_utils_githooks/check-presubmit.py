@@ -72,6 +72,7 @@ CheckResults = Union[List[Tuple[str, CheckResult]], CheckResult]
 # The files and directories on which we run the mypy typechecker. The paths are
 # relative to the root of the toolchain-utils repository.
 MYPY_CHECKED_PATHS = (
+    "afdo_tools/update_kernel_afdo.py",
     "check_portable_toolchains.py",
     "cros_utils/bugs.py",
     "cros_utils/bugs_test.py",
@@ -107,15 +108,6 @@ def run_command_unchecked(
 def has_executable_on_path(exe: str) -> bool:
     """Returns whether we have `exe` somewhere on our $PATH"""
     return shutil.which(exe) is not None
-
-
-def escape_command(command: Iterable[str]) -> str:
-    """Returns a human-readable and copy-pastable shell command.
-
-    Only intended for use in output to users. shell=True is strongly
-    discouraged.
-    """
-    return " ".join(shlex.quote(x) for x in command)
 
 
 def remove_deleted_files(files: Iterable[str]) -> List[str]:
@@ -278,8 +270,8 @@ def check_isort(
     if not bad_files:
         return CheckResult(
             ok=False,
-            output="`%s` failed; stdout/stderr:\n%s"
-            % (escape_command(command), stdout_and_stderr),
+            output=f"`{shlex.join(command)}` failed; stdout/stderr:\n"
+            f"{stdout_and_stderr}",
             autofix_commands=[],
         )
 
@@ -710,8 +702,7 @@ def check_go_format(toolchain_utils_root, _thread_pool, files):
     if exit_code:
         return CheckResult(
             ok=False,
-            output="%s failed; stdout/stderr:\n%s"
-            % (escape_command(command), output),
+            output=f"{shlex.join(command)} failed; stdout/stderr:\n{output}",
             autofix_commands=[],
         )
 
@@ -799,9 +790,10 @@ def process_check_result(
     if isinstance(check_results, CheckResult):
         ok, output, autofix_commands = check_results
         if not ok and autofix_commands:
-            recommendation = "Recommended command(s) to fix this: %s" % [
-                escape_command(x) for x in autofix_commands
-            ]
+            recommendation = (
+                "Recommended command(s) to fix this: "
+                f"{[shlex.join(x) for x in autofix_commands]}"
+            )
             if output:
                 output += "\n" + recommendation
             else:
@@ -817,8 +809,8 @@ def process_check_result(
             if not ok and autofix:
                 message.append(
                     indent_block(
-                        "Recommended command(s) to fix this: %s"
-                        % [escape_command(x) for x in autofix]
+                        "Recommended command(s) to fix this: "
+                        f"{[shlex.join(x) for x in autofix]}"
                     )
                 )
 
@@ -869,12 +861,12 @@ def try_autofix(
 
         if exit_code:
             print(
-                "*** Autofix command `%s` exited with code %d; stdout/stderr:"
-                % (escape_command(command), exit_code)
+                f"*** Autofix command `{shlex.join(command)}` exited with "
+                f"code {exit_code}; stdout/stderr:"
             )
             print(output)
         else:
-            print("*** Autofix `%s` succeeded" % escape_command(command))
+            print(f"*** Autofix `{shlex.join(command)}` succeeded")
             anything_succeeded = True
 
     if anything_succeeded:
@@ -897,7 +889,9 @@ def is_in_chroot() -> bool:
     return os.path.exists("/etc/cros_chroot_version")
 
 
-def maybe_reexec_inside_chroot(autofix: bool, files: List[str]) -> None:
+def maybe_reexec_inside_chroot(
+    autofix: bool, install_deps_only: bool, files: List[str]
+) -> None:
     if is_in_chroot():
         return
 
@@ -944,6 +938,8 @@ def maybe_reexec_inside_chroot(autofix: bool, files: List[str]) -> None:
 
     if not autofix:
         args.append("--no_autofix")
+    if install_deps_only:
+        args.append("--install_deps_only")
     args.extend(rebase_path(x) for x in files)
 
     if chdir_to is None:
@@ -990,20 +986,39 @@ def main(argv: List[str]) -> int:
         action="store_false",
         help="Prevent auto-entering the chroot if we're not already in it.",
     )
+    parser.add_argument(
+        "--install_deps_only",
+        action="store_true",
+        help="""
+        Only install dependencies that would be required if presubmits were
+        being run, and quit. This skips all actual checking.
+        """,
+    )
     parser.add_argument("files", nargs="*")
     opts = parser.parse_args(argv)
 
     files = opts.files
-    if not files:
+    install_deps_only = opts.install_deps_only
+    if not files and not install_deps_only:
         return 0
 
     if opts.enter_chroot:
-        maybe_reexec_inside_chroot(opts.autofix, opts.files)
+        maybe_reexec_inside_chroot(opts.autofix, install_deps_only, files)
 
     # If you ask for --no_enter_chroot, you're on your own for installing these
     # things.
     if is_in_chroot():
         ensure_pip_deps_installed()
+        if install_deps_only:
+            print(
+                "Dependency installation complete & --install_deps_only "
+                "passed. Quit."
+            )
+            return 0
+    elif install_deps_only:
+        parser.error(
+            "--install_deps_only is meaningless if the chroot isn't entered"
+        )
 
     files = [os.path.abspath(f) for f in files]
 

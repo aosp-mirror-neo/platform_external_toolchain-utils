@@ -14,7 +14,7 @@ class ArgsOutputTest:
     """Testing class to simulate a argument parser object."""
 
     def __init__(self, svn_option="google3"):
-        self.chroot_path = "/abs/path/to/chroot"
+        self.chromeos_path = "/abs/path/to/chroot"
         self.last_tested = "/abs/path/to/last_tested_file.json"
         self.llvm_version = svn_option
         self.extra_change_lists = None

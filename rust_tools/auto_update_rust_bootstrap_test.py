@@ -5,7 +5,6 @@
 
 """Tests for auto_update_rust_bootstrap."""
 
-
 import os
 from pathlib import Path
 import shutil
@@ -36,6 +35,26 @@ To https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay
  * [new reference]             HEAD -> refs/for/main
 """
 
+_GIT_PUSH_MULTI_CL_OUTPUT = r"""
+remote: Waiting for private key checker: 2/2 objects left
+remote:
+remote: Processing changes: new: 1 (\)
+remote: Processing changes: new: 1 (|)
+remote: Processing changes: new: 1 (/)
+remote: Processing changes: refs: 1, new: 1 (/)
+remote: Processing changes: refs: 1, new: 1 (/)
+remote: Processing changes: refs: 1, new: 1 (/)
+remote: Processing changes: refs: 1, new: 1, done
+remote:
+remote: SUCCESS
+remote:
+remote:   https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5339923 rust-bootstrap: add version 1.75.0 [NEW]
+remote:   https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5339924 rust-bootstrap: remove unused ebuilds [NEW]
+remote:
+To https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay
+ * [new reference]             HEAD -> refs/for/main
+"""
+
 
 class Test(unittest.TestCase):
     """Tests for auto_update_rust_bootstrap."""
@@ -49,8 +68,17 @@ class Test(unittest.TestCase):
 
     def test_git_cl_id_scraping(self):
         self.assertEqual(
-            auto_update_rust_bootstrap.scrape_git_push_cl_id(_GIT_PUSH_OUTPUT),
-            5018826,
+            auto_update_rust_bootstrap.scrape_git_push_cl_id_strs(
+                _GIT_PUSH_OUTPUT
+            ),
+            ["5018826"],
+        )
+
+        self.assertEqual(
+            auto_update_rust_bootstrap.scrape_git_push_cl_id_strs(
+                _GIT_PUSH_MULTI_CL_OUTPUT
+            ),
+            ["5339923", "5339924"],
         )
 
     def test_ebuild_linking_logic_handles_direct_relative_symlinks(self):

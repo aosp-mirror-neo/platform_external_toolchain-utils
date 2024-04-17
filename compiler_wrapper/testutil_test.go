@@ -196,11 +196,6 @@ func (ctx *testContext) mustFail(exitCode int) string {
 
 func (ctx *testContext) updateConfig(cfg *config) {
 	*ctx.cfg = *cfg
-	ctx.cfg.newWarningsDir = filepath.Join(ctx.tempDir, "fatal_clang_warnings")
-
-	// Ensure this is always empty, so any test that depends on it will see no output unless
-	// it's properly set up.
-	ctx.cfg.newWarningsDir = ""
 }
 
 func (ctx *testContext) newCommand(path string, args ...string) *command {

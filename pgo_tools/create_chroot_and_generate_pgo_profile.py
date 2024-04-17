@@ -231,9 +231,7 @@ def main(argv: List[str]):
         if opts.upload:
             pgo_tools.run(upload_command)
         else:
-            friendly_upload_command = " ".join(
-                shlex.quote(str(x)) for x in upload_command
-            )
+            friendly_upload_command = shlex.join(str(x) for x in upload_command)
             logging.info(
                 "To upload the profile, run %r in %r",
                 friendly_upload_command,

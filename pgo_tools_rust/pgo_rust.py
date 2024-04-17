@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-#
 # Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 # pylint: disable=line-too-long
+
 """Handle most aspects of creating and benchmarking PGO profiles for Rust.
 
 This is meant to be done at Rust uprev time. Ultimately profdata files need
@@ -278,7 +278,6 @@ def build_rust(
     use_frontend_profile: bool = False,
     use_llvm_profile: bool = False,
 ):
-
     if use_frontend_profile or use_llvm_profile:
         assert not generate_frontend_profile and not generate_llvm_profile, (
             "Can't build a compiler to both use profile information "
@@ -301,15 +300,20 @@ def build_rust(
 
     env_use = os.getenv("USE", "").rstrip()
     use = (env_use + " " + use).strip()
+    rust_cross_packages = [
+        f"cross-{x}/rust" for x in TARGET_TRIPLES if "-pc-linux-" not in x
+    ]
+
     # -E to preserve environment variables like USE, FEATURES, etc.
     run(
         [
             "sudo",
             "-E",
             "emerge",
+            "-j",
             "dev-lang/rust-host",
-            "dev-lang/rust",
-        ],
+        ]
+        + rust_cross_packages,
         env={"USE": use},
     )
 

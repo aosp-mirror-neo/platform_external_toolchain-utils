@@ -253,36 +253,6 @@ func TestCalculateAndroidWrapperPath(t *testing.T) {
 	}
 }
 
-// If "crash-diagnostics-dir" flag is already provided, only use that flag and don't add a dupe
-func TestCrashDiagPreFlag(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		ctx.cfg.clangFlags = []string{"-fcrash-diagnostics-dir=/build/something/foo"}
-		ctx.env = []string{
-			"CROS_ARTIFACTS_TMP_DIR=/tmp/foo",
-		}
-		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand(clangX86_64, mainCc)))
-		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/build/something/foo"); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
-// If "crash-diagnostics-dir" flag is already provided, only use that flag and don't add a dupe
-func TestCrashDiagPostFlag(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		ctx.cfg.clangPostFlags = []string{"-fcrash-diagnostics-dir=/build/something/foo"}
-		ctx.env = []string{
-			"CROS_ARTIFACTS_TMP_DIR=/tmp/foo",
-		}
-		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand(clangX86_64, mainCc)))
-		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/build/something/foo"); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
 // If "crash-diagnostics-dir" flag is not provided, add one in
 func TestCrashDiagDefault(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
@@ -291,7 +261,30 @@ func TestCrashDiagDefault(t *testing.T) {
 		}
 		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
 			ctx.newCommand(clangX86_64, mainCc)))
+
+		// Verify that we added the default flag
 		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/tmp/foo/toolchain/clang_crash_diagnostics"); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+// If "crash-diagnostics-dir" flag is already provided by the user, only use that flag and don't add a dupe
+func TestCrashDiagUserFlag(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		ctx.env = []string{
+			"CROS_ARTIFACTS_TMP_DIR=/tmp/foo",
+		}
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(clangX86_64, mainCc, "-fcrash-diagnostics-dir=/build/something/foozz")))
+
+		// Verify that user flag is not removed
+		if err := verifyArgCount(cmd, 1, "-fcrash-diagnostics-dir=/build/something/foozz"); err != nil {
+			t.Error(err)
+		}
+
+		// Verify that we did not add the default flag
+		if err := verifyArgCount(cmd, 0, "-fcrash-diagnostics-dir=/tmp/foo/toolchain/clang_crash_diagnostics"); err != nil {
 			t.Error(err)
 		}
 	})

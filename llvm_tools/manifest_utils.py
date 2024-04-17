@@ -11,7 +11,7 @@ on toolchain projects (llvm-project, etc.) which are public.
 from pathlib import Path
 import shutil
 import subprocess
-from typing import List, Union
+from typing import List, Optional, Union
 from xml.etree import ElementTree
 
 import atomic_write_file
@@ -28,11 +28,62 @@ class UpdateManifestError(Exception):
     """Error occurred when updating the manifest."""
 
 
-def make_xmlparser():
+class ManifestParseError(Exception):
+    """Error occurred when parsing the contents of the manifest."""
+
+
+def make_xmlparser() -> ElementTree.XMLParser:
     """Return a new xmlparser with custom TreeBuilder."""
     return ElementTree.XMLParser(
         target=ElementTree.TreeBuilder(insert_comments=True)
     )
+
+
+def _find_llvm_project_in_manifest_tree(
+    xmlroot: ElementTree.Element,
+) -> Optional[ElementTree.Element]:
+    """Returns the llvm-project `project` in `xmlroot`, if it exists."""
+    for child in xmlroot:
+        if (
+            child.tag == "project"
+            and child.attrib.get("path") == LLVM_PROJECT_PATH
+        ):
+            return child
+    return None
+
+
+def extract_current_llvm_hash(src_tree: Path) -> str:
+    """Returns the current LLVM SHA for the CrOS tree rooted at `src_tree`.
+
+    Raises:
+        ManifestParseError if the manifest didn't have the expected contents.
+    """
+    xmlroot = ElementTree.parse(
+        get_chromeos_manifest_path(src_tree), parser=make_xmlparser()
+    ).getroot()
+    return extract_current_llvm_hash_from_xml(xmlroot)
+
+
+def extract_current_llvm_hash_from_xml(xmlroot: ElementTree.Element) -> str:
+    """Returns the current LLVM SHA for the parsed XML file.
+
+    Raises:
+        ManifestParseError if the manifest didn't have the expected contents.
+    """
+    if xmlroot.tag != "manifest":
+        raise ManifestParseError(
+            f"Root tag is {xmlroot.tag}; should be `manifest`."
+        )
+
+    llvm_project = _find_llvm_project_in_manifest_tree(xmlroot)
+    if llvm_project is None:
+        raise ManifestParseError("No llvm-project `project` found in manifest.")
+
+    revision = llvm_project.attrib.get("revision")
+    if not revision:
+        raise ManifestParseError("Toolchain's `project` has no revision.")
+
+    return revision
 
 
 def update_chromeos_manifest(revision: str, src_tree: Path) -> Path:
@@ -73,21 +124,11 @@ def get_chromeos_manifest_path(src_tree: Path) -> Path:
 
 def update_chromeos_manifest_tree(revision: str, xmlroot: ElementTree.Element):
     """Update the revision info for LLVM for a manifest XML root."""
-
-    # This exists mostly for testing.
-    def is_llvm_project(child):
-        return (
-            child.tag == "project" and child.attrib["path"] == LLVM_PROJECT_PATH
-        )
-
-    finder = (child for child in xmlroot if is_llvm_project(child))
-    llvm_project_elem = next(finder, None)
+    llvm_project_elem = _find_llvm_project_in_manifest_tree(xmlroot)
     # Element objects can be falsy, so we need to explicitly check None.
-    if llvm_project_elem is not None:
-        # Update the llvm revision git sha
-        llvm_project_elem.attrib["revision"] = revision
-    else:
+    if llvm_project_elem is None:
         raise UpdateManifestError("xmltree did not have llvm-project")
+    llvm_project_elem.attrib["revision"] = revision
 
 
 def format_manifest(repo_manifest: Path):
