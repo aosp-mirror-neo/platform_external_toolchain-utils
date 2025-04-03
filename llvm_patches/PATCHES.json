@@ -532,5 +532,65 @@
       "from": 537678,
       "until": 566148
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "c9d0a464c9f3a0a66f35d0ca28f36a96efc6961b",
+      "title": "Revert \"[mlir][math]Update `convertPowfOp` `ExpandPatterns.cpp`\" (#126063)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/c9d0a464c9f3a0a66f35d0ca28f36a96efc6961b.patch",
+    "version_range": {
+      "from": 563468,
+      "until": 564416
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "0227396417d4625bc93affdd8957ff8d90c76299",
+      "title": "Revert \"[libc++] Reduce std::conjunction overhead (#124259)\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/0227396417d4625bc93affdd8957ff8d90c76299.patch",
+    "version_range": {
+      "from": 563049,
+      "until": 564591
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "c65ed964657c93d51f3e05de9e0609419768a143",
+      "title": "Revert \"[reland][libc][bazel] Enable software prefetching for memcpy\" (#127189)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/c65ed964657c93d51f3e05de9e0609419768a143.patch",
+    "version_range": {
+      "from": 554178,
+      "until": 565287
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "cd6e959102888279dc7e75a41ebd75a08ac3f7a5",
+      "title": "Revert \"[MC] Explicitly mark MCSymbol for MO_ExternalSymbol\" (#133291)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/cd6e959102888279dc7e75a41ebd75a08ac3f7a5.patch",
+    "version_range": {
+      "from": 550362,
+      "until": 570122
+    }
   }
 ]
