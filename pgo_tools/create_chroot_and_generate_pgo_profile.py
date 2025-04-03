@@ -99,16 +99,23 @@ def generate_pgo_profile(
     else:
         git_utils.checkout(git_dir=llvm_project, ref=sha)
 
+    logging.info("Working on all toolchain projects")
+    workon_llvm = (
+        cros_paths.CHROOT_SOURCE_ROOT
+        / cros_paths.TOOLCHAIN_UTILS
+        / "llvm_tools"
+        / "workon_llvm.sh"
+    )
     pgo_utils.run(
         cros_sdk
         + [
-            "cros-workon",
-            "--host",
-            "start",
-            "sys-devel/llvm",
+            workon_llvm,
+            # No need to set any boards up here.
+            "-",
         ],
         cwd=repo_root,
     )
+    logging.info("Running PGO profile generation script inside of the chroot")
     generate_pgo_profile_path = (
         cros_paths.CHROOT_SOURCE_ROOT
         / cros_paths.TOOLCHAIN_UTILS_PYBIN

@@ -26,7 +26,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from typing import Dict, FrozenSet, Generator, List, Optional
+from typing import Dict, Generator, List, Optional
 
 from pgo_tools import pgo_utils
 
@@ -132,34 +132,17 @@ def restore_llvm_binpkg() -> None:
         pgo_utils.run(pgo_utils.generate_quickpkg_restoration_command(pkg))
 
 
-def find_missing_cross_libs() -> FrozenSet[str]:
-    """Returns cross-* libraries that need to be installed for workloads."""
-    equery_result = pgo_utils.run(
-        ["equery", "l", "--format=$cp", "cross-*/*"],
-        check=False,
-        stdout=subprocess.PIPE,
-    )
-
-    # If no matching package is found, equery will exit with code 3.
-    if equery_result.returncode == 3:
-        return ALL_NEEDED_CROSS_LIBS
-
-    equery_result.check_returncode()
-    has_packages = {x.strip() for x in equery_result.stdout.splitlines()}
-    return ALL_NEEDED_CROSS_LIBS - has_packages
-
-
-def ensure_cross_libs_are_installed():
-    """Ensures that we have cross-* libs for all `IMPORTANT_TRIPLES`."""
-    missing_packages = find_missing_cross_libs()
-    if not missing_packages:
-        logging.info("All cross-compiler libraries are already installed")
-        return
-
-    missing_packages = sorted(missing_packages)
-    logging.info("Installing cross-compiler libs: %s", missing_packages)
+def ensure_toolchain_is_up_to_date():
+    """Ensures that all toolchain/cross-compiler packages are up-to-date."""
+    logging.info("Updating all toolchain packages to the new toolchain")
+    # Using the command from go/crostc-mage-misc#using-the-new-toolchain
     pgo_utils.run(
-        ["sudo", "emerge", "-j", "-G"] + missing_packages,
+        [
+            "sudo",
+            "cros_setup_toolchains",
+            "--include-boards=amd64-generic",
+            "--nousepkg",
+        ],
     )
 
 
@@ -501,19 +484,21 @@ def main(argv: List[str]):
             )
         )
 
-    logging.info("Ensuring `cross-` libraries are installed")
-    ensure_cross_libs_are_installed()
+    logging.info("Installing the new toolchain...")
+    ensure_toolchain_is_up_to_date()
     tempdir = Path(tempfile.mkdtemp(prefix="generate_llvm_pgo_profile_"))
     try:
         workloads_path = tempdir / "workloads"
         logging.info("Fetching workloads")
         fetch_workloads_into(workloads_path)
 
-        # If our binpkg is not fresh, we may be operating with a weird LLVM
-        # (e.g., a PGO'ed one ;) ). Ensure we always start with that binpkg as
-        # our baseline.
-        if not llvm_binpkg_is_fresh:
-            restore_llvm_binpkg()
+        # Subtle: ensure we always start with the initial LLVM. The new one
+        # might emit a PGO profile version that the old one can't parse, which
+        # makes it impossible to build the new with the old (w/ PGO enabled).
+        #
+        # The cross-compiler libs being out of sync is fine; `sys-devel/llvm`
+        # ships with the cross-compiler libs it needs for host builds.
+        restore_llvm_binpkg()
 
         logging.info("Building PGO instrumented LLVM")
         emerge_pgo_generate_llvm()
