@@ -16,7 +16,6 @@ it can still account for a few MB of diff in an average case.
 import abc
 import argparse
 import dataclasses
-import json
 import logging
 import os
 from pathlib import Path
@@ -25,6 +24,8 @@ import sys
 import tempfile
 from typing import List, Optional, Tuple
 
+from cros_utils import cros_image_tools
+from cros_utils import cros_paths
 from llvm_tools import cros_cls
 
 
@@ -92,37 +93,70 @@ class DebugInfoArtifact(ComparableArtifact):
         return os.path.getsize(file.parent / chrome_debug)
 
 
+def _calculate_image_size(mount_point: Path) -> int:
+    """Returns the size of the FS mounted at mount_point, in bytes."""
+    df_stdout = subprocess.run(
+        ("df", "--block-size=1", mount_point),
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+
+    # There's a row of header, then a row with the info we want with the
+    # columns:
+    # - filesystem_name
+    # - total_blocks
+    # - used_blocks
+    # - available_blocks
+    # - use%
+    # - mount_point
+    #
+    # Since `--block-size=1` above, all 'blocks' will be 1 byte.
+    rows = df_stdout.strip().splitlines()
+    header = rows[0]
+    if not header.startswith("Filesystem"):
+        raise ValueError(f"`df` header doesn't look as expected: {header!r}")
+
+    data = rows[1]
+    used_blocks = data.split()[2]
+    return int(used_blocks)
+
+
+# TODO(b/409142189): As noted in b/409142189#comment3, release-vs-CQ might not
+# be the best way to verify these builds. Should probably be CQ-vs-CQ (with a
+# CQ+1 run of nothing but `touch sys-devel/llvm/files/force_rebuild` being one
+# of the CQs?)
 class ImageSizeArtifact(ComparableArtifact):
     """ComparableArtifact instance for image files."""
 
+    def __init__(self, chromeos_root: Path):
+        self._chromeos_root = chromeos_root
+
     @property
     def artifact_name(self) -> str:
-        return "image.zip"
+        return "chromiumos_base_image.tar.xz"
 
     def _measure_artifact_size(self, file: Path) -> int:
-        binpkg_sizes_name = "chromiumos_base_image.bin-package-sizes.json"
+        tmpdir = file.parent
+        base_image_name = "chromiumos_base_image.bin"
         subprocess.run(
             [
-                "unzip",
-                file.name,
-                binpkg_sizes_name,
+                "tar",
+                "-xaf",
+                file,
             ],
             check=True,
-            cwd=file.parent,
+            cwd=tmpdir,
             stdin=subprocess.DEVNULL,
         )
-        with (file.parent / binpkg_sizes_name).open(encoding="utf-8") as f:
-            loaded = json.load(f)
-            try:
-                size = loaded["total_size"]
-            except KeyError:
-                raise ValueError(f"Missing total_size in {loaded.keys()}")
-
-            if not isinstance(size, int):
-                raise ValueError(
-                    f"total_size was unexpectedly {type(size)}: {size}"
-                )
-            return size
+        mount_dir = tmpdir / "mount"
+        mount_dir.mkdir()
+        image_file = tmpdir / base_image_name
+        with cros_image_tools.mount_image(
+            self._chromeos_root, image_file, mount_dir
+        ):
+            return _calculate_image_size(mount_dir)
 
 
 def is_probably_non_production_builder(builder_name: str) -> bool:
@@ -310,6 +344,8 @@ def inspect_gs(opts: argparse.Namespace, artifact: ComparableArtifact) -> None:
 
 
 def main(argv: List[str]) -> None:
+    cros_root = cros_paths.script_chromiumos_checkout_or_exit()
+
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -353,7 +389,12 @@ def main(argv: List[str]) -> None:
 
     assert getattr(opts, "func", None), "Unknown subcommand?"
     if opts.image:
-        artifact: ComparableArtifact = ImageSizeArtifact()
+        artifact: ComparableArtifact = ImageSizeArtifact(cros_root)
+        logging.warning(
+            "This script compares the image size from a CQ build versus a "
+            "release build. This is known to produce inaccurate results. "
+            "Please tread with caution until b/409142189 is fixed."
+        )
     else:
         assert opts.debuginfo
         artifact = DebugInfoArtifact()
