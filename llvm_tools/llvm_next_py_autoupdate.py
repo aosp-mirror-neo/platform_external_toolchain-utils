@@ -27,12 +27,6 @@ from llvm_tools import cros_cls
 from llvm_tools import llvm_next
 
 
-CL_REVIEWERS = (
-    git_utils.REVIEWER_DETECTIVE,
-    git_utils.REVIEWER_MAGE,
-)
-
-
 @dataclasses.dataclass(frozen=True, eq=True)
 class GerritCLInfo:
     """Carries relevant info about a CL."""
@@ -292,7 +286,8 @@ def main(argv: List[str]) -> None:
                 worktree,
                 remote=git_utils.CROS_EXTERNAL_REMOTE,
                 branch=git_utils.CROS_MAIN_BRANCH,
-                reviewers=CL_REVIEWERS,
             )
             for cl in cl_list:
-                git_utils.try_set_autosubmit_labels(toolchain_utils_root, cl)
+                git_utils.set_autoreview_topic_and_labels(
+                    toolchain_utils_root, cl
+                )

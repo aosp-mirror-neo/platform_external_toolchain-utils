@@ -20,12 +20,6 @@ from cros_utils import git_utils
 from llvm_tools import patch_utils
 
 
-# Folks who should be on the R-line of any CLs that get uploaded.
-CL_REVIEWERS = (
-    git_utils.REVIEWER_DETECTIVE,
-    git_utils.REVIEWER_MAGE,
-)
-
 # Folks who should be on the CC-line of any CLs that get uploaded.
 CL_CC = ("gbiv@chromium.org",)
 
@@ -75,7 +69,6 @@ def upload_changes(cros_overlay: Path, autosubmit_cwd: Path) -> None:
         cros_overlay,
         remote="cros",
         branch="main",
-        reviewers=CL_REVIEWERS,
         cc=CL_CC,
     )
 
@@ -84,7 +77,7 @@ def upload_changes(cros_overlay: Path, autosubmit_cwd: Path) -> None:
 
     cl_id = cl_ids[0]
     logging.info("Uploaded CL http://crrev.com/c/%s successfully.", cl_id)
-    git_utils.try_set_autosubmit_labels(autosubmit_cwd, cl_id)
+    git_utils.set_autoreview_topic_and_labels(autosubmit_cwd, cl_id)
 
 
 def find_chromeos_llvm_version(chromiumos_overlay: Path) -> int:

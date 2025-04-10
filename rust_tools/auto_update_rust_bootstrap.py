@@ -36,12 +36,6 @@ from rust_tools import copy_rust_bootstrap
 # The bug to tag in all commit messages.
 TRACKING_BUG = "b:315473495"
 
-# Reviewers for all CLs uploaded.
-DEFAULT_CL_REVIEWERS = (
-    "gbiv@chromium.org",
-    "inglorion@chromium.org",
-)
-
 # These match variable assignments in the rust-bootstrap ebuilds.
 RUST_BOOTSTRAP_USE_PREBUILTS_REGEX = re.compile(
     r"^(THIS_VERSION_HAS_PREBUILT=)(.*)$", re.MULTILINE
@@ -319,10 +313,9 @@ def upload_changes(git_dir: Path):
         git_repo=git_dir,
         remote=git_utils.CROS_EXTERNAL_REMOTE,
         branch=git_utils.CROS_MAIN_BRANCH,
-        reviewers=DEFAULT_CL_REVIEWERS,
     )
     for cl_id in cl_ids:
-        git_utils.try_set_autosubmit_labels(
+        git_utils.set_autoreview_topic_and_labels(
             cwd=git_dir,
             cl_id=cl_id,
         )
@@ -386,7 +379,7 @@ def set_rust_bootstrap_prebuilt_use(
 
 
 def build_commit_message_for_new_prebuilts(
-    versions_updated: List[Tuple[EbuildVersion, Optional[str]]]
+    versions_updated: List[Tuple[EbuildVersion, Optional[str]]],
 ) -> str:
     """Builds a commit message for adding new prebuilts."""
     pretty_artifact_lines = []

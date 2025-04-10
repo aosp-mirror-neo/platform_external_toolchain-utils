@@ -270,6 +270,21 @@ def set_gerrit_label(cwd: Path, cl_id: int, label_name: str, label_value: str):
     )
 
 
+def set_autoreview_topic(cwd: Path, cl_id: int) -> None:
+    """Sets the autoreview topic on the given CL.
+
+    The autoreview topic integrates with other infra we have to ping
+    Chrotomation's CL reviews en masse every day. This allows these CLs to land
+    in a timely manner (or more timely than tagging random reviewers, at least).
+    """
+    subprocess.run(
+        ("gerrit", "topic", "crostc-auto-cl", str(cl_id)),
+        cwd=cwd,
+        check=True,
+        stdin=subprocess.DEVNULL,
+    )
+
+
 def try_set_autosubmit_labels(cwd: Path, cl_id: int) -> None:
     """Sets autosubmit on a CL. Logs - not raises - on failure.
 
@@ -294,6 +309,15 @@ def try_set_autosubmit_labels(cwd: Path, cl_id: int) -> None:
             logging.warning(
                 "Failed setting label %s on CL %d; ignoring", label_name, cl_id
             )
+
+
+def set_autoreview_topic_and_labels(cwd: Path, cl_id: int) -> None:
+    """Combines set_autoreview_topic and try_set_autosubmit_labels.
+
+    These often go hand-in-hand.
+    """
+    set_autoreview_topic(cwd, cl_id)
+    try_set_autosubmit_labels(cwd, cl_id)
 
 
 @contextlib.contextmanager

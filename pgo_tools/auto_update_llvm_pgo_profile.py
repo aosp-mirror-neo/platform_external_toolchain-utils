@@ -425,11 +425,7 @@ def main(argv: List[str]) -> None:
         remote=git_utils.CROS_EXTERNAL_REMOTE,
         branch=git_utils.CROS_MAIN_BRANCH,
         ref=maybe_sha,
-        reviewers=(
-            git_utils.REVIEWER_DETECTIVE,
-            git_utils.REVIEWER_MAGE,
-        ),
     )
     for cl in cls:
-        git_utils.try_set_autosubmit_labels(chromiumos_overlay, cl)
+        git_utils.set_autoreview_topic_and_labels(chromiumos_overlay, cl)
     logging.info("%d CL(s) uploaded.", len(cls))

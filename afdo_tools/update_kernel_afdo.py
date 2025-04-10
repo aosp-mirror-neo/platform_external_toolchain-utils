@@ -25,12 +25,6 @@ from cros_utils import git_utils
 from cros_utils import gs
 
 
-# Folks who should be on the R-line of any CLs that get uploaded.
-CL_REVIEWERS = (
-    git_utils.REVIEWER_DETECTIVE,
-    git_utils.REVIEWER_MAGE,
-)
-
 # Folks who should be on the CC-line of any CLs that get uploaded.
 CL_CC = ("gbiv@chromium.org",)
 
@@ -609,8 +603,7 @@ def upload_head_to_gerrit(
         toolchain_utils,
         branch.remote,
         branch.branch_name,
-        CL_REVIEWERS,
-        CL_CC,
+        cc=CL_CC,
     )
 
     if len(cl_ids) > 1:
@@ -626,7 +619,7 @@ def upload_head_to_gerrit(
         )
         return
 
-    git_utils.try_set_autosubmit_labels(chromeos_tree, cl_id)
+    git_utils.set_autoreview_topic_and_labels(chromeos_tree, cl_id)
 
 
 def main(argv: List[str]) -> None:
