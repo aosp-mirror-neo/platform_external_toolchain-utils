@@ -765,3 +765,16 @@ def log(
         stdout=subprocess.PIPE,
         encoding="utf-8",
     ).stdout
+
+
+def query_gerrit(chromeos_root: Path, query: str) -> List[int]:
+    """Returns CLs that match the given `query`."""
+    results = subprocess.run(
+        ("gerrit", "--raw", "search", query),
+        check=True,
+        cwd=chromeos_root,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    return [int(x) for x in results.split()]
