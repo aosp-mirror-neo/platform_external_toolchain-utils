@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import subprocess
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 
 BuildID = int
@@ -245,6 +245,17 @@ class CQBoardBuilderOutput:
                 artifacts_link = output["properties"].get("artifact_link")
             results.append(cls(status=status, artifacts_link=artifacts_link))
         return results
+
+
+def fetch_cq_orchestrator_or_board_builder(
+    bot_id: BuildID,
+) -> Tuple[str, Union[CQOrchestratorOutput, CQBoardBuilderOutput]]:
+    """Figures out the builder type of bot_id, then fetches it."""
+    result = _run_bb_decoding_output(["get", str(bot_id)])
+    builder_name = result["builder"]["builder"]
+    if builder_name == "cq-orchestrator":
+        return builder_name, CQOrchestratorOutput.fetch(bot_id)
+    return builder_name, CQBoardBuilderOutput.fetch_many((bot_id,))[0]
 
 
 def parse_release_from_builder_artifacts_link(artifacts_link: str) -> str:

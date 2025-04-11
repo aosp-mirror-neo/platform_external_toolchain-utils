@@ -23,6 +23,9 @@ class Test(test_helpers.TempDirTestCase):
             an error about flags:
             clang-2: error: flag -foo is not supported [-Wfoo,-Werror]
 
+            another error about flags:
+            error: unknown warning option [-Werror,-Wfoo2]
+
             an error about code:
             /path/to/foo.cc:12:34: error: don't do this [-Werror,-Wbar]
 
@@ -34,7 +37,8 @@ class Test(test_helpers.TempDirTestCase):
             """
         )
         self.assertEqual(
-            gen.scrape_fatal_warning_names_from_stdout(stdout), ["bar", "foo"]
+            gen.scrape_fatal_warning_names_from_stdout(stdout),
+            ["bar", "foo", "foo2"],
         )
 
     @mock.patch.object(gen, "scrape_fatal_warning_names_from_stdout")
@@ -133,9 +137,8 @@ class Test(test_helpers.TempDirTestCase):
         # borderline-useless given the size of these files.
         self.maxDiff = 10000
         actual = gen.create_go_file(
-            builder=gen.Builder(name="", url=""),
             llvm_revision=123,
-            fatal_warnings=[],
+            fatal_warnings={},
         )
         fname = "getWarningsForLLVM_r123"
         expected = gen.GO_COPYRIGHT_HEADER + textwrap.dedent(
@@ -154,28 +157,34 @@ class Test(test_helpers.TempDirTestCase):
         # Set maxDiff to a very large value, since tiny diffs are
         # borderline-useless given the size of these files.
         self.maxDiff = 10000
+        amd64_generic = gen.Builder(
+            name="amd64-generic", url="https://amd64-generic-url"
+        )
+        brya = gen.Builder(name="brya", url="https://brya-url")
         actual = gen.create_go_file(
-            builder=gen.Builder(
-                name="amd64-generic", url="https://amd64-generic-url"
-            ),
             llvm_revision=321,
-            fatal_warnings=[
+            fatal_warnings={
                 gen.FatalWarning(
                     warning_name="foo",
                     category="cat",
                     package_name="pkg",
-                ),
+                ): [brya],
                 gen.FatalWarning(
                     warning_name="bar",
                     category="cat",
                     package_name="pkg",
-                ),
+                ): [amd64_generic],
                 gen.FatalWarning(
                     warning_name="baz",
                     category="dog",
                     package_name="pkg",
-                ),
-            ],
+                ): [brya],
+                gen.FatalWarning(
+                    warning_name="baz",
+                    category="snek",
+                    package_name="pkg",
+                ): [],
+            },
         )
         fname = "getWarningsForLLVM_r321"
         expected = gen.GO_COPYRIGHT_HEADER + textwrap.dedent(
@@ -185,13 +194,16 @@ class Test(test_helpers.TempDirTestCase):
 
             func {fname}(packageNameAndCategory string) []string {{
                 switch packageNameAndCategory {{
-                // Observed and suppressed on 1 builder during testing.
-                // amd64-generic: https://amd64-generic-url
+                // Observed and suppressed on 2 builders during testing.
+                // e.g., amd64-generic: https://amd64-generic-url.
                 case "cat/pkg":
                     return []string{{ "-Wno-bar", "-Wno-foo" }}
                 // Observed and suppressed on 1 builder during testing.
-                // amd64-generic: https://amd64-generic-url
+                // e.g., brya: https://brya-url.
                 case "dog/pkg":
+                    return []string{{ "-Wno-baz" }}
+                // (No builder links were available for these exemptions).
+                case "snek/pkg":
                     return []string{{ "-Wno-baz" }}
                 default:
                     return nil
