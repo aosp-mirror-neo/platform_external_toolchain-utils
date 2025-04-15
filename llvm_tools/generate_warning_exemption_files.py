@@ -92,12 +92,8 @@ def scrape_fatal_warning_names_from_stdout(stdout: str) -> List[str]:
             continue
 
         warning_flags = m.group(1)
-        individual_warning_flags = warning_flags.split(",")
-        if "-Werror" not in individual_warning_flags:
-            continue
-
         warning_flags_no_werror = [
-            x for x in individual_warning_flags if x != "-Werror"
+            x for x in warning_flags.split(",") if x != "-Werror"
         ]
         if len(warning_flags_no_werror) != 1:
             raise ValueError(

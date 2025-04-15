@@ -29,6 +29,10 @@ class Test(test_helpers.TempDirTestCase):
             an error about code:
             /path/to/foo.cc:12:34: error: don't do this [-Werror,-Wbar]
 
+            a -Warning that's an error by default (thus lacks -Werror in
+            brackets), e.g., b/409989901 and b/325463152.
+            /path/to/foo.cc:12:34: error: don't do this either [-Wdefault-error]
+
             general non-Werror warning:
             /path/to/foo.cc:13:34: warning: fine, do this [-Wbaz]
 
@@ -38,7 +42,7 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertEqual(
             gen.scrape_fatal_warning_names_from_stdout(stdout),
-            ["bar", "foo", "foo2"],
+            ["bar", "default-error", "foo", "foo2"],
         )
 
     @mock.patch.object(gen, "scrape_fatal_warning_names_from_stdout")
