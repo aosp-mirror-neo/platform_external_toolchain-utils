@@ -277,12 +277,7 @@ def set_autoreview_topic(cwd: Path, cl_id: int) -> None:
     Chrotomation's CL reviews en masse every day. This allows these CLs to land
     in a timely manner (or more timely than tagging random reviewers, at least).
     """
-    subprocess.run(
-        ("gerrit", "topic", "crostc-auto-cl", str(cl_id)),
-        cwd=cwd,
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
+    set_gerrit_label(cwd, cl_id, "topic", "crostc-auto-cl")
 
 
 def try_set_autosubmit_labels(cwd: Path, cl_id: int) -> None:
