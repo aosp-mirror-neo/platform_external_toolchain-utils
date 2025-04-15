@@ -11,9 +11,9 @@
 # https://android-review.googlesource.com/c/platform/external/toolchain-utils/+/1132504/1
 
 local_branch_name="merge_with_upstream"
-local_upstream="aosp/master"  # nocheck
-remote="aosp"
-remote_branch="${remote}/upstream-mirror-master"  # nocheck
+local_upstream="goog/main"  # nocheck
+remote="goog"
+remote_branch="${remote}/upstream-main"  # nocheck
 
 my_dir="$(dirname "$(readlink -m "$0")")"
 cd "${my_dir}"
