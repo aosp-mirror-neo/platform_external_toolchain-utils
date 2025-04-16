@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -7,12 +5,14 @@
 """Script to make mass, CrOS-wide seccomp changes."""
 
 import argparse
+from dataclasses import dataclass
+from dataclasses import field
 import re
+import shutil
 import subprocess
 import sys
-import shutil
-from typing import Any, Iterable, Optional
-from dataclasses import dataclass, field
+from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+
 
 # Pre-compiled regexes.
 AMD64_RE = re.compile(r".*(amd|x86_)64.*\.policy")
@@ -25,13 +25,13 @@ ARM_RE = re.compile(r".*arm(v7)?.*\.policy")
 class Policies:
     """Dataclass to hold lists of policies which match certain types."""
 
-    arm: list[str] = field(default_factory=list)
-    x86_64: list[str] = field(default_factory=list)
-    x86: list[str] = field(default_factory=list)
-    arm64: list[str] = field(default_factory=list)
-    none: list[str] = field(default_factory=list)
+    arm: List[str] = field(default_factory=list)
+    x86_64: List[str] = field(default_factory=list)
+    x86: List[str] = field(default_factory=list)
+    arm64: List[str] = field(default_factory=list)
+    none: List[str] = field(default_factory=list)
 
-    def to_dict(self) -> dict[str, list[str]]:
+    def to_dict(self) -> Dict[str, List[str]]:
         """Convert this class to a dictionary."""
         return {**self.__dict__}
 
@@ -66,7 +66,7 @@ def main():
 
     syscall_lookup_table = _make_syscall_lookup_table(args)
 
-    for (type_, val) in separated.to_dict().items():
+    for type_, val in separated.to_dict().items():
         for fp in val:
             syscalls = syscall_lookup_table[type_]
             missing = check_missing_syscalls(syscalls, fp)
@@ -81,7 +81,7 @@ def main():
     if not args.edit:
         sys.exit(0 if success else 2)
 
-    for (type_, val) in separated.to_dict().items():
+    for type_, val in separated.to_dict().items():
         for fp in val:
             syscalls = syscall_lookup_table[type_]
             if args.force:
@@ -96,7 +96,7 @@ def main():
     sys.exit(0 if success else 2)
 
 
-def _make_syscall_lookup_table(args: Any) -> dict[str, list[str]]:
+def _make_syscall_lookup_table(args: Any) -> Dict[str, List[str]]:
     """Make lookup table, segmented by all/b32/b64/none policies.
 
     Args:
@@ -146,7 +146,7 @@ def _confirm_add(fp: str, syscalls: Iterable[str], noninteractive=None):
         print(f"Skipping {fp}")
 
 
-def check_missing_syscalls(syscalls: list[str], fp: str) -> Optional[set[str]]:
+def check_missing_syscalls(syscalls: List[str], fp: str) -> Optional[Set[str]]:
     """Return which specified syscalls are missing in the given file."""
     missing_syscalls = set(syscalls)
     with open(fp) as f:
@@ -161,7 +161,7 @@ def check_missing_syscalls(syscalls: list[str], fp: str) -> Optional[set[str]]:
     return missing_syscalls
 
 
-def _update_seccomp(fp: str, missing_syscalls: list[str]):
+def _update_seccomp(fp: str, missing_syscalls: List[str]):
     """Update the seccomp of the file based on the seccomp change type."""
     with open(fp, "a") as f:
         sorted_syscalls = sorted(missing_syscalls)
@@ -169,7 +169,7 @@ def _update_seccomp(fp: str, missing_syscalls: list[str]):
             f.write(to_write + ": 1\n")
 
 
-def _search_cmd(query: str, use_fd=True) -> list[str]:
+def _search_cmd(query: str, use_fd=True) -> List[str]:
     if use_fd and shutil.which("fdfind") is not None:
         return [
             "fdfind",
@@ -188,7 +188,7 @@ def _search_cmd(query: str, use_fd=True) -> list[str]:
     ]
 
 
-def find_potential_policy_files(packages: list[str]) -> tuple[list[str], bool]:
+def find_potential_policy_files(packages: List[str]) -> Tuple[List[str], bool]:
     """Find potentially related policy files to the given packages.
 
     Returns:
@@ -280,7 +280,3 @@ def parse_args() -> Any:
         " Does nothing without --edit.",
     )
     return parser.parse_args()
-
-
-if __name__ == "__main__":
-    main()

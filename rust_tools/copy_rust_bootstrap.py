@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -198,7 +197,3 @@ def main(argv: List[str]):
             )
         else:
             _upload(file_to_upload, target_path, opts.force)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

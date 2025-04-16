@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -130,9 +129,19 @@ func TestDoubleBuildDoesntRecompileIfNoObviousWerrorsExist(t *testing.T) {
 func TestKnownConfigureFileParsing(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		for _, f := range []string{"conftest.c", "conftest.cpp", "/dev/null"} {
-			if !isLikelyAConfTest(ctx.cfg, ctx.newCommand(clangX86_64, f)) {
+			if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, f)) {
 				t.Errorf("%q isn't considered a conf test file", f)
 			}
+		}
+	})
+}
+
+func TestKnownConfigureDirParsing(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		wd := "foo/bar/CMakeFiles/CMakeScratch/TryCompile-abc123"
+		ctx.wd = wd
+		if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, "foo.c")) {
+			t.Errorf("%q isn't considered a conf test pwd", wd)
 		}
 	})
 }
@@ -387,7 +396,7 @@ func withForceDisableWErrorTestContext(t *testing.T, work func(ctx *testContext)
 
 func readLoggedWarnings(ctx *testContext) *warningsJSONData {
 	warningsDir := getForceDisableWerrorDir(ctx, ctx.cfg)
-	files, err := ioutil.ReadDir(warningsDir)
+	files, err := os.ReadDir(warningsDir)
 	if err != nil {
 		if _, ok := err.(*os.PathError); ok {
 			return nil
@@ -397,7 +406,7 @@ func readLoggedWarnings(ctx *testContext) *warningsJSONData {
 	if len(files) != 1 {
 		ctx.t.Fatalf("expected 1 warning log file. Got: %s", files)
 	}
-	data, err := ioutil.ReadFile(filepath.Join(warningsDir, files[0].Name()))
+	data, err := os.ReadFile(filepath.Join(warningsDir, files[0].Name()))
 	if err != nil {
 		ctx.t.Fatal(err)
 	}
@@ -625,9 +634,15 @@ func TestClangTidyNoDoubleBuild(t *testing.T) {
 	})
 }
 
-func withAndroidClangTidyTestContext(t *testing.T, work func(ctx *testContext)) {
+func withAndroidTestContext(t *testing.T, work func(ctx *testContext)) {
 	withTestContext(t, func(ctx *testContext) {
 		ctx.cfg.isAndroidWrapper = true
+		work(ctx)
+	})
+}
+
+func withAndroidClangTidyTestContext(t *testing.T, work func(ctx *testContext)) {
+	withAndroidTestContext(t, func(ctx *testContext) {
 		ctx.cfg.useLlvmNext = true
 		ctx.env = []string{"OUT_DIR=/tmp"}
 

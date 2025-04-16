@@ -14,26 +14,21 @@ import (
 
 func processClangFlags(builder *commandBuilder) error {
 	env := builder.env
-	clangDir, _ := env.getenv("CLANG")
-
-	if clangDir == "" {
-		if builder.cfg.isHostWrapper {
-			clangDir = filepath.Dir(builder.absWrapperPath)
-		} else {
-			clangDir = filepath.Join(builder.rootPath, "usr/bin/")
-			if !filepath.IsAbs(builder.path) {
-				// If sysroot_wrapper is invoked by relative path, call actual compiler in
-				// relative form. This is neccesary to remove absolute path from compile
-				// outputs.
-				var err error
-				clangDir, err = filepath.Rel(env.getwd(), clangDir)
-				if err != nil {
-					return wrapErrorwithSourceLocf(err, "failed to make clangDir %s relative to %s.", clangDir, env.getwd())
-				}
+	clangDir := ""
+	if builder.cfg.isHostWrapper {
+		clangDir = filepath.Dir(builder.absWrapperPath)
+	} else {
+		clangDir = filepath.Join(builder.rootPath, "usr/bin/")
+		if !filepath.IsAbs(builder.path) {
+			// If sysroot_wrapper is invoked by relative path, call actual compiler in
+			// relative form. This is necessary to remove absolute path from compile
+			// outputs.
+			var err error
+			clangDir, err = filepath.Rel(env.getwd(), clangDir)
+			if err != nil {
+				return wrapErrorwithSourceLocf(err, "failed to make clangDir %s relative to %s.", clangDir, env.getwd())
 			}
 		}
-	} else {
-		clangDir = filepath.Dir(clangDir)
 	}
 
 	clangBasename := "clang"
@@ -71,6 +66,11 @@ func processClangFlags(builder *commandBuilder) error {
 	// based on a single input argument, and also be able to return errors.
 	newArgs := []builderArg{}
 
+	// Note: Used for detecting whether we are building non-thumb2 compatible
+	// baremetal arm targets. This is used to override the target triple for
+	// armv6m targets, as Clang target triple normalization does not work
+	// correctly when it's set to "arm" instead of "armv6m". See b/373947346.
+	isArmV6M := false
 	for _, arg := range builder.args {
 		// Adds an argument with the given value, preserving the
 		// fromUser value of the original argument.
@@ -79,6 +79,10 @@ func processClangFlags(builder *commandBuilder) error {
 				fromUser: arg.fromUser,
 				value:    value,
 			})
+		}
+
+		if arg.value == "-march=armv6m" || strings.HasPrefix(arg.value, "-target=armv6m") || strings.HasPrefix(arg.value, "--target=armv6m") {
+			isArmV6M = true
 		}
 
 		if mapped, ok := gccToClang[arg.value]; ok {
@@ -135,7 +139,15 @@ func processClangFlags(builder *commandBuilder) error {
 		prefixPath := path.Join(relLinkerPath, builder.target.target+"-")
 		builder.addPreUserArgs("--prefix=" + prefixPath)
 		builder.addPostUserArgs("-B" + relLinkerPath)
-		builder.addPostUserArgs("-target", builder.target.target)
+
+		// Override for armv6m, as it doesn't support thumb2, and Clang target
+		// triple normalization does not work correctly when it's set to "arm" instead
+		// of "armv6m". See b/373947346.
+		if isArmV6M {
+			builder.addPostUserArgs("-target", "armv6m-none-eabi")
+		} else {
+			builder.addPostUserArgs("-target", builder.target.target)
+		}
 	}
 	return nil
 }

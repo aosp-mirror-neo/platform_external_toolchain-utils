@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -13,7 +12,6 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
-import sys
 from typing import IO, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 
@@ -44,6 +42,8 @@ known_llvm_rev_sha_pairs = (
     (450000, "906ebd5830e6053b50c52bf098e3586b567e8499"),
     (475000, "530d14a99611a71f8f3eb811920fd7b5c4d4e1f8"),
     (500000, "173855f9b0bdfe45d71272596b510650bfc1ca33"),
+    (525000, "ac3ee1b1aec424c60660fd245f5b53aaffa2f5b1"),
+    (550000, "e5bc842a9c56c1d83543f0232a888db6210efd85"),
 )
 
 # Represents an LLVM git checkout:
@@ -345,7 +345,7 @@ def translate_rev_to_sha_from_baseline(
             )
         if child_rev < want_rev:
             raise ValueError(
-                "Revision {want_rev} is past "
+                f"Revision {want_rev} is past "
                 f"{llvm_config.remote}/{branch_name}. Try updating your tree?"
             )
         baseline_git_sha = child_sha
@@ -482,7 +482,3 @@ def main(argv: List[str]) -> None:
     else:
         sha = translate_rev_to_sha(config, Rev.parse(opts.rev))
         print(sha)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

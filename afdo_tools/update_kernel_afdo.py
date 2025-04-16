@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -17,22 +16,17 @@ import logging
 import os
 from pathlib import Path
 import re
-import shlex
 import subprocess
 import sys
 from typing import Dict, Iterable, List, Optional, Tuple
 
+from cros_utils import cros_paths
 from cros_utils import git_utils
+from cros_utils import gs
 
-
-# Folks who should be on the R-line of any CLs that get uploaded.
-CL_REVIEWERS = (git_utils.REVIEWER_DETECTIVE,)
 
 # Folks who should be on the CC-line of any CLs that get uploaded.
-CL_CC = (
-    "denik@google.com",
-    "gbiv@google.com",
-)
+CL_CC = ("gbiv@chromium.org",)
 
 # Determine which gsutil to use.
 # 'gsutil.py' is provided by depot_tools, whereas 'gsutil'
@@ -76,30 +70,19 @@ class KernelVersion:
         return cls(major=int(m.group(1)), minor=int(m.group(2)))
 
 
+ARM_KERNEL_5_15 = (Arch.ARM, KernelVersion(5, 15))
+
 # Versions that rolling should be skipped on, for one reason or another.
 SKIPPED_VERSIONS: Dict[int, Iterable[Tuple[Arch, KernelVersion]]] = {
     # Kernel tracing was disabled on ARM in 114, b/275560674
-    114: ((Arch.ARM, KernelVersion(5, 15)),),
-    115: ((Arch.ARM, KernelVersion(5, 15)),),
+    114: (ARM_KERNEL_5_15,),
+    115: (ARM_KERNEL_5_15,),
+    # Kernel profiles are no longer generated as of M126. Don't complain about
+    # them.
+    124: (ARM_KERNEL_5_15,),
+    125: (ARM_KERNEL_5_15,),
+    126: (ARM_KERNEL_5_15,),
 }
-
-
-class Channel(enum.Enum):
-    """An enum that discusses channels."""
-
-    # Ordered from closest-to-ToT to farthest-from-ToT
-    CANARY = "canary"
-    BETA = "beta"
-    STABLE = "stable"
-
-    @classmethod
-    def parse(cls, val: str) -> "Channel":
-        for x in cls:
-            if val == x.value:
-                return x
-        raise ValueError(
-            f"No such channel: {val!r}; try one of {[x.value for x in cls]}"
-        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -155,26 +138,17 @@ def get_parser():
     parser.add_argument(
         "channel",
         nargs="*",
-        type=Channel.parse,
-        default=list(Channel),
+        type=git_utils.Channel.parse,
+        default=list(git_utils.Channel),
         help=f"""
         Channel(s) to update. If none are passed, this will update all
-        channels. Choose from {[x.value for x in Channel]}.
+        channels. Choose from {[x.value for x in git_utils.Channel]}.
         """,
     )
     return parser
 
 
-@dataclasses.dataclass(frozen=True, eq=True, order=True)
-class GitBranch:
-    """Represents a ChromeOS branch."""
-
-    remote: str
-    release_number: int
-    branch_name: str
-
-
-def git_checkout(git_dir: Path, branch: GitBranch) -> None:
+def git_checkout(git_dir: Path, branch: git_utils.ChannelBranch) -> None:
     subprocess.run(
         [
             "git",
@@ -195,61 +169,6 @@ def git_fetch(git_dir: Path) -> None:
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
     )
-
-
-def git_rev_parse(git_dir: Path, ref_or_sha: str) -> str:
-    return subprocess.run(
-        ["git", "rev-parse", ref_or_sha],
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    ).stdout.strip()
-
-
-def autodetect_branches(toolchain_utils: Path) -> Dict[Channel, GitBranch]:
-    """Returns GitBranches for each branch type in toolchain_utils."""
-    stdout = subprocess.run(
-        [
-            "git",
-            "branch",
-            "-r",
-        ],
-        cwd=toolchain_utils,
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    ).stdout
-
-    # Match "${remote}/release-R${branch_number}-${build}.B"
-    branch_re = re.compile(r"([^/]+)/(release-R(\d+)-\d+\.B)")
-    branches = []
-    for line in stdout.splitlines():
-        line = line.strip()
-        if m := branch_re.fullmatch(line):
-            remote, branch_name, branch_number = m.groups()
-            branches.append(GitBranch(remote, int(branch_number), branch_name))
-
-    branches.sort(key=lambda x: x.release_number)
-    if len(branches) < 2:
-        raise ValueError(
-            f"Expected at least two branches, but only found {len(branches)}"
-        )
-
-    stable = branches[-2]
-    beta = branches[-1]
-    canary = GitBranch(
-        remote=beta.remote,
-        release_number=beta.release_number + 1,
-        branch_name="main",
-    )
-    return {
-        Channel.CANARY: canary,
-        Channel.BETA: beta,
-        Channel.STABLE: stable,
-    }
 
 
 @dataclasses.dataclass(frozen=True, eq=True, order=True)
@@ -338,65 +257,30 @@ class KernelGsProfile:
         )
 
 
-def datetime_from_gs_time(timestamp_str: str) -> datetime.datetime:
-    """Parses a datetime from gs."""
-    return datetime.datetime.strptime(
-        timestamp_str, "%Y-%m-%dT%H:%M:%SZ"
-    ).replace(tzinfo=datetime.timezone.utc)
-
-
 class KernelProfileFetcher:
     """Fetches kernel profiles from gs://. Caches results."""
 
     def __init__(self):
         self._cached_results: Dict[str, List[KernelGsProfile]] = {}
 
-    @staticmethod
-    def _parse_gs_stdout(stdout: str) -> List[KernelGsProfile]:
-        line_re = re.compile(r"\s*\d+\s+(\S+T\S+)\s+(gs://.+)")
-        results = []
-        # Ignore the last line, since that's "TOTAL:"
-        for line in stdout.splitlines()[:-1]:
-            line = line.strip()
-            if not line:
-                continue
-            m = line_re.fullmatch(line)
-            if m is None:
-                raise ValueError(f"Unexpected line from gs: {line!r}")
-            timestamp_str, gs_url = m.groups()
-            timestamp = datetime_from_gs_time(timestamp_str)
-            file_name = os.path.basename(gs_url)
-            results.append(KernelGsProfile.from_file_name(timestamp, file_name))
-        return results
-
     @classmethod
     def _fetch_impl(cls, gs_url: str) -> List[KernelGsProfile]:
-        cmd = [
-            GSUTIL,
-            "ls",
-            "-l",
-            gs_url,
-        ]
-        result = subprocess.run(
-            cmd,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            encoding="utf-8",
-        )
-
-        if result.returncode:
-            # If nothing could be found, gsutil will exit after printing this.
-            if "One or more URLs matched no objects." in result.stderr:
-                return []
-            logging.error(
-                "%s failed; stderr:\n%s", shlex.join(cmd), result.stderr
+        results = []
+        for gs_entry in gs.ls(gs_url):
+            profile_name = os.path.basename(gs_entry.gs_path)
+            # All directories end with `/`, so  their basenames are empty.
+            if not profile_name:
+                continue
+            assert gs_entry.last_modified is not None, (
+                "Non-directory unexpectedly has a None last-modified date: "
+                f"{gs_entry}"
             )
-            result.check_returncode()
-            assert False, "unreachable"
-
-        return cls._parse_gs_stdout(result.stdout)
+            results.append(
+                KernelGsProfile.from_file_name(
+                    gs_entry.last_modified, profile_name
+                )
+            )
+        return results
 
     def fetch(self, gs_url: str) -> List[KernelGsProfile]:
         cached = self._cached_results.get(gs_url)
@@ -526,8 +410,8 @@ def fetch_and_validate_newest_afdo_artifact(
     selection_info: ProfileSelectionInfo,
     arch: Arch,
     kernel_version: KernelVersion,
-    branch: GitBranch,
-    channel: Channel,
+    branch: git_utils.ChannelBranch,
+    channel: git_utils.Channel,
 ) -> Optional[Tuple[str, bool]]:
     """Tries to update one AFDO profile on a branch.
 
@@ -541,7 +425,7 @@ def fetch_and_validate_newest_afdo_artifact(
     )
     # Try an older branch if we're not on stable. We should fail harder if we
     # only have old profiles on stable, though.
-    if newest_artifact is None and channel != Channel.STABLE:
+    if newest_artifact is None and channel != git_utils.Channel.STABLE:
         newest_artifact = find_newest_afdo_artifact(
             fetcher, arch, kernel_version, branch.release_number - 1
         )
@@ -575,12 +459,20 @@ def fetch_and_validate_newest_afdo_artifact(
     return newest_artifact.file_name_no_suffix, is_old
 
 
+def remove_untracked_mappings(
+    descriptors: Dict[KernelVersion, str],
+    versions_to_track: Iterable[KernelVersion],
+) -> Dict[KernelVersion, str]:
+    version_set = set(versions_to_track)
+    return {k: v for k, v in descriptors.items() if k in version_set}
+
+
 def update_afdo_for_channel(
     fetcher: KernelProfileFetcher,
     toolchain_utils: Path,
     selection_info: ProfileSelectionInfo,
-    channel: Channel,
-    branch: GitBranch,
+    channel: git_utils.Channel,
+    branch: git_utils.ChannelBranch,
     skipped_versions: Dict[int, Iterable[Tuple[Arch, KernelVersion]]],
 ) -> UpdateResult:
     """Updates AFDO on the given channel."""
@@ -594,7 +486,10 @@ def update_afdo_for_channel(
     made_changes = False
     had_failures = False
     for arch, cfg in update_cfgs.items():
-        afdo_mappings = read_afdo_descriptor_file(cfg.metadata_file)
+        afdo_mappings = remove_untracked_mappings(
+            read_afdo_descriptor_file(cfg.metadata_file),
+            cfg.versions_to_track,
+        )
         for kernel_version in cfg.versions_to_track:
             if to_skip and (arch, kernel_version) in to_skip:
                 logging.info(
@@ -646,7 +541,7 @@ def update_afdo_for_channel(
 
 
 def commit_new_profiles(
-    toolchain_utils: Path, channel: Channel, had_failures: bool
+    toolchain_utils: Path, channel: git_utils.Channel, had_failures: bool
 ):
     """Runs `git commit -a` with an appropriate message."""
     commit_message_lines = [
@@ -665,7 +560,7 @@ def commit_new_profiles(
             "This brings all profiles to their newest versions."
         )
 
-    if channel != Channel.CANARY:
+    if channel != git_utils.Channel.CANARY:
         commit_message_lines += (
             "",
             "Have PM pre-approval because this shouldn't break the release",
@@ -673,6 +568,10 @@ def commit_new_profiles(
         )
 
     commit_message_lines += (
+        "",
+        "Never rebase this CL! If there's a merge conflict, either abandon",
+        "this CL, or let Chrotomation do so after a few days. Rebasing could",
+        "cause a performance regression.",
         "",
         "BUG=None",
         "TEST=Verified in kernel-release-afdo-verify-orchestrator",
@@ -697,15 +596,14 @@ def commit_new_profiles(
 def upload_head_to_gerrit(
     toolchain_utils: Path,
     chromeos_tree: Optional[Path],
-    branch: GitBranch,
+    branch: git_utils.ChannelBranch,
 ):
     """Uploads HEAD to gerrit as a CL, and sets reviewers/CCs."""
     cl_ids = git_utils.upload_to_gerrit(
         toolchain_utils,
         branch.remote,
         branch.branch_name,
-        CL_REVIEWERS,
-        CL_CC,
+        cc=CL_CC,
     )
 
     if len(cl_ids) > 1:
@@ -721,19 +619,11 @@ def upload_head_to_gerrit(
         )
         return
 
-    git_utils.try_set_autosubmit_labels(chromeos_tree, cl_id)
-
-
-def find_chromeos_tree_root(a_dir: Path) -> Optional[Path]:
-    for parent in a_dir.parents:
-        if (parent / ".repo").is_dir():
-            return parent
-    return None
+    git_utils.set_autoreview_topic_and_labels(chromeos_tree, cl_id)
 
 
 def main(argv: List[str]) -> None:
-    my_dir = Path(__file__).resolve().parent
-    toolchain_utils = my_dir.parent
+    toolchain_utils = cros_paths.script_toolchain_utils_root()
 
     opts = get_parser().parse_args(argv)
     logging.basicConfig(
@@ -744,7 +634,7 @@ def main(argv: List[str]) -> None:
 
     chromeos_tree = opts.chromeos_tree
     if not chromeos_tree:
-        chromeos_tree = find_chromeos_tree_root(my_dir)
+        chromeos_tree = cros_paths.script_chromiumos_checkout()
         if chromeos_tree:
             logging.info("Autodetected ChromeOS tree root at %s", chromeos_tree)
 
@@ -757,10 +647,12 @@ def main(argv: List[str]) -> None:
         max_profile_age=datetime.timedelta(days=opts.max_age_days),
     )
 
-    branches = autodetect_branches(toolchain_utils)
+    branches = git_utils.autodetect_cros_channels(toolchain_utils)
     logging.debug("Current branches: %s", branches)
 
-    assert all(x in branches for x in Channel), "branches are missing channels?"
+    assert all(
+        x in branches for x in git_utils.Channel
+    ), "branches are missing channels?"
 
     fetcher = KernelProfileFetcher()
     had_failures = False
@@ -788,7 +680,7 @@ def main(argv: List[str]) -> None:
                 logging.info(
                     "--upload not specified. Leaving commit for %s at %s",
                     channel,
-                    git_rev_parse(worktree, "HEAD"),
+                    git_utils.resolve_ref(worktree, "HEAD"),
                 )
 
     if had_failures:
@@ -797,7 +689,3 @@ def main(argv: List[str]) -> None:
             "above logs. Most likely the things you're looking for are logged "
             "at the ERROR level."
         )
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

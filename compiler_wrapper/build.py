@@ -23,7 +23,7 @@ def parse_args():
         "--use_ccache", required=True, choices=["true", "false"]
     )
     parser.add_argument(
-        "--use_llvm_next", required=True, choices=["true", "false"]
+        "--use_llvm_next", default="false", choices=["true", "false"]
     )
     parser.add_argument("--output_file", required=True, type=str)
     parser.add_argument(

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -219,7 +218,3 @@ def main(argv: List[str]) -> None:
         with open(new_state_file_path, "w", encoding="utf-8") as f:
             json.dump(new_state_file, f)
         os.rename(new_state_file_path, state_file)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

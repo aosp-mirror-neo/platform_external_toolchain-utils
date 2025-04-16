@@ -1,0 +1,86 @@
+From eb6385859d4df71f030b1d8679ca1b98eba4c780 Mon Sep 17 00:00:00 2001
+From: Harini0924 <harinidonthula@gmail.com>
+Date: Tue, 27 Aug 2024 18:52:08 -0700
+Subject: [PATCH] Revert "[Clang] [Test] Use lit Syntax for Environment
+ Variables in Clang subproject" (#106267)
+
+Reverts llvm/llvm-project#102647
+
+I am reverting this change because the `readfile` doesn't actually
+perform any useful operation, and yet, for some reason, the test still
+passed. This indicates that the modification was unnecessary and could
+lead to confusion or unexpected behavior in the future.
+
+patch.cherry: true
+patch.metadata.original_sha: 815bf0f190383e14068f191bb0d16d62fbb6f8b3
+patch.platforms: chromiumos
+patch.version_range.from: 547155
+patch.version_range.until: 547783
+
+---
+ clang/test/ClangScanDeps/pr61006.cppm     | 10 +++++-----
+ clang/test/Driver/coverage.c              |  4 ++--
+ clang/test/Driver/program-path-priority.c |  4 ++--
+ 3 files changed, 9 insertions(+), 9 deletions(-)
+
+diff --git a/clang/test/ClangScanDeps/pr61006.cppm b/clang/test/ClangScanDeps/pr61006.cppm
+index 9ce6edaf2010..f75edd38c81b 100644
+--- a/clang/test/ClangScanDeps/pr61006.cppm
++++ b/clang/test/ClangScanDeps/pr61006.cppm
+@@ -6,13 +6,13 @@
+ // RUN: mkdir -p %t
+ // RUN: split-file %s %t
+ //
+-// RUN: %clang -print-resource-dir > %t/resource-dir.txt && \
++// RUN: EXPECTED_RESOURCE_DIR=`%clang -print-resource-dir` && \
+ // RUN: ln -s %clang++ %t/clang++ && \
+-// RUN: sed "s|EXPECTED_RESOURCE_DIR|%{readfile:%t/resource-dir.txt}|g; s|DIR|%/t|g" %t/P1689.json.in > %t/P1689.json && \
+-// RUN: env EXPECTED_RESOURCE_DIR=%{readfile:%t/resource-dir.txt} clang-scan-deps -compilation-database %t/P1689.json -format=p1689 | FileCheck %t/a.cpp -DPREFIX=%/t && \
+-// RUN: env EXPECTED_RESOURCE_DIR=%{readfile:%t/resource-dir.txt} clang-scan-deps -format=p1689 \
++// RUN: sed "s|EXPECTED_RESOURCE_DIR|$EXPECTED_RESOURCE_DIR|g; s|DIR|%/t|g" %t/P1689.json.in > %t/P1689.json && \
++// RUN: clang-scan-deps -compilation-database %t/P1689.json -format=p1689 | FileCheck %t/a.cpp -DPREFIX=%/t && \
++// RUN: clang-scan-deps -format=p1689 \
+ // RUN:   -- %t/clang++ -std=c++20 -c -fprebuilt-module-path=%t %t/a.cpp -o %t/a.o \
+-// RUN:      -resource-dir %{env:EXPECTED_RESOURCE_DIR} | FileCheck %t/a.cpp -DPREFIX=%/t
++// RUN:      -resource-dir $EXPECTED_RESOURCE_DIR | FileCheck %t/a.cpp -DPREFIX=%/t
+ 
+ //--- P1689.json.in
+ [
+diff --git a/clang/test/Driver/coverage.c b/clang/test/Driver/coverage.c
+index ab791ada2d35..e5ed064aab45 100644
+--- a/clang/test/Driver/coverage.c
++++ b/clang/test/Driver/coverage.c
+@@ -18,7 +18,7 @@
+ // GCNO-LOCATION-REL: "-coverage-notes-file={{.*}}{{/|\\\\}}foo/bar.gcno"
+ 
+ /// GCC allows PWD to change the paths.
+-// RUN: %if system-linux %{ env PWD=/proc/self/cwd %clang -### -c --coverage %s -o foo/bar.o 2>&1 | FileCheck --check-prefix=PWD %s %}
++// RUN: %if system-linux %{ PWD=/proc/self/cwd %clang -### -c --coverage %s -o foo/bar.o 2>&1 | FileCheck --check-prefix=PWD %s %}
+ // PWD: "-coverage-notes-file=/proc/self/cwd/foo/bar.gcno" "-coverage-data-file=/proc/self/cwd/foo/bar.gcda"
+ 
+ /// Don't warn -Wunused-command-line-argument.
+@@ -50,6 +50,6 @@
+ // LINK2: -cc1{{.*}} "-coverage-notes-file={{.*}}{{/|\\\\}}f/gb.gcno" "-coverage-data-file={{.*}}{{/|\\\\}}f/gb.gcda"
+ 
+ /// GCC allows PWD to change the paths.
+-// RUN: %if system-linux %{ env PWD=/proc/self/cwd %clang -### --coverage d/a.c d/b.c -o e/x -fprofile-dir=f 2>&1 | FileCheck %s --check-prefix=LINK3 %}
++// RUN: %if system-linux %{ PWD=/proc/self/cwd %clang -### --coverage d/a.c d/b.c -o e/x -fprofile-dir=f 2>&1 | FileCheck %s --check-prefix=LINK3 %}
+ // LINK3: -cc1{{.*}} "-coverage-notes-file=/proc/self/cwd/e/x-a.gcno" "-coverage-data-file=f/proc/self/cwd/e/x-a.gcda"
+ // LINK3: -cc1{{.*}} "-coverage-notes-file=/proc/self/cwd/e/x-b.gcno" "-coverage-data-file=f/proc/self/cwd/e/x-b.gcda"
+diff --git a/clang/test/Driver/program-path-priority.c b/clang/test/Driver/program-path-priority.c
+index 358a06d7c6d1..c940c4ced944 100644
+--- a/clang/test/Driver/program-path-priority.c
++++ b/clang/test/Driver/program-path-priority.c
+@@ -87,8 +87,8 @@
+ 
+ /// <default-triple>-gcc has lowest priority so <triple>-gcc
+ /// on PATH beats default triple in program path
+-// RUN: %t/clang --version | grep "Target:" | cut -d ' ' -f2 > %t/default-triple.txt
+-// RUN: env DEFAULT_TRIPLE=%{readfile:%t/default-triple.txt} touch %t/%{env:DEFAULT_TRIPLE}-gcc && chmod +x %t/%{env:DEFAULT_TRIPLE}-gcc
++// RUN: DEFAULT_TRIPLE=`%t/clang --version | grep "Target:" | cut -d ' ' -f2`
++// RUN: touch %t/$DEFAULT_TRIPLE-gcc && chmod +x %t/$DEFAULT_TRIPLE-gcc
+ // RUN: touch %t/%target_triple-gcc && chmod +x %t/%target_triple-gcc
+ // RUN: env "PATH=%t/env/" %t/clang -### -target notreal-none-elf %s 2>&1 | \
+ // RUN:   FileCheck --check-prefix=DEFAULT_TRIPLE_GCC %s
+-- 
+2.49.0.395.g12beb8f557-goog

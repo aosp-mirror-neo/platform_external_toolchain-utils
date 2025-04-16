@@ -1,0 +1,31 @@
+From 4a957141db9f96a449365f1d270ccfb5182bdc14 Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Fri, 14 Jun 2024 21:34:26 +0000
+Subject: [PATCH] inline-cost: skip threshold checks
+
+Some users in CrOS set internal LLVM flags that can tune these to <0. The
+comment admits that <0 is a valid value, and inglorion@ noted that upstream does
+not see an inline threshold here <0 being broken somehow. See b/256193799 for
+more.
+
+---
+ llvm/lib/Analysis/InlineCost.cpp | 3 ---
+ 1 file changed, 3 deletions(-)
+
+diff --git a/llvm/lib/Analysis/InlineCost.cpp b/llvm/lib/Analysis/InlineCost.cpp
+index fa0c30637633..336e887266cb 100644
+--- a/llvm/lib/Analysis/InlineCost.cpp
++++ b/llvm/lib/Analysis/InlineCost.cpp
+@@ -1065,9 +1065,6 @@ class InlineCostCallAnalyzer final : public CallAnalyzer {
+     // While Threshold depends on commandline options that can take negative
+     // values, we want to enforce the invariant that the computed threshold and
+     // bonuses are non-negative.
+-    assert(Threshold >= 0);
+-    assert(SingleBBBonus >= 0);
+-    assert(VectorBonus >= 0);
+ 
+     // Speculatively apply all possible bonuses to Threshold. If cost exceeds
+     // this Threshold any time, and cost cannot decrease, we can stop processing
+-- 
+2.45.2.627.g7a2c4fd464-goog
+

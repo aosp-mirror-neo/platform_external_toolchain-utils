@@ -33,17 +33,6 @@ func TestClangBasename(t *testing.T) {
 	})
 }
 
-func TestClangPathGivenClangEnv(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		ctx.env = []string{"CLANG=/a/b/clang"}
-		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand(clangX86_64, mainCc)))
-		if err := verifyPath(cmd, "/a/b/clang"); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
 func TestAbsoluteClangPathBasedOnRootPath(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		ctx.cfg.clangRootRelPath = "somepath"

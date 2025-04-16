@@ -55,7 +55,6 @@ func TestCrosHardenedConfigWithoutCCache(t *testing.T) {
 			createGccPathGoldenInputs(ctx, gomaEnv),
 			createClangPathGoldenInputs(ctx, gomaEnv),
 			createClangSyntaxGoldenInputs(gomaEnv),
-			createBisectGoldenInputs(clangX86_64),
 			createForceDisableWErrorGoldenInputs(),
 			createClangTidyGoldenInputs(gomaEnv),
 		})
@@ -80,7 +79,6 @@ func TestCrosHardenedConfigWithLlvmNext(t *testing.T) {
 			createGccPathGoldenInputs(ctx, gomaEnv),
 			createClangPathGoldenInputs(ctx, gomaEnv),
 			createClangSyntaxGoldenInputs(gomaEnv),
-			createBisectGoldenInputs(clangX86_64),
 			createForceDisableWErrorGoldenInputs(),
 			createClangTidyGoldenInputs(gomaEnv),
 		})
@@ -105,7 +103,6 @@ func createSyswrapperGoldenInputs(ctx *testContext) []goldenFile {
 		createSysrootWrapperCommonGoldenInputs("clang", gomaEnv),
 		createSanitizerGoldenInputs("clang"),
 		createClangArgsGoldenInputs(),
-		createBisectGoldenInputs(clangX86_64),
 		createForceDisableWErrorGoldenInputs(),
 		createClangTidyGoldenInputs(gomaEnv),
 	}
@@ -151,40 +148,6 @@ func createGoldenInputsForAllTargets(compiler string, args ...string) goldenFile
 			{
 				WrapperCmd: newGoldenCmd("./armv8m-cros-win-gnu-"+compiler, args...),
 				Cmds:       okResults,
-			},
-		},
-	}
-}
-
-func createBisectGoldenInputs(compiler string) goldenFile {
-	return goldenFile{
-		Name: "bisect.json",
-		Records: []goldenRecord{
-			{
-				WrapperCmd: newGoldenCmd(compiler, mainCc),
-				Env: []string{
-					"BISECT_STAGE=someBisectStage",
-					"HOME=/user/home",
-				},
-				Cmds: okResults,
-			},
-			{
-				WrapperCmd: newGoldenCmd(compiler, mainCc),
-				Env: []string{
-					"BISECT_STAGE=someBisectStage",
-					"BISECT_DIR=someBisectDir",
-					"HOME=/user/home",
-				},
-				Cmds: okResults,
-			},
-			{
-				WrapperCmd: newGoldenCmd(compiler, mainCc),
-				Env: []string{
-					"BISECT_STAGE=someBisectStage",
-					"BISECT_DIR=someBisectDir",
-					"HOME=/user/home",
-				},
-				Cmds: errorResults,
 			},
 		},
 	}
@@ -280,11 +243,6 @@ func createClangPathGoldenInputs(ctx *testContext, gomaEnv string) goldenFile {
 			},
 			{
 				WrapperCmd: newGoldenCmd("./x86_64-cros-linux-gnu-clang++", mainCc),
-				Cmds:       okResults,
-			},
-			{
-				WrapperCmd: newGoldenCmd(clangX86_64, mainCc),
-				Env:        []string{"CLANG=somepath/clang"},
 				Cmds:       okResults,
 			},
 			{

@@ -10,7 +10,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -83,7 +82,7 @@ func runGoldenRecords(ctx *testContext, goldenDir string, files []goldenFile) {
 			compareBuffer := &bytes.Buffer{}
 			writeGoldenRecords(ctx, compareBuffer, file.Records)
 			filePath := filepath.Join(goldenDir, file.Name)
-			goldenFileData, err := ioutil.ReadFile(filePath)
+			goldenFileData, err := os.ReadFile(filePath)
 			if err != nil {
 				ctx.t.Error(err)
 				continue
@@ -195,6 +194,9 @@ func writeGoldenRecords(ctx *testContext, writer io.Writer, records []goldenReco
 		}
 		return strings.ReplaceAll(asString, ctx.tempDir, stableTempDir)
 	})
+	if err != nil {
+		ctx.t.Fatalf("transforming JSON values: %v", err)
+	}
 
 	encoder := json.NewEncoder(writer)
 	encoder.SetIndent("", "  ")

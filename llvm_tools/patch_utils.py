@@ -24,7 +24,7 @@ from typing import (
     Union,
 )
 
-import atomic_write_file
+from llvm_tools import atomic_write_file
 
 
 APPLIED_RE = re.compile(r"^Applying: (.+) \(#(\d+)\)$")
@@ -34,7 +34,9 @@ HUNK_HEADER_RE = re.compile(r"^@@\s+-(\d+),(\d+)\s+\+(\d+),(\d+)\s+@@")
 HUNK_END_RE = re.compile(r"^--\s*$")
 PATCH_SUBFILE_HEADER_RE = re.compile(r"^\+\+\+ [ab]/(.*)$")
 
-CHROMEOS_PATCHES_JSON_PACKAGES = (
+# A list of all packages in chromiumos-overlay that deploy subsets of the LLVM
+# source tree we ship.
+CHROMEOS_LLVM_SUBPACKAGES = (
     "dev-util/lldb-server",
     "sys-devel/llvm",
     "sys-libs/compiler-rt",
@@ -158,31 +160,6 @@ class PatchResult:
         return s
 
 
-def git_apply(patch_path: Path) -> List[Union[str, Path]]:
-    """Patch a patch file using 'git apply'."""
-    return ["git", "apply", patch_path]
-
-
-def git_am(patch_path: Path) -> List[Union[str, Path]]:
-    """Patch a patch file using 'git am'."""
-    return ["git", "am", "--3way", patch_path]
-
-
-def gnu_patch(root_dir: Path, patch_path: Path) -> List[Union[str, Path]]:
-    """Patch a patch file using GNU 'patch'."""
-    return [
-        "patch",
-        "-d",
-        root_dir.absolute(),
-        "-f",
-        "-E",
-        "-p1",
-        "--no-backup-if-mismatch",
-        "-i",
-        patch_path,
-    ]
-
-
 @dataclasses.dataclass
 class PatchEntry:
     """Object mapping of an entry of PATCHES.json."""
@@ -270,7 +247,7 @@ class PatchEntry:
         self,
         root_dir: Path,
         patch_cmd: Optional[Callable] = None,
-        extra_args: Optional[List[str]] = None,
+        extra_args: Optional[List[Union[str, Path]]] = None,
     ) -> PatchResult:
         """Apply a patch to a given directory."""
         # Cmd to apply a patch in the src unpack path.
@@ -279,34 +256,12 @@ class PatchEntry:
             raise RuntimeError(
                 f"Cannot apply: patch {abs_patch_path} is not a file"
             )
-
-        if not patch_cmd or patch_cmd is gnu_patch:
-            cmd = gnu_patch(root_dir, abs_patch_path) + (extra_args or [])
-        else:
-            cmd = patch_cmd(abs_patch_path) + (extra_args or [])
-
-        try:
-            subprocess.run(
-                cmd, encoding="utf-8", check=True, stdout=subprocess.PIPE
-            )
-        except subprocess.CalledProcessError as e:
-            parsed_hunks = self.parsed_hunks()
-            failed_hunks_id_dict = parse_failed_patch_output(e.stdout)
-            failed_hunks = {}
-            if patch_cmd is gnu_patch:
-                for path, failed_hunk_ids in failed_hunks_id_dict.items():
-                    hunks_for_file = parsed_hunks[path]
-                    failed_hunks[path] = [
-                        hunk
-                        for hunk in hunks_for_file
-                        if hunk.hunk_id in failed_hunk_ids
-                    ]
-            elif failed_hunks_id_dict:
-                # using git am
-                failed_hunks = parsed_hunks
-
-            return PatchResult(succeeded=False, failed_hunks=failed_hunks)
-        return PatchResult(succeeded=True)
+        # TODO(b/343568613)
+        # By default, we still expect to be using gnu_patch.
+        # This is a bad default, and requires some clean up.
+        if not patch_cmd:
+            patch_cmd = gnu_patch
+        return patch_cmd(self, root_dir, abs_patch_path, extra_args)
 
     def test_apply(
         self, root_dir: Path, patch_cmd: Optional[Callable] = None
@@ -315,12 +270,20 @@ class PatchEntry:
 
         When using gnu_patch, this will pass --dry-run.
         When using git_am or git_apply, this will instead
-        use git_apply with --summary.
+        use git_apply with --check.
         """
-        if patch_cmd is git_am or patch_cmd is git_apply:
+        if any(
+            patch_cmd is cmd
+            for cmd in (
+                git_apply,
+                git_am,
+                git_am_chromiumos,
+                git_am_chromiumos_quiet,
+            )
+        ):
             # There is no dry run option for git am,
             # so we use git apply for test.
-            return self.apply(root_dir, git_apply, ["--summary"])
+            return self.apply(root_dir, git_apply, ["--check"])
         if patch_cmd is gnu_patch or patch_cmd is None:
             return self.apply(root_dir, patch_cmd, ["--dry-run"])
         raise ValueError(f"No such patch command: {patch_cmd.__name__}.")
@@ -329,6 +292,227 @@ class PatchEntry:
         if not self.metadata:
             return ""
         return self.metadata.get("title", "")
+
+
+def git_apply(
+    pe: PatchEntry,
+    root_dir: Path,
+    patch_path: Path,
+    extra_args: List[Union[str, Path]],
+) -> PatchResult:
+    """Patch a patch file using 'git apply'."""
+    cmd: List[Union[str, Path]] = ["git", "apply", patch_path]
+    if extra_args:
+        cmd += extra_args
+    return _run_git_applylike(pe, root_dir, cmd)
+
+
+def git_am(
+    pe: PatchEntry,
+    root_dir: Path,
+    patch_path: Path,
+    extra_args: Optional[List[Union[str, Path]]],
+) -> PatchResult:
+    """Patch a patch file using 'git am'."""
+    cmd: List[Union[str, Path]] = ["git", "am", "--3way", patch_path]
+    if extra_args:
+        cmd += extra_args
+    return _run_git_applylike(pe, root_dir, cmd)
+
+
+def git_am_chromiumos(
+    pe: PatchEntry,
+    root_dir: Path,
+    patch_path: Path,
+    extra_args: Optional[List[Union[str, Path]]],
+) -> PatchResult:
+    """Patch a patch file using 'git am', but include footer metadata."""
+    return _git_am_chromiumos_internal(pe, root_dir, patch_path, extra_args)
+
+
+def git_am_chromiumos_quiet(
+    pe: PatchEntry,
+    root_dir: Path,
+    patch_path: Path,
+    extra_args: Optional[List[Union[str, Path]]],
+) -> PatchResult:
+    """Same as git_am_chromiumos, but no stdout."""
+    return _git_am_chromiumos_internal(
+        pe, root_dir, patch_path, extra_args, quiet=True
+    )
+
+
+def _git_am_chromiumos_internal(
+    pe: PatchEntry,
+    root_dir: Path,
+    patch_path: Path,
+    extra_args: Optional[List[Union[str, Path]]],
+    quiet: bool = False,
+) -> PatchResult:
+    cmd: List[Union[str, Path]] = [
+        "git",
+        "am",
+        "--3way",
+        "--keep-non-patch",
+        patch_path,
+    ]
+    if extra_args:
+        cmd += extra_args
+    try:
+        subprocess.run(
+            cmd,
+            encoding="utf-8",
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL if quiet else None,
+            cwd=root_dir,
+        )
+    except subprocess.CalledProcessError:
+        failed_hunks = pe.parsed_hunks()
+        return PatchResult(succeeded=False, failed_hunks=failed_hunks)
+    # Now we need to rewrite the commit message with the new footer.
+    original_commit_msg_lines = (
+        subprocess.run(
+            ["git", "show", "-s", "--format=%B", "HEAD"],
+            encoding="utf-8",
+            check=True,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            cwd=root_dir,
+        )
+        .stdout.strip()
+        .splitlines()
+    )
+    new_commit_msg_lines = []
+    metadata_regex = re.compile(r"(change-id|patch\.[\w.-]+):.+", re.IGNORECASE)
+    new_commit_msg_lines = [
+        line
+        for line in original_commit_msg_lines
+        if not metadata_regex.match(line)
+    ] + _chromiumos_llvm_footer(pe)
+    subprocess.run(
+        ["git", "commit", "--amend", "-m", "\n".join(new_commit_msg_lines)],
+        check=True,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL if quiet else None,
+        cwd=root_dir,
+    )
+    return PatchResult(succeeded=True)
+
+
+def gnu_patch(
+    pe: PatchEntry,
+    root_dir: Path,
+    patch_path: Path,
+    extra_args: Optional[List[Union[str, Path]]],
+) -> PatchResult:
+    """Patch a patch file using GNU 'patch'."""
+    cmd: List[Union[str, Path]] = [
+        "patch",
+        "-d",
+        root_dir.absolute(),
+        "-f",
+        "-E",
+        "-p1",
+        "--no-backup-if-mismatch",
+        "-i",
+        patch_path,
+    ]
+    if extra_args:
+        cmd += extra_args
+    try:
+        subprocess.run(
+            cmd,
+            encoding="utf-8",
+            check=True,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.CalledProcessError as e:
+        parsed_hunks = pe.parsed_hunks()
+        failed_hunks_id_dict = parse_failed_patch_output(e.stdout)
+        failed_hunks = {}
+        for path, failed_hunk_ids in failed_hunks_id_dict.items():
+            hunks_for_file = parsed_hunks[path]
+            failed_hunks[path] = [
+                hunk
+                for hunk in hunks_for_file
+                if hunk.hunk_id in failed_hunk_ids
+            ]
+        return PatchResult(succeeded=False, failed_hunks=failed_hunks)
+    return PatchResult(succeeded=True)
+
+
+def _run_git_applylike(
+    pe: PatchEntry, root_dir: Path, cmd: List[Union[Path, str]]
+):
+    try:
+        subprocess.run(
+            cmd,
+            encoding="utf-8",
+            check=True,
+            stdin=subprocess.DEVNULL,
+            cwd=root_dir,
+        )
+    except subprocess.CalledProcessError:
+        failed_hunks = pe.parsed_hunks()
+        return PatchResult(succeeded=False, failed_hunks=failed_hunks)
+    return PatchResult(succeeded=True)
+
+
+def generate_chromiumos_llvm_footer(
+    is_cherry: bool,
+    apply_from: Optional[int] = None,
+    apply_until: Optional[int] = None,
+    original_sha: Optional[str] = None,
+    platforms: Iterable[str] = (),
+    info: Optional[str] = None,
+) -> List[str]:
+    """Generates a commit footer given patch metadata.
+
+    Returns:
+        A list of commit footer lines.
+    """
+    # We want to keep the order of these alphabetical,
+    # so the creation of the footer looks a little weird.
+    extra_metadata = []
+    if info:
+        extra_metadata.append("patch.metadata.info: " + ", ".join(info))
+    if original_sha:
+        extra_metadata.append(f"patch.metadata.original_sha: {original_sha}")
+    if platforms:
+        extra_metadata.append("patch.platforms: " + ", ".join(platforms))
+    from_rev = "0"
+    until_rev = "null"
+    if apply_from is not None:
+        from_rev = str(apply_from)
+    if apply_until is not None:
+        until_rev = str(apply_until)
+    return (
+        [
+            "",
+            f"patch.cherry: {str(is_cherry).lower()}",
+        ]
+        + extra_metadata
+        + [
+            f"patch.version_range.from: {from_rev}",
+            f"patch.version_range.until: {until_rev}",
+        ]
+    )
+
+
+def _chromiumos_llvm_footer(pe: PatchEntry) -> List[str]:
+    version_range = pe.version_range or {}
+    metadata = pe.metadata or {}
+    return generate_chromiumos_llvm_footer(
+        is_cherry=pe.rel_patch_path.startswith("cherry/"),
+        apply_from=version_range.get("from"),
+        apply_until=version_range.get("until"),
+        original_sha=metadata.get("original_sha"),
+        platforms=pe.platforms or (),
+        info=metadata.get("info"),
+    )
 
 
 def patch_applies_after(
