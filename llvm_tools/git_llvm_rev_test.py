@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -7,14 +6,13 @@
 
 import unittest
 
-import git_llvm_rev
-import llvm_project
+from llvm_tools import get_llvm_hash
+from llvm_tools import git_llvm_rev
 
 
 def get_llvm_config() -> git_llvm_rev.LLVMConfig:
-    return git_llvm_rev.LLVMConfig(
-        dir=llvm_project.get_location(), remote="origin"
-    )
+    repo = get_llvm_hash.GetCachedUpToDateReadOnlyLLVMRepo()
+    return git_llvm_rev.LLVMConfig(dir=repo.path, remote=repo.remote)
 
 
 class Test(unittest.TestCase):
@@ -170,7 +168,3 @@ class Test(unittest.TestCase):
 # FIXME: When release/10.x happens, it may be nice to have a test-case
 # generally covering that, since it's the first branch that we have to travel
 # back to the base commit for.
-
-if __name__ == "__main__":
-    llvm_project.ensure_up_to_date()
-    unittest.main()

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -8,9 +7,9 @@
 from typing import Iterable
 import unittest
 
-import bb_add
-import cros_cls
-import llvm_next
+from llvm_tools import bb_add
+from llvm_tools import cros_cls
+from llvm_tools import llvm_next
 
 
 _ARBITRARY_BOTS = ["chromeos/cq/amd64-generic-cq"]
@@ -35,52 +34,32 @@ class Test(unittest.TestCase):
         ):
             bb_add.generate_bb_add_command(
                 use_llvm_next=True,
-                disable_werror=False,
                 extra_cls=(),
                 bots=_ARBITRARY_BOTS,
+                tags=(),
             )
 
     def test_generate_bb_add_adds_llvm_next_cls(self):
         self.set_llvm_next_cls((cros_cls.ChangeListURL(123, 1),))
         cmd = bb_add.generate_bb_add_command(
             use_llvm_next=True,
-            disable_werror=False,
             extra_cls=(),
             bots=_ARBITRARY_BOTS,
+            tags=(),
         )
         self.assertEqual(
             cmd, ["bb", "add", "-cl", "crrev.com/c/123/1"] + _ARBITRARY_BOTS
         )
 
-    def test_generate_bb_add_adds_disable_werror_cl(self):
-        self.set_llvm_next_cls((cros_cls.ChangeListURL(123, 1),))
-        cmd = bb_add.generate_bb_add_command(
-            use_llvm_next=False,
-            disable_werror=True,
-            extra_cls=(),
-            bots=_ARBITRARY_BOTS,
-        )
-        self.assertEqual(
-            cmd,
-            [
-                "bb",
-                "add",
-                "-cl",
-                llvm_next.DISABLE_WERROR_CL.crrev_url_without_http(),
-            ]
-            + _ARBITRARY_BOTS,
-        )
-
     def test_generate_bb_add_adds_extra_cls(self):
-        self.set_llvm_next_cls((cros_cls.ChangeListURL(123, 1),))
         cmd = bb_add.generate_bb_add_command(
             use_llvm_next=False,
-            disable_werror=False,
             extra_cls=(
                 cros_cls.ChangeListURL(123, 1),
                 cros_cls.ChangeListURL(126),
             ),
             bots=_ARBITRARY_BOTS,
+            tags=(),
         )
         self.assertEqual(
             cmd,
@@ -95,6 +74,22 @@ class Test(unittest.TestCase):
             + _ARBITRARY_BOTS,
         )
 
-
-if __name__ == "__main__":
-    unittest.main()
+    def test_use_of_tags(self):
+        cmd = bb_add.generate_bb_add_command(
+            use_llvm_next=False,
+            extra_cls=(cros_cls.ChangeListURL(126),),
+            bots=_ARBITRARY_BOTS,
+            tags=("custom-tag",),
+        )
+        self.assertEqual(
+            cmd,
+            [
+                "bb",
+                "add",
+                "-cl",
+                "crrev.com/c/126",
+                "-t",
+                "custom-tag",
+            ]
+            + _ARBITRARY_BOTS,
+        )

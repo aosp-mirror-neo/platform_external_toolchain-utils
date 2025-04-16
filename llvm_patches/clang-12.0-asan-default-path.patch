@@ -1,0 +1,31 @@
+From d83201605cdb869ac3741fa03d199b9689053ac9 Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Wed, 12 Jun 2024 21:41:58 +0000
+Subject: [PATCH] clang-12.0-asan-default-path
+
+By default, the ASAN message goes to STDERR. This causes problem if we cannot
+log the ASAN message, and we can not figure out why the ASAN check fails.
+This change set the ASAN message goes to /var/log/asan${pid} by default.
+
+As a workaround for b/223869781, this is set to /tmp/asan.
+
+---
+ compiler-rt/lib/sanitizer_common/sanitizer_flags.inc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/compiler-rt/lib/sanitizer_common/sanitizer_flags.inc b/compiler-rt/lib/sanitizer_common/sanitizer_flags.inc
+index 6148ae56067c..a5884521ec7e 100644
+--- a/compiler-rt/lib/sanitizer_common/sanitizer_flags.inc
++++ b/compiler-rt/lib/sanitizer_common/sanitizer_flags.inc
+@@ -52,7 +52,7 @@ COMMON_FLAG(bool, handle_ioctl, false, "Intercept and handle ioctl requests.")
+ COMMON_FLAG(int, malloc_context_size, 1,
+             "Max number of stack frames kept for each allocation/deallocation.")
+ COMMON_FLAG(
+-    const char *, log_path, nullptr,
++    const char *, log_path, "/tmp/asan",
+     "Write logs to \"log_path.pid\". The special values are \"stdout\" and "
+     "\"stderr\". If unspecified, defaults to \"stderr\".")
+ COMMON_FLAG(
+-- 
+2.45.2.505.gda0bf45e8d-goog
+

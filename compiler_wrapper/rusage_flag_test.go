@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -88,7 +87,7 @@ func TestLogRusageFileContent(t *testing.T) {
 		ctx.env = []string{"TOOLCHAIN_RUSAGE_OUTPUT=" + logFileName}
 		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, mainCc)))
 
-		data, err := ioutil.ReadFile(logFileName)
+		data, err := os.ReadFile(logFileName)
 		if err != nil {
 			t.Errorf("could not read the rusage log file. Error: %s", err)
 		}
@@ -121,7 +120,7 @@ func TestLogRusageAppendsToFile(t *testing.T) {
 		ctx.env = []string{"TOOLCHAIN_RUSAGE_OUTPUT=" + logFileName}
 
 		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, mainCc)))
-		data, err := ioutil.ReadFile(logFileName)
+		data, err := os.ReadFile(logFileName)
 		if err != nil {
 			t.Errorf("could not read the rusage log file. Error: %s", err)
 		}
@@ -137,7 +136,7 @@ func TestLogRusageAppendsToFile(t *testing.T) {
 		}
 
 		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, mainCc)))
-		data, err = ioutil.ReadFile(logFileName)
+		data, err = os.ReadFile(logFileName)
 		if err != nil {
 			t.Errorf("could not read the rusage log file. Error: %s", err)
 		}

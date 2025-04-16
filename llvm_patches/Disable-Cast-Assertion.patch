@@ -1,0 +1,48 @@
+From b03f99e57e606076d1aa77e88df7a1c1a077a14e Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Fri, 14 Jun 2024 21:29:09 +0000
+Subject: [PATCH] Disable Cast Assertion
+
+This CL creates a local patch to disable an assert in LLVM for Casting.
+This is fix is more of a temporary workaround while
+github.com/llvm/llvm-project/issues/39319 is open.
+
+This fixes a clang crash compiling boost with debug enabled (b/271428130)
+
+---
+ llvm/include/llvm/Support/Casting.h | 4 ----
+ 1 file changed, 4 deletions(-)
+
+diff --git a/llvm/include/llvm/Support/Casting.h b/llvm/include/llvm/Support/Casting.h
+index 2391c1a531a5..3059a587fffc 100644
+--- a/llvm/include/llvm/Support/Casting.h
++++ b/llvm/include/llvm/Support/Casting.h
+@@ -563,25 +563,21 @@ template <typename First, typename Second, typename... Rest, typename From>
+ 
+ template <typename To, typename From>
+ [[nodiscard]] inline decltype(auto) cast(const From &Val) {
+-  assert(isa<To>(Val) && "cast<Ty>() argument of incompatible type!");
+   return CastInfo<To, const From>::doCast(Val);
+ }
+ 
+ template <typename To, typename From>
+ [[nodiscard]] inline decltype(auto) cast(From &Val) {
+-  assert(isa<To>(Val) && "cast<Ty>() argument of incompatible type!");
+   return CastInfo<To, From>::doCast(Val);
+ }
+ 
+ template <typename To, typename From>
+ [[nodiscard]] inline decltype(auto) cast(From *Val) {
+-  assert(isa<To>(Val) && "cast<Ty>() argument of incompatible type!");
+   return CastInfo<To, From *>::doCast(Val);
+ }
+ 
+ template <typename To, typename From>
+ [[nodiscard]] inline decltype(auto) cast(std::unique_ptr<From> &&Val) {
+-  assert(isa<To>(Val) && "cast<Ty>() argument of incompatible type!");
+   return CastInfo<To, std::unique_ptr<From>>::doCast(std::move(Val));
+ }
+ 
+-- 
+2.45.2.627.g7a2c4fd464-goog
+

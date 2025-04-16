@@ -1,0 +1,37 @@
+From 9fa733e5e5da74d18f36728aa0b7af0108da222c Mon Sep 17 00:00:00 2001
+From: Tom Hughes <tomhughes@chromium.org>
+Date: Fri, 13 Sep 2024 16:47:06 -0700
+Subject: [PATCH] [libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a
+ no-op on baremetal
+
+Baremetal targets tend to use custom linker scripts, which may not
+include the __lcxx_override section.
+
+BUG=b:363082822
+---
+ libcxx/src/include/overridable_function.h | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/libcxx/src/include/overridable_function.h b/libcxx/src/include/overridable_function.h
+index 7b0fba10f47d..ea0cb95f1976 100644
+--- a/libcxx/src/include/overridable_function.h
++++ b/libcxx/src/include/overridable_function.h
+@@ -61,7 +61,14 @@
+ // libc++abi, which needs the same mechanism.
+ //
+ 
+-#if defined(_LIBCPP_OBJECT_FORMAT_MACHO)
++// Baremetal targets tend to use custom linker scripts, which may not include
++// the __lcxx_override section.
++#if defined(LIBCXXABI_BAREMETAL)
++
++#  define _LIBCPP_CAN_DETECT_OVERRIDDEN_FUNCTION 0
++#  define _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE /* nothing */
++
++#elif defined(_LIBCPP_OBJECT_FORMAT_MACHO)
+ 
+ #  define _LIBCPP_CAN_DETECT_OVERRIDDEN_FUNCTION 1
+ #  define _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE                                                                 \
+-- 
+2.46.0.662.g92d0881bb0-goog
+

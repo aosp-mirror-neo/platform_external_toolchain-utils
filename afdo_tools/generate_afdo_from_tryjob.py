@@ -1,20 +1,17 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Given a tryjob and perf profile, generates an AFDO profile."""
 
-
 import argparse
-import distutils.spawn
 import os
 import os.path
 import shutil
 import subprocess
 import sys
 import tempfile
+from typing import List
 
 
 _CREATE_LLVM_PROF = "create_llvm_prof"
@@ -64,9 +61,9 @@ def _generate_afdo(perf_profile_loc, tryjob_loc, output_name):
     # extracting the rest in _fetch_and_maybe_unpack.
     subprocess.check_call(["tar", "xaf", "debug.tgz", chrome_in_debug_loc])
 
-    # Note that the AFDO tool *requires* a binary named `chrome` to be present if
-    # we're generating a profile for chrome. It's OK for this to be split debug
-    # information.
+    # Note that the AFDO tool *requires* a binary named `chrome` to be present
+    # if we're generating a profile for chrome. It's OK for this to be split
+    # debug information.
     os.rename(chrome_in_debug_loc, "chrome")
 
     print("Generating AFDO profile.")
@@ -110,7 +107,7 @@ def _tryjob_arg(tryjob_arg):
     return _GS_PREFIX + chell_path + tryjob_arg
 
 
-def main():
+def main(argv: List[str]):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--perf_profile",
@@ -138,9 +135,9 @@ def main():
         action="store_true",
         help="Don't remove the tempdir on failure",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    if not distutils.spawn.find_executable(_CREATE_LLVM_PROF):
+    if not shutil.which(_CREATE_LLVM_PROF):
         sys.exit(_CREATE_LLVM_PROF + " not found; are you in the chroot?")
 
     profile = _abspath_or_gs_link(args.perf_profile)
@@ -153,9 +150,9 @@ def main():
         os.chdir(temp_dir)
         _generate_afdo(profile, args.tryjob, afdo_output)
 
-        # The AFDO tooling is happy to generate essentially empty profiles for us.
-        # Chrome's profiles are often 8+ MB; if we only see a small fraction of
-        # that, something's off. 512KB was arbitrarily selected.
+        # The AFDO tooling is happy to generate essentially empty profiles for
+        # us. Chrome's profiles are often 8+ MB; if we only see a small
+        # fraction of that, something's off. 512KB was arbitrarily selected.
         if os.path.getsize(afdo_output) < 512 * 1024:
             raise ValueError(
                 "The AFDO profile is suspiciously small for Chrome. "
@@ -171,7 +168,3 @@ def main():
             shutil.rmtree(temp_dir, ignore_errors=True)
         else:
             print("Artifacts are available at", temp_dir)
-
-
-if __name__ == "__main__":
-    sys.exit(main())

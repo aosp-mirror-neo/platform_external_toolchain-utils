@@ -7,7 +7,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -104,7 +103,7 @@ func runClangTidyForTricium(env env, clangCmd *command, cSrcFile string, extraTi
 		return fmt.Errorf("creating fixes directory at %q: %v", fixesDir, err)
 	}
 
-	f, err := ioutil.TempFile(fixesDir, "lints-")
+	f, err := os.CreateTemp(fixesDir, "lints-")
 	if err != nil {
 		return fmt.Errorf("making tempfile for tidy: %v", err)
 	}
@@ -163,7 +162,7 @@ func runClangTidyForTricium(env env, clangCmd *command, cSrcFile string, extraTi
 			return fmt.Errorf("creating crash artifacts directory at %q: %v", tidyCrashArtifacts, err)
 		}
 
-		f, err := ioutil.TempFile(tidyCrashArtifacts, "crash-")
+		f, err := os.CreateTemp(tidyCrashArtifacts, "crash-")
 		if err != nil {
 			return fmt.Errorf("making tempfile for crash output: %v", err)
 		}

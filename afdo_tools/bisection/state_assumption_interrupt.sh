@@ -8,7 +8,8 @@
 
 PROBLEM_STATUS=127
 
-tmp_dir=$(pwd)/afdo_test_tmp
+my_dir="$(dirname "$(readlink -m "$0")")"
+tmp_dir="${AFDO_TEST_DIR:?}/afdo_test_tmp"
 
 count_file="${tmp_dir}/.count"
 if [[ -f "${count_file}" ]]; then
@@ -34,5 +35,5 @@ if [[ ${local_count} -ge 2 ]] && [[ $(( ${num_call}%2 )) -ne 0 ]]; then
 fi
 
 # script just needs any second argument to write profs to .second_run_*
-$(pwd)/state_assumption_external.sh "$1" 'second_run'
+"${my_dir}/state_assumption_external.sh" "$1" 'second_run'
 exit $?

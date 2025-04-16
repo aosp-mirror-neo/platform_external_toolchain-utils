@@ -1,0 +1,32 @@
+From bfb6d4554db6ec7329273007073556d49a21f3d6 Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Fri, 14 Jun 2024 21:25:05 +0000
+Subject: [PATCH] llvm-17.0-invocation
+
+In simple-chrome, clang is a shell wrapper, it calls clang.elf, which is the
+real binary, then, clang.elf calls clang.elf itself. It is the last invocation
+"clang.elf -> clang.elf" that breaks, because direct calls to clang.elf misses
+all environment setup in clang wrapper. Fix this by calling to clang wrapper
+instead of clang.elf binary.
+
+---
+ clang/tools/driver/driver.cpp | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/clang/tools/driver/driver.cpp b/clang/tools/driver/driver.cpp
+index 531b5b4a61c1..b3eafeaa77c2 100644
+--- a/clang/tools/driver/driver.cpp
++++ b/clang/tools/driver/driver.cpp
+@@ -451,6 +451,9 @@ int clang_main(int Argc, char **Argv, const llvm::ToolContext &ToolContext) {
+   }
+ 
+   std::string Path = GetExecutablePath(ToolContext.Path, CanonicalPrefixes);
++  size_t PathLen = Path.length();
++  if (PathLen > 4 && Path.substr(PathLen - 4) == ".elf")
++    Path = Path.substr(0, PathLen - 4);
+ 
+   // Whether the cc1 tool should be called inside the current process, or if we
+   // should spawn a new clang subprocess (old behavior).
+-- 
+2.45.2.627.g7a2c4fd464-goog
+

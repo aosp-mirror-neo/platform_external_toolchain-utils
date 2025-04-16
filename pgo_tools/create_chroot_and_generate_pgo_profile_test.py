@@ -8,12 +8,32 @@
 from pathlib import Path
 import shutil
 import tempfile
-import textwrap
 import unittest
 
 # This script's name makes lines exceed 80 chars if it's not imported `as`
 # something shorter.
-import create_chroot_and_generate_pgo_profile as create_chroot_etc
+from pgo_tools import create_chroot_and_generate_pgo_profile as create_chroot_etc
+
+
+EXAMPLE_SDK_VERSION_CONF_FILE = r"""
+# Copyright 2022 The ChromiumOS Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+# The last version of the sdk that we built & tested.
+SDK_LATEST_VERSION="2024.04.22.140014"
+
+# How to find the standalone toolchains from the above sdk.
+TC_PATH="2024/04/%(target)s-2024.04.22.140014.tar.xz"
+
+# Frozen version of SDK used for bootstrapping.
+# If unset, SDK_LATEST_VERSION will be used for bootstrapping.
+BOOTSTRAP_FROZEN_VERSION="2024.03.12.020106"
+
+# The Google Storage bucket containing the SDK tarball and toolchains.
+# If empty, Chromite will assume a default value, likely "chromiumos-sdk".
+SDK_BUCKET=""
+"""
 
 
 class Test(unittest.TestCase):
@@ -24,11 +44,24 @@ class Test(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(tempdir))
         return tempdir
 
+    def test_sdk_version_detection_works(self):
+        repo_root = self.make_tempdir()
+        sdk_version_conf = repo_root / create_chroot_etc.SDK_VERSION_CONF_SUBDIR
+        sdk_version_conf.parent.mkdir(parents=True)
+        sdk_version_conf.write_text(
+            EXAMPLE_SDK_VERSION_CONF_FILE, encoding="utf-8"
+        )
+        self.assertEqual(
+            create_chroot_etc.detect_bootstrap_sdk_version(repo_root),
+            "2024.03.12.020106",
+        )
+
     def test_path_translation_works(self):
         repo_root = Path("/some/repo")
         chroot_info = create_chroot_etc.ChrootInfo(
             chroot_name="my-chroot",
             out_dir_name="my-out",
+            sdk_version="123",
         )
         self.assertEqual(
             create_chroot_etc.translate_chroot_path_to_out_of_chroot(
@@ -36,46 +69,3 @@ class Test(unittest.TestCase):
             ),
             repo_root / "my-out" / "tmp/file/path",
         )
-
-    def test_llvm_ebuild_location(self):
-        tempdir = self.make_tempdir()
-
-        llvm_subdir = (
-            tempdir / "src/third_party/chromiumos-overlay/sys-devel/llvm"
-        )
-        want_ebuild = llvm_subdir / "llvm-18.0.0_pre12345.ebuild"
-        files = [
-            llvm_subdir / "llvm-15.ebuild",
-            llvm_subdir / "llvm-16.0.1-r3.ebuild",
-            want_ebuild,
-            llvm_subdir / "llvm-9999.ebuild",
-        ]
-
-        llvm_subdir.mkdir(parents=True)
-        for f in files:
-            f.touch()
-
-        self.assertEqual(
-            create_chroot_etc.locate_current_llvm_ebuild(tempdir),
-            want_ebuild,
-        )
-
-    def test_llvm_hash_parsing(self):
-        h = create_chroot_etc.parse_llvm_next_hash(
-            textwrap.dedent(
-                """\
-            # Copyright blah blah
-            EAPI=7
-            LLVM_HASH="98f5a340975bc00197c57e39eb4ca26e2da0e8a2" # r496208
-            LLVM_NEXT_HASH="14f0776550b5a49e1c42f49a00213f7f3fa047bf" # r498229
-            # Snip
-            CROS_WORKON_COMMIT=("${LLVM_NEXT_HASH}")
-            """
-            )
-        )
-
-        self.assertEqual(h, "14f0776550b5a49e1c42f49a00213f7f3fa047bf")
-
-
-if __name__ == "__main__":
-    unittest.main()

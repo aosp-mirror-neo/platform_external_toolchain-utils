@@ -1,63 +1,18 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests for generate_pgo_profile."""
 
-from pathlib import Path
-import shutil
-import tempfile
-import unittest
 from unittest import mock
 
-import generate_pgo_profile
-import pgo_tools
+from llvm_tools import test_helpers
+from pgo_tools import generate_pgo_profile
+from pgo_tools import pgo_utils
 
 
-class Test(unittest.TestCase):
+class Test(test_helpers.TempDirTestCase):
     """Tests for generate_pgo_profile."""
-
-    @mock.patch.object(pgo_tools, "run")
-    def test_find_missing_cross_libs_works_for_empty_results(self, mock_run):
-        mock_run.return_value.returncode = 3
-        mock_run.return_value.stdout = ""
-        self.assertEqual(
-            generate_pgo_profile.find_missing_cross_libs(),
-            generate_pgo_profile.ALL_NEEDED_CROSS_LIBS,
-        )
-
-        mock_run.return_value.returncode = 0
-        self.assertEqual(
-            generate_pgo_profile.find_missing_cross_libs(),
-            generate_pgo_profile.ALL_NEEDED_CROSS_LIBS,
-        )
-
-    @mock.patch.object(pgo_tools, "run")
-    def test_find_missing_cross_libs_filters_results_properly(self, mock_run):
-        mock_run.return_value.returncode = 0
-        mock_run.return_value.stdout = "\n".join(
-            generate_pgo_profile.ALL_NEEDED_CROSS_LIBS
-        )
-        self.assertEqual(generate_pgo_profile.find_missing_cross_libs(), set())
-
-        some_cross_libs = sorted(generate_pgo_profile.ALL_NEEDED_CROSS_LIBS)
-        del some_cross_libs[len(some_cross_libs) // 3 :]
-        mock_run.return_value.stdout = "\n".join(
-            some_cross_libs + ["cross-foo/bar"]
-        )
-
-        expected_result = generate_pgo_profile.ALL_NEEDED_CROSS_LIBS - set(
-            some_cross_libs
-        )
-        self.assertEqual(
-            generate_pgo_profile.find_missing_cross_libs(), expected_result
-        )
-
-    def make_tempdir(self) -> Path:
-        tempdir = Path(tempfile.mkdtemp(prefix="generate_pgo_profile_test_"))
-        self.addCleanup(lambda: shutil.rmtree(tempdir))
-        return tempdir
 
     def test_read_exactly_one_dirent_works(self):
         tempdir = self.make_tempdir()
@@ -80,7 +35,7 @@ class Test(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "^Expected exactly one"):
             generate_pgo_profile.read_exactly_one_dirent(tempdir)
 
-    @mock.patch.object(pgo_tools, "run")
+    @mock.patch.object(pgo_utils, "run")
     def test_profraw_conversion_works(self, mock_run):
         tempdir = self.make_tempdir()
         profiles = [
@@ -106,7 +61,3 @@ class Test(unittest.TestCase):
             self.assertIn(p, run_cmd)
         self.assertNotIn(not_a_profile, run_cmd)
         self.assertIn(f"--output={result}", run_cmd)
-
-
-if __name__ == "__main__":
-    unittest.main()

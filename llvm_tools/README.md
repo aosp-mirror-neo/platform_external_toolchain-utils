@@ -182,190 +182,9 @@ $ ./patch_manager.py \
 
 ## LLVM Bisection
 
-### `llvm_bisection.py`
+### `llvm_simple_bisect.py`
 
-#### Usage
-
-This script is used to bisect a bad revision of LLVM. After the script finishes,
-the user requires to run the script again to continue the bisection. Intially,
-the script creates a JSON file that does not exist which then continues
-bisection (after invoking the script again) based off of the JSON file.
-
-For example, assuming the revision 369420 is the bad revision:
-
-```
-$ ./llvm_bisection.py \
-  --parallel 3 \
-  --start_rev 369410 \
-  --end_rev 369420 \
-  --last_tested /abs/path/to/tryjob/file/ \
-  --extra_change_lists 513590 \
-  --builder eve-release-tryjob \
-  --options latest-toolchain
-```
-
-The above example bisects the bad revision (369420), starting from the good
-revision 369410 and launching 3 tryjobs in between if possible (`--parallel`).
-Here, the `--last_tested` path is a path to a JSON file that does not exist. The
-tryjobs are tested on the eve board. `--extra_change_lists` and `--options`
-indicate what parameters to pass into launching a tryjob.
-
-For help with the command line arguments of the script, run:
-
-```
-$ ./llvm_bisection.py --help
-```
-
-### `auto_llvm_bisection.py`
-
-#### Usage
-
-This script automates the LLVM bisection process by using `cros buildresult` to
-update the status of each tryjob.
-
-An example when this script would be used to do LLVM bisection overnight
-because tryjobs take very long to finish.
-
-For example, assuming the good revision is 369410 and the bad revision is
-369420, then:
-
-```
-$ ./auto_llvm_bisection.py --start_rev 369410 --end_rev 369420 \
-  --last_tested /abs/path/to/last_tested_file.json \
-  --extra_change_lists 513590 1394249 \
-  --options latest-toolchain nochromesdk \
-  --chromeos_path /path/to/chromeos/chroot \
-  --builder eve-release-tryjob
-```
-
-The example above bisects LLVM between revision 369410 and 369420. If the file
-exists, the script resumes bisection. Otherwise, the script creates the file
-provided by `--last_tested`. `--extra_change_lists` and `--options` are used for
-each tryjob when being submitted. Lastly, the tryjobs are launched for the board
-provided by `--builder` (in this example, for the eve board).
-
-For help with the command line arguments of the script, run:
-
-```
-$ ./auto_llvm_bisection.py --help
-```
-
-### `update_tryjob_status.py`
-
-#### Usage
-
-This script updates a tryjob's 'status' value when bisecting LLVM. This script
-can use the file that was created by `llvm_bisection.py`.
-
-An example when this script would be used is when the result of tryjob that was
-launched was 'fail' (due to flaky infra) but it should really have been
-'success'.
-
-For example, to update a tryjob's 'status' to 'good':
-
-```
-$ ./update_tryjob_status.py \
-  --set_status good \
-  --revision 369412 \
-  --status_file /abs/path/to/tryjob/file
-```
-
-The above example uses the file in `--status_file` to update a tryjob in that
-file that tested the revision 369412 and sets its 'status' value to 'good'.
-
-For help with the command line arguments of the script, run:
-
-```
-$ ./update_tryjob_status.py --help
-```
-
-For example, to update a tryjob's 'status' to 'bad':
-
-```
-$ ./update_tryjob_status.py \
-  --set_status bad \
-  --revision 369412 \
-  --status_file /abs/path/to/tryjob/file
-```
-
-For example, to update a tryjob's 'status' to 'pending':
-
-```
-$ ./update_tryjob_status.py \
-  --set_status pending \
-  --revision 369412 \
-  --status_file /abs/path/to/tryjob/file
-```
-
-For example, to update a tryjob's 'status' to 'skip':
-
-```
-$ ./update_tryjob_status.py \
-  --set_status skip \
-  --revision 369412 \
-  --status_file /abs/path/to/tryjob/file
-```
-
-For example, to update a tryjob's 'status' based off a custom script exit code:
-
-```
-$ ./update_tryjob_status.py \
-  --set_status custom_script \
-  --revision 369412 \
-  --status_file /abs/path/to/tryjob/file \
-  --custom_script /abs/path/to/script.py
-```
-
-### `modify_a_tryjob.py`
-
-#### Usage
-
-This script modifies a tryjob directly given an already created tryjob file when
-bisecting LLVM. The file created by `llvm_bisection.py` can be used in this
-script.
-
-An example when this script would be used is when a tryjob needs to be manually
-added.
-
-For example:
-
-```
-$ ./modify_a_tryjob.py \
-  --modify_a_tryjob add \
-  --revision 369416 \
-  --extra_change_lists 513590 \
-  --options latest-toolchain \
-  --builder eve-release-tryjob \
-  --status_file /abs/path/to/tryjob/file
-```
-
-The above example creates a tryjob that tests revision 369416 on the eve board,
-passing in the extra arguments (`--extra_change_lists` and `--options`). The
-tryjob is then inserted into the file passed in via `--status_file`.
-
-For help with the command line arguments of the script, run:
-
-```
-$ ./modify_a_tryjob.py --help
-```
-
-For example, to remove a tryjob that tested revision 369412:
-
-```
-$ ./modify_a_tryjob.py \
-  --modify_a_tryjob remove \
-  --revision 369412 \
-  --status_file /abs/path/to/tryjob/file
-```
-
-For example, to relaunch a tryjob that tested revision 369418:
-
-```
-$ ./modify_a_tryjob.py \
-  --modify_a_tryjob relaunch \
-  --revision 369418 \
-  --status_file /abs/path/to/tryjob/file
-```
+TODO(ryanbeltran): Please write some docs here.
 
 ## Other Helpful Scripts
 
@@ -428,26 +247,23 @@ r387778
 **Tip**: if you put a symlink called `git-llvm-rev` to this script somewhere on
 your `$PATH`, you can also use it as `git llvm-rev`.
 
-### `get_upstream_patch.py`
+### `get_patch.py`
 
 #### Usage
 
-This script updates the proper ChromeOS packages with LLVM patches of your choosing, and
-copies the patches into patch folders of the packages. This tool supports both git hash
-of commits as well as differential reviews.
+This script updates the proper ChromeOS packages with LLVM patches of your
+choosing, and copies the patches into patch folders of the packages. This tool
+supports both git hash of commits as well as differential reviews.
 
 Usage:
 
 ```
-./get_upstream_patch.py --chromeos_path /abs/path/to/chroot --start_sha llvm
---sha 174c3eb69f19ff2d6a3eeae31d04afe77e62c021 --sha 174c3eb69f19ff2d6a3eeae31d04afe77e62c021
---differential D123456
+get_patch.py --start-ref="HEAD" 47413bb27 p:74791
 ```
 
-It tries to autodetect a lot of things (e.g., packages changed by each sha,
-their ebuild paths, the "start"/"end" revisions to set, etc.) By default the
-script creates a local patch. Use --create_cl option to create a CL instead. For
-more information, please see the `--help`
+It tries to autodetect a lot of things. For more information, please see the
+`--help`. This only pulls down the patches into the current tree, commits and
+uploads must be done manually.
 
 ### `revert_checker.py`
 

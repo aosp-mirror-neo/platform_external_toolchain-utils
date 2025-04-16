@@ -239,7 +239,3 @@ class Tests(unittest.TestCase):
             bugs.AppendToExistingBug(1, "body", directory=tmpdir)
             json_files = list(Path(tmpdir).glob("*.json"))
             self.assertEqual(len(json_files), 1, json_files)
-
-
-if __name__ == "__main__":
-    unittest.main()

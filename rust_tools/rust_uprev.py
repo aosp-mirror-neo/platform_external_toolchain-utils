@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -13,20 +12,16 @@ failing step is fixed. Example usage to create a new version:
 
 1. (outside chroot) $ ./rust_tools/rust_uprev.py            \\
                      --state_file /tmp/rust-to-1.60.0.json  \\
-                     roll --uprev 1.60.0
+                     --uprev 1.60.0
 2. Step "compile rust" failed due to the patches can't apply to new version.
 3. Manually fix the patches.
-4. Execute the command in step 1 again, but add "--continue" before "roll".
+4. Execute the command in step 1 again, but add "--continue".
 5. Iterate 1-4 for each failed step until the tool passes.
-
-Besides "roll", the tool also support subcommands that perform
-various parts of an uprev.
 
 See `--help` for all available options.
 """
 
 import argparse
-import functools
 import json
 import logging
 import os
@@ -34,8 +29,8 @@ import pathlib
 from pathlib import Path
 import re
 import shlex
-import shutil
 import subprocess
+import textwrap
 import threading
 import time
 from typing import (
@@ -47,14 +42,15 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
-    Tuple,
     TypeVar,
     Union,
 )
 import urllib.request
 
+from cros_utils import cros_paths
+from cros_utils import git_utils
 from llvm_tools import chroot
-from llvm_tools import git
+from pgo_tools_rust import pgo_rust
 
 
 T = TypeVar("T")
@@ -95,14 +91,14 @@ EQUERY = "equery"
 GPG = "gpg"
 GSUTIL = "gsutil.py"
 MIRROR_PATH = "gs://chromeos-localmirror/distfiles"
-EBUILD_PREFIX = SOURCE_ROOT / "src/third_party/chromiumos-overlay"
+EBUILD_PREFIX = SOURCE_ROOT / cros_paths.CHROMIUMOS_OVERLAY
 CROS_RUSTC_ECLASS = EBUILD_PREFIX / "eclass/cros-rustc.eclass"
 # Keyserver to use with GPG. Not all keyservers have Rust's signing key;
 # this must be set to a keyserver that does.
 GPG_KEYSERVER = "keyserver.ubuntu.com"
 PGO_RUST = Path(
     "/mnt/host/source"
-    "/src/third_party/toolchain-utils/pgo_tools_rust/pgo_rust.py"
+    "/src/third_party/toolchain-utils/py/bin/pgo_tools_rust/pgo_rust.py"
 )
 RUST_PATH = Path(EBUILD_PREFIX, "dev-lang", "rust")
 # This is the signing key used by upstream Rust as of 2023-08-09.
@@ -190,12 +186,6 @@ class RustVersion(NamedTuple):
         )
 
 
-class PreparedUprev(NamedTuple):
-    """Container for the information returned by prepare_uprev."""
-
-    template_version: RustVersion
-
-
 def compute_ebuild_path(category: str, name: str, version: RustVersion) -> Path:
     return EBUILD_PREFIX / category / name / f"{name}-{version}.ebuild"
 
@@ -248,14 +238,6 @@ def find_ebuild_path(
     return result[0]
 
 
-def get_rust_bootstrap_version():
-    """Get the version of the current rust-bootstrap package."""
-    bootstrap_ebuild = find_ebuild_path(rust_bootstrap_path(), "rust-bootstrap")
-    m = re.match(r"^rust-bootstrap-(\d+).(\d+).(\d+)", bootstrap_ebuild.name)
-    assert m, bootstrap_ebuild.name
-    return RustVersion(int(m.group(1)), int(m.group(2)), int(m.group(3)))
-
-
 def parse_commandline_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -281,86 +263,29 @@ def parse_commandline_args() -> argparse.Namespace:
         action="store_true",
         help="Continue the steps from the state file",
     )
-
-    create_parser_template = argparse.ArgumentParser(add_help=False)
-    create_parser_template.add_argument(
-        "--template",
-        type=RustVersion.parse,
-        default=None,
-        help="A template to use for creating a Rust uprev from, in the form "
-        "a.b.c The ebuild has to exist in the chroot. If not specified, the "
-        "tool will use the current Rust version in the chroot as template.",
-    )
-    create_parser_template.add_argument(
+    parser.add_argument(
         "--skip_compile",
         action="store_true",
         help="Skip compiling rust to test the tool. Only for testing",
     )
-
-    subparsers = parser.add_subparsers(dest="subparser_name")
-    subparser_names = []
-    subparser_names.append("create")
-    create_parser = subparsers.add_parser(
-        "create",
-        parents=[create_parser_template],
-        help="Create changes uprevs Rust to a new version",
-    )
-    create_parser.add_argument(
-        "--rust_version",
-        type=RustVersion.parse,
-        required=True,
-        help="Rust version to uprev to, in the form a.b.c",
-    )
-
-    subparser_names.append("remove")
-    remove_parser = subparsers.add_parser(
-        "remove",
-        help="Clean up old Rust version from chroot",
-    )
-    remove_parser.add_argument(
-        "--rust_version",
-        type=RustVersion.parse,
-        default=None,
-        help="Rust version to remove, in the form a.b.c If not "
-        "specified, the tool will remove the oldest version in the chroot",
-    )
-
-    subparser_names.append("roll")
-    roll_parser = subparsers.add_parser(
-        "roll",
-        parents=[create_parser_template],
-        help="A command can create and upload a Rust uprev CL, including "
-        "preparing the repo, creating new Rust uprev, deleting old uprev, "
-        "and upload a CL to crrev.",
-    )
-    roll_parser.add_argument(
+    parser.add_argument(
         "--uprev",
         type=RustVersion.parse,
         required=True,
         help="Rust version to uprev to, in the form a.b.c",
     )
-    roll_parser.add_argument(
-        "--remove",
-        type=RustVersion.parse,
-        default=None,
-        help="Rust version to remove, in the form a.b.c If not "
-        "specified, the tool will remove the oldest version in the chroot",
-    )
-    roll_parser.add_argument(
+    parser.add_argument(
         "--skip_cross_compiler",
         action="store_true",
         help="Skip updating cross-compiler in the chroot",
     )
-    roll_parser.add_argument(
+    parser.add_argument(
         "--no_upload",
         action="store_true",
         help="If specified, the tool will not upload the CL for review",
     )
 
     args = parser.parse_args()
-    if args.subparser_name not in subparser_names:
-        parser.error("one of %s must be specified" % subparser_names)
-
     if args.cont and args.restart:
         parser.error("Please select either --continue or --restart")
 
@@ -377,42 +302,6 @@ def parse_commandline_args() -> argparse.Namespace:
         os.remove(args.state_file)
 
     return args
-
-
-def prepare_uprev(
-    rust_version: RustVersion, template: RustVersion
-) -> Optional[PreparedUprev]:
-    ebuild_path = find_ebuild_for_rust_version(template)
-
-    if rust_version <= template:
-        logging.info(
-            "Requested version %s is not newer than the template version %s.",
-            rust_version,
-            template,
-        )
-        return None
-
-    logging.info(
-        "Template Rust version is %s (ebuild: %s)",
-        template,
-        ebuild_path,
-    )
-
-    return PreparedUprev(template)
-
-
-def create_ebuild(
-    category: str,
-    name: str,
-    template_version: RustVersion,
-    new_version: RustVersion,
-) -> None:
-    template_ebuild = compute_ebuild_path(category, name, template_version)
-    new_ebuild = compute_ebuild_path(category, name, new_version)
-    shutil.copyfile(template_ebuild, new_ebuild)
-    subprocess.check_call(
-        ["git", "add", new_ebuild.name], cwd=new_ebuild.parent
-    )
 
 
 def set_include_profdata_src(ebuild_path: os.PathLike, include: bool) -> None:
@@ -442,21 +331,30 @@ def set_include_profdata_src(ebuild_path: os.PathLike, include: bool) -> None:
     Path(ebuild_path).write_text(contents, encoding="utf-8")
 
 
-def update_bootstrap_version(
-    path: PathOrStr, new_bootstrap_version: RustVersion
+def update_ebuild_variable_version(
+    path: PathOrStr, variable_name: str, new_version: RustVersion
 ) -> None:
     path = Path(path)
     contents = path.read_text(encoding="utf-8")
     contents, subs = re.subn(
-        r"^BOOTSTRAP_VERSION=.*$",
-        'BOOTSTRAP_VERSION="%s"' % (new_bootstrap_version,),
+        r"^" + re.escape(variable_name) + r"=.*$",
+        f'{variable_name}="{new_version}"',
         contents,
         flags=re.MULTILINE,
     )
     if not subs:
-        raise RuntimeError(f"BOOTSTRAP_VERSION not found in {path}")
+        raise RuntimeError(f"{variable_name} not found in {path}")
     path.write_text(contents, encoding="utf-8")
-    logging.info("Rust BOOTSTRAP_VERSION updated to %s", new_bootstrap_version)
+    logging.info("Rust %s updated to %s", variable_name, new_version)
+
+
+def cros_workon(start_or_stop: str, packages: List[str]) -> None:
+    """Runs `cros-workon` on the given host packages."""
+    subprocess.run(
+        ["cros", "workon", "--host", start_or_stop] + packages,
+        check=True,
+        stdin=subprocess.DEVNULL,
+    )
 
 
 def ebuild_actions(
@@ -533,16 +431,6 @@ it to the local mirror using gsutil cp.
     if not acl_verified:
         logging.error("Output from acl get:\n%s", output)
         raise Exception("Could not verify that allUsers has READER permission")
-
-
-def fetch_bootstrap_distfiles(version: RustVersion) -> None:
-    """Fetches rust-bootstrap distfiles from the local mirror
-
-    Fetches the distfiles for a rust-bootstrap ebuild to ensure they
-    are available on the mirror and the local copies are the same as
-    the ones on the mirror.
-    """
-    fetch_distfile_from_mirror(compute_rustc_src_name(version))
 
 
 def fetch_rust_distfiles(version: RustVersion) -> None:
@@ -694,19 +582,6 @@ def update_rust_packages(
         f.write(new_contents)
 
 
-def update_virtual_rust(
-    template_version: RustVersion, new_version: RustVersion
-) -> None:
-    template_ebuild = find_ebuild_path(
-        EBUILD_PREFIX.joinpath("virtual/rust"), "rust", template_version
-    )
-    virtual_rust_dir = template_ebuild.parent
-    new_name = f"rust-{new_version}.ebuild"
-    new_ebuild = virtual_rust_dir.joinpath(new_name)
-    shutil.copyfile(template_ebuild, new_ebuild)
-    subprocess.check_call(["git", "add", new_name], cwd=virtual_rust_dir)
-
-
 def unmerge_package_if_installed(pkgatom: str) -> None:
     """Unmerges a package if it is installed."""
     shpkg = shlex.quote(pkgatom)
@@ -750,45 +625,12 @@ def perform_step(
     return val
 
 
-def prepare_uprev_from_json(obj: Any) -> Optional[PreparedUprev]:
-    if not obj:
-        return None
-    version = obj[0]
-    return PreparedUprev(
-        RustVersion(*version),
-    )
-
-
-def prepare_uprev_to_json(
-    prepared_uprev: Optional[PreparedUprev],
-) -> Optional[Tuple[RustVersion]]:
-    if prepared_uprev is None:
-        return None
-    return (prepared_uprev.template_version,)
-
-
 def create_rust_uprev(
     rust_version: RustVersion,
     template_version: RustVersion,
     skip_compile: bool,
     run_step: RunStepFn,
 ) -> None:
-    prepared = run_step(
-        "prepare uprev",
-        lambda: prepare_uprev(rust_version, template_version),
-        result_from_json=prepare_uprev_from_json,
-        result_to_json=prepare_uprev_to_json,
-    )
-    if prepared is None:
-        return
-    template_version = prepared.template_version
-
-    run_step(
-        "mirror bootstrap sources",
-        lambda: mirror_rust_source(
-            template_version,
-        ),
-    )
     run_step(
         "mirror rust sources",
         lambda: mirror_rust_source(
@@ -800,31 +642,39 @@ def create_rust_uprev(
     # are not available on the mirror. To make them pass, fetch the
     # required files yourself, verify their checksums, then upload them
     # to the mirror.
-    run_step(
-        "fetch bootstrap distfiles",
-        lambda: fetch_bootstrap_distfiles(template_version),
-    )
     run_step("fetch rust distfiles", lambda: fetch_rust_distfiles(rust_version))
     run_step(
-        "update bootstrap version",
-        lambda: update_bootstrap_version(CROS_RUSTC_ECLASS, template_version),
+        "update cros-rustc.eclass bootstrap version",
+        lambda: update_ebuild_variable_version(
+            CROS_RUSTC_ECLASS, "BOOTSTRAP_VERSION", template_version
+        ),
     )
+
+    run_step(
+        "update cros-rustc.eclass rust version",
+        lambda: update_ebuild_variable_version(
+            CROS_RUSTC_ECLASS, "RUSTC_STABLE_VERSION", rust_version
+        ),
+    )
+
+    rust_workon_packages = ["dev-lang/rust-host"]
+    # Add all cross-compiler packages, except for host packages, which don't
+    # have a `rust` to install.
+    rust_workon_packages += (
+        f"cross-{x}/rust"
+        for x in pgo_rust.TARGET_TRIPLES
+        if not x.endswith("pc-linux-gnu")
+    )
+
+    run_step(
+        "cros-workon rust packages",
+        lambda: cros_workon("start", rust_workon_packages),
+    )
+
     run_step(
         "turn off profile data sources in cros-rustc.eclass",
         lambda: set_include_profdata_src(CROS_RUSTC_ECLASS, include=False),
     )
-
-    for category, name in RUST_PACKAGES:
-        run_step(
-            f"create new {category}/{name} ebuild",
-            functools.partial(
-                create_ebuild,
-                category,
-                name,
-                template_version,
-                rust_version,
-            ),
-        )
 
     run_step(
         "update dev-lang/rust-host manifest to add new version",
@@ -854,7 +704,15 @@ def create_rust_uprev(
         lambda: ebuild_actions("dev-lang/rust-host", ["manifest"]),
     )
     if not skip_compile:
-        run_step("build packages", lambda: rebuild_packages(rust_version))
+        run_step(
+            "build packages", lambda: rebuild_packages(rust_workon_packages)
+        )
+
+    run_step(
+        "cros-workon stop rust packages",
+        lambda: cros_workon("stop", rust_workon_packages),
+    )
+
     run_step(
         "insert host version into rust packages",
         lambda: update_rust_packages(
@@ -865,32 +723,22 @@ def create_rust_uprev(
         "insert target version into rust packages",
         lambda: update_rust_packages("dev-lang/rust", rust_version, add=True),
     )
-    run_step(
-        "upgrade virtual/rust",
-        lambda: update_virtual_rust(template_version, rust_version),
-    )
 
 
-def find_rust_versions() -> List[Tuple[RustVersion, Path]]:
-    """Returns (RustVersion, ebuild_path) for base versions of dev-lang/rust.
-
-    This excludes symlinks to ebuilds, so if rust-1.34.0.ebuild and
-    rust-1.34.0-r1.ebuild both exist and -r1 is a symlink to the other,
-    only rust-1.34.0.ebuild will be in the return value.
-    """
-    return [
-        (RustVersion.parse_from_ebuild(ebuild), ebuild)
+def find_stable_rust_version() -> RustVersion:
+    """Returns the RustVersion of the stable dev-lang/rust ebuild."""
+    rust_versions = [
+        RustVersion.parse_from_ebuild(ebuild)
         for ebuild in RUST_PATH.iterdir()
-        if ebuild.suffix == ".ebuild" and not ebuild.is_symlink()
+        if ebuild.suffix == ".ebuild"
+        and not ebuild.name.endswith("-9999.ebuild")
+        and not ebuild.is_symlink()
     ]
-
-
-def find_oldest_rust_version() -> RustVersion:
-    """Returns the RustVersion of the oldest dev-lang/rust ebuild."""
-    rust_versions = find_rust_versions()
-    if len(rust_versions) <= 1:
-        raise RuntimeError("Expect to find more than one Rust versions")
-    return min(rust_versions)[0]
+    if len(rust_versions) != 1:
+        raise RuntimeError(
+            f"Expect to find exactly one Rust version; found {rust_versions}"
+        )
+    return rust_versions[0]
 
 
 def find_ebuild_for_rust_version(version: RustVersion) -> Path:
@@ -898,31 +746,23 @@ def find_ebuild_for_rust_version(version: RustVersion) -> Path:
     return find_ebuild_path(RUST_PATH, "rust", version)
 
 
-def rebuild_packages(version: RustVersion):
+def rebuild_packages(workon_packages: List[str]):
     """Rebuild packages modified by this script."""
-    # Remove all packages we modify to avoid depending on preinstalled
-    # versions. This ensures that the packages can really be built.
-    packages = [f"{category}/{name}" for category, name in RUST_PACKAGES]
-    for pkg in packages:
-        unmerge_package_if_installed(pkg)
-    # Mention only dev-lang/rust explicitly, so that others are pulled
-    # in as dependencies (letting us detect dependency errors).
-    # Packages we modify are listed in --usepkg-exclude to ensure they
-    # are built from source.
     try:
         run_in_chroot(
             [
                 "sudo",
                 "emerge",
+                # Use unlimited jobs, since we should only be emerging a small
+                # handful of packages.
+                "--jobs",
                 "--quiet-build",
-                "--usepkg-exclude",
-                " ".join(packages),
-                f"=dev-lang/rust-{version}",
-            ],
+            ]
+            + workon_packages,
         )
     except:
         logging.warning(
-            "Failed to build dev-lang/rust or one of its dependencies."
+            "Failed to build rust or one of its dependencies."
             " If necessary, you can restore rust and rust-host from"
             " binary packages:\n  sudo emerge --getbinpkgonly dev-lang/rust"
         )
@@ -958,65 +798,11 @@ def remove_files(filename: PathOrStr, path: PathOrStr) -> None:
     subprocess.check_call(["git", "rm", filename], cwd=path)
 
 
-def remove_rust_uprev(
-    rust_version: Optional[RustVersion],
-    run_step: RunStepFn,
-) -> None:
-    def find_desired_rust_version() -> RustVersion:
-        if rust_version:
-            return rust_version
-        return find_oldest_rust_version()
-
-    def find_desired_rust_version_from_json(obj: Any) -> RustVersion:
-        return RustVersion(*obj)
-
-    delete_version = run_step(
-        "find rust version to delete",
-        find_desired_rust_version,
-        result_from_json=find_desired_rust_version_from_json,
-    )
-
-    for category, name in RUST_PACKAGES:
-        run_step(
-            f"remove old {name} ebuild",
-            functools.partial(
-                remove_ebuild_version,
-                EBUILD_PREFIX / category / name,
-                name,
-                delete_version,
-            ),
-        )
-
-    run_step(
-        "update dev-lang/rust-host manifest to delete old version",
-        lambda: ebuild_actions("dev-lang/rust-host", ["manifest"]),
-    )
-    run_step(
-        "remove target version from rust packages",
-        lambda: update_rust_packages(
-            "dev-lang/rust", delete_version, add=False
-        ),
-    )
-    run_step(
-        "remove host version from rust packages",
-        lambda: update_rust_packages(
-            "dev-lang/rust-host", delete_version, add=False
-        ),
-    )
-    run_step("remove virtual/rust", lambda: remove_virtual_rust(delete_version))
-
-
-def remove_virtual_rust(delete_version: RustVersion) -> None:
-    remove_ebuild_version(
-        EBUILD_PREFIX.joinpath("virtual/rust"), "rust", delete_version
-    )
-
-
 def rust_bootstrap_path() -> Path:
     return EBUILD_PREFIX.joinpath("dev-lang/rust-bootstrap")
 
 
-def create_new_repo(rust_version: RustVersion) -> None:
+def create_rust_uprev_branch(rust_version: RustVersion) -> None:
     output = get_command_output(
         ["git", "status", "--porcelain"], cwd=EBUILD_PREFIX
     )
@@ -1025,7 +811,9 @@ def create_new_repo(rust_version: RustVersion) -> None:
             f"{EBUILD_PREFIX} has uncommitted changes, please either discard "
             "them or commit them."
         )
-    git.CreateBranch(EBUILD_PREFIX, f"rust-to-{rust_version}")
+    git_utils.create_branch(
+        EBUILD_PREFIX, branch_name=f"rust-to-{rust_version}"
+    )
 
 
 def build_cross_compiler(template_version: RustVersion) -> None:
@@ -1059,16 +847,25 @@ def build_cross_compiler(template_version: RustVersion) -> None:
 
 def create_new_commit(rust_version: RustVersion) -> None:
     subprocess.check_call(["git", "add", "-A"], cwd=EBUILD_PREFIX)
-    messages = [
-        f"[DO NOT SUBMIT] dev-lang/rust: upgrade to Rust {rust_version}",
-        "",
-        "This CL is created by rust_uprev tool automatically." "",
-        "BUG=None",
-        "TEST=Use CQ to test the new Rust version",
-    ]
-    branch = f"rust-to-{rust_version}"
-    git.CommitChanges(EBUILD_PREFIX, messages)
-    git.UploadChanges(EBUILD_PREFIX, branch)
+    sha = git_utils.commit_all_changes(
+        EBUILD_PREFIX,
+        message=textwrap.dedent(
+            f"""\
+            [DO NOT SUBMIT] dev-lang/rust: upgrade to Rust {rust_version}
+
+            This CL is created by rust_uprev tool automatically.
+
+            BUG=None
+            TEST=Use CQ to test the new Rust version
+            """
+        ),
+    )
+    git_utils.upload_to_gerrit(
+        EBUILD_PREFIX,
+        remote=git_utils.CROS_EXTERNAL_REMOTE,
+        branch=git_utils.CROS_MAIN_BRANCH,
+        ref=sha,
+    )
 
 
 def run_in_chroot(cmd: Command, *args, **kwargs) -> subprocess.CompletedProcess:
@@ -1180,42 +977,17 @@ def main() -> None:
             result_to_json,
         )
 
-    if args.subparser_name == "create":
-        sudo_keepalive()
-        create_rust_uprev(
-            args.rust_version, args.template, args.skip_compile, run_step
+    sudo_keepalive()
+    template_version = find_stable_rust_version()
+    run_step(
+        "create rust upgrade branch",
+        lambda: create_rust_uprev_branch(args.uprev),
+    )
+    if not args.skip_cross_compiler:
+        run_step(
+            "build cross compiler",
+            lambda: build_cross_compiler(template_version),
         )
-    elif args.subparser_name == "remove":
-        remove_rust_uprev(args.rust_version, run_step)
-    else:
-        # If you have added more subparser_name, please also add the handlers
-        # above
-        assert args.subparser_name == "roll"
-
-        sudo_keepalive()
-        # Determine the template version, if not given.
-        template_version = args.template
-        if template_version is None:
-            rust_ebuild = find_ebuild_for_package("dev-lang/rust")
-            template_version = RustVersion.parse_from_ebuild(rust_ebuild)
-
-        run_step("create new repo", lambda: create_new_repo(args.uprev))
-        if not args.skip_cross_compiler:
-            run_step(
-                "build cross compiler",
-                lambda: build_cross_compiler(template_version),
-            )
-        create_rust_uprev(
-            args.uprev, template_version, args.skip_compile, run_step
-        )
-        remove_rust_uprev(args.remove, run_step)
-        prepared = prepare_uprev_from_json(completed_steps["prepare uprev"])
-        assert prepared is not None, "no prepared uprev decoded from JSON"
-        if not args.no_upload:
-            run_step(
-                "create rust uprev CL", lambda: create_new_commit(args.uprev)
-            )
-
-
-if __name__ == "__main__":
-    main()
+    create_rust_uprev(args.uprev, template_version, args.skip_compile, run_step)
+    if not args.no_upload:
+        run_step("create rust uprev CL", lambda: create_new_commit(args.uprev))

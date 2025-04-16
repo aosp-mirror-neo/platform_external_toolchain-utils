@@ -1,0 +1,43 @@
+From 21c8adbb29cfa0df30c55899a4a56495e2d2e04c Mon Sep 17 00:00:00 2001
+From: Jason Molenda <jmolenda@apple.com>
+Date: Tue, 19 Nov 2024 15:52:42 -0800
+Subject: [PATCH] Revert "[lldb] Allow fetching of RA register when above fault
+ handler (#98566)"
+
+This reverts commit fd424179dcb3417fc0675f77d2bf06c750dd1c33.
+
+This patch has two problems.  First, it is unnecessary, Pavel landed
+a fix a week or so before mine which solves this problem in
+bbd54e08b08f5ccd38c4665178e65c58f7b14459 .  Second, the fix is
+incorrect; for a function above a trap handler, where all registers
+are available, this patch would have lldb fetch the return address
+register from frame 0.  This might be 10 frames up in the stack;
+the frame 0 return address register is incorrect.  The change would
+have been correct a short bit later than this, but Pavel's fix is
+executed earlier in the function and none of this is needed.
+
+patch.cherry: true
+patch.metadata.original_sha: d29a50f358e71a695b23e456d66ed2924617deb9
+patch.platforms: chromiumos
+patch.version_range.from: 542750
+patch.version_range.until: 556712
+
+---
+ lldb/source/Target/RegisterContextUnwind.cpp | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lldb/source/Target/RegisterContextUnwind.cpp b/lldb/source/Target/RegisterContextUnwind.cpp
+index a61228d092d8..f74f1dc0e1b8 100644
+--- a/lldb/source/Target/RegisterContextUnwind.cpp
++++ b/lldb/source/Target/RegisterContextUnwind.cpp
+@@ -1401,7 +1401,7 @@ RegisterContextUnwind::SavedLocationForRegister(
+       // it's still live in the actual register. Handle this specially.
+ 
+       if (!have_unwindplan_regloc && return_address_reg.IsValid() &&
+-          BehavesLikeZerothFrame()) {
++          IsFrameZero()) {
+         if (return_address_reg.GetAsKind(eRegisterKindLLDB) !=
+             LLDB_INVALID_REGNUM) {
+           lldb_private::UnwindLLDB::RegisterLocation new_regloc;
+-- 
+2.49.0.395.g12beb8f557-goog
