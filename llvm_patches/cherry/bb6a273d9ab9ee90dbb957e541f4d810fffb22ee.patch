@@ -1,0 +1,78 @@
+From 7f7a97ac699a296d80dc54efb267187c2609dacb Mon Sep 17 00:00:00 2001
+From: Jordan R AW <ajordanr@google.com>
+Date: Sat, 22 Feb 2025 09:13:46 -0800
+Subject: [PATCH] [lldb] Fix manual CURSES_LIBRARIES tinfo finding (#128245)
+
+At present, we automatically detect terminfo symbols in CURSES_LIBRARIES
+after it is found through find_package. However, by introducing a check
+for TINFO_LIBRARIES, we break systems which pass all of
+CURSES_INCLUDE_DIRS, CURSES_LIBRARIES, and PANEL_LIBRARIES individually
+without passing TINFO_LIBRARIES. We'd rather not expose TINFO_LIBRARIES
+at all.
+
+This commit preemptively attempts to fix issues encountered on systems
+that manually pass CURSES_LIBRARIES which already contain the necessary
+terminfo symbols (e.g. 'acs_map').
+
+See this breakage in Google Fuchsia:
+https://issues.fuchsia.dev/397455029
+
+References Issue #101368
+
+patch.cherry: true
+patch.metadata.original_sha: bb6a273d9ab9ee90dbb957e541f4d810fffb22ee
+patch.platforms: chromiumos
+patch.version_range.from: 537678
+patch.version_range.until: 566148
+
+---
+ lldb/cmake/modules/FindCursesAndPanel.cmake | 20 ++++++++++++++++----
+ 1 file changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/lldb/cmake/modules/FindCursesAndPanel.cmake b/lldb/cmake/modules/FindCursesAndPanel.cmake
+index 75ebaa35d7ea..8628059f91ba 100644
+--- a/lldb/cmake/modules/FindCursesAndPanel.cmake
++++ b/lldb/cmake/modules/FindCursesAndPanel.cmake
+@@ -6,15 +6,25 @@
+ 
+ include(CMakePushCheckState)
+ 
+-function(lldb_check_curses_tinfo CURSES_LIBRARIES CURSES_HAS_TINFO)
++function(lldb_check_curses_tinfo CURSES_INCLUDE_DIRS CURSES_LIBRARIES CURSES_HAS_TINFO)
+   cmake_reset_check_state()
++  set(CMAKE_REQUIRED_INCLUDES "${CURSES_INCLUDE_DIRS}")
+   set(CMAKE_REQUIRED_LIBRARIES "${CURSES_LIBRARIES}")
+   # acs_map is one of many symbols that are part of tinfo but could
+   # be bundled in curses.
+   check_symbol_exists(acs_map "curses.h" CURSES_HAS_TINFO)
+ endfunction()
+ 
+-if(CURSES_INCLUDE_DIRS AND CURSES_LIBRARIES AND TINFO_LIBRARIES AND PANEL_LIBRARIES)
++if(CURSES_INCLUDE_DIRS AND CURSES_LIBRARIES AND PANEL_LIBRARIES)
++  if(NOT HAS_TERMINFO_SYMBOLS)
++    lldb_check_curses_tinfo("${CURSES_INCLUDE_DIRS}"
++                            "${CURSES_LIBRARIES}"
++                            CURSES_HAS_TINFO)
++    if(NOT CURSES_HAS_TINFO)
++      message(WARNING "CURSES_LIBRARIES was provided manually but is missing terminfo symbols")
++    endif()
++    mark_as_advanced(CURSES_HAS_TINFO)
++  endif()
+   set(CURSESANDPANEL_FOUND TRUE)
+ else()
+   find_package(Curses QUIET)
+@@ -25,8 +35,10 @@ else()
+     # Sometimes the curses libraries define their own terminfo symbols,
+     # other times they're extern and are defined by a separate terminfo library.
+     # Auto-detect which.
+-    lldb_check_curses_tinfo("${CURSES_LIBRARIES}" CURSES_HAS_TINFO)
+-    if (NOT CURSES_HAS_TINFO)
++    lldb_check_curses_tinfo("${CURSES_INCLUDE_DIRS}"
++                            "${CURSES_LIBRARIES}"
++                            CURSES_HAS_TINFO)
++    if(NOT CURSES_HAS_TINFO)
+       message(STATUS "curses library missing terminfo symbols, looking for tinfo separately")
+       find_library(TINFO_LIBRARIES NAMES tinfo DOC "The curses tinfo library" QUIET)
+       list(APPEND CURSES_LIBRARIES "${TINFO_LIBRARIES}")
+-- 
+2.49.0.395.g12beb8f557-goog

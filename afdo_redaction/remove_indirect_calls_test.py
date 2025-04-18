@@ -60,7 +60,3 @@ class Test(unittest.TestCase):
   """.strip().splitlines()
 
         self.assertEqual(_run_test(profile_lines), expected_lines)
-
-
-if __name__ == "__main__":
-    unittest.main()

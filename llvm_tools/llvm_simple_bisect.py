@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -25,7 +24,8 @@ import subprocess
 import sys
 from typing import Optional, Text
 
-import chroot
+from cros_utils import cros_paths
+from llvm_tools import chroot
 
 
 # Git Bisection exit codes
@@ -108,7 +108,7 @@ class CommandResult:
 class LLVMRepo:
     """LLVM Repository git and workon information."""
 
-    REPO_PATH = Path("/mnt/host/source/src/third_party/llvm-project")
+    REPO_PATH = cros_paths.CHROOT_SOURCE_ROOT / cros_paths.LLVM_PROJECT
 
     def __init__(self):
         self.workon: Optional[bool] = None
@@ -345,7 +345,3 @@ def main():
     except Exception:
         logging.exception("Uncaught Exception in main")
         abort(opts.never_abort)
-
-
-if __name__ == "__main__":
-    main()

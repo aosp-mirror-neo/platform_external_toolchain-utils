@@ -1,0 +1,321 @@
+From bd59cc8103930a251107038992ffa3e738e6a2f6 Mon Sep 17 00:00:00 2001
+From: Owen Pan <owenpiano@gmail.com>
+Date: Wed, 28 Aug 2024 18:23:54 -0700
+Subject: [PATCH] =?UTF-8?q?[clang-format]=20Revert=20"[clang-format][NFC]?=
+ =?UTF-8?q?=20Delete=20TT=5FLambdaArrow=20(#70=E2=80=A6=20(#105923)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+…519)"
+
+This reverts commit e00d32afb9d33a1eca48e2b041c9688436706c5b and adds a
+test for lambda arrow SplitPenalty.
+
+Fixes #105480.
+
+patch.cherry: true
+patch.metadata.original_sha: 438ad9f2bf25575c474313de4ad85a5da6f69e4c
+patch.platforms: chromiumos
+patch.version_range.from: 516925
+patch.version_range.until: 547893
+
+---
+ clang/lib/Format/ContinuationIndenter.cpp     | 10 +++---
+ clang/lib/Format/FormatToken.h                |  3 +-
+ clang/lib/Format/TokenAnnotator.cpp           | 33 ++++++++++--------
+ clang/lib/Format/UnwrappedLineParser.cpp      |  2 +-
+ clang/unittests/Format/TokenAnnotatorTest.cpp | 34 ++++++++++++++-----
+ 5 files changed, 50 insertions(+), 32 deletions(-)
+
+diff --git a/clang/lib/Format/ContinuationIndenter.cpp b/clang/lib/Format/ContinuationIndenter.cpp
+index 4fcb776db45b..04d4aec9ef7a 100644
+--- a/clang/lib/Format/ContinuationIndenter.cpp
++++ b/clang/lib/Format/ContinuationIndenter.cpp
+@@ -885,10 +885,8 @@ void ContinuationIndenter::addTokenOnCurrentLine(LineState &State, bool DryRun,
+     CurrentState.ContainsUnwrappedBuilder = true;
+   }
+ 
+-  if (Current.is(TT_TrailingReturnArrow) &&
+-      Style.Language == FormatStyle::LK_Java) {
++  if (Current.is(TT_LambdaArrow) && Style.Language == FormatStyle::LK_Java)
+     CurrentState.NoLineBreak = true;
+-  }
+   if (Current.isMemberAccess() && Previous.is(tok::r_paren) &&
+       (Previous.MatchingParen &&
+        (Previous.TotalLength - Previous.MatchingParen->TotalLength > 10))) {
+@@ -1043,7 +1041,7 @@ unsigned ContinuationIndenter::addTokenOnNewLine(LineState &State,
+   //
+   // is common and should be formatted like a free-standing function. The same
+   // goes for wrapping before the lambda return type arrow.
+-  if (Current.isNot(TT_TrailingReturnArrow) &&
++  if (Current.isNot(TT_LambdaArrow) &&
+       (!Style.isJavaScript() || Current.NestingLevel != 0 ||
+        !PreviousNonComment || PreviousNonComment->isNot(tok::equal) ||
+        !Current.isOneOf(Keywords.kw_async, Keywords.kw_function))) {
+@@ -1303,7 +1301,7 @@ unsigned ContinuationIndenter::getNewLineColumn(const LineState &State) {
+     }
+     return CurrentState.Indent;
+   }
+-  if (Current.is(TT_TrailingReturnArrow) &&
++  if (Current.is(TT_LambdaArrow) &&
+       Previous.isOneOf(tok::kw_noexcept, tok::kw_mutable, tok::kw_constexpr,
+                        tok::kw_consteval, tok::kw_static, TT_AttributeSquare)) {
+     return ContinuationIndent;
+@@ -1637,7 +1635,7 @@ unsigned ContinuationIndenter::moveStateToNextToken(LineState &State,
+   }
+   if (Current.isOneOf(TT_BinaryOperator, TT_ConditionalExpr) && Newline)
+     CurrentState.NestedBlockIndent = State.Column + Current.ColumnWidth + 1;
+-  if (Current.isOneOf(TT_LambdaLSquare, TT_TrailingReturnArrow))
++  if (Current.isOneOf(TT_LambdaLSquare, TT_LambdaArrow))
+     CurrentState.LastSpace = State.Column;
+   if (Current.is(TT_RequiresExpression) &&
+       Style.RequiresExpressionIndentation == FormatStyle::REI_Keyword) {
+diff --git a/clang/lib/Format/FormatToken.h b/clang/lib/Format/FormatToken.h
+index 2d386d99aa84..03c0cbd60961 100644
+--- a/clang/lib/Format/FormatToken.h
++++ b/clang/lib/Format/FormatToken.h
+@@ -102,6 +102,7 @@ namespace format {
+   TYPE(JsTypeColon)                                                            \
+   TYPE(JsTypeOperator)                                                         \
+   TYPE(JsTypeOptionalQuestion)                                                 \
++  TYPE(LambdaArrow)                                                            \
+   TYPE(LambdaDefinitionLParen)                                                 \
+   TYPE(LambdaLBrace)                                                           \
+   TYPE(LambdaLSquare)                                                          \
+@@ -726,7 +727,7 @@ public:
+   bool isMemberAccess() const {
+     return isOneOf(tok::arrow, tok::period, tok::arrowstar) &&
+            !isOneOf(TT_DesignatedInitializerPeriod, TT_TrailingReturnArrow,
+-                    TT_LeadingJavaAnnotation);
++                    TT_LambdaArrow, TT_LeadingJavaAnnotation);
+   }
+ 
+   bool isPointerOrReference() const {
+diff --git a/clang/lib/Format/TokenAnnotator.cpp b/clang/lib/Format/TokenAnnotator.cpp
+index f8bf8d9570d9..72115c3a9216 100644
+--- a/clang/lib/Format/TokenAnnotator.cpp
++++ b/clang/lib/Format/TokenAnnotator.cpp
+@@ -833,7 +833,7 @@ private:
+         }
+         // An arrow after an ObjC method expression is not a lambda arrow.
+         if (CurrentToken->is(TT_ObjCMethodExpr) && CurrentToken->Next &&
+-            CurrentToken->Next->is(TT_TrailingReturnArrow)) {
++            CurrentToken->Next->is(TT_LambdaArrow)) {
+           CurrentToken->Next->overwriteFixedType(TT_Unknown);
+         }
+         Left->MatchingParen = CurrentToken;
+@@ -1770,8 +1770,10 @@ private:
+       }
+       break;
+     case tok::arrow:
+-      if (Tok->Previous && Tok->Previous->is(tok::kw_noexcept))
++      if (Tok->isNot(TT_LambdaArrow) && Tok->Previous &&
++          Tok->Previous->is(tok::kw_noexcept)) {
+         Tok->setType(TT_TrailingReturnArrow);
++      }
+       break;
+     case tok::equal:
+       // In TableGen, there must be a value after "=";
+@@ -2057,11 +2059,11 @@ private:
+             TT_LambdaLSquare, TT_LambdaLBrace, TT_AttributeMacro, TT_IfMacro,
+             TT_ForEachMacro, TT_TypenameMacro, TT_FunctionLBrace,
+             TT_ImplicitStringLiteral, TT_InlineASMBrace, TT_FatArrow,
+-            TT_NamespaceMacro, TT_OverloadedOperator, TT_RegexLiteral,
+-            TT_TemplateString, TT_ObjCStringLiteral, TT_UntouchableMacroFunc,
+-            TT_StatementAttributeLikeMacro, TT_FunctionLikeOrFreestandingMacro,
+-            TT_ClassLBrace, TT_EnumLBrace, TT_RecordLBrace, TT_StructLBrace,
+-            TT_UnionLBrace, TT_RequiresClause,
++            TT_LambdaArrow, TT_NamespaceMacro, TT_OverloadedOperator,
++            TT_RegexLiteral, TT_TemplateString, TT_ObjCStringLiteral,
++            TT_UntouchableMacroFunc, TT_StatementAttributeLikeMacro,
++            TT_FunctionLikeOrFreestandingMacro, TT_ClassLBrace, TT_EnumLBrace,
++            TT_RecordLBrace, TT_StructLBrace, TT_UnionLBrace, TT_RequiresClause,
+             TT_RequiresClauseInARequiresExpression, TT_RequiresExpression,
+             TT_RequiresExpressionLParen, TT_RequiresExpressionLBrace,
+             TT_BracedListLBrace)) {
+@@ -2247,7 +2249,7 @@ private:
+       Contexts.back().IsExpression = true;
+     } else if (Current.is(TT_TrailingReturnArrow)) {
+       Contexts.back().IsExpression = false;
+-    } else if (Current.is(Keywords.kw_assert)) {
++    } else if (Current.isOneOf(TT_LambdaArrow, Keywords.kw_assert)) {
+       Contexts.back().IsExpression = Style.Language == FormatStyle::LK_Java;
+     } else if (Current.Previous &&
+                Current.Previous->is(TT_CtorInitializerColon)) {
+@@ -2382,7 +2384,7 @@ private:
+       AutoFound = true;
+     } else if (Current.is(tok::arrow) &&
+                Style.Language == FormatStyle::LK_Java) {
+-      Current.setType(TT_TrailingReturnArrow);
++      Current.setType(TT_LambdaArrow);
+     } else if (Current.is(tok::arrow) && Style.isVerilog()) {
+       // The implication operator.
+       Current.setType(TT_BinaryOperator);
+@@ -3286,7 +3288,7 @@ private:
+       }
+       if (Current->is(TT_JsComputedPropertyName))
+         return prec::Assignment;
+-      if (Current->is(TT_TrailingReturnArrow))
++      if (Current->is(TT_LambdaArrow))
+         return prec::Comma;
+       if (Current->is(TT_FatArrow))
+         return prec::Assignment;
+@@ -4211,7 +4213,7 @@ unsigned TokenAnnotator::splitPenalty(const AnnotatedLine &Line,
+   }
+   if (Right.is(TT_PointerOrReference))
+     return 190;
+-  if (Right.is(TT_TrailingReturnArrow))
++  if (Right.is(TT_LambdaArrow))
+     return 110;
+   if (Left.is(tok::equal) && Right.is(tok::l_brace))
+     return 160;
+@@ -5289,9 +5291,10 @@ bool TokenAnnotator::spaceRequiredBefore(const AnnotatedLine &Line,
+     return false;
+   }
+ 
+-  if (Right.is(TT_TrailingReturnArrow) || Left.is(TT_TrailingReturnArrow))
++  if (Right.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow) ||
++      Left.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow)) {
+     return true;
+-
++  }
+   if (Left.is(tok::comma) && Right.isNot(TT_OverloadedOperatorLParen) &&
+       // In an unexpanded macro call we only find the parentheses and commas
+       // in a line; the commas and closing parenthesis do not require a space.
+@@ -6326,8 +6329,8 @@ bool TokenAnnotator::canBreakBefore(const AnnotatedLine &Line,
+   return Left.isOneOf(tok::comma, tok::coloncolon, tok::semi, tok::l_brace,
+                       tok::kw_class, tok::kw_struct, tok::comment) ||
+          Right.isMemberAccess() ||
+-         Right.isOneOf(TT_TrailingReturnArrow, tok::lessless, tok::colon,
+-                       tok::l_square, tok::at) ||
++         Right.isOneOf(TT_TrailingReturnArrow, TT_LambdaArrow, tok::lessless,
++                       tok::colon, tok::l_square, tok::at) ||
+          (Left.is(tok::r_paren) &&
+           Right.isOneOf(tok::identifier, tok::kw_const)) ||
+          (Left.is(tok::l_paren) && Right.isNot(tok::r_paren)) ||
+diff --git a/clang/lib/Format/UnwrappedLineParser.cpp b/clang/lib/Format/UnwrappedLineParser.cpp
+index 5f1a88d4bcd7..9997a8705bdd 100644
+--- a/clang/lib/Format/UnwrappedLineParser.cpp
++++ b/clang/lib/Format/UnwrappedLineParser.cpp
+@@ -2326,7 +2326,7 @@ bool UnwrappedLineParser::tryToParseLambda() {
+       // This might or might not actually be a lambda arrow (this could be an
+       // ObjC method invocation followed by a dereferencing arrow). We might
+       // reset this back to TT_Unknown in TokenAnnotator.
+-      FormatTok->setFinalizedType(TT_TrailingReturnArrow);
++      FormatTok->setFinalizedType(TT_LambdaArrow);
+       SeenArrow = true;
+       nextToken();
+       break;
+diff --git a/clang/unittests/Format/TokenAnnotatorTest.cpp b/clang/unittests/Format/TokenAnnotatorTest.cpp
+index 99798de43e70..de524fbe982f 100644
+--- a/clang/unittests/Format/TokenAnnotatorTest.cpp
++++ b/clang/unittests/Format/TokenAnnotatorTest.cpp
+@@ -42,6 +42,8 @@ protected:
+   EXPECT_EQ((FormatTok)->getPrecedence(), Prec) << *(FormatTok)
+ #define EXPECT_BRACE_KIND(FormatTok, Kind)                                     \
+   EXPECT_EQ(FormatTok->getBlockKind(), Kind) << *(FormatTok)
++#define EXPECT_SPLIT_PENALTY(FormatTok, Penalty)                               \
++  EXPECT_EQ(FormatTok->SplitPenalty, Penalty) << *(FormatTok)
+ #define EXPECT_TOKEN(FormatTok, Kind, Type)                                    \
+   do {                                                                         \
+     EXPECT_TOKEN_KIND(FormatTok, Kind);                                        \
+@@ -1706,21 +1708,21 @@ TEST_F(TokenAnnotatorTest, UnderstandsLambdas) {
+   ASSERT_EQ(Tokens.size(), 9u) << Tokens;
+   EXPECT_TOKEN(Tokens[0], tok::l_square, TT_LambdaLSquare);
+   EXPECT_TOKEN(Tokens[2], tok::l_paren, TT_LambdaDefinitionLParen);
+-  EXPECT_TOKEN(Tokens[4], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[4], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[6], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("[]() -> auto & {}");
+   ASSERT_EQ(Tokens.size(), 10u) << Tokens;
+   EXPECT_TOKEN(Tokens[0], tok::l_square, TT_LambdaLSquare);
+   EXPECT_TOKEN(Tokens[2], tok::l_paren, TT_LambdaDefinitionLParen);
+-  EXPECT_TOKEN(Tokens[4], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[4], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[7], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("[]() -> auto * {}");
+   ASSERT_EQ(Tokens.size(), 10u) << Tokens;
+   EXPECT_TOKEN(Tokens[0], tok::l_square, TT_LambdaLSquare);
+   EXPECT_TOKEN(Tokens[2], tok::l_paren, TT_LambdaDefinitionLParen);
+-  EXPECT_TOKEN(Tokens[4], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[4], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[7], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("[] {}");
+@@ -1736,20 +1738,20 @@ TEST_F(TokenAnnotatorTest, UnderstandsLambdas) {
+   Tokens = annotate("[] -> auto {}");
+   ASSERT_EQ(Tokens.size(), 7u) << Tokens;
+   EXPECT_TOKEN(Tokens[0], tok::l_square, TT_LambdaLSquare);
+-  EXPECT_TOKEN(Tokens[2], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[2], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[4], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("[] -> struct S { return {}; }");
+   ASSERT_EQ(Tokens.size(), 12u) << Tokens;
+   EXPECT_TOKEN(Tokens[0], tok::l_square, TT_LambdaLSquare);
+-  EXPECT_TOKEN(Tokens[2], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[2], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[5], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("foo([&](u32 bar) __attribute__((attr)) -> void {});");
+   ASSERT_EQ(Tokens.size(), 22u) << Tokens;
+   EXPECT_TOKEN(Tokens[2], tok::l_square, TT_LambdaLSquare);
+   EXPECT_TOKEN(Tokens[5], tok::l_paren, TT_LambdaDefinitionLParen);
+-  EXPECT_TOKEN(Tokens[15], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[15], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[17], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("[] <typename T> () {}");
+@@ -1838,7 +1840,7 @@ TEST_F(TokenAnnotatorTest, UnderstandsLambdas) {
+   EXPECT_TOKEN(Tokens[0], tok::l_square, TT_LambdaLSquare);
+   EXPECT_TOKEN(Tokens[2], tok::less, TT_TemplateOpener);
+   EXPECT_TOKEN(Tokens[6], tok::l_paren, TT_LambdaDefinitionLParen);
+-  EXPECT_TOKEN(Tokens[10], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[10], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[12], tok::kw_requires, TT_RequiresClause);
+   EXPECT_TRUE(Tokens[16]->ClosesRequiresClause);
+   EXPECT_TOKEN(Tokens[17], tok::l_brace, TT_LambdaLBrace);
+@@ -1907,7 +1909,7 @@ TEST_F(TokenAnnotatorTest, UnderstandsLambdas) {
+   EXPECT_TOKEN(Tokens[2], tok::less, TT_TemplateOpener);
+   EXPECT_TOKEN(Tokens[6], tok::kw_requires, TT_RequiresClause);
+   EXPECT_TRUE(Tokens[10]->ClosesRequiresClause);
+-  EXPECT_TOKEN(Tokens[11], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[11], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[13], tok::l_brace, TT_LambdaLBrace);
+ 
+   Tokens = annotate("[] <typename T> requires Foo<T> (T t) requires Bar<T> {}");
+@@ -3342,7 +3344,7 @@ TEST_F(TokenAnnotatorTest, FunctionTryBlock) {
+   EXPECT_TOKEN(Tokens[3], tok::l_paren, TT_FunctionDeclarationLParen);
+   EXPECT_TOKEN(Tokens[11], tok::colon, TT_CtorInitializerColon);
+   EXPECT_TOKEN(Tokens[14], tok::l_square, TT_LambdaLSquare);
+-  EXPECT_TOKEN(Tokens[16], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_TOKEN(Tokens[16], tok::arrow, TT_LambdaArrow);
+   EXPECT_TOKEN(Tokens[20], tok::l_brace, TT_LambdaLBrace);
+   EXPECT_TOKEN(Tokens[31], tok::comma, TT_CtorInitializerComma);
+   EXPECT_TOKEN(Tokens[36], tok::l_brace, TT_FunctionLBrace);
+@@ -3369,6 +3371,20 @@ TEST_F(TokenAnnotatorTest, GNULanguageStandard) {
+   EXPECT_TOKEN(Tokens[2], tok::spaceship, TT_BinaryOperator);
+ }
+ 
++TEST_F(TokenAnnotatorTest, SplitPenalty) {
++  auto Style = getLLVMStyle();
++  Style.ColumnLimit = 20;
++
++  auto Tokens = annotate("class foo {\n"
++                         "  auto bar()\n"
++                         "      -> bool;\n"
++                         "};",
++                         Style);
++  ASSERT_EQ(Tokens.size(), 13u) << Tokens;
++  EXPECT_TOKEN(Tokens[7], tok::arrow, TT_TrailingReturnArrow);
++  EXPECT_SPLIT_PENALTY(Tokens[7], 23u);
++}
++
+ } // namespace
+ } // namespace format
+ } // namespace clang
+-- 
+2.49.0.395.g12beb8f557-goog

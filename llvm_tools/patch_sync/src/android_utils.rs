@@ -18,7 +18,8 @@ pub fn get_android_llvm_version(android_checkout: &Path) -> Result<String> {
     let mut command = new_android_cmd(android_checkout, "python3")?;
     command.args([
         "-c",
-        "import android_version; print(android_version.get_svn_revision_number(), end='')",
+        "from src.llvm_android import android_version; \
+         print(android_version.get_svn_revision_number(), end='')",
     ]);
     let output = command.output()?;
     if !output.status.success() {

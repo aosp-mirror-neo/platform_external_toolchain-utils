@@ -352,8 +352,8 @@ enum Opt {
         #[structopt(long = "cros-rev")]
         cros_reviewers: Option<String>,
 
-        /// Git ref (e.g. hash) for the ChromiumOS overlay to use as the base.
-        #[structopt(long = "overlay-base-ref")]
+        /// Git ref (e.g. hash) for the ChromiumOS toolchain-utils to use as the base.
+        #[structopt(long = "tc-base-ref")]
         old_cros_ref: String,
 
         /// Path to the Android Open Source Project source repo checkout.

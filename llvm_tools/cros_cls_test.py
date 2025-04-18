@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -7,7 +6,7 @@
 
 import unittest
 
-import cros_cls
+from llvm_tools import cros_cls
 
 
 class TestChangeListURL(unittest.TestCase):
@@ -26,6 +25,24 @@ class TestChangeListURL(unittest.TestCase):
         self.assertEqual(
             cros_cls.ChangeListURL.parse(
                 "chrome-internal-review.googlesource.com/c/chromeos/"
+                "manifest-internal/+/654321"
+            ),
+            cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
+        )
+
+    def test_parsing_long_form_git_corp_url(self):
+        self.assertEqual(
+            cros_cls.ChangeListURL.parse(
+                "chromium-review.git.corp.google.com/c/chromiumos/overlays/"
+                "chromiumos-overlay/+/123456",
+            ),
+            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
+        )
+
+    def test_parsing_long_form_git_corp_internal_url(self):
+        self.assertEqual(
+            cros_cls.ChangeListURL.parse(
+                "chrome-internal-review.git.corp.google.com/c/chromeos/"
                 "manifest-internal/+/654321"
             ),
             cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
@@ -152,7 +169,3 @@ class Test(unittest.TestCase):
             ),
             "R122-15711.0.0",
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

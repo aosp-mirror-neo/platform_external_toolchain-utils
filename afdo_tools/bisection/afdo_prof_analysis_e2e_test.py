@@ -1,29 +1,27 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """End-to-end test for afdo_prof_analysis."""
 
-
+import datetime
 import json
 import os
+from pathlib import Path
 import shutil
 import tempfile
-import unittest
-from datetime import date
 
 from afdo_tools.bisection import afdo_prof_analysis as analysis
+from llvm_tools import test_helpers
 
 
-class ObjectWithFields(object):
+class ObjectWithFields:
     """Turns kwargs given to the constructor into fields on an object.
 
     Examples:
-      x = ObjectWithFields(a=1, b=2)
-      assert x.a == 1
-      assert x.b == 2
+        x = ObjectWithFields(a=1, b=2)
+        assert x.a == 1
+        assert x.b == 2
     """
 
     def __init__(self, **kwargs):
@@ -31,7 +29,7 @@ class ObjectWithFields(object):
             setattr(self, key, val)
 
 
-class AfdoProfAnalysisE2ETest(unittest.TestCase):
+class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
     """Class for end-to-end testing of AFDO Profile Analysis"""
 
     # nothing significant about the values, just easier to remember even vs odd
@@ -59,6 +57,26 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
         "bisect_results": {"ranges": [], "individuals": ["func_a"]},
     }
 
+    def setUp(self):
+        super().setUp()
+
+        # Test scripts depend on AFDO_TEST_DIR pointing to a directory to run
+        # in. Set that up for them.
+        self.tempdir = self.make_tempdir()
+
+        saved_value = None
+        tmpdir_env_var = "AFDO_TEST_DIR"
+        saved_value = os.environ.get(tmpdir_env_var)
+        os.environ[tmpdir_env_var] = str(self.tempdir)
+
+        def restore_environ():
+            if saved_value is None:
+                del os.environ[tmpdir_env_var]
+            else:
+                os.environ[tmpdir_env_var] = saved_value
+
+        self.addCleanup(restore_environ)
+
     def test_afdo_prof_analysis(self):
         # Individual issues take precedence by nature of our algos
         # so first, that should be caught
@@ -66,7 +84,8 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
         bad = self.bad_prof.copy()
         self.run_check(good, bad, self.expected)
 
-        # Now remove individuals and exclusively BAD, and check that range is caught
+        # Now remove individuals and exclusively BAD, and check that range is
+        # caught
         bad["func_a"] = good["func_a"]
         bad.pop("bad_func_a")
         bad.pop("bad_func_b")
@@ -108,7 +127,7 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
         os.close(fd_second)
         completed_state_file = "%s.completed.%s" % (
             state_file,
-            str(date.today()),
+            str(datetime.date.today()),
         )
         self.run_check(
             self.good_prof,
@@ -119,9 +138,9 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
             out_file=second_result,
         )
 
-        with open(first_result) as f:
+        with open(first_result, encoding="utf-8") as f:
             initial_run = json.load(f)
-        with open(second_result) as f:
+        with open(second_result, encoding="utf-8") as f:
             loaded_run = json.load(f)
         self.assertEqual(initial_run, loaded_run)
 
@@ -141,14 +160,14 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
             )
 
     def test_state_assumption(self):
-        def compare_runs(tmp_dir, first_ctr, second_ctr):
-            """Compares given prof versions between first and second run in test."""
-            first_prof = "%s/.first_run_%d" % (tmp_dir, first_ctr)
-            second_prof = "%s/.second_run_%d" % (tmp_dir, second_ctr)
-            with open(first_prof) as f:
-                first_prof_text = f.read()
-            with open(second_prof) as f:
-                second_prof_text = f.read()
+        def compare_runs(
+            tmp_dir: Path, first_ctr: int, second_ctr: int
+        ) -> None:
+            """Compares given prof versions between 1st and 2nd run in test."""
+            first_prof = tmp_dir / f".first_run_{first_ctr}"
+            second_prof = tmp_dir / f".second_run_{second_ctr}"
+            first_prof_text = first_prof.read_text(encoding="utf-8")
+            second_prof_text = second_prof.read_text(encoding="utf-8")
             self.assertEqual(first_prof_text, second_prof_text)
 
         good_prof = {"func_a": ":1\n3: 3\n5: 7\n"}
@@ -164,37 +183,32 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
             "bad_only_functions": False,
         }
 
-        # using a static temp dir rather than a dynamic one because these files are
-        # shared between the bash scripts and this Python test, and the arguments
-        # to the bash scripts are fixed by afdo_prof_analysis.py so it would be
-        # difficult to communicate dynamically generated directory to bash scripts
-        scripts_tmp_dir = "%s/afdo_test_tmp" % os.getcwd()
-        os.mkdir(scripts_tmp_dir)
-        self.addCleanup(shutil.rmtree, scripts_tmp_dir, ignore_errors=True)
+        my_dir = os.path.dirname(os.path.abspath(__file__))
+        scripts_tmp_dir = self.tempdir / "afdo_test_tmp"
+        scripts_tmp_dir.mkdir()
 
         # files used in the bash scripts used as external deciders below
-        # - count_file tracks the current number of calls to the script in total
+        # - count_file tracks the current number of calls to the script in
+        #   total
         # - local_count_file tracks the number of calls to the script without
-        # interruption
-        count_file = "%s/.count" % scripts_tmp_dir
-        local_count_file = "%s/.local_count" % scripts_tmp_dir
+        #   interruption
+        count_file = scripts_tmp_dir / ".count"
+        local_count_file = scripts_tmp_dir / ".local_count"
 
         # runs through whole thing at once
         initial_seed = self.run_check(
             good_prof,
             bad_prof,
             expected,
-            extern_decider="state_assumption_external.sh",
+            extern_decider=os.path.join(my_dir, "state_assumption_external.sh"),
         )
-        with open(count_file) as f:
-            num_calls = int(f.read())
-        os.remove(count_file)  # reset counts for second run
-        finished_state_file = "afdo_analysis_state.json.completed.%s" % str(
-            date.today()
-        )
-        self.addCleanup(os.remove, finished_state_file)
+        num_calls = int(count_file.read_text(encoding="utf-8"))
+        count_file.unlink()
 
         # runs the same analysis but interrupted each iteration
+        interrupt_decider = os.path.join(
+            my_dir, "state_assumption_interrupt.sh"
+        )
         for i in range(2 * num_calls + 1):
             no_resume_run = i == 0
             seed = initial_seed if no_resume_run else None
@@ -204,13 +218,13 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
                     bad_prof,
                     expected,
                     no_resume=no_resume_run,
-                    extern_decider="state_assumption_interrupt.sh",
+                    extern_decider=interrupt_decider,
                     seed=seed,
                 )
                 break
             except RuntimeError:
                 # script was interrupted, so we restart local count
-                os.remove(local_count_file)
+                local_count_file.unlink()
         else:
             raise RuntimeError("Test failed -- took too many iterations")
 
@@ -219,7 +233,8 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
 
         start = 3
         for ctr in range(start, num_calls):
-            # second run counter incremented by 4 for each one first run is because
+            # second run counter incremented by 4 for each one first run is
+            # because
             # +2 for performing initial checks on good and bad profs each time
             # +1 for PROBLEM_STATUS run which causes error and restart
             compare_runs(scripts_tmp_dir, ctr, 6 + (ctr - start) * 4)
@@ -235,41 +250,32 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
         extern_decider=None,
         seed=None,
     ):
-
         temp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
 
-        good_prof_file = "%s/%s" % (temp_dir, "good_prof.txt")
-        bad_prof_file = "%s/%s" % (temp_dir, "bad_prof.txt")
+        good_prof_file = os.path.join(temp_dir, "good_prof.txt")
+        bad_prof_file = os.path.join(temp_dir, "bad_prof.txt")
         good_prof_text = analysis.json_to_text(good_prof)
         bad_prof_text = analysis.json_to_text(bad_prof)
-        with open(good_prof_file, "w") as f:
+        with open(good_prof_file, "w", encoding="utf-8") as f:
             f.write(good_prof_text)
-        with open(bad_prof_file, "w") as f:
+        with open(bad_prof_file, "w", encoding="utf-8") as f:
             f.write(bad_prof_text)
 
         dir_path = os.path.dirname(
             os.path.realpath(__file__)
         )  # dir of this file
-        external_script = "%s/%s" % (
+        external_script = os.path.join(
             dir_path,
             extern_decider or "e2e_external.sh",
         )
 
-        # FIXME: This test ideally shouldn't be writing to $PWD
+        # FIXME: This test ideally shouldn't be writing to the directory of
+        # this file.
         if state_file is None:
-            state_file = "%s/afdo_analysis_state.json" % os.getcwd()
+            state_file = os.path.join(self.tempdir, "afdo_analysis_state.json")
 
-            def rm_state():
-                try:
-                    os.unlink(state_file)
-                except OSError:
-                    # Probably because the file DNE. That's fine.
-                    pass
-
-            self.addCleanup(rm_state)
-
-        actual = analysis.main(
+        actual = analysis.main_impl(
             ObjectWithFields(
                 good_prof=good_prof_file,
                 bad_prof=bad_prof_file,
@@ -284,7 +290,3 @@ class AfdoProfAnalysisE2ETest(unittest.TestCase):
         actual_seed = actual.pop("seed")  # nothing to check
         self.assertEqual(actual, expected)
         return actual_seed
-
-
-if __name__ == "__main__":
-    unittest.main()

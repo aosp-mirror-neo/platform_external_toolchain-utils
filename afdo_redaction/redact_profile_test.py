@@ -133,7 +133,3 @@ class Tests(unittest.TestCase):
         self.assertIn("Retained 1/101 functions", summary)
         self.assertIn("Retained 1,575/84,275 samples, total", summary)
         self.assertIn("Retained 1,083/34,583 top-level samples", summary)
-
-
-if __name__ == "__main__":
-    unittest.main()

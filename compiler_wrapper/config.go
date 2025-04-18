@@ -74,16 +74,16 @@ func isAndroidConfig() bool {
 }
 
 func getConfig(configName string, useCCache bool, useLlvmNext bool, version string) (*config, error) {
-	cfg := config{}
+	cfg := (*config)(nil)
 	switch configName {
 	case "cros.hardened":
-		cfg = crosHardenedConfig
+		cfg = getCrosHardenedConfig()
 	case "cros.nonhardened":
-		cfg = crosNonHardenedConfig
+		cfg = getCrosNonHardenedConfig()
 	case "cros.host":
-		cfg = crosHostConfig
+		cfg = getCrosHostConfig()
 	case "android":
-		cfg = androidConfig
+		cfg = getAndroidConfig()
 	default:
 		return nil, newErrorwithSourceLocf("unknown config name: %s", configName)
 	}
@@ -94,7 +94,7 @@ func getConfig(configName string, useCCache bool, useLlvmNext bool, version stri
 		cfg.clangPostFlags = append(cfg.clangPostFlags, llvmNextPostFlags...)
 	}
 	cfg.version = version
-	return &cfg, nil
+	return cfg, nil
 }
 
 func crosCommonClangFlags() []string {
@@ -107,13 +107,8 @@ func crosCommonClangFlags() []string {
 		"-Qunused-arguments",
 		"-Werror=poison-system-directories",
 		"-Wno-deprecated-declarations",
-		"-Wno-enum-constexpr-conversion",
 		"-Wno-error=implicit-function-declaration",
 		"-Wno-error=implicit-int",
-		"-Wno-final-dtor-non-final-class",
-		"-Wno-single-bit-bitfield-constant-conversion",
-		"-Wno-tautological-constant-compare",
-		"-Wno-tautological-unsigned-enum-zero-compare",
 		"-Wno-unknown-warning-option",
 		"-fdebug-default-version=5",
 		"-Wno-int-conversion",
@@ -121,8 +116,6 @@ func crosCommonClangFlags() []string {
 		// TODO(b/316021385): Temporarily disables warnings for variable length arrays.
 		"-Wno-error=vla-cxx-extension",
 		"-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
-		// TODO(b/315504245): Temporarily prevents new mangling rules from taking effect.
-		"-fclang-abi-compat=17",
 	}
 }
 
@@ -134,89 +127,97 @@ func crosCommonClangPostFlags() []string {
 }
 
 // Full hardening.
-// Temporarily disable function splitting because of chromium:434751.
-var crosHardenedConfig = config{
-	clangRootRelPath: "../..",
-	gccRootRelPath:   "../../../../..",
-	// Pass "-fcommon" till the packages are fixed to work with new clang/gcc
-	// default of "-fno-common", crbug.com/1060413.
-	commonFlags: []string{
-		"-fcommon",
-		"-fstack-protector-strong",
-		"-D_FORTIFY_SOURCE=3",
-		"-fno-omit-frame-pointer",
-	},
-	gccFlags: []string{
-		"-fno-reorder-blocks-and-partition",
-		"-Wno-unused-local-typedefs",
-		"-Wno-maybe-uninitialized",
-	},
-	// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
-	// Disable "-faddrsig" since it produces object files that strip doesn't understand, chromium:915742.
-	// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
-	//   removed that flag for now.
-	clangFlags: append(
-		crosCommonClangFlags(),
-		"--unwindlib=libunwind",
-		"-Wno-section",
-		"-fno-addrsig",
-		"-ftrivial-auto-var-init=zero",
-	),
-	clangPostFlags: crosCommonClangPostFlags(),
+func getCrosHardenedConfig() *config {
+	// Temporarily disable function splitting because of chromium:434751.
+	return &config{
+		clangRootRelPath: "../..",
+		gccRootRelPath:   "../../../../..",
+		// Pass "-fcommon" till the packages are fixed to work with new clang/gcc
+		// default of "-fno-common", crbug.com/1060413.
+		commonFlags: []string{
+			"-fcommon",
+			"-fstack-protector-strong",
+			"-D_FORTIFY_SOURCE=3",
+			"-fno-omit-frame-pointer",
+		},
+		gccFlags: []string{
+			"-fno-reorder-blocks-and-partition",
+			"-Wno-unused-local-typedefs",
+			"-Wno-maybe-uninitialized",
+		},
+		// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
+		// Disable "-faddrsig" since it produces object files that strip doesn't understand, chromium:915742.
+		// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
+		//   removed that flag for now.
+		clangFlags: append(
+			crosCommonClangFlags(),
+			"--unwindlib=libunwind",
+			"-Wno-section",
+			"-fno-addrsig",
+			"-ftrivial-auto-var-init=zero",
+		),
+		clangPostFlags: crosCommonClangPostFlags(),
+	}
 }
 
 // Flags to be added to non-hardened toolchain.
-var crosNonHardenedConfig = config{
-	clangRootRelPath: "../..",
-	gccRootRelPath:   "../../../../..",
-	commonFlags:      []string{},
-	gccFlags: []string{
-		"-Wno-maybe-uninitialized",
-		"-Wno-unused-local-typedefs",
-		"-Wno-deprecated-declarations",
-		"-Wtrampolines",
-	},
-	// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
-	clangFlags: append(
-		crosCommonClangFlags(),
-		"-Wno-section",
-	),
-	clangPostFlags: crosCommonClangPostFlags(),
+func getCrosNonHardenedConfig() *config {
+	return &config{
+		clangRootRelPath: "../..",
+		gccRootRelPath:   "../../../../..",
+		commonFlags:      []string{},
+		gccFlags: []string{
+			"-Wno-maybe-uninitialized",
+			"-Wno-unused-local-typedefs",
+			"-Wno-deprecated-declarations",
+			"-Wtrampolines",
+		},
+		// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
+		clangFlags: append(
+			crosCommonClangFlags(),
+			"-Wno-section",
+		),
+		clangPostFlags: crosCommonClangPostFlags(),
+	}
 }
 
 // Flags to be added to host toolchain.
-var crosHostConfig = config{
-	isHostWrapper:    true,
-	clangRootRelPath: "../..",
-	gccRootRelPath:   "../..",
-	// Pass "-fcommon" till the packages are fixed to work with new clang/gcc
-	// default of "-fno-common", crbug.com/1060413.
-	commonFlags: []string{
-		"-fcommon",
-	},
-	gccFlags: []string{
-		"-Wno-maybe-uninitialized",
-		"-Wno-unused-local-typedefs",
-		"-Wno-deprecated-declarations",
-	},
-	// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
-	//   removed that flag for now.
-	clangFlags: append(
-		crosCommonClangFlags(),
-		"-Wno-unused-local-typedefs",
-		"-fno-addrsig",
-	),
-	// Temporarily disable Wdeprecated-copy. b/191479033
-	clangPostFlags: crosCommonClangPostFlags(),
+func getCrosHostConfig() *config {
+	return &config{
+		isHostWrapper:    true,
+		clangRootRelPath: "../..",
+		gccRootRelPath:   "../..",
+		// Pass "-fcommon" till the packages are fixed to work with new clang/gcc
+		// default of "-fno-common", crbug.com/1060413.
+		commonFlags: []string{
+			"-fcommon",
+		},
+		gccFlags: []string{
+			"-Wno-maybe-uninitialized",
+			"-Wno-unused-local-typedefs",
+			"-Wno-deprecated-declarations",
+		},
+		// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
+		//   removed that flag for now.
+		clangFlags: append(
+			crosCommonClangFlags(),
+			"-Wno-unused-local-typedefs",
+			"-fno-addrsig",
+		),
+		// Temporarily disable Wdeprecated-copy. b/191479033
+		clangPostFlags: crosCommonClangPostFlags(),
+	}
 }
 
-var androidConfig = config{
-	isHostWrapper:    false,
-	isAndroidWrapper: true,
-	gccRootRelPath:   "./",
-	clangRootRelPath: "./",
-	commonFlags:      []string{},
-	gccFlags:         []string{},
-	clangFlags:       []string{},
-	clangPostFlags:   []string{},
+func getAndroidConfig() *config {
+	return &config{
+		isHostWrapper:    false,
+		isAndroidWrapper: true,
+		gccRootRelPath:   "./",
+		clangRootRelPath: "./",
+		commonFlags:      []string{},
+		gccFlags:         []string{},
+		clangFlags:       []string{},
+		clangPostFlags:   []string{},
+	}
 }

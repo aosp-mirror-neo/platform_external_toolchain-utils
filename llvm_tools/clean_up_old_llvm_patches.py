@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -14,48 +13,34 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import List, Optional
+from typing import List
 
+from cros_utils import cros_paths
 from cros_utils import git_utils
-import patch_utils
+from llvm_tools import patch_utils
 
-
-# The chromiumos-overlay packages to GC patches in.
-PACKAGES_TO_COLLECT = patch_utils.CHROMEOS_PATCHES_JSON_PACKAGES
-
-# Folks who should be on the R-line of any CLs that get uploaded.
-CL_REVIEWERS = (git_utils.REVIEWER_DETECTIVE,)
 
 # Folks who should be on the CC-line of any CLs that get uploaded.
-CL_CC = ("gbiv@google.com",)
+CL_CC = ("gbiv@chromium.org",)
 
 
-def maybe_autodetect_cros_overlay(my_dir: Path) -> Optional[Path]:
-    third_party = my_dir.parent.parent
-    cros_overlay = third_party / "chromiumos-overlay"
-    if cros_overlay.exists():
-        return cros_overlay
-    return None
-
-
-def remove_old_patches(cros_overlay: Path, min_revision: int) -> bool:
+def remove_old_patches(toolchain_utils: Path, min_revision: int) -> bool:
     """Removes patches in cros_overlay. Returns whether changes were made."""
-    patches_removed = 0
-    for package in PACKAGES_TO_COLLECT:
-        logging.info("GC'ing patches from %s...", package)
-        patches_json = cros_overlay / package / "files/PATCHES.json"
-        removed_patch_files = patch_utils.remove_old_patches(
-            min_revision, patches_json
-        )
-        if not removed_patch_files:
-            logging.info("No patches removed from %s", patches_json)
-            continue
+    patches_json = (
+        toolchain_utils / cros_paths.DEFAULT_PATCHES_PATH_IN_TOOLCHAIN_UTILS
+    )
+    logging.info("GC'ing patches from %s...", patches_json)
+    removed_patch_files = patch_utils.remove_old_patches(
+        min_revision, patches_json
+    )
+    if not removed_patch_files:
+        logging.info("No patches removed")
+        return False
 
-        patches_removed += len(removed_patch_files)
-        for patch in removed_patch_files:
-            logging.info("Removing %s...", patch)
-            patch.unlink()
-    return patches_removed != 0
+    for patch in removed_patch_files:
+        logging.info("Removing %s...", patch)
+        patch.unlink()
+    return True
 
 
 def commit_changes(cros_overlay: Path, min_rev: int):
@@ -84,7 +69,6 @@ def upload_changes(cros_overlay: Path, autosubmit_cwd: Path) -> None:
         cros_overlay,
         remote="cros",
         branch="main",
-        reviewers=CL_REVIEWERS,
         cc=CL_CC,
     )
 
@@ -93,7 +77,7 @@ def upload_changes(cros_overlay: Path, autosubmit_cwd: Path) -> None:
 
     cl_id = cl_ids[0]
     logging.info("Uploaded CL http://crrev.com/c/%s successfully.", cl_id)
-    git_utils.try_set_autosubmit_labels(autosubmit_cwd, cl_id)
+    git_utils.set_autoreview_topic_and_labels(autosubmit_cwd, cl_id)
 
 
 def find_chromeos_llvm_version(chromiumos_overlay: Path) -> int:
@@ -119,6 +103,8 @@ def find_android_llvm_version(android_toolchain_tree: Path) -> int:
     android_version_py = (
         android_toolchain_tree
         / "toolchain"
+        / "llvm_android"
+        / "src"
         / "llvm_android"
         / "android_version.py"
     )
@@ -153,7 +139,7 @@ def find_android_llvm_version(android_toolchain_tree: Path) -> int:
     return int(match.group(1))
 
 
-def get_opts(my_dir: Path, argv: List[str]) -> argparse.Namespace:
+def get_opts(argv: List[str]) -> argparse.Namespace:
     """Returns options for the script."""
 
     parser = argparse.ArgumentParser(
@@ -182,7 +168,16 @@ def get_opts(my_dir: Path, argv: List[str]) -> argparse.Namespace:
         type=Path,
         help="""
         Path to chromiumos-overlay. Will autodetect if none is specified. If
-        autodetection fails and none is specified, this script will fail.
+        autodetection fails, none is specified, and this flag is needed (for
+        minimum-revision autodetection), this script will fail.
+        """,
+    )
+    parser.add_argument(
+        "--toolchain-utils",
+        type=Path,
+        help="""
+        Path to toolchain-utils. Will use the toolchain-utils executing this if
+        none is specified.
         """,
     )
     parser.add_argument(
@@ -220,18 +215,25 @@ def get_opts(my_dir: Path, argv: List[str]) -> argparse.Namespace:
     )
     opts = parser.parse_args(argv)
 
-    if not opts.chromiumos_overlay:
-        maybe_overlay = maybe_autodetect_cros_overlay(my_dir)
-        if not maybe_overlay:
-            parser.error(
-                "Failed to autodetect --chromiumos-overlay; please pass a value"
-            )
-        opts.chromiumos_overlay = maybe_overlay
+    if not opts.toolchain_utils:
+        opts.toolchain_utils = cros_paths.script_toolchain_utils_root()
 
     if not opts.gerrit_tool_cwd:
         opts.gerrit_tool_cwd = opts.chromiumos_overlay
 
     if opts.autodetect_revision:
+        if not opts.chromiumos_overlay:
+            maybe_cros_root = cros_paths.script_chromiumos_checkout()
+            if not maybe_cros_root:
+                parser.error(
+                    "When using --autodetect-revision, this script must be "
+                    "run from within a CrOS checkout unless you specify "
+                    "--chromiumos-overlay."
+                )
+            opts.chromiumos_overlay = (
+                maybe_cros_root / cros_paths.CHROMIUMOS_OVERLAY
+            )
+
         if not opts.android_toolchain:
             parser.error(
                 "--android-toolchain must be passed with --autodetect-revision"
@@ -257,16 +259,14 @@ def main(argv: List[str]) -> None:
         level=logging.INFO,
     )
 
-    my_dir = Path(__file__).resolve().parent
-    opts = get_opts(my_dir, argv)
-
-    cros_overlay = opts.chromiumos_overlay
+    opts = get_opts(argv)
+    toolchain_utils = opts.toolchain_utils
     gerrit_tool_cwd = opts.gerrit_tool_cwd
     upload = opts.upload_with_autoreview
     commit = opts.commit or upload
     min_revision = opts.revision
 
-    made_changes = remove_old_patches(cros_overlay, min_revision)
+    made_changes = remove_old_patches(toolchain_utils, min_revision)
     if not made_changes:
         logging.info("No changes made; exiting.")
         return
@@ -278,15 +278,11 @@ def main(argv: List[str]) -> None:
         return
 
     logging.info("Committing changes...")
-    commit_changes(cros_overlay, min_revision)
+    commit_changes(toolchain_utils, min_revision)
     if not upload:
         logging.info("Change with removed patches has been committed locally.")
         return
 
     logging.info("Uploading changes...")
-    upload_changes(cros_overlay, gerrit_tool_cwd)
+    upload_changes(toolchain_utils, gerrit_tool_cwd)
     logging.info("Change sent for review.")
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

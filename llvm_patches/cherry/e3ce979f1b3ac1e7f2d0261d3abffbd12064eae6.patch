@@ -1,0 +1,69 @@
+From 696a2a0a02b23000c2ea96e6501eda120a8d9d29 Mon Sep 17 00:00:00 2001
+From: Aaron Ballman <aaron@aaronballman.com>
+Date: Fri, 23 Aug 2024 09:48:02 -0400
+Subject: [PATCH] Revert "[clang] Increase the default expression nesting limit
+ (#104717)"
+
+This reverts commit 7597e0930638e0a20ca9bfc193a3d89575ce4469.
+
+It caused several buildbot failures due to stack overflows with the
+parser test.
+
+patch.cherry: true
+patch.metadata.original_sha: e3ce979f1b3ac1e7f2d0261d3abffbd12064eae6
+patch.platforms: chromiumos
+patch.version_range.from: 546878
+patch.version_range.until: 547382
+
+---
+ clang/docs/ReleaseNotes.rst           | 2 --
+ clang/include/clang/Driver/Options.td | 2 +-
+ clang/test/Parser/parser_overflow.c   | 4 ++--
+ 3 files changed, 3 insertions(+), 5 deletions(-)
+
+diff --git a/clang/docs/ReleaseNotes.rst b/clang/docs/ReleaseNotes.rst
+index 93040c2eee2c..70ff5dedab21 100644
+--- a/clang/docs/ReleaseNotes.rst
++++ b/clang/docs/ReleaseNotes.rst
+@@ -174,8 +174,6 @@ Deprecated Compiler Flags
+ Modified Compiler Flags
+ -----------------------
+ 
+-- The compiler flag `-fbracket-depth` default value is increased from 256 to 2048.
+-
+ - The ``-ffp-model`` option has been updated to enable a more limited set of
+   optimizations when the ``fast`` argument is used and to accept a new argument,
+   ``aggressive``. The behavior of ``-ffp-model=aggressive`` is equivalent
+diff --git a/clang/include/clang/Driver/Options.td b/clang/include/clang/Driver/Options.td
+index 111608d30ff8..7e40e99e9ba2 100644
+--- a/clang/include/clang/Driver/Options.td
++++ b/clang/include/clang/Driver/Options.td
+@@ -7976,7 +7976,7 @@ def fapply_global_visibility_to_externs : Flag<["-"], "fapply-global-visibility-
+   MarshallingInfoFlag<LangOpts<"SetVisibilityForExternDecls">>;
+ def fbracket_depth : Separate<["-"], "fbracket-depth">,
+   HelpText<"Maximum nesting level for parentheses, brackets, and braces">,
+-  MarshallingInfoInt<LangOpts<"BracketDepth">, "2048">;
++  MarshallingInfoInt<LangOpts<"BracketDepth">, "256">;
+ defm const_strings : BoolOption<"f", "const-strings",
+   LangOpts<"ConstStrings">, DefaultFalse,
+   PosFlag<SetTrue, [], [ClangOption, CC1Option], "Use">,
+diff --git a/clang/test/Parser/parser_overflow.c b/clang/test/Parser/parser_overflow.c
+index 53c79bc06d99..9514e808550a 100644
+--- a/clang/test/Parser/parser_overflow.c
++++ b/clang/test/Parser/parser_overflow.c
+@@ -1,5 +1,5 @@
+ // RUN: not %clang_cc1 %s -fsyntax-only -DHUGE 2>&1 | FileCheck %s
+-// RUN: %clang_cc1 %s -fsyntax-only
++// RUN: not %clang_cc1 %s -fsyntax-only 2>&1 | FileCheck %s
+ // RUN: not %clang_cc1 %s -fsyntax-only -fbracket-depth 299 2>&1 | FileCheck %s
+ // RUN: %clang_cc1 %s -fsyntax-only -fbracket-depth 300
+ // RUN: not %clang %s -fsyntax-only -fbracket-depth=299 2>&1 | FileCheck %s
+@@ -15,5 +15,5 @@ void foo(void) {
+ #endif
+ }
+ 
+-// CHECK: fatal error: bracket nesting level exceeded maximum of {{2048|299}}
++// CHECK: fatal error: bracket nesting level exceeded maximum of {{256|299}}
+ // CHECK: note: use -fbracket-depth=N to increase maximum nesting level
+-- 
+2.49.0.395.g12beb8f557-goog

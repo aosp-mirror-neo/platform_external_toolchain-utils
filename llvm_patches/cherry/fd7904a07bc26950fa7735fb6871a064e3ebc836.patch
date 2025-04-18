@@ -1,0 +1,32 @@
+From 03f9644037afe99a5b987c276658d796e06292b2 Mon Sep 17 00:00:00 2001
+From: Adrian Prantl <aprantl@apple.com>
+Date: Fri, 23 Aug 2024 09:25:24 -0700
+Subject: [PATCH] Revert "[lldb] Speculative fix for trap_frame_sym_ctx.test"
+
+This reverts commit 19d3f3417100dc99caa4394fbd26fc0c4702264e.
+
+patch.cherry: true
+patch.metadata.original_sha: fd7904a07bc26950fa7735fb6871a064e3ebc836
+patch.platforms: chromiumos
+patch.version_range.from: 547186
+patch.version_range.until: 547400
+
+---
+ lldb/test/Shell/Unwind/trap_frame_sym_ctx.test | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/lldb/test/Shell/Unwind/trap_frame_sym_ctx.test b/lldb/test/Shell/Unwind/trap_frame_sym_ctx.test
+index 08a26616240e..1bf1fb1d6e85 100644
+--- a/lldb/test/Shell/Unwind/trap_frame_sym_ctx.test
++++ b/lldb/test/Shell/Unwind/trap_frame_sym_ctx.test
+@@ -15,7 +15,7 @@ breakpoint set -n bar
+ process launch
+ # CHECK: stop reason = breakpoint 1.1
+ 
+-thread backtrace -u
++thread backtrace
+ # CHECK: frame #0: {{.*}}`bar
+ # CHECK: frame #1: {{.*}}`tramp
+ # CHECK: frame #2: {{.*}}`main
+-- 
+2.49.0.395.g12beb8f557-goog

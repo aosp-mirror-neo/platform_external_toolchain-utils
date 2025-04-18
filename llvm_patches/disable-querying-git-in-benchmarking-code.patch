@@ -1,0 +1,34 @@
+From ac5ed85fd4cef222ed3fd4df00854cbb2b2abd75 Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Sat, 15 Jun 2024 00:14:01 +0000
+Subject: [PATCH] disable querying git in benchmarking code
+
+This benchmarking library will try to query git for the current SHA, and this
+code is called even if llvm-libc's benchmarks are disabled.
+
+Querying git modifies `index.lock` files, which makes Portage's sandbox unhappy.
+Manually set a failure value here instead.
+
+---
+ third-party/benchmark/CMakeLists.txt | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/third-party/benchmark/CMakeLists.txt b/third-party/benchmark/CMakeLists.txt
+index 8af49406d052..71e5603ab290 100644
+--- a/third-party/benchmark/CMakeLists.txt
++++ b/third-party/benchmark/CMakeLists.txt
+@@ -105,8 +105,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+ 
+ 
+ # Read the git tags to determine the project version
+-include(GetGitVersion)
+-get_git_version(GIT_VERSION)
++#include(GetGitVersion)
++#get_git_version(GIT_VERSION)
++set(GIT_VERSION "0.0.0")
+ 
+ # If no git version can be determined, use the version
+ # from the project() command
+-- 
+2.45.2.627.g7a2c4fd464-goog
+

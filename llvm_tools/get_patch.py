@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -27,20 +26,20 @@ import textwrap
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 from urllib import request
 
-import atomic_write_file
-import git_llvm_rev
-import patch_utils
+from cros_utils import cros_paths
+from cros_utils import git_utils
+from llvm_tools import atomic_write_file
+from llvm_tools import git_llvm_rev
+from llvm_tools import patch_utils
 
 
-CHROMIUMOS_OVERLAY_PATH = Path("src/third_party/chromiumos-overlay")
-LLVM_PKG_PATH = CHROMIUMOS_OVERLAY_PATH / "sys-devel/llvm"
-COMPILER_RT_PKG_PATH = CHROMIUMOS_OVERLAY_PATH / "sys-libs/compiler-rt"
-LIBCXX_PKG_PATH = CHROMIUMOS_OVERLAY_PATH / "sys-libs/libcxx"
-LIBUNWIND_PKG_PATH = CHROMIUMOS_OVERLAY_PATH / "sys-libs/llvm-libunwind"
-SCUDO_PKG_PATH = CHROMIUMOS_OVERLAY_PATH / "sys-libs/scudo"
-LLDB_PKG_PATH = CHROMIUMOS_OVERLAY_PATH / "dev-util/lldb-server"
+LLVM_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-devel/llvm"
+COMPILER_RT_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/compiler-rt"
+LIBCXX_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/libcxx"
+LIBUNWIND_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/llvm-libunwind"
+SCUDO_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/scudo"
+LLDB_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "dev-util/lldb-server"
 
-LLVM_PROJECT_PATH = Path("src/third_party/llvm-project")
 PATCH_METADATA_FILENAME = "PATCHES.json"
 
 
@@ -192,10 +191,11 @@ class PatchContext:
             pe = patch_utils.PatchEntry(
                 workdir=workdir,
                 metadata={
+                    "info": [],
+                    "original_sha": patch_source.git_ref,
                     "title": get_commit_subj(
                         self.llvm_project_dir, patch_source.git_ref
                     ),
-                    "info": [],
                 },
                 platforms=list(self.platforms),
                 rel_patch_path=rel_patch_path,
@@ -211,7 +211,7 @@ class PatchContext:
                     f"Patch at {pe.rel_patch_path}"
                     " already exists in PATCHES.json"
                 )
-            contents = git_format_patch(
+            contents = _git_format_patch(
                 self.llvm_project_dir,
                 patch_source.git_ref,
             )
@@ -233,6 +233,7 @@ class PatchContext:
                 workdir=workdir,
                 metadata={
                     "title": github_ctx.full_title,
+                    "original_sha": None,
                     "info": [],
                 },
                 rel_patch_path=rel_patch_path,
@@ -289,31 +290,6 @@ def get_commit_subj(git_root_dir: Path, ref: str) -> str:
     ).stdout.strip()
     logging.debug("  -> %s", subj)
     return subj
-
-
-def git_format_patch(git_root_dir: Path, ref: str) -> str:
-    """Format a patch for a single git ref.
-
-    Args:
-        git_root_dir: Root directory for a given local git repository.
-        ref: Git ref to make a patch for.
-
-    Returns:
-        The patch file contents.
-    """
-    logging.debug("Formatting patch for %s^..%s", ref, ref)
-    proc = subprocess.run(
-        ["git", "format-patch", "--stdout", f"{ref}^..{ref}"],
-        cwd=git_root_dir,
-        encoding="utf-8",
-        stdout=subprocess.PIPE,
-        check=True,
-    )
-    contents = proc.stdout.strip()
-    if not contents:
-        raise ValueError(f"No git diff between {ref}^..{ref}")
-    logging.debug("Patch diff is %d lines long", contents.count("\n"))
-    return contents
 
 
 def get_llvm_github_pull(pull_number: int) -> Dict[str, Any]:
@@ -452,7 +428,7 @@ class GitHubPRContext:
                 changed_packages = get_changed_packages(
                     worktree_dir, (self.base_ref, "HEAD")
                 )
-                patch_contents = git_format_patch(worktree_dir, "HEAD")
+                patch_contents = _git_format_patch(worktree_dir, "HEAD")
             finally:
                 logging.debug(
                     "Cleaning up worktree and deleting branch %s",
@@ -583,8 +559,14 @@ def _write_patch(title: str, contents: str, path: Path) -> None:
     path.write_text(contents, encoding="utf-8")
 
 
+def _git_format_patch(git_dir: Path, ref: str) -> str:
+    """Wrapper for git_utils.format_patch. Used for mocking."""
+    return git_utils.format_patch(git_dir, ref)
+
+
 def validate_patch_args(
     positional_args: List[str],
+    llvm_project: Path,
 ) -> List[Union[LLVMGitRef, LLVMPullRequest]]:
     """Checks that each ref_or_pr_num is in a valid format."""
     patch_sources = []
@@ -601,8 +583,15 @@ def validate_patch_args(
             logging.info("Patching remote GitHub PR '%s'", pull_request_num)
             patch_source = LLVMPullRequest(pull_request_num)
         else:
-            logging.info("Patching local ref '%s'", arg)
-            patch_source = LLVMGitRef(arg)
+            if git_utils.is_full_git_sha(arg):
+                logging.info("Patching local ref '%s'", arg)
+                full_sha = arg
+            else:
+                full_sha = git_utils.resolve_ref(llvm_project, arg)
+                logging.info(
+                    "Patching local ref '%s' (expands to %s)", arg, full_sha
+                )
+            patch_source = LLVMGitRef(full_sha)
         patch_sources.append(patch_source)
     return patch_sources
 
@@ -618,14 +607,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "-c",
         "--chromiumos-root",
-        help="""Path to the chromiumos source tree root.
+        help="""
+        Path to the chromiumos source tree root.
         Tries to autodetect if not passed.
         """,
     )
     parser.add_argument(
         "-l",
         "--llvm",
-        help="""Path to the llvm dir.
+        help="""
+        Path to the llvm dir.
         Tries to autodetect from chromiumos root if not passed.
         """,
     )
@@ -633,14 +624,14 @@ def parse_args() -> argparse.Namespace:
         "-s",
         "--start-ref",
         default="HEAD",
-        help="""The starting ref for which to apply patches.
-        """,
+        help="The starting ref for which to apply patches.",
     )
     parser.add_argument(
         "-p",
         "--platform",
         action="append",
-        help="""Apply this patch to the give platform. Common options include
+        help="""
+        Apply this patch to the give platform. Common options include
         'chromiumos' and 'android'. Can be specified multiple times to
         apply to multiple platforms. If not passed, platform is set to
         'chromiumos'.
@@ -660,7 +651,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "ref_or_pr_num",
         nargs="+",
-        help="""Git ref or GitHub PR number to make patches.
+        help="""
+        Git ref or GitHub PR number to make patches.
         To patch a GitHub PR, use the syntax p:NNNN (e.g. 'p:123456').
         """,
         type=str,
@@ -673,7 +665,6 @@ def parse_args() -> argparse.Namespace:
         level=logging.DEBUG if args.verbose else logging.INFO,
     )
 
-    args.patch_sources = validate_patch_args(args.ref_or_pr_num)
     if args.chromiumos_root:
         if not _has_repo_child(args.chromiumos_root):
             parser.error("chromiumos root directly passed but has no .repo")
@@ -688,13 +679,15 @@ def parse_args() -> argparse.Namespace:
         )
 
     if not args.llvm:
-        if (args.chromiumos_root / LLVM_PROJECT_PATH).is_dir():
-            args.llvm = args.chromiumos_root / LLVM_PROJECT_PATH
+        if (args.chromiumos_root / cros_paths.LLVM_PROJECT).is_dir():
+            args.llvm = args.chromiumos_root / cros_paths.LLVM_PROJECT
         else:
             parser.error(
                 "Could not autodetect llvm-project dir. Use '-l' to pass the "
                 "llvm-project directly"
             )
+
+    args.patch_sources = validate_patch_args(args.ref_or_pr_num, args.llvm)
     return args
 
 
@@ -716,7 +709,3 @@ def main() -> None:
     )
     for patch_source in args.patch_sources:
         ctx.apply_patches(patch_source)
-
-
-if __name__ == "__main__":
-    main()

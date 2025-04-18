@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -208,7 +206,3 @@ def main():
                         run(stdin, stdout, args.number, cwp, benchmark)
             else:
                 run(stdin, stdout, args.number)
-
-
-if __name__ == "__main__":
-    main()
