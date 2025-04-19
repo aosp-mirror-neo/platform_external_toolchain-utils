@@ -1,17 +1,17 @@
-#!/usr/bin/env python3
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests for nightly_revert_checker."""
 
+import textwrap
+import time
 import unittest
 from unittest import mock
 
 from cros_utils import tiny_render
-import get_upstream_patch
-import nightly_revert_checker
-import revert_checker
+from llvm_tools import nightly_revert_checker
+from llvm_tools import revert_checker
 
 
 # pylint: disable=protected-access
@@ -137,49 +137,6 @@ class Test(unittest.TestCase):
 
         self.assertEqual(email, expected_email)
 
-    @mock.patch("revert_checker.find_reverts")
-    @mock.patch("get_upstream_patch.get_from_upstream")
-    def test_do_cherrypick_is_called(self, do_cherrypick, find_reverts):
-        find_reverts.return_value = [
-            revert_checker.Revert("12345abcdef", "fedcba54321")
-        ]
-        nightly_revert_checker.do_cherrypick(
-            chroot_path="/path/to/chroot",
-            llvm_dir="/path/to/llvm",
-            repository="repository_name",
-            interesting_shas=[("12345abcdef", "fedcba54321")],
-            state=nightly_revert_checker.State(),
-            reviewers=["meow@chromium.org"],
-            cc=["purr@chromium.org"],
-        )
-
-        do_cherrypick.assert_called_once()
-        find_reverts.assert_called_once()
-
-    @mock.patch("revert_checker.find_reverts")
-    @mock.patch("get_upstream_patch.get_from_upstream")
-    def test_do_cherrypick_handles_cherrypick_error(
-        self, do_cherrypick, find_reverts
-    ):
-        find_reverts.return_value = [
-            revert_checker.Revert("12345abcdef", "fedcba54321")
-        ]
-        do_cherrypick.side_effect = get_upstream_patch.CherrypickError(
-            "Patch at 12345abcdef already exists in PATCHES.json"
-        )
-        nightly_revert_checker.do_cherrypick(
-            chroot_path="/path/to/chroot",
-            llvm_dir="/path/to/llvm",
-            repository="repository_name",
-            interesting_shas=[("12345abcdef", "fedcba54321")],
-            state=nightly_revert_checker.State(),
-            reviewers=["meow@chromium.org"],
-            cc=["purr@chromium.org"],
-        )
-
-        do_cherrypick.assert_called_once()
-        find_reverts.assert_called_once()
-
     def test_sha_prettification_for_email(self):
         sha = "a" * 40
         rev = 123456
@@ -194,7 +151,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    @mock.patch("time.time")
+    @mock.patch.object(time, "time")
     def test_emailing_about_stale_heads_skips_in_simple_cases(self, time_time):
         now = 1_000_000_000
         time_time.return_value = now
@@ -252,8 +209,8 @@ class Test(unittest.TestCase):
             state, nightly_revert_checker.State.from_json(state.to_json())
         )
 
-    @mock.patch("time.time")
-    @mock.patch("nightly_revert_checker._send_revert_email")
+    @mock.patch.object(time, "time")
+    @mock.patch.object(nightly_revert_checker, "_send_revert_email")
     def test_emailing_about_stale_with_one_report(
         self, send_revert_email, time_time
     ):
@@ -302,6 +259,89 @@ class Test(unittest.TestCase):
             "bug at go/crostc-bug if an update is needed. Thanks!",
         )
 
+    def test_appending_footers_when_none_exist(self):
+        base_message = textwrap.dedent(
+            """\
+            hello: world!
 
-if __name__ == "__main__":
-    unittest.main()
+            This is a simple commit message.
+            """
+        ).rstrip()
+        want_message = textwrap.dedent(
+            """\
+            hello: world!
+
+            This is a simple commit message.
+
+            foo: bar
+            bar: baz
+            """
+        ).rstrip()
+        self.assertEqual(
+            nightly_revert_checker._append_footers_to_commit_message(
+                base_message,
+                ("foo: bar", "bar: baz"),
+            ),
+            want_message,
+        )
+
+    def test_appending_footers_when_some_exist(self):
+        base_message = textwrap.dedent(
+            """\
+            hello: world!
+
+            This is a simple commit message.
+            this: is not a footer though
+            because: it is in the same paragraph as the commit message
+
+            but: this is a footer!
+            """
+        ).rstrip()
+        want_message = textwrap.dedent(
+            """\
+            hello: world!
+
+            This is a simple commit message.
+            this: is not a footer though
+            because: it is in the same paragraph as the commit message
+
+            but: this is a footer!
+            foo: bar
+            """
+        ).rstrip()
+        self.assertEqual(
+            nightly_revert_checker._append_footers_to_commit_message(
+                base_message,
+                ("foo: bar",),
+            ),
+            want_message,
+        )
+
+    def test_appending_footers_when_last_paragraph_is_tricky(self):
+        base_message = textwrap.dedent(
+            """\
+            hello: world!
+
+            This is a simple commit message.
+            this: is not a footer though
+            because: it is in the same paragraph as the commit message
+            """
+        ).rstrip()
+        want_message = textwrap.dedent(
+            """\
+            hello: world!
+
+            This is a simple commit message.
+            this: is not a footer though
+            because: it is in the same paragraph as the commit message
+
+            foo: bar
+            """
+        ).rstrip()
+        self.assertEqual(
+            nightly_revert_checker._append_footers_to_commit_message(
+                base_message,
+                ("foo: bar",),
+            ),
+            want_message,
+        )

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -41,7 +40,7 @@ import tempfile
 import threading
 from typing import Any, Counter, DefaultDict, Dict, IO, Iterable, List, Optional
 
-import cros_cls
+from llvm_tools import cros_cls
 
 
 _DEFAULT_FETCH_DIRECTORY = Path("/tmp/werror_logs")
@@ -166,7 +165,7 @@ class AggregatedWarnings:
     )
 
     _CWD_PACKAGE_RE = re.compile(
-        r"^(?:/build/[^/]+)?/var/(?:cache|tmp)/portage/([^/]+/[^/]+)/"
+        r"^(?:/build/[^/]+)?/(?:var/)?(?:cache|tmp)/portage/([^/]+/[^/]+)/"
     )
 
     @classmethod
@@ -571,7 +570,3 @@ def main(argv: List[str]) -> None:
 
     assert getattr(opts, "func", None), "Unknown subcommand?"
     opts.func(opts)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

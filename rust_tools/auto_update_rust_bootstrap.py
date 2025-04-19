@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -27,18 +26,22 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
-import copy_rust_bootstrap
+from cros_utils import cros_paths
+from cros_utils import git_utils
+from rust_tools import copy_rust_bootstrap
 
 
 # The bug to tag in all commit messages.
 TRACKING_BUG = "b:315473495"
 
-# Reviewers for all CLs uploaded.
-DEFAULT_CL_REVIEWERS = (
-    "gbiv@chromium.org",
-    "inglorion@chromium.org",
+# These match variable assignments in the rust-bootstrap ebuilds.
+RUST_BOOTSTRAP_USE_PREBUILTS_REGEX = re.compile(
+    r"^(THIS_VERSION_HAS_PREBUILT=)(.*)$", re.MULTILINE
+)
+RUST_BOOTSTRAP_PRIOR_VERSION_REGEX = re.compile(
+    r'^(PRIOR_RUST_BOOTSTRAP_VERSION=")([^"]*)(")', re.MULTILINE
 )
 
 
@@ -79,53 +82,6 @@ class EbuildVersion:
         if self.rev:
             result += f"-r{self.rev}"
         return result
-
-
-def find_raw_bootstrap_sequence_lines(
-    ebuild_lines: List[str],
-) -> Tuple[int, int]:
-    """Returns the start/end lines of RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE."""
-    for i, line in enumerate(ebuild_lines):
-        if line.startswith("RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=("):
-            start = i
-            break
-    else:
-        raise ValueError("No bootstrap sequence start found in text")
-
-    for i, line in enumerate(ebuild_lines[i + 1 :], i + 1):
-        if line.rstrip() == ")":
-            return start, i
-    raise ValueError("No bootstrap sequence end found in text")
-
-
-def read_bootstrap_sequence_from_ebuild(
-    rust_bootstrap_ebuild: Path,
-) -> List[EbuildVersion]:
-    """Returns a list of EbuildVersions from the given ebuild."""
-    ebuild_lines = rust_bootstrap_ebuild.read_text(
-        encoding="utf-8"
-    ).splitlines()
-    start, end = find_raw_bootstrap_sequence_lines(ebuild_lines)
-    results = []
-    for line in ebuild_lines[start + 1 : end]:
-        # Ignore comments.
-        line = line.split("#", 1)[0].strip()
-        if not line:
-            continue
-        assert len(line.split()) == 1, f"Unexpected line: {line!r}"
-        results.append(parse_raw_ebuild_version(line.strip()))
-    return results
-
-
-def version_listed_in_bootstrap_sequence(
-    ebuild: Path, rust_bootstrap_version: EbuildVersion
-) -> bool:
-    ebuild_lines = ebuild.read_text(encoding="utf-8").splitlines()
-    start, end = find_raw_bootstrap_sequence_lines(ebuild_lines)
-    str_version = str(rust_bootstrap_version.without_rev())
-    return any(
-        line.strip() == str_version for line in ebuild_lines[start + 1 : end]
-    )
 
 
 @functools.lru_cache(1)
@@ -236,16 +192,19 @@ def parse_ebuild_version(ebuild_name: str) -> EbuildVersion:
     )
 
 
-def collect_ebuilds_by_version(
+def collect_stable_ebuilds_by_version(
     ebuild_dir: Path,
 ) -> List[Tuple[EbuildVersion, Path]]:
     """Returns the latest ebuilds grouped by version.without_rev.
 
-    Result is always sorted by version, latest versions are last.
+    Result is always sorted by version, latest versions are last. 9999 ebuilds
+    are ignored.
     """
     ebuilds = ebuild_dir.glob("*.ebuild")
     versioned_ebuilds: Dict[EbuildVersion, Tuple[EbuildVersion, Path]] = {}
     for ebuild in ebuilds:
+        if ebuild.name.endswith("-9999.ebuild"):
+            continue
         version = parse_ebuild_version(ebuild.name)
         version_no_rev = version.without_rev()
         other = versioned_ebuilds.get(version_no_rev)
@@ -287,18 +246,6 @@ def maybe_copy_prebuilt_to_localmirror(
         stdin=subprocess.DEVNULL,
     )
     return True
-
-
-def add_version_to_bootstrap_sequence(
-    ebuild: Path, version: EbuildVersion, dry_run: bool
-):
-    ebuild_lines = ebuild.read_text(encoding="utf-8").splitlines(keepends=True)
-    _, end = find_raw_bootstrap_sequence_lines(ebuild_lines)
-    # `end` is the final paren. Since we _need_ prebuilts for all preceding
-    # versions, always put this a line before the end.
-    ebuild_lines.insert(end, f"\t{version}\n")
-    if not dry_run:
-        ebuild.write_text("".join(ebuild_lines), encoding="utf-8")
 
 
 def is_ebuild_linked_to_in_dir(root_ebuild_path: Path) -> bool:
@@ -360,70 +307,106 @@ def update_ebuild_manifest(rust_bootstrap_ebuild: Path):
     )
 
 
-def commit_all_changes(
-    git_dir: Path, rust_bootstrap_dir: Path, commit_message: str
-):
-    subprocess.run(
-        ["git", "add", rust_bootstrap_dir.relative_to(git_dir)],
-        cwd=git_dir,
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
-    subprocess.run(
-        ["git", "commit", "-m", commit_message],
-        cwd=git_dir,
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
-
-
-def scrape_git_push_cl_id_strs(git_push_output: str) -> List[str]:
-    id_regex = re.compile(
-        r"^remote:\s+https://chromium-review\S+/\+/(\d+)\s", re.MULTILINE
-    )
-    results = id_regex.findall(git_push_output)
-    if not results:
-        raise ValueError(
-            f"Found 0 matches of {id_regex} in {git_push_output!r}; expected "
-            "at least 1."
-        )
-    return results
-
-
 def upload_changes(git_dir: Path):
-    logging.info("Uploading changes")
-    result = subprocess.run(
-        ["git", "push", "cros", "HEAD:refs/for/main"],
-        check=True,
-        cwd=git_dir,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
-    # Print this in case anyone's looking at the output.
-    print(result.stdout, end=None)
-    result.check_returncode()
-
-    cl_ids = scrape_git_push_cl_id_strs(result.stdout)
-    logging.info(
-        "Uploaded %s successfully!", [f"crrev.com/c/{x}" for x in cl_ids]
+    logging.info("Uploading changes...")
+    cl_ids = git_utils.upload_to_gerrit(
+        git_repo=git_dir,
+        remote=git_utils.CROS_EXTERNAL_REMOTE,
+        branch=git_utils.CROS_MAIN_BRANCH,
     )
     for cl_id in cl_ids:
-        gerrit_commands = (
-            ["gerrit", "label-v", cl_id, "1"],
-            ["gerrit", "label-cq", cl_id, "1"],
-            ["gerrit", "label-as", cl_id, "1"],
-            ["gerrit", "reviewers", cl_id] + list(DEFAULT_CL_REVIEWERS),
-            ["gerrit", "ready", cl_id],
+        git_utils.set_autoreview_topic_and_labels(
+            cwd=git_dir,
+            cl_id=cl_id,
         )
-        for command in gerrit_commands:
-            logging.info("Running gerrit command: %s", command)
-            subprocess.run(
-                command,
-                check=True,
-                stdin=subprocess.DEVNULL,
+
+
+def is_rust_bootstrap_using_prebuilts(rust_bootstrap_contents: str) -> bool:
+    """Returns whether the given rust-bootstrap ebuild installs a prebuilt."""
+    matches = list(
+        RUST_BOOTSTRAP_USE_PREBUILTS_REGEX.finditer(rust_bootstrap_contents)
+    )
+    if len(matches) != 1:
+        raise ValueError(
+            "Expected precisely one match for "
+            "{RUST_BOOTSTRAP_USE_PREBUILTS_REGEX} in ebuild contents; got "
+            f"{len(matches)}."
+        )
+    var_value = matches[0].group(2)
+    return bool(var_value.split("#", 1)[0].strip())
+
+
+def substitute_exactly_once(
+    regex: re.Pattern, replace: Callable[[re.Match], str], string: str
+) -> str:
+    """re.subn, but `raise`s less or more than one replacement is made.
+
+    This is used instead of `re.subn(..., count=1)`, since it functions as a
+    nicer assertion that only exactly one match is expected.
+    """
+    new_contents, num_replacements = regex.subn(replace, string)
+    if num_replacements != 1:
+        raise ValueError(
+            f"Expected to replace exactly one instance of {regex}; replaced "
+            f"{num_replacements}"
+        )
+    return new_contents
+
+
+def set_rust_bootstrap_prebuilt_use(
+    rust_bootstrap_contents: str, use_prebuilts: bool
+) -> str:
+    """Sets the use-prebuilts flag to `use_prebuilts`. in the given ebuild."""
+
+    def replace_instance(match: re.Match) -> str:
+        new_assignment = "1" if use_prebuilts else ""
+        result = match.group(1) + new_assignment
+
+        # If there's a comment at the end (w/ potential leading spaces),
+        # preserve it. This is done independently of
+        # RUST_BOOTSTRAP_USE_PREBUILTS_REGEX, since multiline regex matching is
+        # harder to reason about.
+        if current_assignment := match.group(2):
+            if m := re.search(r"(\s*#.*)$", current_assignment):
+                result += m.group(1)
+        return result
+
+    return substitute_exactly_once(
+        RUST_BOOTSTRAP_USE_PREBUILTS_REGEX,
+        replace_instance,
+        rust_bootstrap_contents,
+    )
+
+
+def build_commit_message_for_new_prebuilts(
+    versions_updated: List[Tuple[EbuildVersion, Optional[str]]],
+) -> str:
+    """Builds a commit message for adding new prebuilts."""
+    pretty_artifact_lines = []
+    for version, maybe_gs_path in versions_updated:
+        if maybe_gs_path:
+            pretty_artifact_lines.append(
+                f"- rust-bootstrap-{version.without_rev()} => {maybe_gs_path}"
             )
+        else:
+            pretty_artifact_lines.append(
+                f"- rust-bootstrap-{version.without_rev()} was already on "
+                "localmirror"
+            )
+
+    pretty_artifacts = "artifact" if len(versions_updated) == 1 else "artifacts"
+    commit_message_lines = [
+        "rust-bootstrap: use prebuilts",
+        "",
+        f"This CL used the following rust-bootstrap {pretty_artifacts}:",
+    ]
+    commit_message_lines += pretty_artifact_lines
+    commit_message_lines += (
+        "",
+        f"BUG={TRACKING_BUG}",
+        "TEST=CQ",
+    )
+    return "\n".join(commit_message_lines)
 
 
 def maybe_add_newest_prebuilts(
@@ -443,10 +426,13 @@ def maybe_add_newest_prebuilts(
     """
     # A list of (version, maybe_prebuilt_location).
     versions_updated: List[Tuple[EbuildVersion, Optional[str]]] = []
-    for version, ebuild in collect_ebuilds_by_version(rust_bootstrap_dir):
+    for version, ebuild in collect_stable_ebuilds_by_version(
+        rust_bootstrap_dir
+    ):
         logging.info("Inspecting %s...", ebuild)
-        if version.without_rev() in read_bootstrap_sequence_from_ebuild(ebuild):
-            logging.info("Prebuilt already exists for %s.", ebuild)
+        current_ebuild_text = ebuild.read_text(encoding="utf-8")
+        if is_rust_bootstrap_using_prebuilts(current_ebuild_text):
+            logging.info("Prebuilt already in use for %s.", ebuild)
             continue
 
         logging.info("Prebuilt isn't in ebuild; checking remotely.")
@@ -459,7 +445,19 @@ def maybe_add_newest_prebuilts(
         uploaded = maybe_copy_prebuilt_to_localmirror(
             copy_rust_bootstrap_script, prebuilt, dry_run
         )
-        add_version_to_bootstrap_sequence(ebuild, version, dry_run)
+        new_ebuild_text = set_rust_bootstrap_prebuilt_use(
+            current_ebuild_text, use_prebuilts=True
+        )
+        if dry_run:
+            # N.B., the new ebuild's contents are still generated, so --dry-run
+            # runs can catch errors in that more easily.
+            logging.info(
+                "--dry-run was passed; skipping setting the prebuilt bit in %s",
+                ebuild,
+            )
+        else:
+            ebuild.write_text(new_ebuild_text, encoding="utf-8")
+
         uprevved_ebuild = uprev_ebuild(ebuild, version, dry_run)
         versions_updated.append((version, prebuilt if uploaded else None))
 
@@ -475,35 +473,10 @@ def maybe_add_newest_prebuilts(
     # updates for all ebuilds in the same package.
     update_ebuild_manifest(uprevved_ebuild)
 
-    pretty_artifact_lines = []
-    for version, maybe_gs_path in versions_updated:
-        if maybe_gs_path:
-            pretty_artifact_lines.append(
-                f"- rust-bootstrap-{version.without_rev()} => {maybe_gs_path}"
-            )
-        else:
-            pretty_artifact_lines.append(
-                f"- rust-bootstrap-{version.without_rev()} was already on "
-                "localmirror"
-            )
-
-    pretty_artifacts = "\n".join(pretty_artifact_lines)
-
     logging.info("Committing changes.")
-    commit_all_changes(
+    git_utils.commit_all_changes(
         chromiumos_overlay,
-        rust_bootstrap_dir,
-        commit_message=textwrap.dedent(
-            f"""\
-            rust-bootstrap: use prebuilts
-
-            This CL used the following rust-bootstrap artifacts:
-            {pretty_artifacts}
-
-            BUG={TRACKING_BUG}
-            TEST=CQ
-            """
-        ),
+        message=build_commit_message_for_new_prebuilts(versions_updated),
     )
     return True
 
@@ -513,8 +486,16 @@ def rust_dir_from_rust_bootstrap(rust_bootstrap_dir: Path) -> Path:
     return rust_bootstrap_dir.parent / "rust"
 
 
-class MissingRustBootstrapPrebuiltError(Exception):
-    """Raised when rust-bootstrap can't be landed due to a missing prebuilt."""
+def set_rust_bootstrap_prior_version(
+    rust_bootstrap_contents: str,
+    new_version: EbuildVersion,
+) -> str:
+    """Sets the prior rust bootstrap version to the given one."""
+    return substitute_exactly_once(
+        RUST_BOOTSTRAP_PRIOR_VERSION_REGEX,
+        lambda m: m.group(1) + str(new_version.without_rev()) + m.group(3),
+        rust_bootstrap_contents,
+    )
 
 
 def maybe_add_new_rust_bootstrap_version(
@@ -536,25 +517,20 @@ def maybe_add_new_rust_bootstrap_version(
     Returns:
         True if changes were made (or would've been made, in the case of
         dry_run being True). False otherwise.
-
-    Raises:
-        MissingRustBootstrapPrebuiltError if the creation of a new
-        rust-bootstrap ebuild wouldn't be buildable, since there's no
-        rust-bootstrap prebuilt of the prior version for it to sync.
     """
     # These are always returned in sorted error, so taking the last is the same
     # as `max()`.
     (
         newest_bootstrap_version,
         newest_bootstrap_ebuild,
-    ) = collect_ebuilds_by_version(rust_bootstrap_dir)[-1]
+    ) = collect_stable_ebuilds_by_version(rust_bootstrap_dir)[-1]
 
     logging.info(
         "Detected newest rust-bootstrap version: %s", newest_bootstrap_version
     )
 
     rust_dir = rust_dir_from_rust_bootstrap(rust_bootstrap_dir)
-    newest_rust_version, _ = collect_ebuilds_by_version(rust_dir)[-1]
+    newest_rust_version, _ = collect_stable_ebuilds_by_version(rust_dir)[-1]
     logging.info("Detected newest rust version: %s", newest_rust_version)
 
     # Generally speaking, we don't care about keeping up with new patch
@@ -569,43 +545,36 @@ def maybe_add_new_rust_bootstrap_version(
         logging.info("No missing rust-bootstrap versions detected.")
         return False
 
-    available_prebuilts = read_bootstrap_sequence_from_ebuild(
-        newest_bootstrap_ebuild
-    )
-    need_prebuilt = newest_rust_version.major_minor_only().prior_minor_version()
-
-    if all(x.major_minor_only() != need_prebuilt for x in available_prebuilts):
-        raise MissingRustBootstrapPrebuiltError(
-            f"want version {need_prebuilt}; "
-            f"available versions: {available_prebuilts}"
-        )
-
-    # Ensure the rust-bootstrap ebuild we're landing is a regular file. This
-    # makes cleanup of the old files trivial, since they're dead symlinks.
+    # Just copy the old ebuild, tweaking contents slightly as appropriate.
     prior_ebuild_resolved = newest_bootstrap_ebuild.resolve()
     new_ebuild = (
         rust_bootstrap_dir
         / f"rust-bootstrap-{newest_rust_version.without_rev()}.ebuild"
     )
+
+    prior_ebuild_contents = prior_ebuild_resolved.read_text(encoding="utf-8")
+    new_ebuild_contents = set_rust_bootstrap_prior_version(
+        set_rust_bootstrap_prebuilt_use(
+            prior_ebuild_contents,
+            use_prebuilts=False,
+        ),
+        new_version=newest_bootstrap_version,
+    )
     if dry_run:
-        logging.info("Would move %s to %s.", prior_ebuild_resolved, new_ebuild)
+        logging.info(
+            "Would create new rust-bootstrap ebuild %s from %s.",
+            new_ebuild,
+            prior_ebuild_resolved,
+        )
         return True
 
-    logging.info(
-        "Moving %s to %s, and creating symlink at the old location",
-        prior_ebuild_resolved,
-        new_ebuild,
-    )
-    prior_ebuild_resolved.rename(new_ebuild)
-    prior_ebuild_resolved.symlink_to(new_ebuild.relative_to(rust_bootstrap_dir))
-
+    new_ebuild.write_text(new_ebuild_contents, encoding="utf-8")
     update_ebuild_manifest(new_ebuild)
     if commit:
         newest_no_rev = newest_rust_version.without_rev()
-        commit_all_changes(
+        git_utils.commit_all_changes(
             chromiumos_overlay,
-            rust_bootstrap_dir,
-            commit_message=textwrap.dedent(
+            message=textwrap.dedent(
                 f"""\
                 rust-bootstrap: add version {newest_no_rev}
 
@@ -671,12 +640,14 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
         other ebuilds linking to it. It's still 'needed' in this case, but with
         some human intervention, it can be removed.
     """
-    rust_bootstrap_versions = collect_ebuilds_by_version(rust_bootstrap_dir)
+    rust_bootstrap_versions = collect_stable_ebuilds_by_version(
+        rust_bootstrap_dir
+    )
     logging.info(
         "Current rust-bootstrap versions: %s",
         [x for x, _ in rust_bootstrap_versions],
     )
-    rust_versions = collect_ebuilds_by_version(
+    rust_versions = collect_stable_ebuilds_by_version(
         rust_dir_from_rust_bootstrap(rust_bootstrap_dir)
     )
     # rust_versions is sorted, so taking the last is the same as max().
@@ -755,10 +726,9 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
             "no longer needed.",
         ]
         message = textwrap.fill("\n".join(message_lines))
-        commit_all_changes(
+        git_utils.commit_all_changes(
             chromiumos_overlay,
-            rust_bootstrap_dir,
-            commit_message=textwrap.dedent(
+            message=textwrap.dedent(
                 f"""\
                 rust-bootstrap: remove unused ebuild{"s" if many else ""}
 
@@ -773,13 +743,15 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
 
 
 def main(argv: List[str]):
+    cros_checkout = cros_paths.script_chromiumos_checkout_or_exit()
+    py_bin_dir = cros_checkout / cros_paths.TOOLCHAIN_UTILS_PYBIN
+
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
         level=logging.INFO,
     )
 
-    my_dir = Path(__file__).parent.resolve()
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -787,7 +759,7 @@ def main(argv: List[str]):
     parser.add_argument(
         "--chromiumos-overlay",
         type=Path,
-        default=my_dir.parent.parent / "chromiumos-overlay",
+        default=cros_checkout / cros_paths.CHROMIUMOS_OVERLAY,
     )
     parser.add_argument(
         "action",
@@ -812,7 +784,9 @@ def main(argv: List[str]):
         upload = True
 
     rust_bootstrap_dir = opts.chromiumos_overlay / "dev-lang/rust-bootstrap"
-    copy_rust_bootstrap_script = my_dir / "copy_rust_bootstrap.py"
+    copy_rust_bootstrap_script = (
+        py_bin_dir / "rust_tools" / "copy_rust_bootstrap.py"
+    )
 
     had_recoverable_error = False
     # Ensure prebuilts are up to date first, since it allows
@@ -824,15 +798,9 @@ def main(argv: List[str]):
         dry_run,
     )
 
-    try:
-        made_changes |= maybe_add_new_rust_bootstrap_version(
-            opts.chromiumos_overlay, rust_bootstrap_dir, dry_run
-        )
-    except MissingRustBootstrapPrebuiltError:
-        logging.exception(
-            "Ensuring newest rust-bootstrap ebuild exists failed."
-        )
-        had_recoverable_error = True
+    made_changes |= maybe_add_new_rust_bootstrap_version(
+        opts.chromiumos_overlay, rust_bootstrap_dir, dry_run
+    )
 
     try:
         made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
@@ -851,7 +819,3 @@ def main(argv: List[str]):
 
     if had_recoverable_error:
         sys.exit("Exiting uncleanly due to above error(s).")
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

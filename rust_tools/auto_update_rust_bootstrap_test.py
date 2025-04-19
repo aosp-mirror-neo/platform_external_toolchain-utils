@@ -1,11 +1,9 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests for auto_update_rust_bootstrap."""
 
-import os
 from pathlib import Path
 import shutil
 import tempfile
@@ -13,47 +11,7 @@ import textwrap
 import unittest
 from unittest import mock
 
-import auto_update_rust_bootstrap
-
-
-_GIT_PUSH_OUTPUT = r"""
-remote: Waiting for private key checker: 2/2 objects left
-remote:
-remote: Processing changes: new: 1 (\)
-remote: Processing changes: new: 1 (|)
-remote: Processing changes: new: 1 (/)
-remote: Processing changes: refs: 1, new: 1 (/)
-remote: Processing changes: refs: 1, new: 1 (/)
-remote: Processing changes: refs: 1, new: 1 (/)
-remote: Processing changes: refs: 1, new: 1, done
-remote:
-remote: SUCCESS
-remote:
-remote:   https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5018826 rust-bootstrap: use prebuilts [WIP] [NEW]
-remote:
-To https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay
- * [new reference]             HEAD -> refs/for/main
-"""
-
-_GIT_PUSH_MULTI_CL_OUTPUT = r"""
-remote: Waiting for private key checker: 2/2 objects left
-remote:
-remote: Processing changes: new: 1 (\)
-remote: Processing changes: new: 1 (|)
-remote: Processing changes: new: 1 (/)
-remote: Processing changes: refs: 1, new: 1 (/)
-remote: Processing changes: refs: 1, new: 1 (/)
-remote: Processing changes: refs: 1, new: 1 (/)
-remote: Processing changes: refs: 1, new: 1, done
-remote:
-remote: SUCCESS
-remote:
-remote:   https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5339923 rust-bootstrap: add version 1.75.0 [NEW]
-remote:   https://chromium-review.googlesource.com/c/chromiumos/overlays/chromiumos-overlay/+/5339924 rust-bootstrap: remove unused ebuilds [NEW]
-remote:
-To https://chromium.googlesource.com/chromiumos/overlays/chromiumos-overlay
- * [new reference]             HEAD -> refs/for/main
-"""
+from rust_tools import auto_update_rust_bootstrap
 
 
 class Test(unittest.TestCase):
@@ -65,21 +23,6 @@ class Test(unittest.TestCase):
         )
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
-
-    def test_git_cl_id_scraping(self):
-        self.assertEqual(
-            auto_update_rust_bootstrap.scrape_git_push_cl_id_strs(
-                _GIT_PUSH_OUTPUT
-            ),
-            ["5018826"],
-        )
-
-        self.assertEqual(
-            auto_update_rust_bootstrap.scrape_git_push_cl_id_strs(
-                _GIT_PUSH_MULTI_CL_OUTPUT
-            ),
-            ["5339923", "5339924"],
-        )
 
     def test_ebuild_linking_logic_handles_direct_relative_symlinks(self):
         tempdir = self.make_tempdir()
@@ -128,30 +71,114 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_raw_bootstrap_seq_finding_functions(self):
+    def test_version_has_prebuilt_detection_works(self):
         ebuild_contents = textwrap.dedent(
             """\
             # Some copyright
             FOO=bar
-            # Comment about RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=(
-            RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=( # another comment
-                1.2.3 # (with a comment with parens)
-                4.5.6
-            )
+            # Comment about this cool var
+            THIS_VERSION_HAS_PREBUILT=     # a comment
+
+            # Another comment for posterity
             """
         )
-
-        ebuild_lines = ebuild_contents.splitlines()
-        (
-            start,
-            end,
-        ) = auto_update_rust_bootstrap.find_raw_bootstrap_sequence_lines(
-            ebuild_lines
+        self.assertFalse(
+            auto_update_rust_bootstrap.is_rust_bootstrap_using_prebuilts(
+                ebuild_contents
+            )
         )
-        self.assertEqual(start, len(ebuild_lines) - 4)
-        self.assertEqual(end, len(ebuild_lines) - 1)
 
-    def test_collect_ebuilds_by_version_ignores_older_versions(self):
+    def test_version_has_prebuilt_modification_works(self):
+        ebuild_contents = textwrap.dedent(
+            """\
+            # Some copyright
+            FOO=bar
+            # Comment about this cool var
+            THIS_VERSION_HAS_PREBUILT=     # a comment
+            # Another comment for posterity
+            """
+        )
+        with_set_has_ebuild = (
+            auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
+                ebuild_contents,
+                use_prebuilts=True,
+            )
+        )
+        self.assertIn(
+            "THIS_VERSION_HAS_PREBUILT=1     # a comment\n", with_set_has_ebuild
+        )
+
+        with_unset_has_ebuild = (
+            auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
+                ebuild_contents,
+                use_prebuilts=False,
+            )
+        )
+        self.assertEqual(ebuild_contents, with_unset_has_ebuild)
+
+    def test_version_has_prebuilt_modification_works_without_comment(self):
+        ebuild_contents = textwrap.dedent(
+            """\
+            # Some copyright
+            FOO=bar
+            # Comment about this cool var
+            THIS_VERSION_HAS_PREBUILT=
+
+            # Another comment for posterity
+            """
+        )
+        with_set_has_ebuild = (
+            auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
+                ebuild_contents,
+                use_prebuilts=True,
+            )
+        )
+        self.assertIn("THIS_VERSION_HAS_PREBUILT=1", with_set_has_ebuild)
+
+    def test_version_has_prebuilt_unsetting_works_with_comment(self):
+        ebuild_contents = textwrap.dedent(
+            """\
+            # Some copyright
+            FOO=bar
+            # Comment about this cool var
+            THIS_VERSION_HAS_PREBUILT=" 1" # baz
+
+            # Another comment for posterity
+            """
+        )
+        with_set_has_ebuild = (
+            auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
+                ebuild_contents,
+                use_prebuilts=False,
+            )
+        )
+        self.assertIn("THIS_VERSION_HAS_PREBUILT= # baz", with_set_has_ebuild)
+
+    def test_set_rust_bootstrap_prior_version_works(self):
+        ebuild_contents = textwrap.dedent(
+            """\
+            # Some copyright
+            FOO=bar
+            # Comment about this cool var
+            PRIOR_RUST_BOOTSTRAP_VERSION="foo"
+
+            # Another comment for posterity
+            """
+        )
+        with_update = (
+            auto_update_rust_bootstrap.set_rust_bootstrap_prior_version(
+                ebuild_contents,
+                new_version=auto_update_rust_bootstrap.EbuildVersion(
+                    major=1,
+                    minor=2,
+                    patch=3,
+                    rev=4,
+                ),
+            )
+        )
+        self.assertIn('PRIOR_RUST_BOOTSTRAP_VERSION="1.2.3"', with_update)
+
+    def test_collect_ebuilds_by_version_ignores_old_versions_and_9999(self):
         tempdir = self.make_tempdir()
         ebuild_170 = tempdir / "rust-bootstrap-1.70.0.ebuild"
         ebuild_170.touch()
@@ -159,9 +186,12 @@ class Test(unittest.TestCase):
         ebuild_170_r1.touch()
         ebuild_171_r2 = tempdir / "rust-bootstrap-1.71.1-r2.ebuild"
         ebuild_171_r2.touch()
+        (tempdir / "rust-bootstrap-9999.ebuild").touch()
 
         self.assertEqual(
-            auto_update_rust_bootstrap.collect_ebuilds_by_version(tempdir),
+            auto_update_rust_bootstrap.collect_stable_ebuilds_by_version(
+                tempdir
+            ),
             [
                 (
                     auto_update_rust_bootstrap.EbuildVersion(
@@ -176,94 +206,6 @@ class Test(unittest.TestCase):
                     ebuild_171_r2,
                 ),
             ],
-        )
-
-    def test_has_prebuilt_works(self):
-        tempdir = self.make_tempdir()
-        ebuild = tempdir / "rust-bootstrap-1.70.0.ebuild"
-        ebuild.write_text(
-            textwrap.dedent(
-                """\
-                # Some copyright
-                FOO=bar
-                # Comment about RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=(
-                RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=( # another comment
-                    1.67.0
-                    1.68.1
-                    1.69.0
-                )
-                """
-            ),
-            encoding="utf-8",
-        )
-
-        self.assertTrue(
-            auto_update_rust_bootstrap.version_listed_in_bootstrap_sequence(
-                ebuild,
-                auto_update_rust_bootstrap.EbuildVersion(
-                    major=1,
-                    minor=69,
-                    patch=0,
-                    rev=0,
-                ),
-            )
-        )
-
-        self.assertFalse(
-            auto_update_rust_bootstrap.version_listed_in_bootstrap_sequence(
-                ebuild,
-                auto_update_rust_bootstrap.EbuildVersion(
-                    major=1,
-                    minor=70,
-                    patch=0,
-                    rev=0,
-                ),
-            )
-        )
-
-    def test_ebuild_updating_works(self):
-        tempdir = self.make_tempdir()
-        ebuild = tempdir / "rust-bootstrap-1.70.0.ebuild"
-        ebuild.write_text(
-            textwrap.dedent(
-                """\
-                # Some copyright
-                FOO=bar
-                RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=(
-                \t1.67.0
-                \t1.68.1
-                \t1.69.0
-                )
-                """
-            ),
-            encoding="utf-8",
-        )
-
-        auto_update_rust_bootstrap.add_version_to_bootstrap_sequence(
-            ebuild,
-            auto_update_rust_bootstrap.EbuildVersion(
-                major=1,
-                minor=70,
-                patch=1,
-                rev=2,
-            ),
-            dry_run=False,
-        )
-
-        self.assertEqual(
-            ebuild.read_text(encoding="utf-8"),
-            textwrap.dedent(
-                """\
-                # Some copyright
-                FOO=bar
-                RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=(
-                \t1.67.0
-                \t1.68.1
-                \t1.69.0
-                \t1.70.1-r2
-                )
-                """
-            ),
         )
 
     def test_ebuild_version_parsing_works(self):
@@ -332,12 +274,9 @@ class Test(unittest.TestCase):
             """\
             # Some copyright
             FOO=bar
-            RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=(
-            \t1.67.0
-            \t1.68.1
-            \t1.69.0
-            \t1.70.0-r1
-            )
+
+            THIS_VERSION_HAS_PREBUILT=1
+            PRIOR_RUST_BOOTSTRAP_VERSION="1.69.0"
             """
         )
         rust_bootstrap_1_70.write_text(
@@ -352,48 +291,19 @@ class Test(unittest.TestCase):
         update_ebuild_manifest.assert_called_once()
         rust_bootstrap_1_71 = rust_bootstrap / "rust-bootstrap-1.71.0.ebuild"
 
-        self.assertTrue(rust_bootstrap_1_70.is_symlink())
-        self.assertEqual(
-            os.readlink(rust_bootstrap_1_70),
-            rust_bootstrap_1_71.name,
-        )
-        self.assertFalse(rust_bootstrap_1_71.is_symlink())
-        self.assertEqual(
-            rust_bootstrap_1_71.read_text(encoding="utf-8"),
+        self.assertTrue(
+            rust_bootstrap_1_70.read_text(encoding="utf-8"),
             rust_bootstrap_contents,
         )
-
-    def test_ensure_newest_version_breaks_if_prebuilt_is_not_available(self):
-        tempdir = self.make_tempdir()
-        rust = tempdir / "rust"
-        rust.mkdir()
-        (rust / "rust-1.71.0-r1.ebuild").touch()
-        rust_bootstrap = tempdir / "rust-bootstrap"
-        rust_bootstrap.mkdir()
-        rust_bootstrap_1_70 = rust_bootstrap / "rust-bootstrap-1.70.0-r2.ebuild"
-
-        rust_bootstrap_contents = textwrap.dedent(
-            """\
-            # Some copyright
-            FOO=bar
-            RUSTC_RAW_FULL_BOOTSTRAP_SEQUENCE=(
-            \t1.67.0
-            \t1.68.1
-            \t1.69.0
-            # Note: Missing 1.70.0 for rust-bootstrap-1.71.1
-            )
-            """
+        new_contents = rust_bootstrap_1_71.read_text(encoding="utf-8")
+        self.assertIn(
+            "THIS_VERSION_HAS_PREBUILT=\n",
+            new_contents,
         )
-        rust_bootstrap_1_70.write_text(
-            rust_bootstrap_contents, encoding="utf-8"
+        self.assertIn(
+            'PRIOR_RUST_BOOTSTRAP_VERSION="1.70.0"\n',
+            new_contents,
         )
-
-        with self.assertRaises(
-            auto_update_rust_bootstrap.MissingRustBootstrapPrebuiltError
-        ):
-            auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                tempdir, rust_bootstrap, dry_run=True
-            )
 
     def test_version_deletion_does_nothing_if_all_versions_are_needed(self):
         tempdir = self.make_tempdir()
@@ -496,6 +406,50 @@ class Test(unittest.TestCase):
                 tempdir, rust_bootstrap, dry_run=True
             )
 
+    def test_prebuilt_commit_message_generation_with_one_update(self):
+        msg = auto_update_rust_bootstrap.build_commit_message_for_new_prebuilts(
+            [
+                (
+                    auto_update_rust_bootstrap.EbuildVersion(1, 70, 0, 0),
+                    "gs://some/path",
+                )
+            ]
+        )
+        self.assertEqual(
+            msg,
+            textwrap.dedent(
+                f"""\
+            rust-bootstrap: use prebuilts
 
-if __name__ == "__main__":
-    unittest.main()
+            This CL used the following rust-bootstrap artifact:
+            - rust-bootstrap-1.70.0 => gs://some/path
+
+            BUG={auto_update_rust_bootstrap.TRACKING_BUG}
+            TEST=CQ"""
+            ),
+        )
+
+    def test_prebuilt_commit_message_generation_with_multiple_updates(self):
+        msg = auto_update_rust_bootstrap.build_commit_message_for_new_prebuilts(
+            [
+                (
+                    auto_update_rust_bootstrap.EbuildVersion(1, 70, 0, 0),
+                    "gs://some/path",
+                ),
+                (auto_update_rust_bootstrap.EbuildVersion(1, 71, 1, 0), None),
+            ]
+        )
+        self.assertEqual(
+            msg,
+            textwrap.dedent(
+                f"""\
+            rust-bootstrap: use prebuilts
+
+            This CL used the following rust-bootstrap artifacts:
+            - rust-bootstrap-1.70.0 => gs://some/path
+            - rust-bootstrap-1.71.1 was already on localmirror
+
+            BUG={auto_update_rust_bootstrap.TRACKING_BUG}
+            TEST=CQ"""
+            ),
+        )

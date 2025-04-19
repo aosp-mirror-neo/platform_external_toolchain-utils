@@ -1,0 +1,36 @@
+From 6899bf76634f02f6a912f4c2d716d21f153a622e Mon Sep 17 00:00:00 2001
+From: Guillaume Chatelet <gchatelet@google.com>
+Date: Fri, 14 Feb 2025 11:19:26 +0100
+Subject: [PATCH] Revert "[reland][libc][bazel] Enable software prefetching for
+ memcpy" (#127189)
+
+Reverts llvm/llvm-project#113886
+
+We suspect this has caused internal performance regressions, reverting
+while root causing it more thoroughly.
+
+patch.cherry: true
+patch.metadata.original_sha: c65ed964657c93d51f3e05de9e0609419768a143
+patch.platforms: chromiumos
+patch.version_range.from: 554178
+patch.version_range.until: 565287
+
+---
+ .../bazel/llvm-project-overlay/libc/libc_configure_options.bzl  | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl b/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl
+index 96d7fa86e9dd..f65da9e98226 100644
+--- a/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl
++++ b/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl
+@@ -24,7 +24,7 @@ LIBC_CONFIGURE_OPTIONS = [
+     # Documentation in libc/src/string/memory_utils/...
+     # "LIBC_COPT_MEMCPY_USE_EMBEDDED_TINY",
+     # "LIBC_COPT_MEMCPY_X86_USE_REPMOVSB_FROM_SIZE",
+-    "LIBC_COPT_MEMCPY_X86_USE_SOFTWARE_PREFETCHING",
++    # "LIBC_COPT_MEMCPY_X86_USE_SOFTWARE_PREFETCHING",
+     "LIBC_COPT_MEMSET_X86_USE_SOFTWARE_PREFETCHING",
+ 
+     # Documentation in libc/docs/dev/printf_behavior.rst
+-- 
+2.49.0.504.g3bcea36a83-goog

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -295,7 +294,7 @@ func withCompileWithFallbackTestContext(t *testing.T, work func(ctx *testContext
 
 func readCompileWithFallbackErrorLog(ctx *testContext) string {
 	logFile := filepath.Join(ctx.tempDir, "fallback_stderr")
-	data, err := ioutil.ReadFile(logFile)
+	data, err := os.ReadFile(logFile)
 	if err != nil {
 		ctx.t.Fatalf("error reading log file %s: %s", logFile, err)
 	}

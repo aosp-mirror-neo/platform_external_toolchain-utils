@@ -8,7 +8,7 @@ import io
 import json
 import unittest
 
-import benchmark_pgo_profiles
+from pgo_tools import benchmark_pgo_profiles
 
 
 class Test(unittest.TestCase):
@@ -45,7 +45,3 @@ class Test(unittest.TestCase):
             self.assertIs(
                 profile, benchmark_pgo_profiles.parse_profile_path(str(profile))
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

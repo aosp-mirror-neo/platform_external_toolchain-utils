@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2018 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -250,7 +248,3 @@ def _main():
         summary_output_file=sys.stderr,
         profile_output_file=sys.stdout,
     )
-
-
-if __name__ == "__main__":
-    _main()

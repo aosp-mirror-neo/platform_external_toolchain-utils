@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -12,10 +11,10 @@ from pathlib import Path
 import sys
 from typing import Callable, Iterable, List, Optional, Tuple
 
-import failure_modes
-import get_llvm_hash
-import patch_utils
-import subprocess_helpers
+from llvm_tools import failure_modes
+from llvm_tools import get_llvm_hash
+from llvm_tools import patch_utils
+from llvm_tools import subprocess_helpers
 
 
 class GitBisectionCode(enum.IntEnum):
@@ -80,12 +79,21 @@ def GetCommandLineArgs(sys_argv: Optional[List[str]]):
         "application of. Not used in other modes.",
     )
 
+    group = parser.add_mutually_exclusive_group()
     # Add argument for the option to us git am to commit patch or
     # just using patch.
-    parser.add_argument(
+    group.add_argument(
         "--git_am",
         action="store_true",
         help="If set, use 'git am' to patch instead of GNU 'patch'. ",
+    )
+
+    # Add argument for the option to us git am chromiumos to commit patch or
+    # just using patch.
+    group.add_argument(
+        "--chromiumos_apply",
+        action="store_true",
+        help="If set, use 'git am' with chromiumos footer edits.",
     )
 
     # Parse the command line.
@@ -268,6 +276,13 @@ def main(sys_argv: List[str]):
             "--patch_metadata_file arg " f"{patches_json_fp} is not a file"
         )
 
+    if args_output.git_am:
+        patch_cmd = patch_utils.git_am
+    elif args_output.chromiumos_apply:
+        patch_cmd = patch_utils.git_am_chromiumos
+    else:
+        patch_cmd = patch_utils.gnu_patch
+
     def _apply_all(args):
         if args.svn_version is None:
             raise ValueError("--svn_version must be set when applying patches")
@@ -275,16 +290,13 @@ def main(sys_argv: List[str]):
             svn_version=args.svn_version,
             llvm_src_dir=llvm_src_dir,
             patches_json_fp=patches_json_fp,
-            patch_cmd=patch_utils.git_am
-            if args.git_am
-            else patch_utils.gnu_patch,
+            patch_cmd=patch_cmd,
             continue_on_failure=args.failure_mode
             == failure_modes.FailureModes.CONTINUE,
         )
         PrintPatchResults(result)
 
     def _disable(args):
-        patch_cmd = patch_utils.git_am if args.git_am else patch_utils.gnu_patch
         patch_utils.update_version_ranges(
             args.svn_version, llvm_src_dir, patches_json_fp, patch_cmd
         )
@@ -314,7 +326,3 @@ def main(sys_argv: List[str]):
 
     if args_output.failure_mode in dispatch_table:
         dispatch_table[args_output.failure_mode](args_output)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

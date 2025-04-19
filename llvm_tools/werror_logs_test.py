@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -8,16 +7,13 @@
 import io
 import logging
 import os
-from pathlib import Path
-import shutil
 import subprocess
-import tempfile
 import textwrap
 from typing import Dict
-import unittest
 from unittest import mock
 
-import werror_logs
+from llvm_tools import test_helpers
+from llvm_tools import werror_logs
 
 
 class SilenceLogs:
@@ -38,7 +34,7 @@ def create_warning_info(packages: Dict[str, int]) -> werror_logs.WarningInfo:
     return x
 
 
-class Test(unittest.TestCase):
+class Test(test_helpers.TempDirTestCase):
     """Tests for werror_logs."""
 
     def silence_logs(self):
@@ -46,11 +42,6 @@ class Test(unittest.TestCase):
         log = logging.getLogger()
         log.addFilter(f)
         self.addCleanup(log.removeFilter, f)
-
-    def make_tempdir(self) -> Path:
-        tempdir = tempfile.mkdtemp("werror_logs_test_")
-        self.addCleanup(shutil.rmtree, tempdir)
-        return Path(tempdir)
 
     def test_clang_warning_parsing_parses_flag_errors(self):
         self.assertEqual(
@@ -260,6 +251,24 @@ class Test(unittest.TestCase):
             warning_info, create_warning_info({"sys-devel/llvm": len(cwds)})
         )
 
+    def test_guessing_real_packages_correctly(self):
+        # pylint: disable=line-too-long
+        aggregated = werror_logs.AggregatedWarnings()
+        cwds = (
+            "/build/amd64-generic/tmp/portage/dev-util/perf-5.15.68-r4/work/",
+            "/build/amd64-generic/tmp/portage/app-benchmarks/stress-ng-0.13.09/work/stress-ng-0.13.09",
+        )
+        for d in cwds:
+            aggregated.add_report_json(
+                {
+                    "cwd": d,
+                    "stdout": "clang-17: error: foo [-Werror,-Wfoo]",
+                }
+            )
+        self.assertEqual(len(aggregated.warnings), 1)
+        warning, _ = next(iter(aggregated.warnings.items()))
+        self.assertEqual(warning.name, "-Wfoo")
+
     def test_aggregation_raises_if_package_name_cant_be_guessed(self):
         aggregated = werror_logs.AggregatedWarnings()
         with self.assertRaises(werror_logs.UnknownPackageNameError):
@@ -419,7 +428,3 @@ class Test(unittest.TestCase):
                 unpack_dir, download_dir, gs_urls
             )
         self.assertEqual(run_mock.call_count, 3)
-
-
-if __name__ == "__main__":
-    unittest.main()

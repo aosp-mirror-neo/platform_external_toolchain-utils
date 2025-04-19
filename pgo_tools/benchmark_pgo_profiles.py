@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -22,18 +21,19 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
-import sys
 from typing import IO, List, Optional, Union
 
-import pgo_tools
+from cros_utils import cros_paths
+from pgo_tools import pgo_utils
 
 
 # The full path to where `sys-devel/llvm` expects local profiles to be if
 # `USE=llvm_pgo_use_local` is specified.
-LOCAL_PROFILE_LOCATION = Path(
-    "/mnt/host/source/src/third_party/chromiumos-overlay",
-    "sys-devel/llvm/files/llvm-local.profdata",
-).resolve()
+LOCAL_PROFILE_LOCATION = (
+    cros_paths.CHROOT_SOURCE_ROOT
+    / cros_paths.CHROMIUMOS_OVERLAY
+    / "sys-devel/llvm/files/llvm-local.profdata"
+)
 
 CHROOT_HYPERFINE = Path.home() / ".cargo/bin/hyperfine"
 
@@ -88,7 +88,7 @@ def ensure_hyperfine_is_installed():
         return
 
     logging.info("Installing hyperfine for benchmarking...")
-    pgo_tools.run(
+    pgo_utils.run(
         [
             "cargo",
             "install",
@@ -106,7 +106,7 @@ def construct_hyperfine_cmd(
     llvm_binpkg: Path,
     use_thinlto: bool,
     export_json: Optional[Path] = None,
-) -> pgo_tools.Command:
+) -> pgo_utils.Command:
     if isinstance(profile, Path):
         if profile != LOCAL_PROFILE_LOCATION:
             shutil.copyfile(profile, LOCAL_PROFILE_LOCATION)
@@ -120,7 +120,7 @@ def construct_hyperfine_cmd(
 
     quickpkg_restore = shlex.join(
         str(x)
-        for x in pgo_tools.generate_quickpkg_restoration_command(llvm_binpkg)
+        for x in pgo_utils.generate_quickpkg_restoration_command(llvm_binpkg)
     )
 
     setup_cmd = (
@@ -140,7 +140,7 @@ def construct_hyperfine_cmd(
         f"sudo USE={shlex.quote(benchmark_use)} "
         f"ebuild {shlex.quote(str(llvm_ebuild))}"
     )
-    cmd: pgo_tools.Command = [
+    cmd: pgo_utils.Command = [
         CHROOT_HYPERFINE,
         "--max-runs=3",
         f"--setup={setup_cmd}",
@@ -208,14 +208,14 @@ def run_benchmark(
     ensure_hyperfine_is_installed()
 
     llvm_ebuild_path = Path(
-        pgo_tools.run(
+        pgo_utils.run(
             ["equery", "w", "sys-devel/llvm"], stdout=subprocess.PIPE
         ).stdout.strip()
     )
 
-    baseline_llvm_binpkg = pgo_tools.quickpkg_llvm()
+    baseline_llvm_binpkg = pgo_utils.quickpkg_llvm()
     accumulated_run_data = []
-    with pgo_tools.temporary_file(
+    with pgo_utils.temporary_file(
         prefix="benchmark_pgo_profile"
     ) as tmp_json_file:
         for profile in profiles:
@@ -233,14 +233,14 @@ def run_benchmark(
                 str(profile),
                 shlex.join(str(x) for x in cmd),
             )
-            pgo_tools.run(cmd)
+            pgo_utils.run(cmd)
 
             with tmp_json_file.open(encoding="utf-8") as f:
                 accumulated_run_data.append(RunData.from_json(str(profile), f))
 
     logging.info("Restoring original LLVM...")
-    pgo_tools.run(
-        pgo_tools.generate_quickpkg_restoration_command(baseline_llvm_binpkg)
+    pgo_utils.run(
+        pgo_utils.generate_quickpkg_restoration_command(baseline_llvm_binpkg)
     )
     return accumulated_run_data
 
@@ -275,13 +275,9 @@ def main(argv: List[str]):
     )
     opts = parser.parse_args(argv)
 
-    pgo_tools.exit_if_not_in_chroot()
+    pgo_utils.exit_if_not_in_chroot()
 
     profiles = opts.profile
     validate_profiles(parser, profiles)
 
     run_benchmark(opts.thinlto, profiles)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

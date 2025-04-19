@@ -5,9 +5,13 @@
 """Helper functions for unit testing."""
 
 import contextlib
+import inspect
 import json
 import os
+from pathlib import Path
+import shutil
 import tempfile
+import unittest
 
 
 class ArgsOutputTest:
@@ -84,3 +88,14 @@ def CreateTemporaryFile(suffix=""):
     finally:
         if os.path.isfile(temp_file_path):
             os.remove(temp_file_path)
+
+
+class TempDirTestCase(unittest.TestCase):
+    """Subclass for test-cases. Provides a `make_tempdir()` function."""
+
+    def make_tempdir(self) -> Path:
+        defining_file = Path(inspect.getfile(self.__class__))
+        test_file_name = Path(defining_file).with_suffix("").name
+        tempdir = Path(tempfile.mkdtemp(prefix=test_file_name + "_"))
+        self.addCleanup(shutil.rmtree, tempdir)
+        return tempdir

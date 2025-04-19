@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -21,8 +20,9 @@ import subprocess
 import sys
 from typing import List, Set, TextIO
 
-import get_upstream_patch
-import revert_checker
+from cros_utils import cros_paths
+from llvm_tools import get_llvm_hash
+from llvm_tools import revert_checker
 
 
 @dataclasses.dataclass(frozen=True)
@@ -78,13 +78,17 @@ def write_reverts_as_csv(write_to: TextIO, reverts: List[RevertInfo]):
 
 
 def main(argv: List[str]):
+    # `cros_root` is hardcoded here, since:
+    # - this one only reads tree state, and
+    # - the person/automation invoking it is almost definitely invoking it _in
+    #   the tree that it should run in_.
+    cros_root = cros_paths.script_chromiumos_checkout_or_exit()
+
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
         level=logging.INFO,
     )
-
-    my_dir = Path(__name__).resolve().parent
 
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -93,7 +97,7 @@ def main(argv: List[str]):
     parser.add_argument(
         "-C",
         "--git-dir",
-        default=my_dir.parent.parent / "llvm-project",
+        default=str(cros_root / cros_paths.LLVM_PROJECT),
         help="LLVM git directory to use.",
         # Note that this is left as `type=str` because that's what
         # `revert_checker` expects.
@@ -103,27 +107,21 @@ def main(argv: List[str]):
         "--llvm-next", action="store_true", help="Use the llvm-next hash"
     )
     parser.add_argument(
-        "--llvm-dir",
-        help="Directory containing LLVM ebuilds",
-        type=Path,
-        default=my_dir.parent.parent / "chromiumos-overlay/sys-devel/llvm",
-    )
-    parser.add_argument(
         "--llvm-head",
         default="cros/upstream/main",
         help="ref to treat as 'origin/main' in the given LLVM dir.",
     )
     opts = parser.parse_args(argv)
 
-    symbolic_sha = "llvm-next" if opts.llvm_next else "llvm"
-    llvm_sha = get_upstream_patch.resolve_symbolic_sha(
-        symbolic_sha,
-        opts.llvm_dir,
-    )
+    if opts.llvm_next:
+        llvm_sha = get_llvm_hash.LLVMHash().GetCrOSLLVMNextHash()
+    else:
+        llvm_sha = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(cros_root)
+
     logging.info("Resolved %r as the LLVM SHA to check.", llvm_sha)
 
     in_tree_cherrypicks = list_upstream_cherrypicks(
-        opts.llvm_dir / "files/PATCHES.json"
+        cros_root / cros_paths.DEFAULT_PATCHES_PATH
     )
     logging.info("Identified %d local cherrypicks.", len(in_tree_cherrypicks))
 
@@ -153,7 +151,3 @@ def main(argv: List[str]):
     print()
     print("CSV summary of reverts:")
     write_reverts_as_csv(sys.stdout, reverts)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])
