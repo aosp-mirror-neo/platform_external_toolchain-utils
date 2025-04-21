@@ -57,7 +57,7 @@ func calculateAndroidWrapperPath(mainBuilderPath string, absWrapperPath string) 
 
 	// We need to be careful here: path.Join Clean()s its result, so `./foo` will get
 	// transformed to `foo`, which isn't good since we're passing this path to exec.
-	basePart := filepath.Base(absWrapperPath) + ".real"
+	basePart := filepath.Base(absWrapperPath) + "-real"
 	if !strings.ContainsRune(mainBuilderPath, filepath.Separator) {
 		return basePart
 	}

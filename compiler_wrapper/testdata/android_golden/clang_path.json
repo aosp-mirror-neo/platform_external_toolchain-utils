@@ -6,7 +6,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/clang.real"
+          "path": "/tmp/stable/clang-real"
         }
       }
     ],
@@ -27,7 +27,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/clang.real"
+          "path": "/tmp/stable/clang-real"
         },
         "exitcode": 1,
         "stderr": "someerror",
@@ -54,7 +54,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/clang.real"
+          "path": "/tmp/stable/clang-real"
         }
       }
     ],
@@ -78,7 +78,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/clang++.real"
+          "path": "/tmp/stable/clang++-real"
         }
       }
     ],
@@ -99,7 +99,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/clang-tidy.real"
+          "path": "/tmp/stable/clang-tidy-real"
         }
       }
     ],
@@ -120,7 +120,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/clang-tidy.real"
+          "path": "/tmp/stable/clang-tidy-real"
         }
       }
     ],
@@ -144,7 +144,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "a/b/c/d/e/f/g/clang.real"
+          "path": "a/b/c/d/e/f/g/clang-real"
         }
       }
     ],
@@ -165,7 +165,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "symlinked/clang.real"
+          "path": "symlinked/clang-real"
         }
       }
     ],
@@ -186,7 +186,7 @@
           "args": [
             "main.cc"
           ],
-          "path": "/tmp/stable/pathenv/clang.real"
+          "path": "/tmp/stable/pathenv/clang-real"
         }
       }
     ],
@@ -208,7 +208,7 @@
       {
         "cmd": {
           "args": [
-            "/tmp/stable/clang.real",
+            "/tmp/stable/clang-real",
             "main.cc"
           ],
           "path": "/tmp/stable/gomacc"
