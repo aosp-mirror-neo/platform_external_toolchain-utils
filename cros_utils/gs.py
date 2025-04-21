@@ -9,16 +9,15 @@ import datetime
 import logging
 import re
 import shlex
+import shutil
 import subprocess
 from typing import List, Optional
 
 
 # Determine which gsutil to use.
-# 'gsutil.py' is provided by depot_tools, whereas 'gsutil'
-# is provided by either https://cloud.google.com/sdk/docs/install, or
-# the 'google-cloud-cli' package. Since we need depot_tools to even
-# use 'repo', 'gsutil.py' is guaranteed to exist.
-GSUTIL = "gsutil.py"
+# In some environments (host machines), `gsutil` is provided on $PATH. If that
+# fails and depot_tools is on $PATH, gsutil.py also works.
+GSUTIL = "gsutil" if shutil.which("gsutil") else "gsutil.py"
 
 
 @dataclasses.dataclass(frozen=True)
