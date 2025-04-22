@@ -1,6 +1,7 @@
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
+
 """Utilities to file bugs."""
 
 import datetime
@@ -10,6 +11,9 @@ import os
 import threading
 from typing import Any, Dict, List, Optional, Union
 
+
+# ChromeOS > Infra > Toolchain
+INTERNAL_CROSTC_COMPONENT = 1034879
 
 X20_PATH = "/google/data/rw/teams/c-compiler-chrome/prod_bugs"
 
