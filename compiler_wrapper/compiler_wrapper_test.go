@@ -197,22 +197,22 @@ func TestCalculateAndroidWrapperPath(t *testing.T) {
 		{
 			mainBuilderPath: "/foo/bar",
 			absWrapperPath:  "/bar/baz",
-			want:            "/foo/baz.real",
+			want:            "/foo/baz-real",
 		},
 		{
 			mainBuilderPath: "/my_wrapper",
 			absWrapperPath:  "/bar/baz",
-			want:            "/baz.real",
+			want:            "/baz-real",
 		},
 		{
 			mainBuilderPath: "no_seps",
 			absWrapperPath:  "/bar/baz",
-			want:            "baz.real",
+			want:            "baz-real",
 		},
 		{
 			mainBuilderPath: "./a_sep",
 			absWrapperPath:  "/bar/baz",
-			want:            "./baz.real",
+			want:            "./baz-real",
 		},
 	}
 

@@ -96,7 +96,7 @@ func TestClangPathForAndroidWrapper(t *testing.T) {
 		ctx.cfg.isAndroidWrapper = true
 		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
 			ctx.newCommand("somedir/clang", mainCc)))
-		if err := verifyPath(cmd, "somedir/clang.real"); err != nil {
+		if err := verifyPath(cmd, "somedir/clang-real"); err != nil {
 			t.Error(err)
 		}
 	})
@@ -109,7 +109,7 @@ func TestClangPathForAndroidWrapperWithSymlinks(t *testing.T) {
 		ctx.symlink("base/some_clang", "linked/clang")
 		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
 			ctx.newCommand("linked/clang", mainCc)))
-		if err := verifyPath(cmd, "linked/some_clang.real"); err != nil {
+		if err := verifyPath(cmd, "linked/some_clang-real"); err != nil {
 			t.Error(err)
 		}
 	})

@@ -32,7 +32,7 @@ func compileWithFallback(env env, cfg *config, originalCmd *command, absWrapperP
 		EnvUpdates: originalCmd.EnvUpdates,
 	}
 	// We only want to pass extra flags to clang and clang++.
-	if base := filepath.Base(originalCmd.Path); base == "clang.real" || base == "clang++.real" {
+	if base := filepath.Base(originalCmd.Path); base == "clang-real" || base == "clang++-real" {
 		// We may introduce some new warnings after rebasing and we need to
 		// disable them before we fix those warnings.
 		extraArgs, _ := env.getenv("ANDROID_LLVM_FALLBACK_DISABLED_WARNINGS")
