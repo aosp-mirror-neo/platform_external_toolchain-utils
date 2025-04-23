@@ -9,7 +9,7 @@
             "-a",
             "-b"
           ],
-          "path": "/tmp/stable/clang.real"
+          "path": "/tmp/stable/clang-real"
         }
       }
     ],
@@ -38,7 +38,7 @@
             "-a",
             "-b"
           ],
-          "path": "/tmp/stable/clang.real"
+          "path": "/tmp/stable/clang-real"
         },
         "exitcode": 1
       },
@@ -79,7 +79,7 @@
             "-a",
             "-b"
           ],
-          "path": "/tmp/stable/clang.real"
+          "path": "/tmp/stable/clang-real"
         },
         "exitcode": 1
       },

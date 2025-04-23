@@ -239,7 +239,7 @@ func TestCompileWithFallbackLogCommandAndErrors(t *testing.T) {
 
 		log := readCompileWithFallbackErrorLog(ctx)
 		if log != `==================COMMAND:====================
-./clang.real main.cc -fno-color-diagnostics -a -b
+./clang-real main.cc -fno-color-diagnostics -a -b
 
 someerror
 ==============================================
@@ -275,7 +275,7 @@ func TestCompileWithFallbackAppendToLog(t *testing.T) {
 		if !strings.Contains(log, "oldContent") {
 			t.Errorf("old content not present: %s", log)
 		}
-		if !strings.Contains(log, "clang.real") {
+		if !strings.Contains(log, "clang-real") {
 			t.Errorf("new content not present: %s", log)
 		}
 	})

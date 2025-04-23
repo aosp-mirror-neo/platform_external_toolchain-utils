@@ -317,7 +317,7 @@ def git_am(
     cmd: List[Union[str, Path]] = ["git", "am", "--3way", patch_path]
     if extra_args:
         cmd += extra_args
-    return _run_git_applylike(pe, root_dir, cmd)
+    return _run_git_applylike(pe, root_dir, cmd, quiet=True)
 
 
 def git_am_chromiumos(
@@ -445,7 +445,10 @@ def gnu_patch(
 
 
 def _run_git_applylike(
-    pe: PatchEntry, root_dir: Path, cmd: List[Union[Path, str]]
+    pe: PatchEntry,
+    root_dir: Path,
+    cmd: List[Union[Path, str]],
+    quiet: bool = False,
 ):
     try:
         subprocess.run(
@@ -453,6 +456,7 @@ def _run_git_applylike(
             encoding="utf-8",
             check=True,
             stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL if quiet else None,
             cwd=root_dir,
         )
     except subprocess.CalledProcessError:
