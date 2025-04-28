@@ -67,19 +67,53 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 
-# The files and directories on which we run the mypy typechecker. The paths are
-# relative to the root of the toolchain-utils repository.
-MYPY_CHECKED_PATHS = (
+# The files on which we skip the mypy typechecker. The paths are relative to the
+# root of the toolchain-utils repository.
+#
+# Since mypy's checks are very valuable, please prefer not to add anything new
+# here. Ideally this should be empty, but there aren't enough hours in the
+# day...
+MYPY_BLOCKED_FILES = (
+    "afdo_redaction/redact_profile.py",
+    "afdo_redaction/redact_profile_test.py",
+    "afdo_redaction/remove_cold_functions.py",
+    "afdo_redaction/remove_cold_functions_test.py",
+    "afdo_redaction/remove_indirect_calls.py",
+    "afdo_redaction/remove_indirect_calls_test.py",
+    "afdo_tools/bisection/afdo_prof_analysis_e2e_test.py",
+    "afdo_tools/bisection/afdo_prof_analysis.py",
+    "afdo_tools/bisection/afdo_prof_analysis_test.py",
+    "afdo_tools/generate_afdo_from_tryjob.py",
+    "afdo_tools/monitor_chrome_afdo.py",
+    "afdo_tools/monitor_chrome_afdo_test.py",
+    "afdo_tools/run_afdo_tryjob.py",
     "afdo_tools/update_kernel_afdo.py",
+    "afdo_tools/update_kernel_afdo_test.py",
+    "auto_abandon_cls.py",
+    "bot_tools/fetch_all_subtest_logs.py",
+    "bot_tools/fetch_all_subtest_logs_test.py",
     "check_portable_toolchains.py",
-    "cros_utils/bugs.py",
-    "cros_utils/bugs_test.py",
-    "cros_utils/tiny_render.py",
-    "llvm_tools",
-    "pgo_tools",
-    "pgo_tools_rust/pgo_rust.py",
-    "rust_tools",
-    "toolchain_utils_githooks/check-presubmit.py",
+    "compiler_wrapper/build.py",
+    "crate_ebuild_help.py",
+    "cros_utils/cros_image_tools.py",
+    "cros_utils/cros_image_tools_test.py",
+    "cros_utils/cros_paths.py",
+    "cros_utils/email_sender.py",
+    "cros_utils/email_sender_test.py",
+    "cros_utils/git_utils.py",
+    "cros_utils/git_utils_test.py",
+    "cros_utils/gs.py",
+    "cros_utils/gs_test.py",
+    "cros_utils/__init__.py",
+    "cros_utils/tiny_render_test.py",
+    "cwp/cr_os/fetch_gn_descs.py",
+    "cwp/cr_os/fetch_gn_descs_test.py",
+    "llvm_extra/create_ebuild_file.py",
+    "ping_automatic_cls.py",
+    "python_wrapper.py",
+    "run_tests_for.py",
+    "seccomp_tools/mass_seccomp_editor/mass_seccomp_editor.py",
+    "seccomp_tools/mass_seccomp_editor/mass_seccomp_editor_test.py",
 )
 
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
@@ -527,31 +561,13 @@ def file_is_relative_to(file: Path, potential_parent: Path) -> bool:
         return False
 
 
-def is_file_in_any_of(file: Path, files_and_dirs: List[Path]) -> bool:
-    """Returns whether `files_and_dirs` encompasses `file`.
-
-    `files_and_dirs` is considered to encompass `file` if `files_and_dirs`
-    contains `file` directly, or if it contains a directory that is a parent of
-    `file`.
-
-    Args:
-        file: a path to check
-        files_and_dirs: a list of directories to check
-    """
-    # This could technically be made sublinear, but it's running at most a few
-    # dozen times on a `files_and_dirs` that's currently < 10 elems.
-    return any(
-        file == x or file_is_relative_to(file, x) for x in files_and_dirs
-    )
-
-
 def check_py_types(
     mypy: Optional[MyPyInvocation],
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
     files: Iterable[str],
 ) -> CheckResults:
-    """Runs static type checking for files in MYPY_CHECKED_FILES."""
+    """Runs static type checking for files not in MYPY_BLOCKED_FILES."""
     if not mypy:
         return CheckResult(
             ok=False,
@@ -561,11 +577,11 @@ def check_py_types(
         )
 
     path_root = Path(toolchain_utils_root)
-    check_locations = [path_root / x for x in MYPY_CHECKED_PATHS]
+    blocklisted_locations = {path_root / x for x in MYPY_BLOCKED_FILES}
     to_check = [
         x
         for x in files
-        if x.endswith(".py") and is_file_in_any_of(Path(x), check_locations)
+        if x.endswith(".py") and Path(x) not in blocklisted_locations
     ]
 
     if not to_check:
