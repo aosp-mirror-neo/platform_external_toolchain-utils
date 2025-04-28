@@ -70,7 +70,7 @@ class ProfileSubtype(enum.Enum):
     NONE = "none"
 
     @classmethod
-    def parse(cls, subtype: str) -> "ProfileArch":
+    def parse(cls, subtype: str) -> "ProfileSubtype":
         for x in cls:
             if x.value == subtype:
                 return x
@@ -96,6 +96,7 @@ CHROME_STAMP_FILE_LOCATIONS: Dict[Tuple[ProfileArch, ProfileSubtype], str] = {
         ProfileSubtype.BIGCORE,
     ): "chromeos/profiles/bigcore.afdo.newest.txt",
 }
+
 
 # N.B., This is expected to return a subset of CHROME_STAMP_FILE_LOCATIONS. That
 # said, iterating over CHROME_STAMP_FILE_LOCATIONS.keys() can be confusing

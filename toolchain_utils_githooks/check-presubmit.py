@@ -75,11 +75,7 @@ CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 # day...
 MYPY_BLOCKED_FILES = (
     "afdo_redaction/redact_profile_test.py",
-    "afdo_tools/monitor_chrome_afdo.py",
-    "afdo_tools/monitor_chrome_afdo_test.py",
-    "bot_tools/fetch_all_subtest_logs.py",
     "crate_ebuild_help.py",
-    "cros_utils/git_utils.py",
 )
 
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.

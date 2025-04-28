@@ -17,7 +17,7 @@ def arbitrary_time() -> datetime.datetime:
     return datetime.datetime(2020, 1, 2, 3, 4, 5, 6, datetime.timezone.utc)
 
 
-def arbitrary_chrome_gs_profile_name() -> monitor_chrome_afdo.ChromeGsProfile:
+def arbitrary_chrome_gs_profile_name() -> str:
     """Returns an arbitrary profile name >= MIN_PROFILE_MAJOR_VERSION."""
     major_cwp_version = monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION
     major_bench_version = major_cwp_version + 1
