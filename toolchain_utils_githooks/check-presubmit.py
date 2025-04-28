@@ -73,10 +73,7 @@ CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 # Since mypy's checks are very valuable, please prefer not to add anything new
 # here. Ideally this should be empty, but there aren't enough hours in the
 # day...
-MYPY_BLOCKED_FILES = (
-    "afdo_redaction/redact_profile_test.py",
-    "crate_ebuild_help.py",
-)
+MYPY_BLOCKED_FILES = ("crate_ebuild_help.py",)
 
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
 LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"

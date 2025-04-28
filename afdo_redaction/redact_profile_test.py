@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2018 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -13,7 +11,7 @@ import unittest
 from afdo_redaction import redact_profile
 
 
-_redact_limit = redact_profile.dedup_records.__defaults__[0]
+_redact_limit = redact_profile.DEFAULT_DEDUP_MAX_REPEATS
 
 
 def _redact(input_lines, summary_to=None):
