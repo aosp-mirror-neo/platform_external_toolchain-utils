@@ -67,14 +67,6 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 
-# The files on which we skip the mypy typechecker. The paths are relative to the
-# root of the toolchain-utils repository.
-#
-# Since mypy's checks are very valuable, please prefer not to add anything new
-# here. Ideally this should be empty, but there aren't enough hours in the
-# day...
-MYPY_BLOCKED_FILES = ("crate_ebuild_help.py",)
-
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
 LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
 
@@ -511,22 +503,13 @@ def check_py_format(
     return [(name, get_check_result_or_catch(task)) for name, task in tasks]
 
 
-def file_is_relative_to(file: Path, potential_parent: Path) -> bool:
-    """file.is_relative_to(potential_parent), but for Python < 3.9."""
-    try:
-        file.relative_to(potential_parent)
-        return True
-    except ValueError:
-        return False
-
-
 def check_py_types(
     mypy: Optional[MyPyInvocation],
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
     files: Iterable[str],
 ) -> CheckResults:
-    """Runs static type checking for files not in MYPY_BLOCKED_FILES."""
+    """Runs static type checking for Python files."""
     if not mypy:
         return CheckResult(
             ok=False,
@@ -535,14 +518,7 @@ def check_py_types(
             autofix_commands=[],
         )
 
-    path_root = Path(toolchain_utils_root)
-    blocklisted_locations = {path_root / x for x in MYPY_BLOCKED_FILES}
-    to_check = [
-        x
-        for x in files
-        if x.endswith(".py") and Path(x) not in blocklisted_locations
-    ]
-
+    to_check = [x for x in files if x.endswith(".py")]
     if not to_check:
         return CheckResult(
             ok=True,
