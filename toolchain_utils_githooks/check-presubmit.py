@@ -9,6 +9,7 @@ import argparse
 import dataclasses
 import datetime
 import functools
+import json
 import multiprocessing
 import multiprocessing.pool
 import os
@@ -67,6 +68,11 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 
+# A list of types stubs to install alongside mypy. These are only autoinstalled
+# inside of the chroot. If mypy fails outside of the chroot due to lack of
+# these, it'll print a command to allow the user to install the missing stubs.
+MYPY_TYPES_PACKAGES = ("types-PyYAML",)
+
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
 LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
 
@@ -121,9 +127,18 @@ class MyPyInvocation:
     """An invocation of mypy."""
 
     command: List[str]
-    # Entries to add to PYTHONPATH, formatted for direct use in the PYTHONPATH
-    # env var.
-    pythonpath_additions: str
+
+
+def list_installed_pip_packages(pip: List[str]) -> List[str]:
+    list_output = subprocess.run(
+        pip + ["list", "--format=json"],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    # This listing is just a list of {"name": x, "version": y} dicts.
+    return [x["name"] for x in json.loads(list_output)]
 
 
 def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
@@ -141,40 +156,36 @@ def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
             - any environment variables to set when invoking mypy
     """
     if has_executable_on_path("mypy"):
-        return MyPyInvocation(command=["mypy"], pythonpath_additions="")
+        return MyPyInvocation(command=["mypy"])
 
     pip = get_pip()
     if not pip:
         assert not is_in_chroot()
         return None
 
-    def get_from_pip() -> Optional[MyPyInvocation]:
-        rc, output = run_command_unchecked(pip + ["show", "mypy"])
-        if rc:
-            return None
+    installed_packages = set(list_installed_pip_packages(pip))
+    pip_mypy_invocation = MyPyInvocation(
+        command=[
+            "python3",
+            "-m",
+            "mypy",
+        ],
+    )
 
-        m = re.search(r"^Location: (.*)", output, re.MULTILINE)
-        if not m:
-            return None
+    # If we're not in the chroot, don't try to install packages into the user's
+    # pip environment. If they're missing mypy, they'll get warned about that.
+    # If they're missing relevant typing packages, mypy will error out & print
+    # commands that allow the user to install those on their own.
+    if not is_in_chroot():
+        if "mypy" in installed_packages:
+            return pip_mypy_invocation
+        return None
 
-        pythonpath = m.group(1)
-        return MyPyInvocation(
-            command=[
-                "python3",
-                "-m",
-                "mypy",
-            ],
-            pythonpath_additions=pythonpath,
-        )
-
-    from_pip = get_from_pip()
-    if from_pip:
-        return from_pip
-
-    if is_in_chroot():
-        subprocess.check_call(pip + ["install", "--user", "mypy"])
-        return get_from_pip()
-    return None
+    need_packages = ("mypy",) + MYPY_TYPES_PACKAGES
+    missing_packages = [x for x in need_packages if x not in installed_packages]
+    if missing_packages:
+        subprocess.check_call(pip + ["install", "--user"] + missing_packages)
+    return pip_mypy_invocation
 
 
 def get_pip() -> Optional[List[str]]:
@@ -358,12 +369,6 @@ def check_mypy(
 ) -> CheckResult:
     """Checks type annotations using mypy."""
     fixed_env = env_with_pythonpath(toolchain_utils_root)
-    if mypy.pythonpath_additions:
-        new_pythonpath = (
-            f"{mypy.pythonpath_additions}:{fixed_env['PYTHONPATH']}"
-        )
-        fixed_env["PYTHONPATH"] = new_pythonpath
-
     # Show the version number, mainly for troubleshooting purposes.
     cmd = mypy.command + ["--version"]
     exit_code, output = run_command_unchecked(
