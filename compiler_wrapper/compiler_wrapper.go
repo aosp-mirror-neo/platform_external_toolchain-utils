@@ -141,6 +141,10 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	disableWerrorConfig := processForceDisableWerrorFlag(env, cfg, mainBuilder)
 	clangSyntax := processClangSyntaxFlag(mainBuilder)
 
+	if err := processPerPackageFlags(cfg, mainBuilder); err != nil {
+		return 0, err
+	}
+
 	rusageEnabled := isRusageEnabled(env)
 
 	// Disable CCache for rusage logs

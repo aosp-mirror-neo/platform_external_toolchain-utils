@@ -38,12 +38,12 @@ var Version = ""
 
 // UseCCache can be set via a linker flag.
 // Value will be passed to strconv.ParseBool.
-// E.g. go build -ldflags '-X config.UseCCache=true'.
+// E.g. go build -ldflags '-X main.UseCCache=true'.
 var UseCCache = "unknown"
 
 // UseLlvmNext can be set via a linker flag.
 // Value will be passed to strconv.ParseBool.
-// E.g. go build -ldflags '-X config.UseLlvmNext=true'.
+// E.g. go build -ldflags '-X main.UseLlvmNext=true'.
 var UseLlvmNext = "unknown"
 
 // ConfigName can be set via a linker flag.
@@ -51,6 +51,12 @@ var UseLlvmNext = "unknown"
 // - "cros.hardened"
 // - "cros.nonhardened"
 var ConfigName = "unknown"
+
+// LlvmRevision can be set via a linker flag.
+// Value, if provided, will be passed to strconv.ParseInt. If none is provided, logic
+// predicated on the current LLVM revision will be skipped.
+// E.g. go build -ldflags '-X main.LlvmRevision=12345'.
+var LlvmRevision = ""
 
 // Returns the configuration matching the UseCCache and ConfigName.
 func getRealConfig() (*config, error) {

@@ -15,10 +15,20 @@ fi
 # to always be redone.
 version_suffix="manually_installed_wrapper_at_unix_$(date +%s.%6N)"
 echo "Using toolchain hash: ${version_suffix}"
+llvm_revision="$(clang --version 2>&1 | head -n1 | sed 's/.*_pre\([0-9]*\).*/\1/')"
+if [[ -z "${llvm_revision}" || "${llvm_revision}" =~ [^0-9] ]]; then
+  echo "Failed to autodetect current LLVM revision" >&2
+  exit 1
+fi
+echo "Autodetected Clang revision: ${llvm_revision}"
+
 cd "$(dirname "$(readlink -m "$0")")"
 
 build_py() {
-  ./build.py --version_suffix="${version_suffix}" "$@"
+  ./build.py \
+    --version_suffix="${version_suffix}" \
+    --llvm_revision="${llvm_revision}" \
+    "$@"
 }
 
 install_sysroot_wrappers() {
