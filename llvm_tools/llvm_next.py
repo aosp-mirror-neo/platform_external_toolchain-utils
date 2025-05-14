@@ -19,8 +19,8 @@ LLVM_NEXT_REV = 563880
 # llvm_next_py_autoupdate.py.
 # pylint: disable=line-too-long
 LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = (
-    "https://crrev.com/c/6417962/2",
-    "https://crrev.com/i/8154895/20",
+    "https://crrev.com/c/6546232/1",
+    "https://crrev.com/i/8154895/21",
 )
 
 # A list of CLs that constitute the current llvm-next roll.
