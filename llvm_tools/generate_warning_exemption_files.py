@@ -8,7 +8,7 @@ This is intended to be used to mass-exempt warnings for Mage rotations. The file
 will contain one func like:
 
 ```
-func getWarningsForLLVM_rNNN(packageNameAndCategory string) []string {
+func getWarningSuppressionsForLLVM_rNN(packageNameAndCategory string) []string {
   // return `-Wno-*` flags required to make the given package build
 }
 ```
@@ -43,8 +43,8 @@ from llvm_tools import warning_exemption
 # simplicity's sake (esp. with tests, ...)
 GO_COPYRIGHT_HEADER = f"""\
 // Copyright {datetime.datetime.now().year} The ChromiumOS Authors
-// Use of this source code is governed by a BSD-style license that can
-// be found in the LICENSE file.
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
 """
 
 # This parses two kinds of errors:
@@ -295,7 +295,7 @@ def create_go_file(
           {package: (warning_names, builders_observed_on)}. The builder
           collection may be empty, but warning_names may not.
     """
-    func_name = f"getWarningsForLLVM_r{llvm_revision}"
+    func_name = f"getWarningSuppressionsForLLVM_r{llvm_revision}"
     header = textwrap.dedent(
         f"""\
 

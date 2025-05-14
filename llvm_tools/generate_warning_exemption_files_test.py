@@ -200,7 +200,7 @@ class Test(test_helpers.TempDirTestCase):
             llvm_revision=123,
             per_package_warnings={},
         )
-        fname = "getWarningsForLLVM_r123"
+        fname = "getWarningSuppressionsForLLVM_r123"
         expected = gen.GO_COPYRIGHT_HEADER + textwrap.dedent(
             f"""\
 
@@ -253,7 +253,7 @@ class Test(test_helpers.TempDirTestCase):
                 ),
             },
         )
-        fname = "getWarningsForLLVM_r321"
+        fname = "getWarningSuppressionsForLLVM_r321"
         expected = gen.GO_COPYRIGHT_HEADER + textwrap.dedent(
             f"""\
 
