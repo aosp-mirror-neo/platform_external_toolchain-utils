@@ -50,6 +50,7 @@ package main
 import "C"
 import (
 	"os/exec"
+	"strings"
 	"unsafe"
 )
 
@@ -60,8 +61,23 @@ import (
 // See crbug.com/1000863 for details.
 // To use this version of exec, please add '-tags libc_exec' when building Go binary.
 // Without the tags, libc_exec.go will not be used.
+//
+// To work around b/406369220, this function calls execCmdWithoutLibc
+// when "sandbox.so" is not present in LD_PRELOAD.
 
 func execCmd(env env, cmd *command) error {
+	// Workaround for b/406369220 (segmentation faults).
+	//
+	// LD_PRELOAD is a list separated by ':'s. If *sandbox.so is in that
+	// list, we conclude we're running inside the Portage sandbox and
+	// must use the libc code path. Else, we use execCmdWithoutLibc.
+	// This avoids segmentation faults which happen on the libc code path.
+	ldPreload, _ := env.getenv("LD_PRELOAD")
+	inSandbox := strings.HasSuffix(ldPreload, "sandbox.so") || strings.Contains(ldPreload, "sandbox.so:")
+	if !inSandbox {
+		return execCmdWithoutLibc(env, cmd)
+	}
+
 	freeList := []unsafe.Pointer{}
 	defer func() {
 		for _, ptr := range freeList {
