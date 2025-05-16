@@ -31,7 +31,16 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
-from typing import Dict, Generator, Iterable, List, Optional, Set, Tuple
+from typing import (
+    DefaultDict,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    Optional,
+    Set,
+    Tuple,
+)
 
 from cros_utils import gs
 from llvm_tools import cros_cls
@@ -218,12 +227,12 @@ def find_all_warning_reports_in(root: Path) -> Generator[Path, None, None]:
 
 def parse_all_fatal_warnings(
     warning_reports: Path,
-) -> Dict[warning_exemption.Package, FatalWarningGroup]:
+) -> DefaultDict[warning_exemption.Package, FatalWarningGroup]:
     logging.info("Parsing warning reports under %s", warning_reports)
 
-    per_package_groups: Dict[warning_exemption.Package, FatalWarningGroup] = (
-        collections.defaultdict(FatalWarningGroup)
-    )
+    per_package_groups: DefaultDict[
+        warning_exemption.Package, FatalWarningGroup
+    ] = collections.defaultdict(FatalWarningGroup)
     for warning_report in find_all_warning_reports_in(warning_reports):
         parse_result = parse_fatal_warnings_file(warning_report)
         if not parse_result:
@@ -453,49 +462,49 @@ def resolve_builder_artifacts(
     return results
 
 
-def fetch_and_unpack_fatal_warnings_tarball(
+def fetch_and_unpack_fatal_warnings_tarballs(
     tmpdir: Path, builder_artifacts: str
-) -> Optional[Path]:
+) -> List[Path]:
     tmpdir.mkdir(parents=True, exist_ok=True)
 
     tarball_suffix = "fatal_clang_warnings.tar.xz"
     results = gs.ls(os.path.join(builder_artifacts, f"*.{tarball_suffix}"))
-    if not results:
-        return None
-    if len(results) > 1:
-        raise ValueError(
-            f"Builder at {builder_artifacts} had {len(results)} warnings "
-            "tarballs; expected one"
+
+    unpack_dirs = []
+    for i, result in enumerate(results):
+        gs_path = result.gs_path
+        tarball_target = tmpdir / f"{i}_{tarball_suffix}"
+        logging.info(
+            "Fetching fatal warnings from %s into %s...",
+            gs_path,
+            tarball_target,
+        )
+        gs_result = subprocess.run(
+            (gs.GSUTIL, "cp", gs_path, tarball_target),
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="replace",
         )
 
-    gs_path = results[0].gs_path
-    tarball_target = tmpdir / tarball_suffix
-    logging.info("Fetching fatal warnings from %s...", gs_path)
-    gs_result = subprocess.run(
-        (gs.GSUTIL, "cp", gs_path, tarball_target),
-        check=False,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-        errors="replace",
-    )
+        if gs_result.returncode:
+            logging.error(
+                "Failed fetching %s; gs stderr: %r", gs_path, gs_result.stderr
+            )
+            gs_result.check_returncode()
 
-    if gs_result.returncode:
-        logging.error(
-            "Failed fetching %s; gs stderr: %r", gs_path, gs_result.stderr
+        unpack_dir = tmpdir / f"{i}_unpack"
+        unpack_dir.mkdir()
+        subprocess.run(
+            ("tar", "xaf", tarball_target),
+            check=True,
+            cwd=unpack_dir,
+            stdin=subprocess.DEVNULL,
         )
-        gs_result.check_returncode()
-
-    unpack_dir = tmpdir / "unpack"
-    unpack_dir.mkdir()
-    subprocess.run(
-        ("tar", "xaf", tarball_target),
-        check=True,
-        cwd=unpack_dir,
-        stdin=subprocess.DEVNULL,
-    )
-    return unpack_dir
+        unpack_dirs.append(unpack_dir)
+    return unpack_dirs
 
 
 def cmd_builders(
@@ -520,28 +529,36 @@ def cmd_builders(
                         builder,
                         artifacts_url,
                         pool.apply_async(
-                            fetch_and_unpack_fatal_warnings_tarball,
+                            fetch_and_unpack_fatal_warnings_tarballs,
                             (subdir, artifacts_url),
                         ),
                     )
                 )
 
             for builder, artifacts_url, task in tasks:
-                unpack_dir = task.get()
-                if not unpack_dir:
+                unpack_dirs = task.get()
+                if not unpack_dirs:
                     logging.info(
-                        "Builder %s had no fatal-warnings artifact; skip",
+                        "Builder %s had no fatal-warnings artifacts; skip",
                         builder.url,
                     )
                     continue
-                unpack_actions.append((builder, artifacts_url, unpack_dir))
+                unpack_actions.append((builder, artifacts_url, unpack_dirs))
 
         results: Dict[
             Optional[warning_exemption.Builder],
             Dict[warning_exemption.Package, FatalWarningGroup],
         ] = {}
-        for builder, artifacts_url, unpack_dir in unpack_actions:
-            results[builder] = parse_all_fatal_warnings(unpack_dir)
+        for builder, artifacts_url, unpack_dir_list in unpack_actions:
+            builder_results: Dict[
+                warning_exemption.Package, FatalWarningGroup
+            ] = collections.defaultdict(FatalWarningGroup)
+            for unpack_dir in unpack_dir_list:
+                for package, grp in parse_all_fatal_warnings(
+                    unpack_dir
+                ).items():
+                    builder_results[package].add(grp)
+            results[builder] = builder_results
 
         cleanup_tmpdir = not opts.keep_tempdir
     finally:
