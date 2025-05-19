@@ -246,6 +246,7 @@
             "-mthumb",
             "-fno-stack-protector",
             "--prefix=../../bin/armv7a-cros-linux-gnueabihf-",
+            "-fno-addrsig",
             "-D__KERNEL__",
             "main.cc",
             "-L/usr/armv7a-cros-linux-gnueabihf/usr/lib",

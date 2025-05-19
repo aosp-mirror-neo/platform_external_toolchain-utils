@@ -115,10 +115,22 @@ func isLikelyAConfTest(env env, cfg *config, cmd *command) bool {
 		return true
 	}
 
+	wasLastArgOutput := false
 	for _, a := range cmd.Args {
 		// The kernel, for example, will do configure tests with /dev/null as a source file.
 		if a == "/dev/null" || strings.HasPrefix(a, "conftest.c") {
 			return true
+		}
+
+		// b/417950454: scons conftests run during src_compile at times, but consistently use
+		// `-o ${some_dir}/.sconf.temp/conftest_${hash}_${num}.o`.
+		if wasLastArgOutput {
+			if strings.HasSuffix(a, ".o") && strings.Contains(a, "/.sconf.temp/conftest_") {
+				return true
+			}
+			wasLastArgOutput = false
+		} else {
+			wasLastArgOutput = a == "-o"
 		}
 	}
 	return false

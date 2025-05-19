@@ -133,6 +133,15 @@ func TestKnownConfigureFileParsing(t *testing.T) {
 				t.Errorf("%q isn't considered a conf test file", f)
 			}
 		}
+
+		sconsFlags := []string{
+			"-Wfoo",
+			"-o",
+			"chrome-os-chroot/.sconf.temp/conftest_h4sh.o",
+		}
+		if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, sconsFlags...)) {
+			t.Errorf("compile command with args %q isn't considered a conf test", sconsFlags)
+		}
 	})
 }
 

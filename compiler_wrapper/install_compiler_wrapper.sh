@@ -15,8 +15,27 @@ fi
 # to always be redone.
 version_suffix="manually_installed_wrapper_at_unix_$(date +%s.%6N)"
 echo "Using toolchain hash: ${version_suffix}"
-llvm_revision="$(clang --version 2>&1 | head -n1 | sed 's/.*_pre\([0-9]*\).*/\1/')"
-if [[ -z "${llvm_revision}" || "${llvm_revision}" =~ [^0-9] ]]; then
+clang_version="$(clang --version 2>&1 | head -n1)"
+case "${clang_version}" in
+	*" 9999 "* )
+		# If this was cros-workon'ed, we need to hunt inside of the LLVM repo.
+		# The version, on ChromeOS branches, should always be at
+		# ${llvm_project}/cros/llvm-rev.
+		my_dir="$(dirname "$(readlink -m "$0")")"
+		llvm_project="${my_dir}/../../../../../llvm-project"
+		llvm_revision="$(<"${llvm_project}/cros/llvm-rev")"
+		;;
+
+	*"_pre"* )
+		# This can't trivially be replaced with `${foo/bar/baz}`, since there's a
+		# backref.
+		# shellcheck disable=SC2001
+		llvm_revision="$(sed 's/.*_pre\([0-9]*\).*/\1/' <<< "${clang_version}")"
+		;;
+
+esac
+
+if [[ -z "${llvm_revision:-}" || "${llvm_revision:-}" =~ [^0-9] ]]; then
   echo "Failed to autodetect current LLVM revision" >&2
   exit 1
 fi

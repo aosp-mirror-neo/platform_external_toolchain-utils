@@ -16,7 +16,6 @@
             "-Wno-error=vla-cxx-extension",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
             "-Wno-unused-local-typedefs",
-            "-fno-addrsig",
             "-fcommon",
             "main.cc"
           ],

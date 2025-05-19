@@ -152,14 +152,12 @@ func getCrosHardenedConfig() *config {
 			"-Wno-maybe-uninitialized",
 		},
 		// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
-		// Disable "-faddrsig" since it produces object files that strip doesn't understand, chromium:915742.
 		// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
 		//   removed that flag for now.
 		clangFlags: append(
 			crosCommonClangFlags(),
 			"--unwindlib=libunwind",
 			"-Wno-section",
-			"-fno-addrsig",
 			"-ftrivial-auto-var-init=zero",
 		),
 		clangPostFlags: crosCommonClangPostFlags(),
@@ -208,7 +206,6 @@ func getCrosHostConfig() *config {
 		clangFlags: append(
 			crosCommonClangFlags(),
 			"-Wno-unused-local-typedefs",
-			"-fno-addrsig",
 		),
 		// Temporarily disable Wdeprecated-copy. b/191479033
 		clangPostFlags: crosCommonClangPostFlags(),
