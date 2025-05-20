@@ -592,5 +592,78 @@
       "from": 550362,
       "until": 570122
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "cros: add user-enumeration patch"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cros-add-user-enumeration-patch.patch",
+    "version_range": {
+      "from": null,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "llvm: don't touch VCS files"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "llvm-don-t-touch-VCS-files.patch",
+    "version_range": {
+      "from": 547379,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "830c0d493aee2f86a4e8e0e6711df93f53399364",
+      "title": "Regard unreachable function as a possible devirtualizable target"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/830c0d493aee2f86a4e8e0e6711df93f53399364.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 555655
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "ba476d0b83dc8a4bbf066dc02a0f73ded27114f0",
+      "title": "[LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ba476d0b83dc8a4bbf066dc02a0f73ded27114f0.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 564320
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "36acaa0be5cf6273200d4cc4c35042c4bfc3861b",
+      "title": "Revert \"[ARM][ConstantIslands] Correct MinNoSplitDisp calculation (#114590)\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/36acaa0be5cf6273200d4cc4c35042c4bfc3861b.patch",
+    "version_range": {
+      "from": 559379,
+      "until": 571637
+    }
   }
 ]
