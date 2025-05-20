@@ -42,12 +42,16 @@ def list_upstream_cherrypicks(patches_json: Path) -> Set[str]:
             if not x.get("platforms") or "chromiumos" in x["platforms"]
         ]
 
-    # Allow for arbitrary suffixes for patches; some have `-v2`, `_fixed`, etc.
-    sha_re = re.compile(r"cherry/([a-fA-F0-9]{40})\b.*\.patch$")
+    # Allow for arbitrary prefixes and suffixes for patches; some have `-v2`,
+    # `_fixed`, etc.
+    sha_re = re.compile(r"cherry/.*([a-fA-F0-9]{40})\b.*\.patch$")
     sha_like_patches = set()
     for p in applicable_patches:
-        m = sha_re.match(p["rel_patch_path"])
-        if m:
+        if s := p.get("metadata", {}).get("original_sha"):
+            sha_like_patches.add(s)
+            continue
+
+        if m := sha_re.match(p["rel_patch_path"]):
             sha_like_patches.add(m.group(1))
 
     return sha_like_patches
