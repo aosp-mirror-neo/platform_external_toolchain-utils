@@ -88,12 +88,6 @@ def main(argv: List[str]):
     #   the tree that it should run in_.
     cros_root = cros_paths.script_chromiumos_checkout_or_exit()
 
-    logging.basicConfig(
-        format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
-        "%(message)s",
-        level=logging.INFO,
-    )
-
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -115,7 +109,18 @@ def main(argv: List[str]):
         default="cros/upstream/main",
         help="ref to treat as 'origin/main' in the given LLVM dir.",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging",
+    )
+
     opts = parser.parse_args(argv)
+    logging.basicConfig(
+        format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
+        "%(message)s",
+        level=logging.DEBUG if opts.debug else logging.INFO,
+    )
 
     if opts.llvm_next:
         llvm_sha = get_llvm_hash.LLVMHash().GetCrOSLLVMNextHash()
@@ -128,6 +133,7 @@ def main(argv: List[str]):
         cros_root / cros_paths.DEFAULT_PATCHES_PATH
     )
     logging.info("Identified %d local cherrypicks.", len(in_tree_cherrypicks))
+    logging.debug("Cherry-pick SHAs: %s", in_tree_cherrypicks)
 
     raw_reverts = revert_checker.find_reverts(
         opts.git_dir,
