@@ -20,7 +20,7 @@ LLVM_NEXT_REV = 563880
 # pylint: disable=line-too-long
 LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = (
     "https://crrev.com/c/6546232/2",
-    "https://crrev.com/i/8154895/29",
+    "https://crrev.com/i/8154895/32",
 )
 
 # A list of CLs that constitute the current llvm-next roll.
