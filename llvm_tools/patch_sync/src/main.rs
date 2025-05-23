@@ -42,6 +42,7 @@ fn main() -> Result<()> {
             no_commit,
             wip,
             disable_cq,
+            no_add_autoreview_topic,
             uprev,
         } => transpose_subcmd(TransposeOpt {
             cros_checkout_path,
@@ -60,6 +61,7 @@ fn main() -> Result<()> {
             no_commit,
             wip,
             disable_cq,
+            no_add_autoreview_topic,
             uprev_ebuilds: uprev,
         }),
     }
@@ -119,6 +121,7 @@ struct TransposeOpt {
     verbose: bool,
     dry_run: bool,
     no_commit: bool,
+    no_add_autoreview_topic: bool,
     cros_reviewers: Vec<String>,
     android_reviewers: Vec<String>,
     wip: bool,
@@ -133,6 +136,7 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
         CommitOpt::CommitAndUpload(RepoUploadOpts {
             wip_mode: args.wip,
             enable_cq: !args.disable_cq,
+            set_autoreview_topic: !args.no_add_autoreview_topic,
         })
     };
     let ctx = RepoSetupContext {
@@ -411,5 +415,10 @@ enum Opt {
         /// Don't run CQ if set. Only has an effect if uploading.
         #[structopt(long)]
         disable_cq: bool,
+
+        /// Don't add an autoreview Gerrit topic after uploading, if possible. Only has an effect if
+        /// uploading.
+        #[structopt(long)]
+        no_add_autoreview_topic: bool,
     },
 }

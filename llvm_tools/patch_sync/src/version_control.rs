@@ -23,6 +23,7 @@ const WORK_BRANCH_NAME: &str = "__patch_sync_tmp";
 pub struct RepoUploadOpts {
     pub wip_mode: bool,
     pub enable_cq: bool,
+    pub set_autoreview_topic: bool,
 }
 
 /// Context struct to keep track of both ChromiumOS and Android checkouts.
@@ -89,12 +90,20 @@ impl RepoSetupContext {
             extra_args.push("--re");
             extra_args.push(reviewer.as_ref());
         }
-        if upload_opts.wip_mode {
+        let RepoUploadOpts {
+            wip_mode,
+            enable_cq,
+            set_autoreview_topic,
+        } = upload_opts;
+        if *wip_mode {
             extra_args.push("--wip");
             extra_args.push("--no-emails");
         }
-        if upload_opts.enable_cq {
+        if *enable_cq {
             extra_args.push("--label=Commit-Queue+1");
+        }
+        if *set_autoreview_topic {
+            extra_args.push("--topic=crostc-auto-cl");
         }
         Self::repo_upload(
             &self.cros_checkout,
@@ -119,11 +128,17 @@ impl RepoSetupContext {
             extra_args.push("--re");
             extra_args.push(reviewer.as_ref());
         }
-        if upload_opts.wip_mode {
+        // NOTE: Android has no 'autoreview topic', so that's ignored here.
+        let RepoUploadOpts {
+            wip_mode,
+            enable_cq,
+            set_autoreview_topic: _,
+        } = upload_opts;
+        if *wip_mode {
             extra_args.push("--wip");
             extra_args.push("--no-emails");
         }
-        if upload_opts.enable_cq {
+        if *enable_cq {
             extra_args.push("--label=Presubmit-Ready+1");
         }
         Self::repo_upload(
