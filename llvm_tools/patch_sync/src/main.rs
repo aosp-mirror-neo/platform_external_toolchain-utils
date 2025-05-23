@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use structopt::StructOpt;
 
 use patch_parsing::{filter_patches_by_platform, PatchCollection, PatchDictSchema, VersionRange};
-use version_control::RepoSetupContext;
+use version_control::{RepoSetupContext, RepoUploadOpts};
 
 fn main() -> Result<()> {
     match Opt::from_args() {
@@ -83,8 +83,6 @@ fn show_subcmd(args: ShowOpt) -> Result<()> {
         cros_checkout: cros_checkout_path,
         android_checkout: android_checkout_path,
         sync_before: sync,
-        wip_mode: true,   // Has no effect, as we're not making changes
-        enable_cq: false, // Has no effect, as we're not uploading anything
         uprev_ebuilds: false,
     };
     ctx.setup()?;
@@ -129,12 +127,18 @@ struct TransposeOpt {
 }
 
 fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
+    let commit_opt = if args.no_commit {
+        CommitOpt::NoCommit
+    } else {
+        CommitOpt::CommitAndUpload(RepoUploadOpts {
+            wip_mode: args.wip,
+            enable_cq: !args.disable_cq,
+        })
+    };
     let ctx = RepoSetupContext {
         cros_checkout: args.cros_checkout_path,
         android_checkout: args.android_checkout_path,
         sync_before: args.sync,
-        wip_mode: args.wip,
-        enable_cq: !args.disable_cq,
         uprev_ebuilds: args.uprev_ebuilds,
     };
     ctx.setup()?;
@@ -211,7 +215,7 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
 
     modify_repos(
         &ctx,
-        args.no_commit,
+        &commit_opt,
         ModifyOpt {
             new_cros_patches,
             cur_cros_collection,
@@ -225,6 +229,11 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
     )
 }
 
+enum CommitOpt {
+    NoCommit,
+    CommitAndUpload(RepoUploadOpts),
+}
+
 struct ModifyOpt {
     new_cros_patches: PatchCollection,
     cur_cros_collection: PatchCollection,
@@ -236,7 +245,7 @@ struct ModifyOpt {
     android_reviewers: Vec<String>,
 }
 
-fn modify_repos(ctx: &RepoSetupContext, no_commit: bool, opt: ModifyOpt) -> Result<()> {
+fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) -> Result<()> {
     // Cleanup on scope exit.
     scopeguard::defer! {
         ctx.cleanup();
@@ -258,15 +267,19 @@ fn modify_repos(ctx: &RepoSetupContext, no_commit: bool, opt: ModifyOpt) -> Resu
             .transpose_write(&mut cur_cros_collection)?;
     }
 
-    if no_commit {
-        println!("--no-commit specified; not committing or uploading");
-        return Ok(());
-    }
+    let upload_opts = match &commit_opt {
+        CommitOpt::NoCommit => {
+            println!("--no-commit specified; not committing or uploading");
+            return Ok(());
+        }
+        CommitOpt::CommitAndUpload(x) => x,
+    };
+
     // Commit and upload for review ------------------------------------------
     // Note we want to check if the android patches are empty for CrOS, and
     // vice versa. This is a little counterintuitive.
     if !opt.new_android_patches.is_empty() {
-        ctx.cros_repo_upload(&opt.cros_reviewers)
+        ctx.cros_repo_upload(&opt.cros_reviewers, upload_opts)
             .context("uploading chromiumos changes")?;
     }
     if !opt.new_cros_patches.is_empty() {
@@ -276,7 +289,7 @@ fn modify_repos(ctx: &RepoSetupContext, no_commit: bool, opt: ModifyOpt) -> Resu
                 e
             );
         }
-        ctx.android_repo_upload(&opt.android_reviewers)
+        ctx.android_repo_upload(&opt.android_reviewers, upload_opts)
             .context("uploading android changes")?;
     }
     Ok(())

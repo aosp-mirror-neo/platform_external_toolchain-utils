@@ -18,6 +18,13 @@ const CROS_MAIN_BRANCH: &str = "cros/main";
 const ANDROID_MAIN_BRANCH: &str = "aosp/main";
 const WORK_BRANCH_NAME: &str = "__patch_sync_tmp";
 
+/// Options for changes that get `repo upload`ed.
+#[derive(Debug)]
+pub struct RepoUploadOpts {
+    pub wip_mode: bool,
+    pub enable_cq: bool,
+}
+
 /// Context struct to keep track of both ChromiumOS and Android checkouts.
 #[derive(Debug)]
 pub struct RepoSetupContext {
@@ -25,8 +32,6 @@ pub struct RepoSetupContext {
     pub android_checkout: PathBuf,
     /// Run `repo sync` before doing any comparisons.
     pub sync_before: bool,
-    pub wip_mode: bool,
-    pub enable_cq: bool,
     /// Generally LLVM ebuilds are now 9999 LIVE ebuilds, so only uprev if this is set.
     pub uprev_ebuilds: bool,
 }
@@ -60,7 +65,11 @@ impl RepoSetupContext {
         Ok(())
     }
 
-    pub fn cros_repo_upload<S: AsRef<str>>(&self, reviewers: &[S]) -> Result<()> {
+    pub fn cros_repo_upload<S: AsRef<str>>(
+        &self,
+        reviewers: &[S],
+        upload_opts: &RepoUploadOpts,
+    ) -> Result<()> {
         let llvm_dir = self
             .cros_checkout
             .join(CROS_TOOLCHAIN_UTILS_REL_PATH)
@@ -80,11 +89,11 @@ impl RepoSetupContext {
             extra_args.push("--re");
             extra_args.push(reviewer.as_ref());
         }
-        if self.wip_mode {
+        if upload_opts.wip_mode {
             extra_args.push("--wip");
             extra_args.push("--no-emails");
         }
-        if self.enable_cq {
+        if upload_opts.enable_cq {
             extra_args.push("--label=Commit-Queue+1");
         }
         Self::repo_upload(
@@ -100,17 +109,21 @@ impl RepoSetupContext {
         )
     }
 
-    pub fn android_repo_upload<S: AsRef<str>>(&self, reviewers: &[S]) -> Result<()> {
+    pub fn android_repo_upload<S: AsRef<str>>(
+        &self,
+        reviewers: &[S],
+        upload_opts: &RepoUploadOpts,
+    ) -> Result<()> {
         let mut extra_args = Vec::new();
         for reviewer in reviewers {
             extra_args.push("--re");
             extra_args.push(reviewer.as_ref());
         }
-        if self.wip_mode {
+        if upload_opts.wip_mode {
             extra_args.push("--wip");
             extra_args.push("--no-emails");
         }
-        if self.enable_cq {
+        if upload_opts.enable_cq {
             extra_args.push("--label=Presubmit-Ready+1");
         }
         Self::repo_upload(
