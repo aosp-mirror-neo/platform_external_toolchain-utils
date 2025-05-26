@@ -17,10 +17,10 @@ func TestWrapperRetriesCompilationsOnApparentKernelBugsSurfacedInGo(t *testing.T
 	withTestContext(t, func(ctx *testContext) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 			switch {
-			case ctx.cmdCount < kernelBugRetryLimit:
+			case ctx.cmdCount < retryableBugRetryLimit:
 				return getErrorIndicatingKernelBug()
 
-			case ctx.cmdCount == kernelBugRetryLimit:
+			case ctx.cmdCount == retryableBugRetryLimit:
 				return nil
 
 			default:
@@ -29,8 +29,8 @@ func TestWrapperRetriesCompilationsOnApparentKernelBugsSurfacedInGo(t *testing.T
 			}
 		}
 		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, mainCc)))
-		if ctx.cmdCount != kernelBugRetryLimit {
-			t.Errorf("expected %d retries. Got: %d", kernelBugRetryLimit, ctx.cmdCount)
+		if ctx.cmdCount != retryableBugRetryLimit {
+			t.Errorf("expected %d retries. Got: %d", retryableBugRetryLimit, ctx.cmdCount)
 		}
 	})
 }
@@ -38,7 +38,7 @@ func TestWrapperRetriesCompilationsOnApparentKernelBugsSurfacedInGo(t *testing.T
 func TestWrapperRetriesCompilationsOnApparentKernelBugsSurfacedInGCC(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-			if ctx.cmdCount >= kernelBugRetryLimit {
+			if ctx.cmdCount >= retryableBugRetryLimit {
 				return nil
 			}
 			_, err := io.WriteString(stderr, "fatal error: failed to get exit status: Unknown error 512")
@@ -48,8 +48,8 @@ func TestWrapperRetriesCompilationsOnApparentKernelBugsSurfacedInGCC(t *testing.
 			return newExitCodeError(1)
 		}
 		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, mainCc)))
-		if ctx.cmdCount != kernelBugRetryLimit {
-			t.Errorf("expected %d retries. Got: %d", kernelBugRetryLimit, ctx.cmdCount)
+		if ctx.cmdCount != retryableBugRetryLimit {
+			t.Errorf("expected %d retries. Got: %d", retryableBugRetryLimit, ctx.cmdCount)
 		}
 	})
 }
@@ -58,7 +58,7 @@ func TestWrapperOnlyRetriesCompilationAFiniteNumberOfTimes(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		kernelBugErr := getErrorIndicatingKernelBug()
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
-			if ctx.cmdCount > kernelBugRetryLimit {
+			if ctx.cmdCount > retryableBugRetryLimit {
 				t.Fatal("command count exceeded kernel bug retry limit; infinite loop?")
 			}
 			return kernelBugErr
@@ -67,8 +67,8 @@ func TestWrapperOnlyRetriesCompilationAFiniteNumberOfTimes(t *testing.T) {
 		if err := verifyInternalError(stderr); err != nil {
 			t.Errorf("Internal error wasn't reported: %v", err)
 		}
-		if ctx.cmdCount != kernelBugRetryLimit {
-			t.Errorf("expected %d retries. Got: %d", kernelBugRetryLimit, ctx.cmdCount)
+		if ctx.cmdCount != retryableBugRetryLimit {
+			t.Errorf("expected %d retries. Got: %d", retryableBugRetryLimit, ctx.cmdCount)
 		}
 	})
 }

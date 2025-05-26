@@ -10,8 +10,6 @@ import (
 
 // crbug.com/1166017
 
-const kernelBugRetryLimit = 25
-
 // GCC will sometimes fail to wait on subprocesses due to this kernel bug. It always fails the
 // compilation and prints "Unknown error 512" in that case.
 func containsTracesOfKernelBug(buf []byte) bool {

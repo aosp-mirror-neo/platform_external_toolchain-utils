@@ -19,6 +19,8 @@ import (
 const (
 	clangCrashArtifactsSubdir = "toolchain/clang_crash_diagnostics"
 	crosArtifactsEnvVar       = "CROS_ARTIFACTS_TMP_DIR"
+
+	retryableBugRetryLimit = 25
 )
 
 func callCompiler(env env, cfg *config, inputCmd *command) int {
@@ -45,6 +47,19 @@ func callCompiler(env env, cfg *config, inputCmd *command) int {
 		exitCode = 1
 	}
 	return exitCode
+}
+
+func containsTracesOfRetryableBug(env env, stdoutOrStderr []byte) bool {
+	if containsTracesOfKernelBug(stdoutOrStderr) {
+		return true
+	}
+
+	// b/417125943: temporarily work around crashes in fcp builds. Since bazel filters the
+	// environment, determine whether to retry using the current directory.
+	if strings.Contains(env.getwd(), "/sys-cluster/fcp") {
+		return bytes.Contains(stdoutOrStderr, []byte("PLEASE submit a bug report to "))
+	}
+	return false
 }
 
 // Given the main builder path and the absolute path to our wrapper, returns the path to the
@@ -152,7 +167,7 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	allowCCache := !rusageEnabled
 	remoteBuildUsed := false
 
-	workAroundKernelBugWithRetries := false
+	workAroundRetryableBug := false
 	if cfg.isAndroidWrapper {
 		mainBuilder.path = calculateAndroidWrapperPath(mainBuilder.path, mainBuilder.absWrapperPath)
 		switch mainBuilder.target.compilerType {
@@ -228,7 +243,7 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 			if err != nil {
 				return 0, err
 			}
-			workAroundKernelBugWithRetries = true
+			workAroundRetryableBug = true
 		}
 	}
 
@@ -254,7 +269,7 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 
 	errRetryCompilation := errors.New("compilation retry requested")
 	var runCompiler func(willLogRusage bool) (int, error)
-	if !workAroundKernelBugWithRetries {
+	if !workAroundRetryableBug {
 		runCompiler = func(willLogRusage bool) (int, error) {
 			var err error
 			if willLogRusage {
@@ -287,7 +302,8 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 				env.run(compilerCmd, getStdin(), stdoutBuffer, stderrBuffer))
 
 			if compilerErr != nil || exitCode != 0 {
-				if retryAttempt < kernelBugRetryLimit && (errorContainsTracesOfKernelBug(compilerErr) || containsTracesOfKernelBug(stdoutBuffer.Bytes()) || containsTracesOfKernelBug(stderrBuffer.Bytes())) {
+				if retryAttempt < retryableBugRetryLimit && (errorContainsTracesOfKernelBug(compilerErr) ||
+					containsTracesOfRetryableBug(env, stdoutBuffer.Bytes()) || containsTracesOfRetryableBug(env, stderrBuffer.Bytes())) {
 					return exitCode, errRetryCompilation
 				}
 			}
