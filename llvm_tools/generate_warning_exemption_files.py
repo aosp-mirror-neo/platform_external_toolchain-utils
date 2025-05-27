@@ -8,7 +8,7 @@ This is intended to be used to mass-exempt warnings for Mage rotations. The file
 will contain one func like:
 
 ```
-func getWarningSuppressionsForLLVM_rNN(packageNameAndCategory string) []string {
+func warningSuppressionsForLLVM_rNN(packageNameAndCategory string) []string {
   // return `-Wno-*` flags required to make the given package build
 }
 ```
@@ -304,7 +304,7 @@ def create_go_file(
           {package: (warning_names, builders_observed_on)}. The builder
           collection may be empty, but warning_names may not.
     """
-    func_name = f"getWarningSuppressionsForLLVM_r{llvm_revision}"
+    func_name = f"warningSuppressionsForLLVM_r{llvm_revision}"
     header = textwrap.dedent(
         f"""\
 
