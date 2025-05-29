@@ -9,7 +9,9 @@ import enum
 import json
 import logging
 import re
+import shlex
 import subprocess
+import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 
@@ -166,6 +168,71 @@ class BuilderStatus(enum.StrEnum):
 def builder_url(build_id: BuildID) -> str:
     """Returns a builder URL given a build ID."""
     return f"https://ci.chromium.org/b/{build_id}"
+
+
+_BOT_SPAWN_BUILD_ID_RE = re.compile(r"http://ci\.chromium\.org/b/(\d+)\b")
+
+
+def spawn_bot(
+    bot_name: str,
+    cls: Iterable[ChangeListURL] = (),
+) -> BuildID:
+    """Uses `bb add` to spawn a builder with the given params."""
+    cmd = ["bb", "add"]
+    for cl in cls:
+        cmd += ("--cl", str(cl))
+    cmd.append(bot_name)
+
+    logging.debug("Running builder with %s", shlex.join(cmd))
+    run_stdout = subprocess.run(
+        cmd,
+        check=True,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ).stdout
+
+    build_ids = _BOT_SPAWN_BUILD_ID_RE.findall(run_stdout)
+    if len(build_ids) != 1:
+        logging.error("Unexpected stdout from `bb add`; got %r", run_stdout)
+        raise ValueError("Expected one build-id from stdout; got {build_ids}")
+
+    build_id = BuildID(build_ids[0])
+    logging.info("Spawned bot: %s", builder_url(build_id))
+    return build_id
+
+
+def wait_for_bot_to_finish(
+    build_id: BuildID, timeout_hours: int
+) -> BuilderStatus:
+    """Waits for the given build to finish, returning its final status.
+
+    Args:
+        build_id: Builder ID
+        timeout_hours: Hours before giving up
+
+    Raises:
+        ValueError if the timeout expires
+    """
+    timeout_at_secs = time.time() + timeout_hours * 60 * 60
+    check_frequency_secs = 10 * 60
+    while True:
+        out = _run_bb_decoding_output(
+            ["get", "-json", "-fields=status", str(build_id)],
+        )
+        assert len(out) == 1, out
+        status = BuilderStatus(out[0])
+        if not status.is_running:
+            return status
+
+        if time.time() > timeout_at_secs:
+            raise ValueError(
+                f"Bot hit timeout after {timeout_hours} hours; "
+                f"last status was {status!r}"
+            )
+
+        logging.info("Bot is still running; sleeping for a bit...")
+        time.sleep(check_frequency_secs)
 
 
 def fetch_cq_orchestrator_ids(
