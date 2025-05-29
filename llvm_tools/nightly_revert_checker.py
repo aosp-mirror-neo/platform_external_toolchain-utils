@@ -436,23 +436,28 @@ def _upload_revert_cherry_pick(
     # merge-conflict markers baked in. If the mage cares, they can fix it up
     # and land it.
     if cherry_pick_returncode:
-        if not git_utils.has_discardable_changes(llvm_worktree):
-            logging.warning(
-                "Cherry-pick of SHA %s would be empty; skipping upload", sha
-            )
-            return
-
         logging.error(
             "Cherry-pick failed. Still uploading, but with highlights."
         )
         subprocess.run(
-            ["git", "add", "."],
+            ("git", "add", "."),
             check=True,
             cwd=llvm_worktree,
             stdin=subprocess.DEVNULL,
         )
+        if not git_utils.has_discardable_changes(llvm_worktree):
+            logging.warning(
+                "Cherry-pick of SHA %s would be empty; skipping upload", sha
+            )
+            subprocess.run(
+                ("git", "cherry-pick", "--abort"),
+                check=True,
+                cwd=llvm_worktree,
+                stdin=subprocess.DEVNULL,
+            )
+            return
         subprocess.run(
-            ["git", "cherry-pick", "--continue"],
+            ("git", "cherry-pick", "--continue"),
             check=True,
             cwd=llvm_worktree,
             stdin=subprocess.DEVNULL,
