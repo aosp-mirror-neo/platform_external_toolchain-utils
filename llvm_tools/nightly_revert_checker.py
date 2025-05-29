@@ -34,6 +34,10 @@ ONE_DAY_SECS = 24 * 60 * 60
 HEAD_STALENESS_ALERT_INTERVAL_SECS = 21 * ONE_DAY_SECS
 # How long to wait after a HEAD changes for the first 'update' email to be sent.
 HEAD_STALENESS_ALERT_INITIAL_SECS = 60 * ONE_DAY_SECS
+# How long to keep `seen_reverts` in state after their LLVM SHA has been
+# removed. This is useful, since it keeps us from re-alerting about reverts if
+# an llvm-next roll has to be reverted.
+REVERT_LIST_GC_TIMEOUT = 14 * ONE_DAY_SECS
 
 
 # Not frozen, as `next_notification_timestamp` may be mutated.
@@ -62,21 +66,20 @@ class State:
 
     # Mapping of LLVM SHA -> List of reverts that have been seen for it
     seen_reverts: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+    # A mapping of LLVM SHA -> the last timestamp at which it was considered
+    # 'interesting'.
+    last_seen_llvm_shas: Dict[str, int] = dataclasses.field(
+        default_factory=dict
+    )
     # Mapping of friendly HEAD name (e.g., main-legacy) to last-known info
     # about it.
     heads: Dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_json(cls, json_object: Any) -> "State":
-        # Autoupgrade old JSON files.
-        if "heads" not in json_object:
-            json_object = {
-                "seen_reverts": json_object,
-                "heads": {},
-            }
-
         return cls(
             seen_reverts=json_object["seen_reverts"],
+            last_seen_llvm_shas=json_object.get("last_seen_llvm_shas", {}),
             heads={
                 k: HeadInfo.from_json(v)
                 for k, v in json_object["heads"].items()
@@ -84,10 +87,9 @@ class State:
         )
 
     def to_json(self) -> Any:
-        return {
-            "seen_reverts": self.seen_reverts,
-            "heads": {k: v.to_json() for k, v in self.heads.items()},
-        }
+        result = dataclasses.asdict(self)
+        result["heads"] = {k: v.to_json() for k, v in self.heads.items()}
+        return result
 
 
 def _find_interesting_android_shas(
@@ -251,6 +253,8 @@ def locate_new_reverts_across_shas(
     """Locates and returns yet-unseen reverts across `interesting_shas`."""
     new_state = State()
     revert_infos = []
+
+    now = int(time.time())
     for friendly_name, sha in interesting_shas:
         logging.info("Finding reverts across %s (%s)", friendly_name, sha)
         all_reverts = revert_checker.find_reverts(
@@ -283,7 +287,6 @@ def locate_new_reverts_across_shas(
                 new_head_info = old_head_info
 
         if new_head_info is None:
-            now = int(time.time())
             notify_at = HEAD_STALENESS_ALERT_INITIAL_SECS + now
             new_head_info = HeadInfo(
                 last_sha=sha,
@@ -299,6 +302,32 @@ def locate_new_reverts_across_shas(
                 new_reverts=new_reverts,
             )
         )
+
+    for head in new_state.seen_reverts:
+        new_state.last_seen_llvm_shas[head] = now
+
+    # b/421163819: copy over the old state's HEADs for a while, even if they're
+    # no longer relevant. A revert of an upstream toolchain may 'revive' them.
+    for head, seen_reverts in state.seen_reverts.items():
+        if head in new_state.last_seen_llvm_shas:
+            continue
+
+        if last_seen := state.last_seen_llvm_shas.get(head):
+            if last_seen + REVERT_LIST_GC_TIMEOUT < now:
+                logging.info(
+                    "Dropping LLVM HEAD %s; it's not been seen for a while",
+                    head,
+                )
+                continue
+        else:
+            # No data exists on when this was last seen, fill in current info.
+            # This case mostly exists for "we're dealing with a state file
+            # created before `last_seen_llvm_shas` was added" - it can be
+            # removed in July of 2025 or so.
+            last_seen = now
+        new_state.last_seen_llvm_shas[head] = last_seen
+        new_state.seen_reverts[head] = seen_reverts.copy()
+
     return new_state, revert_infos
 
 
