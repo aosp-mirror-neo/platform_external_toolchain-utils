@@ -170,6 +170,7 @@ def builder_url(build_id: BuildID) -> str:
     return f"https://ci.chromium.org/b/{build_id}"
 
 
+# Used to parse the build ID from a `bb add` invocation.
 _BOT_SPAWN_BUILD_ID_RE = re.compile(r"http://ci\.chromium\.org/b/(\d+)\b")
 
 
@@ -233,6 +234,14 @@ def wait_for_bot_to_finish(
 
         logging.info("Bot is still running; sleeping for a bit...")
         time.sleep(check_frequency_secs)
+
+
+def fetch_builder_steps(build_id: BuildID) -> List[Any]:
+    """Returns the JSON dict of the given builder's steps."""
+    result = _run_bb_decoding_output(["get", "-steps", str(build_id)])
+    # A build with no steps is functionally equivalent to a build with an empty
+    # steps list.
+    return result.get("steps", [])
 
 
 def fetch_cq_orchestrator_ids(
