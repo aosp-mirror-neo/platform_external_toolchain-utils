@@ -15,8 +15,7 @@ from pathlib import Path
 import subprocess
 from typing import Dict, List
 
-
-UPLOAD_LINTER_FINDINGS_STEP_NAME = "upload linter findings"
+from bot_tools import bot_lints
 
 
 def date_to_proto(date: datetime.date) -> str:
@@ -69,109 +68,9 @@ def enumerate_bots(
     return [int(x) for x in all_builds.splitlines()]
 
 
-@dataclasses.dataclass(frozen=True, eq=True)
-class Finding:
-    """A single finding by the linter bots.
-
-    Contains some of the information from the Finding struct in
-    https://github.com/luci/luci-go/blob/main/common/proto/findings/findings.proto
-
-    Selection was done based mostly on "is it likely that we'll care to query
-    based this information, or use it in end-to-end tests?"
-    """
-
-    category: str
-    file_path: str
-    gerrit_host: str
-    gerrit_change_number: int
-    gerrit_patchset: int
-    message: str
-    severity_level: str
-
-
-@dataclasses.dataclass(frozen=True, eq=True)
-class LinterBotInfo:
-    """Info about a single linter bot invocation."""
-
-    create_time: datetime.datetime
-    findings: List[Finding]
-
-
-def fetch_bot_findings(build_id: int) -> List[Finding]:
-    """Fetches the findings associated with the given build ID.
-
-    It's up to the caller to verify that the build ID _has_ findings; if not,
-    the `bb` command this invokes will fail, causing this function to `raise`.
-    """
-    findings = json.loads(
-        subprocess.run(
-            (
-                "bb",
-                "log",
-                str(build_id),
-                UPLOAD_LINTER_FINDINGS_STEP_NAME,
-                "findings.json",
-            ),
-            check=True,
-            encoding="utf-8",
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-        ).stdout
-    )["findings"]
-
-    results = []
-    for finding in findings:
-        location = finding["location"]
-        gerrit_change_ref = location["gerrit_change_ref"]
-        results.append(
-            Finding(
-                category=finding["category"],
-                file_path=location["file_path"],
-                gerrit_host=gerrit_change_ref["host"],
-                gerrit_change_number=int(gerrit_change_ref["change"]),
-                gerrit_patchset=int(gerrit_change_ref["patchset"]),
-                message=finding["message"],
-                severity_level=finding["severity_level"],
-            )
-        )
-    return results
-
-
-def fetch_bot_info(build_id: int) -> LinterBotInfo:
-    """Fetches the LinterBotInfo for a single linter bot invocation."""
-    logging.info("Fetching info for %d", build_id)
-    build_results = json.loads(
-        subprocess.run(
-            (
-                "bb",
-                "get",
-                "-steps",
-                "-json",
-                str(build_id),
-            ),
-            check=True,
-            encoding="utf-8",
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-        ).stdout
-    )
-
-    create_time = datetime.datetime.fromisoformat(build_results["createTime"])
-    has_findings = any(
-        x["name"] == UPLOAD_LINTER_FINDINGS_STEP_NAME
-        for x in build_results["steps"]
-    )
-    findings = fetch_bot_findings(build_id) if has_findings else []
-    logging.debug("Bot %d had %d findings", build_id, len(findings))
-    return LinterBotInfo(
-        create_time=create_time,
-        findings=findings,
-    )
-
-
 def group_findings_by_date(
-    info: List[LinterBotInfo],
-) -> Dict[datetime.date, List[Finding]]:
+    info: List[bot_lints.LinterBotInfo],
+) -> Dict[datetime.date, List[bot_lints.Finding]]:
     """Groups the given linter bots' findings by the date the bot was run on."""
     grouped = collections.defaultdict(list)
     for bot_info in info:
@@ -192,12 +91,12 @@ def asciify(s: str) -> str:
     return s.encode("ascii", "backslashreplace").decode("ascii")
 
 
-def write_findings(to_file: Path, findings: List[Finding]):
+def write_findings(to_file: Path, findings: List[bot_lints.Finding]):
     """Writes `findings` to `to_file` as a CSV."""
     with to_file.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=[x.name for x in dataclasses.fields(Finding)],
+            fieldnames=[x.name for x in dataclasses.fields(bot_lints.Finding)],
             dialect=csv.unix_dialect,
         )
         writer.writeheader()
@@ -211,7 +110,7 @@ def write_findings(to_file: Path, findings: List[Finding]):
 
 
 def write_grouped_findings(
-    out_dir: Path, findings: Dict[datetime.date, List[Finding]]
+    out_dir: Path, findings: Dict[datetime.date, List[bot_lints.Finding]]
 ):
     """Writes `findings` to dated subdirectories of `out_dir`.
 
@@ -285,7 +184,7 @@ def main(argv: List[str]) -> None:
         return
 
     logging.info("Found %d bots to inspect", len(bots_to_inspect))
-    bot_infos = [fetch_bot_info(x) for x in bots_to_inspect]
+    bot_infos = [bot_lints.fetch_bot_info(x) for x in bots_to_inspect]
     grouped_findings = group_findings_by_date(bot_infos)
     logging.info(
         "Found %d findings across %d days",
