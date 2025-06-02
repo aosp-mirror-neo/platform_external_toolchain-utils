@@ -233,7 +233,8 @@ def find_size_diffable_cq_artifacts(
             # incomplete artifacts (e.g., debug.tgz is "the set of all debuginfo
             # of successfully built packages," and the build might not have
             # gotten far enough to produce chromeos-chrome's debug.tgz)
-            if output.artifacts_link is not None and output.status == "SUCCESS"
+            if output.artifacts_link is not None
+            and output.status == cros_cls.BuilderStatus.SUCCESS
         ]
 
         if not artifact_dir_links:
