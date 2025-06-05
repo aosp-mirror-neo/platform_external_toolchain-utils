@@ -86,20 +86,6 @@
   {
     "metadata": {
       "info": [],
-      "title": "[libcxx] v4: Crash when dereferencing nullopt for std::optional"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "libcxx-crash-when-dereferencing-nullopt-v4.patch",
-    "version_range": {
-      "from": 520603,
-      "until": 547379
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
       "title": "v5: Crash when dereferencing nullopt for std::optional"
     },
     "platforms": [
@@ -138,21 +124,6 @@
     "version_range": {
       "from": 450784,
       "until": null
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "Disable vfork/fork events"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "Disable-vfork-fork-events.patch",
-    "version_range": {
-      "from": 468909,
-      "until": 547379
     }
   },
   {
@@ -272,21 +243,6 @@
   {
     "metadata": {
       "info": [],
-      "original_sha": "0a00d32c5f88fce89006dcde6e235bc77d7b495e",
-      "title": "[lldb] Add armv7a and armv8a ArchSpecs (#106433)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/0a00d32c5f88fce89006dcde6e235bc77d7b495e.patch",
-    "version_range": {
-      "from": 530567,
-      "until": 547992
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
       "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
     },
     "platforms": [
@@ -329,81 +285,6 @@
   {
     "metadata": {
       "info": [],
-      "original_sha": "815bf0f190383e14068f191bb0d16d62fbb6f8b3",
-      "title": "Revert \"[Clang] [Test] Use lit Syntax for Environment Variables in Clang subproject\" (#106267)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/815bf0f190383e14068f191bb0d16d62fbb6f8b3.patch",
-    "version_range": {
-      "from": 547155,
-      "until": 547783
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "e3ce979f1b3ac1e7f2d0261d3abffbd12064eae6",
-      "title": "Revert \"[clang] Increase the default expression nesting limit (#104717)\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/e3ce979f1b3ac1e7f2d0261d3abffbd12064eae6.patch",
-    "version_range": {
-      "from": 546878,
-      "until": 547382
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "fd7904a07bc26950fa7735fb6871a064e3ebc836",
-      "title": "Revert \"[lldb] Speculative fix for trap_frame_sym_ctx.test\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/fd7904a07bc26950fa7735fb6871a064e3ebc836.patch",
-    "version_range": {
-      "from": 547186,
-      "until": 547400
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "9671ed1afcd1e3aab754a9b905d511ffd52f3624",
-      "title": "Revert \"LSV: forbid load-cycles when vectorizing; fix bug (#104815)\" (#106245)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/9671ed1afcd1e3aab754a9b905d511ffd52f3624.patch",
-    "version_range": {
-      "from": 547233,
-      "until": 547704
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "438ad9f2bf25575c474313de4ad85a5da6f69e4c",
-      "title": "[clang-format] Revert \"[clang-format][NFC] Delete TT_LambdaArrow (#70\u2026 (#105923)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/438ad9f2bf25575c474313de4ad85a5da6f69e4c.patch",
-    "version_range": {
-      "from": 516925,
-      "until": 547893
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
       "title": "Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\""
     },
     "platforms": [
@@ -418,36 +299,6 @@
   {
     "metadata": {
       "info": [],
-      "original_sha": "d29a50f358e71a695b23e456d66ed2924617deb9",
-      "title": "Revert \"[lldb] Allow fetching of RA register when above fault handler (#98566)\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/d29a50f358e71a695b23e456d66ed2924617deb9.patch",
-    "version_range": {
-      "from": 542750,
-      "until": 556712
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "412e1af19a248fd5650e6828695c78454a9195fb",
-      "title": "Revert \"[AArch64] Lower alias mask to a whilewr\" (#120261)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/412e1af19a248fd5650e6828695c78454a9195fb.patch",
-    "version_range": {
-      "from": 545094,
-      "until": 560071
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
       "title": "cros: add llvm-rev file"
     },
     "platforms": [
@@ -457,36 +308,6 @@
     "version_range": {
       "from": null,
       "until": 563880
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "d2aff182d379c9b84cebe0fdf58907f4de768f1e",
-      "title": "Revert \"TLS loads opimization (hoist)\" (#114740)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/d2aff182d379c9b84cebe0fdf58907f4de768f1e.patch",
-    "version_range": {
-      "from": 455363,
-      "until": 555342
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "3ef64f7ab5b8651eab500cd944984379fce5f639",
-      "title": "Revert \"Enable logf128 constant folding for hosts with 128bit long double (#104929)\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/3ef64f7ab5b8651eab500cd944984379fce5f639.patch",
-    "version_range": {
-      "from": 547379,
-      "until": 547478
     }
   },
   {
@@ -619,21 +440,6 @@
     "version_range": {
       "from": 547379,
       "until": null
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "830c0d493aee2f86a4e8e0e6711df93f53399364",
-      "title": "Regard unreachable function as a possible devirtualizable target"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/830c0d493aee2f86a4e8e0e6711df93f53399364.patch",
-    "version_range": {
-      "from": 547379,
-      "until": 555655
     }
   },
   {
