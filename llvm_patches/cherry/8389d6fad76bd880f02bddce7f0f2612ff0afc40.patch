@@ -1,0 +1,279 @@
+From 8389d6fad76bd880f02bddce7f0f2612ff0afc40 Mon Sep 17 00:00:00 2001
+From: Pranav Kant <prka@google.com>
+Date: Mon, 21 Apr 2025 15:17:03 -0700
+Subject: [PATCH] [lld] Merge equivalent symbols found during ICF (#134342)
+
+Fixes a correctness issue for AArch64 when ADRP and LDR instructions are
+outlined in separate sections and sections are fed to ICF for
+deduplication.
+
+See test case (based on
+https://github.com/llvm/llvm-project/issues/129122) for details. All
+rodata.* sections are folded into a single section with ICF. This leads
+to all f2_* function sections getting folded into one (as their
+relocation target symbols g* belong to .rodata.g* sections that have
+already been folded into one). Since relocations still refer original g*
+symbols, we end up creating duplicate GOT entry for all such symbols.
+This PR addresses that by tracking such folded symbols and create one
+GOT entry for all such symbols.
+
+Fixes https://github.com/llvm/llvm-project/issues/129122
+
+Co-authored by: @jyknight
+---
+ lld/ELF/ICF.cpp                        | 54 ++++++++++++++-
+ lld/ELF/SymbolTable.cpp                |  6 ++
+ lld/ELF/SymbolTable.h                  |  1 +
+ lld/test/ELF/aarch64-got-merging-icf.s | 95 ++++++++++++++++++++++++++
+ lld/test/ELF/icf-preemptible.s         |  6 ++
+ 5 files changed, 161 insertions(+), 1 deletion(-)
+ create mode 100644 lld/test/ELF/aarch64-got-merging-icf.s
+
+diff --git a/lld/ELF/ICF.cpp b/lld/ELF/ICF.cpp
+index 1cdcf6be9d8a..849f6bdd445f 100644
+--- a/lld/ELF/ICF.cpp
++++ b/lld/ELF/ICF.cpp
+@@ -80,6 +80,7 @@
+ #include "SymbolTable.h"
+ #include "Symbols.h"
+ #include "SyntheticSections.h"
++#include "llvm/ADT/EquivalenceClasses.h"
+ #include "llvm/BinaryFormat/ELF.h"
+ #include "llvm/Object/ELF.h"
+ #include "llvm/Support/Parallel.h"
+@@ -333,6 +334,28 @@ bool ICF<ELFT>::equalsConstant(const InputSection *a, const InputSection *b) {
+              : constantEq(a, ra.relas, b, rb.relas);
+ }
+ 
++template <class RelTy>
++static SmallVector<Symbol *> getReloc(const InputSection *sec,
++                                      Relocs<RelTy> relocs) {
++  SmallVector<Symbol *> syms;
++  for (auto ri = relocs.begin(), re = relocs.end(); ri != re; ++ri) {
++    Symbol &sym = sec->file->getRelocTargetSym(*ri);
++    syms.push_back(&sym);
++  }
++  return syms;
++}
++
++template <class ELFT>
++static SmallVector<Symbol *> getRelocTargetSyms(const InputSection *sec) {
++  const RelsOrRelas<ELFT> rel = sec->template relsOrRelas<ELFT>();
++  if (rel.areRelocsCrel())
++    return getReloc(sec, rel.crels);
++  if (rel.areRelocsRel())
++    return getReloc(sec, rel.rels);
++
++  return getReloc(sec, rel.relas);
++}
++
+ // Compare two lists of relocations. Returns true if all pairs of
+ // relocations point to the same section in terms of ICF.
+ template <class ELFT>
+@@ -535,14 +558,28 @@ template <class ELFT> void ICF<ELFT>::run() {
+   auto print = [&ctx = ctx]() -> ELFSyncStream {
+     return {ctx, ctx.arg.printIcfSections ? DiagLevel::Msg : DiagLevel::None};
+   };
++
++  EquivalenceClasses<Symbol *> symbolEquivalence;
+   // Merge sections by the equivalence class.
++  // Merge symbols identified as equivalent during ICF.
+   forEachClassRange(0, sections.size(), [&](size_t begin, size_t end) {
+     if (end - begin == 1)
+       return;
+     print() << "selected section " << sections[begin];
++    SmallVector<Symbol *> syms = getRelocTargetSyms<ELFT>(sections[begin]);
+     for (size_t i = begin + 1; i < end; ++i) {
+       print() << "  removing identical section " << sections[i];
+       sections[begin]->replace(sections[i]);
++      SmallVector<Symbol *> replacedSyms =
++          getRelocTargetSyms<ELFT>(sections[i]);
++      assert(syms.size() == replacedSyms.size() &&
++             "Should have same number of syms!");
++      for (size_t i = 0; i < syms.size(); i++) {
++        if (syms[i] == replacedSyms[i] || !syms[i]->isGlobal() ||
++            !replacedSyms[i]->isGlobal())
++          continue;
++        symbolEquivalence.unionSets(syms[i], replacedSyms[i]);
++      }
+ 
+       // At this point we know sections merged are fully identical and hence
+       // we want to remove duplicate implicit dependencies such as link order
+@@ -561,11 +598,26 @@ template <class ELFT> void ICF<ELFT>::run() {
+           d->folded = true;
+         }
+   };
+-  for (Symbol *sym : ctx.symtab->getSymbols())
++  for (Symbol *sym : ctx.symtab->getSymbols()) {
+     fold(sym);
++    auto it = symbolEquivalence.findLeader(sym);
++    if (it != symbolEquivalence.member_end() && *it != sym) {
++      print() << "redirecting '" << sym->getName() << "' in symtab to '"
++              << (*it)->getName() << "'";
++      ctx.symtab->redirect(sym, *it);
++    }
++  }
+   parallelForEach(ctx.objectFiles, [&](ELFFileBase *file) {
+     for (Symbol *sym : file->getLocalSymbols())
+       fold(sym);
++    for (Symbol *&sym : file->getMutableGlobalSymbols()) {
++      auto it = symbolEquivalence.findLeader(sym);
++      if (it != symbolEquivalence.member_end() && *it != sym) {
++        print() << "redirecting '" << sym->getName() << "' to '"
++                << (*it)->getName() << "'";
++        sym = *it;
++      }
++    }
+   });
+ 
+   // InputSectionDescription::sections is populated by processSectionCommands().
+diff --git a/lld/ELF/SymbolTable.cpp b/lld/ELF/SymbolTable.cpp
+index b8a70d4e898f..91e47e15b01a 100644
+--- a/lld/ELF/SymbolTable.cpp
++++ b/lld/ELF/SymbolTable.cpp
+@@ -29,6 +29,12 @@ using namespace llvm::ELF;
+ using namespace lld;
+ using namespace lld::elf;
+ 
++void SymbolTable::redirect(Symbol *from, Symbol *to) {
++  int &fromIdx = symMap[CachedHashStringRef(from->getName())];
++  const int toIdx = symMap[CachedHashStringRef(to->getName())];
++  fromIdx = toIdx;
++}
++
+ void SymbolTable::wrap(Symbol *sym, Symbol *real, Symbol *wrap) {
+   // Redirect __real_foo to the original foo and foo to the original __wrap_foo.
+   int &idx1 = symMap[CachedHashStringRef(sym->getName())];
+diff --git a/lld/ELF/SymbolTable.h b/lld/ELF/SymbolTable.h
+index d6443742f7ba..e3a39bac85f9 100644
+--- a/lld/ELF/SymbolTable.h
++++ b/lld/ELF/SymbolTable.h
+@@ -41,6 +41,7 @@ public:
+   SymbolTable(Ctx &ctx) : ctx(ctx) {}
+   ArrayRef<Symbol *> getSymbols() const { return symVector; }
+ 
++  void redirect(Symbol *from, Symbol *to);
+   void wrap(Symbol *sym, Symbol *real, Symbol *wrap);
+ 
+   Symbol *insert(StringRef name);
+diff --git a/lld/test/ELF/aarch64-got-merging-icf.s b/lld/test/ELF/aarch64-got-merging-icf.s
+new file mode 100644
+index 000000000000..01d7bdfd7518
+--- /dev/null
++++ b/lld/test/ELF/aarch64-got-merging-icf.s
+@@ -0,0 +1,95 @@
++## REQUIRES: aarch64
++## Check that symbols that ICF assumes to be the same get a single GOT entry
++
++# RUN: llvm-mc -filetype=obj -triple=aarch64 %s -o %t
++# RUN: llvm-mc -filetype=obj -crel -triple=aarch64 %s -o %tcrel
++# RUN: ld.lld %t -o %t2 --icf=all
++# RUN: ld.lld %tcrel -o %tcrel2 --icf=all
++
++# RUN: llvm-objdump --section-headers %t2 | FileCheck %s --check-prefix=EXE
++# RUN: llvm-objdump --section-headers %tcrel2 | FileCheck %s --check-prefix=EXE
++
++# RUN: ld.lld -shared %t -o %t3 --icf=all
++# RUN: ld.lld -shared %tcrel -o %tcrel3 --icf=all
++
++# RUN: llvm-objdump --section-headers %t3 | FileCheck %s --check-prefix=DSO
++# RUN: llvm-objdump --section-headers %tcrel3 | FileCheck %s --check-prefix=DSO
++
++## All global g* symbols should merge into a single GOT entry while non-global
++## gets its own GOT entry.
++# EXE: {{.*}}.got 00000010{{.*}}
++
++## When symbols are preemptible in DSO mode, GOT entries wouldn't be merged
++# DSO: {{.*}}.got 00000028{{.*}}
++
++.addrsig
++
++callee:
++ret
++
++.macro f, index, isglobal
++
++# (Kept unique) first instruction of the GOT code sequence
++.section .text.f1_\index,"ax",@progbits
++f1_\index:
++adrp x0, :got:g\index
++mov x1, #\index
++b f2_\index
++
++# Folded, second instruction of the GOT code sequence
++.section .text.f2_\index,"ax",@progbits
++f2_\index:
++ldr x0, [x0, :got_lo12:g\index] 
++b callee
++
++# Folded
++.ifnb \isglobal
++.globl g\index
++.endif
++.section .rodata.g\index,"a",@progbits
++g_\index:
++.long 111
++.long 122
++
++g\index:
++.byte 123
++
++.section .text._start,"ax",@progbits
++bl f1_\index
++
++.endm
++
++## Another set of sections merging: g1 <- g2. Linker should be able to
++## resolve both g1 and g2 to g0 based on ICF on previous sections.
++
++.section .text.t1_0,"ax",@progbits
++t1_0:
++adrp x2, :got:g1
++mov x3, #1
++b t2_0
++
++.section .text.t2_0,"ax",@progbits
++t2_0:
++ldr x2, [x2, :got_lo12:g1]
++b callee
++
++.section .text.t1_1,"ax",@progbits
++t1_1:
++adrp x2, :got:g2
++mov x3, #2
++b t2_1
++
++.section .text.t2_1,"ax",@progbits
++t2_1:
++ldr x2, [x2, :got_lo12:g2]
++b callee
++
++.section .text._start,"ax",@progbits
++.globl _start
++_start:
++
++f 0 1
++f 1 1
++f 2 1
++f 3 1
++f 4
+diff --git a/lld/test/ELF/icf-preemptible.s b/lld/test/ELF/icf-preemptible.s
+index 4bd1eca438b1..935249360069 100644
+--- a/lld/test/ELF/icf-preemptible.s
++++ b/lld/test/ELF/icf-preemptible.s
+@@ -17,6 +17,12 @@
+ # EXE-NEXT: selected section {{.*}}:(.text.h1)
+ # EXE-NEXT:   removing identical section {{.*}}:(.text.h2)
+ # EXE-NEXT:   removing identical section {{.*}}:(.text.h3)
++# EXE-NEXT: redirecting 'f2' in symtab to 'f1'
++# EXE-NEXT: redirecting 'g2' in symtab to 'g1'
++# EXE-NEXT: redirecting 'g3' in symtab to 'g1'
++# EXE-NEXT: redirecting 'f2' to 'f1'
++# EXE-NEXT: redirecting 'g2' to 'g1'
++# EXE-NEXT: redirecting 'g3' to 'g1'
+ # EXE-NOT:  {{.}}
+ 
+ ## Definitions are preemptible in a DSO. Only leaf functions can be folded.
+-- 
+2.49.0.906.g1f30a19c02-goog
+

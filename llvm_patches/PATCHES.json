@@ -471,5 +471,245 @@
       "from": 559379,
       "until": 571637
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [MachineOutliner] Preserve instruction bundles (#106402)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/de37da8e37c4c9042563e186068adca98bf59e07.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 548467
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++][TZDB] Fixes %z escaping. (#125399)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/a27f3b2bb137001735949549354aff89dbf227f4.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 564142
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Fix stray usage of _LIBCPP_HAS_NO_WIDE_CHARACTERS on Windows"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/bcfd9f81e1bc9954d616ffbb8625099916bebd5b.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 564267
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ba476d0b83dc8a4bbf066dc02a0f73ded27114f0.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 564320
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Reduce the dependency of the locale base API on the base system from the headers (#117764)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f00b32e2d0ee666d32f1ddd0c687e269fab95b44.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 565900
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME2] Don't preserve ZT0 around SME ABI routines (#132722)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/107260cc29368070bba815d94f9d5b7cec1df7d0.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 569778
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [MTE] decide whether to tag global in AsmPrinter (#135891)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9ed4c705ac1c5c8797f328694f6cd22fbcdae03b.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 572390
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [MTE] do not tag zero sized globals (#136020)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/6bac20b391edce2bde348e59f5be2143157304b5.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 572391
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [lld] Merge equivalent symbols found during ICF (#134342)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8389d6fad76bd880f02bddce7f0f2612ff0afc40.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 572756
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Allow spills of ZT0 around SME ABI routines again (#136726)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8c7a2ce01a77c96028fe2c8566f65c45ad9408d3.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 573249
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Fix connecting via abstract socket (#136466)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/488eeb3ae508221f8e476bbc9d2e9f014542862e.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 573315
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Fix Windows build (#137414)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/935bc84158e933239047de69b9edc77969b5c70c.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 573330
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Skip tests if socket name is longer than 107 bytes (#137405)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/6c78dedc14e7431aa0dd92b9dd8d35bed3e0ed7d.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 573331
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [HWASan] fix missing BTI attribute on personality function thunks (#139138)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/a76cf062a57097ad7971325551854bd5f3d38d94.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 574745
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Add stubs and headers for nl_types APIs."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Add-stubs-and-headers-for-nl_types-APIs-v2.patch",
+    "version_range": {
+      "from": 563880,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Disable integer sanitizer for __libcxx_blsr"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Disable-integer-sanitizer-for-__libcpp_blsr.patch",
+    "version_range": {
+      "from": 563880,
+      "until": null
+    }
   }
 ]

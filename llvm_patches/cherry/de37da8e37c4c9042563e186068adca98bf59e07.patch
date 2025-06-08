@@ -1,0 +1,105 @@
+From de37da8e37c4c9042563e186068adca98bf59e07 Mon Sep 17 00:00:00 2001
+From: Simon Tatham <simon.tatham@arm.com>
+Date: Wed, 4 Sep 2024 09:06:48 +0100
+Subject: [PATCH] [MachineOutliner] Preserve instruction bundles (#106402)
+
+When the machine outliner copies instructions from a source function
+into an outlined function, it was doing it using `CloneMachineInstr`,
+which is documented as not preserving the interior of any instruction
+bundle. So outlining code that includes an instruction bundle would
+fail, because in the outlined version, the bundle would be empty, so
+instructions would go missing in the move.
+
+This occurs when any bundled instruction appears in the outlined code,
+so there was no need to construct an unusual test case: I've just copied
+a function from the existing `stp-opt-with-renaming.mir`, which happens
+to contain an SVE instruction bundle. Including two identical copies of
+that function makes the outliner merge them, and then we check that it
+didn't destroy the interior of the bundle in the process.
+---
+ llvm/lib/CodeGen/MachineOutliner.cpp          |  7 ++-
+ .../AArch64/machine-outliner-bundle.mir       | 54 +++++++++++++++++++
+ 2 files changed, 57 insertions(+), 4 deletions(-)
+ create mode 100644 llvm/test/CodeGen/AArch64/machine-outliner-bundle.mir
+
+diff --git a/llvm/lib/CodeGen/MachineOutliner.cpp b/llvm/lib/CodeGen/MachineOutliner.cpp
+index 42f410c27717..97500d0abeba 100644
+--- a/llvm/lib/CodeGen/MachineOutliner.cpp
++++ b/llvm/lib/CodeGen/MachineOutliner.cpp
+@@ -763,10 +763,9 @@ MachineFunction *MachineOutliner::createOutlinedFunction(
+       BuildMI(MBB, MBB.end(), DL, TII.get(TargetOpcode::CFI_INSTRUCTION))
+           .addCFIIndex(MF.addFrameInst(CFI));
+     } else {
+-      MachineInstr *NewMI = MF.CloneMachineInstr(&MI);
+-      NewMI->dropMemRefs(MF);
+-      NewMI->setDebugLoc(DL);
+-      MBB.insert(MBB.end(), NewMI);
++      MachineInstr &NewMI = TII.duplicate(MBB, MBB.end(), MI);
++      NewMI.dropMemRefs(MF);
++      NewMI.setDebugLoc(DL);
+     }
+   }
+ 
+diff --git a/llvm/test/CodeGen/AArch64/machine-outliner-bundle.mir b/llvm/test/CodeGen/AArch64/machine-outliner-bundle.mir
+new file mode 100644
+index 000000000000..1dd5b0811bdf
+--- /dev/null
++++ b/llvm/test/CodeGen/AArch64/machine-outliner-bundle.mir
+@@ -0,0 +1,54 @@
++# RUN: llc -mtriple=aarch64 -run-pass=machine-outliner \
++# RUN: -verify-machineinstrs %s -o - | FileCheck %s
++
++# CHECK: name: OUTLINED_FUNCTION_0
++# CHECK-NOT: name:
++# CHECK: BUNDLE implicit-def $z3, implicit-def $q3, implicit-def $d3, implicit-def $s3, implicit-def $h3, implicit-def $b3, implicit $z19, implicit $p0, implicit $z16 {
++# CHECK:     $z3 = MOVPRFX_ZZ $z19
++# CHECK:     $z3 = FMUL_ZPmZ_S renamable $p0, killed $z3, renamable $z16
++# CHECK: }
++
++---
++name:            bundled
++alignment:       4
++tracksRegLiveness: true
++frameInfo:
++  maxAlignment:    1
++  maxCallFrameSize: 0
++machineFunctionInfo:
++  hasRedZone:      false
++body:             |
++  bb.0.entry:
++    liveins: $z3, $z19, $p0, $z16
++    renamable $q0 = LDRQui $sp, 1 :: (load 16)
++    STRSui renamable $s0, $sp, 9, implicit killed $q0 :: (store (s32))
++    BUNDLE implicit-def $z3, implicit-def $q3, implicit-def $d3, implicit-def $s3, implicit-def $h3, implicit-def $b3, implicit $z19, implicit $p0, implicit $z16 {
++      $z3 = MOVPRFX_ZZ $z19
++      $z3 = FMUL_ZPmZ_S renamable $p0, killed $z3, renamable $z16
++    }
++    renamable $q0 = LDRQui $sp, 0 :: (load 16, align 32)
++    STRSui renamable $s0, $sp, 10, implicit killed $q0 :: (store (s32))
++    RET undef $lr
++...
++---
++name:            bundled_clone
++alignment:       4
++tracksRegLiveness: true
++frameInfo:
++  maxAlignment:    1
++  maxCallFrameSize: 0
++machineFunctionInfo:
++  hasRedZone:      false
++body:             |
++  bb.0.entry:
++    liveins: $z3, $z19, $p0, $z16
++    renamable $q0 = LDRQui $sp, 1 :: (load 16)
++    STRSui renamable $s0, $sp, 9, implicit killed $q0 :: (store (s32))
++    BUNDLE implicit-def $z3, implicit-def $q3, implicit-def $d3, implicit-def $s3, implicit-def $h3, implicit-def $b3, implicit $z19, implicit $p0, implicit $z16 {
++      $z3 = MOVPRFX_ZZ $z19
++      $z3 = FMUL_ZPmZ_S renamable $p0, killed $z3, renamable $z16
++    }
++    renamable $q0 = LDRQui $sp, 0 :: (load 16, align 32)
++    STRSui renamable $s0, $sp, 10, implicit killed $q0 :: (store (s32))
++    RET undef $lr
++...
+-- 
+2.49.0.472.ge94155a9ec-goog
+

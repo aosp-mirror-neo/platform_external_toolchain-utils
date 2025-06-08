@@ -1,4 +1,4 @@
-From 9688c6beb720459b8789c33b70667fcf3e0bb07c Mon Sep 17 00:00:00 2001
+From ba476d0b83dc8a4bbf066dc02a0f73ded27114f0 Mon Sep 17 00:00:00 2001
 From: Peter Smith <peter.smith@arm.com>
 Date: Wed, 5 Feb 2025 19:04:21 +0000
 Subject: [PATCH] [LLD][ELF][AArch64] Discard .ARM.attributes sections
@@ -15,13 +15,6 @@ relocatable objects. The intention for LLD is that files of type ET_EXEC
 and ET_SHARED will not have a build attributes in the output. A
 relocatable link with -r will need a merged build attributes, but until
 the merge is implemented it is better to discard.
-
-patch.cherry: true
-patch.metadata.original_sha: ba476d0b83dc8a4bbf066dc02a0f73ded27114f0
-patch.platforms: chromiumos
-patch.version_range.from: 563880
-patch.version_range.until: 564320
-
 ---
  lld/ELF/InputFiles.cpp                  |  7 +++++++
  lld/test/ELF/aarch64-build-attributes.s | 26 +++++++++++++++++++++++++
@@ -79,4 +72,5 @@ index 000000000000..24e15f94e3d4
 +_start:
 +ret
 -- 
-2.49.0.1112.g889b7c5bd8-goog
+2.49.0.504.g3bcea36a83-goog
+
