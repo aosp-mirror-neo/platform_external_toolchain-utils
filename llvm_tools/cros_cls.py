@@ -221,8 +221,7 @@ def wait_for_bot_to_finish(
         out = _run_bb_decoding_output(
             ["get", "-json", "-fields=status", str(build_id)],
         )
-        assert len(out) == 1, out
-        status = BuilderStatus(out[0])
+        status = BuilderStatus(out["status"])
         if not status.is_running:
             return status
 
