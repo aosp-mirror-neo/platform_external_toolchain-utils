@@ -61,7 +61,7 @@ DEFAULT_FINDING_EXPECTATIONS = (
     # The clippy lint is about a pointless borrow.
     FindingExpectations(
         category="chromeos_cargo_clippy",
-        file_path="platform2/cros-toolchain/do-not-commit/lint-rs/src/main.rs",
+        file_path="cros-toolchain/do-not-commit/lint-rs/src/main.rs",
         message_re=re.compile(r"clippy::needless_borrow"),
     ),
     # The clang-tidy lint is about a side-effect in an assert() statement being
