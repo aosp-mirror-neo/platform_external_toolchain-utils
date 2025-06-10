@@ -46,6 +46,34 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
             )
         )
 
+    def test_no_error_if_ignored_child_lacks_step(
+        self, mock_fetch_builder_steps, mock_cq_orch_fetch
+    ):
+        ignore_builder = verify_update_sdk.IGNORE_BUILDERS[0]
+
+        mock_cq_orch_fetch.side_effect = [
+            cros_cls.CQOrchestratorOutput(
+                status=cros_cls.BuilderStatus.SUCCESS,
+                child_builders={
+                    "builder_a": 101,
+                    ignore_builder: 102,
+                },
+            )
+        ]
+        mock_fetch_builder_steps.side_effect = [
+            [
+                {"name": "other_step"},
+                {"name": verify_update_sdk.TARGET_STEP_NAME},
+            ],
+            [{"name": "other_step"}],
+        ]
+
+        self.assertTrue(
+            verify_update_sdk._inspect_and_verify_cq_orchestrator(
+                build_id=100, min_expected_child_builders=2
+            )
+        )
+
     def test_too_few_child_builders(
         self, mock_fetch_builder_steps, mock_cq_orch_fetch
     ):

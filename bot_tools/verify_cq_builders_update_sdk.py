@@ -19,6 +19,13 @@ from llvm_tools import cros_cls
 # The step name we look for.
 TARGET_STEP_NAME = "update sdk"
 
+# Builders to ignore in our checks, for one reason or another.
+IGNORE_BUILDERS = (
+    # This runs on CLs with Chromite changes (b/420954566#comment8). Whether or
+    # not it updates the SDK is irrelevant.
+    "chromite-cq",
+)
+
 
 def _inspect_and_verify_cq_orchestrator(
     build_id: int, min_expected_child_builders: int = 20
@@ -51,18 +58,27 @@ def _inspect_and_verify_cq_orchestrator(
     logging.info("Found %d child builders.", len(child_builders))
 
     builders_missing_step = []
+    builders_with_step = 0
     logging.info('Checking child builders for "%s" step...', TARGET_STEP_NAME)
     for builder_name, child_build_id in child_builders.items():
         logging.debug("Checking child %d...", child_build_id)
         steps = cros_cls.fetch_builder_steps(child_build_id)
         had_step = any(x.get("name", "") == TARGET_STEP_NAME for x in steps)
-        if not had_step:
+        if had_step:
+            builders_with_step += 1
+            continue
+
+        if builder_name in IGNORE_BUILDERS:
+            logging.info(
+                "Builder %s lacked step, but is marked as ignored", builder_name
+            )
+        else:
             builders_missing_step.append((builder_name, child_build_id))
 
     if not builders_missing_step:
         logging.info(
-            "All %d child builders had the '%s' step.",
-            len(child_builders),
+            "All %d relevant child builders had the '%s' step.",
+            builders_with_step,
             TARGET_STEP_NAME,
         )
         return True
