@@ -711,5 +711,20 @@
       "from": 563880,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [ELF,RISCV] Fix oscillation due to call relaxation"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8957e64a20fc7f4277565c6cfe3e555c119783ce.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 578415
+    }
   }
 ]
