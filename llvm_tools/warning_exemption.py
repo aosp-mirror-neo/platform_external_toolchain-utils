@@ -122,13 +122,17 @@ class YamlPackageWarnings:
     @classmethod
     def from_yaml(cls, s: Dict[str, Any]) -> "YamlPackageWarnings":
         """Create an instance of this class from an `as_yaml()`."""
-        s = s.copy()
-        package = Package.from_yaml(s.pop("package"))
-        observed_on = [Builder.from_yaml(x) for x in s.pop("observed_on", ())]
+        package = Package.from_yaml(s["package"])
+        observed_on = [Builder.from_yaml(x) for x in s.get("observed_on", ())]
+        # yaml will sometimes deserialize these as None if they're empty;
+        # normalize to an empty list.
+        warning_lines = s["warning_lines"] or []
+        warning_names = s["warning_names"] or []
         return cls(
             package=package,
             observed_on=observed_on,
-            **s,
+            warning_lines=warning_lines,
+            warning_names=warning_names,
         )
 
 
@@ -194,6 +198,9 @@ class YamlFile:
         s = s.copy()
         for k in ("per_package_warnings", "frozen_per_package_warnings"):
             s[k] = [YamlPackageWarnings.from_yaml(x) for x in s.get(k, ())]
+        # Similar to other `from_yaml`, yaml will sometimes deserialize these as
+        # None if they're empty; normalize to an empty list.
+        s["severe_warnings"] = s["severe_warnings"] or []
         return cls(**s)
 
 
