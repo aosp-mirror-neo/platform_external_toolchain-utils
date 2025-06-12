@@ -129,48 +129,45 @@ def format_warning_bug_body(
     builders: List[warning_exemption.Builder],
 ) -> str:
     """Returns a suitable body for the given bug."""
-    pieces = []
+    pieces: List[str] = []
+
     if len(warnings) == 1:
-        pieces.append(
-            f"The {warnings[0]} warning is being suppressed in {package}."
+        pieces += (
+            f"The {warnings[0]} warning is being suppressed in {package}.",
+            " This would ordinarily be an error, but due to a recent toolchain",
+            " upgrade, it's being treated as a warning.",
         )
     else:
-        pieces.append(
-            f"The following warnings are being suppressed in {package}:\n"
+        pieces += (
+            f"The following warnings are being suppressed in {package}. These",
+            " would normally be errors, but due to a recent toolchain upgrade,",
+            " they're being treated as warnings:\n",
         )
         for w in warnings:
             pieces.append(f"\n- -W{w}")
 
     if builders:
-        pieces.append("\n")
         if len(builders) == 1:
-            piece = f"\nThese were observed on the {builders[0].name} builder."
+            piece = f"These were observed on the {builders[0].name} builder."
         else:
             piece = pluralize(
                 len(builders) - 1,
-                f"\nThis warning was observed on the {builders[0].name} "
+                f"These warnings were observed on the {builders[0].name} "
                 f"builder, and %(num)d other%(plural)s.",
             )
-        pieces += ("\n", piece)
+        pieces += ("\n\n", piece)
 
-    pieces.append("\n")
+    pieces.append("\n\n")
     pieces.append(
         textwrap.dedent(
             f"""\
-
-            These would ordinarily be errors, but due to a recent toolchain
-            upgrade, they're being treated as warnings.
-
-            **Remediation instructions**:
-
-            - If you'd like to investigate and consider fixing the warnings,
-              please see go/crostc-warning-exemption#investigating. FIXME:
-            - If you'd like to ignore the warnings, please see
-              go/crostc-warning-exemption#ignoring. FIXME:
-            - If you have questions, please contact {crostc_contact}@.
-
+            **Remediation instructions** are available at
+            go/crostc-warning-exemption#toolchain-user-landing.
             The instructions for fixing these warnings require a file name.
             That's `{exemption_file_name}`.
+
+            If you have questions, please don't hesitate to contact
+            {crostc_contact}@!
             """
         )
     )
@@ -193,13 +190,14 @@ def format_bug(
         ("TYPE", "INTERNAL_CLEANUP"),
         ("PRIORITY", f"P{priority}"),
         ("SEVERITY", "S2"),
-        ("PARENT", str(parent)),
     ]
 
     if assignee:
         metadata.append(("ASSIGNEE", assignee))
 
     bug_pieces += (f"{key}={val}\n" for key, val in metadata)
+    # PARENT does not support `=`, only `+=` and `-=`. Handle that here.
+    bug_pieces.append(f"PARENT+={parent}\n")
     return "".join(bug_pieces)
 
 
@@ -468,10 +466,11 @@ def format_bug_for_mage_followup(
             len(bugs_missing_for),
             "Bug%(plural)s that were autofiled by "
             "file_warning_exemption_bugs.py did not include warnings for:",
-        )
+        ),
+        "",
     ]
     body_lines += (
-        f"  [ ] {warning_name} in {p.category}/{p.package_name}"
+        f"  - [ ] {warning_name} in {p.category}/{p.package_name}"
         for p, warning_name in bugs_missing_for
     )
     body_lines += (
@@ -636,8 +635,9 @@ def main(argv: List[str]) -> None:
     )
     logging.info(
         "If you're sure the above looks good, please `cd` into your "
-        "output directory, and run the following command: "
-        "bash -c 'for x in *.bug; do bugged create < ${x} || break; done'"
+        "output directory, and run the following command:\n"
+        "bash -c 'for x in *; do bugged create --format=markdown < ${x} || "
+        "break; done'"
     )
 
 

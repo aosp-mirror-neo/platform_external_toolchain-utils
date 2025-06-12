@@ -96,8 +96,8 @@ class Test(test_helpers.TempDirTestCase):
             TYPE=INTERNAL_CLEANUP
             PRIORITY=P1
             SEVERITY=S2
-            PARENT=321
             ASSIGNEE=[assignee]
+            PARENT+=321
             """
         )
         self.assertEqual(b, expected_body)
