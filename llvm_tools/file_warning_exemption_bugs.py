@@ -541,7 +541,7 @@ def verify_chroot_exists(chromeos_root: Path):
         "your password)."
     )
     subprocess.run(
-        ("sudo", "-v"),
+        ("sudo", "true"),
         check=True,
         stdin=subprocess.DEVNULL,
     )
