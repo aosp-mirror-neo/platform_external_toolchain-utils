@@ -158,13 +158,16 @@ def format_warning_bug_body(
         pieces += ("\n\n", piece)
 
     pieces.append("\n\n")
+    docs_link = "http://go/crostc-warning-exemption"
     pieces.append(
         textwrap.dedent(
             f"""\
             **Remediation instructions** are available at
-            go/crostc-warning-exemption#toolchain-user-landing.
+            {docs_link}#toolchain-user-landing.
             The instructions for fixing these warnings require a file name.
-            That's `{exemption_file_name}`.
+            That's `{exemption_file_name}`. If you want to jump straight to
+            repro instructions, those are at
+            {docs_link}#how-do-i-repro-the-original-error-and-verify-my-fix.
 
             If you have questions, please don't hesitate to contact
             {crostc_contact}@!
