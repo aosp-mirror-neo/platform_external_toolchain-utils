@@ -86,6 +86,26 @@ def absolutize_path(cwd: str, p: str) -> str:
     return os.path.normpath(os.path.join(cwd, p))
 
 
+_BASH_STYLE_RE = re.compile(
+    # All style sequences start with ESC
+    "\x1b"
+    # Then they can be one of:
+    r"(?:"
+    # - a single character
+    r"[A-Za-z]"
+    # - a '[', then a sequence of characters terminated in 'm'
+    r"|\[[^m]*m"
+    # - a ']', then a sequence of characters terminated in '\a' (BEL)
+    r"|\][^\a]*"
+    "\a)"
+)
+
+
+def remove_bash_style_sequences(s: str) -> str:
+    """Removes all bash font style sequences from `s`."""
+    return _BASH_STYLE_RE.sub("", s)
+
+
 def scrape_fatal_warnings_from_stdout(
     stdout: str, absolutize_with_cwd: Optional[str] = None
 ) -> List[Tuple[str, str]]:
@@ -100,7 +120,10 @@ def scrape_fatal_warnings_from_stdout(
         A list of (full_warning_line, warning_name) for each warning in stdout.
     """
     warning_lines = set()
-    for line in stdout.splitlines():
+    lines_without_style = [
+        remove_bash_style_sequences(x) for x in stdout.splitlines()
+    ]
+    for line in lines_without_style:
         m = _FATAL_WARNING_RE.fullmatch(line)
         if not m:
             continue

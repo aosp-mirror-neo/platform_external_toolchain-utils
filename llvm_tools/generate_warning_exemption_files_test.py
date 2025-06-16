@@ -339,6 +339,35 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertEqual(result, sorted(expected_output))
 
+    def test_removing_bash_style_works(self):
+        self.assertEqual(
+            gen.remove_bash_style_sequences("\x1b[31mRed text.\x1b[0m"),
+            "Red text.",
+        )
+        self.assertEqual(
+            gen.remove_bash_style_sequences("\x1b[31m"),
+            "",
+        )
+        self.assertEqual(
+            gen.remove_bash_style_sequences(
+                "\x1b[1;32mBold green text.\x1b[0m"
+            ),
+            "Bold green text.",
+        )
+        self.assertEqual(
+            gen.remove_bash_style_sequences("Before reset.\x1bcAfter reset."),
+            "Before reset.After reset.",
+        )
+        # This sequence sets a _title_ for the terminal, and it looks like other
+        # sequences do similar "global" operations. There's no reason to include
+        # their inline text in the output.
+        self.assertEqual(
+            gen.remove_bash_style_sequences(
+                "\x1b]0;Title\x07Line after title."
+            ),
+            "Line after title.",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
