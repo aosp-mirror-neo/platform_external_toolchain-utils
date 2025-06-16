@@ -711,5 +711,35 @@
       "from": 563880,
       "until": 578415
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [MachineOutliner] Preserve instruction bundles (#106402)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/de37da8e37c4c9042563e186068adca98bf59e07.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 548467
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Expand Android libc++ test config files (#142846)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/13fe07d670e8a115929c9e595c4490ef5c75f583.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 578705
+    }
   }
 ]
