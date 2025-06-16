@@ -109,9 +109,10 @@ func isLikelyAConfTest(env env, cfg *config, cmd *command) bool {
 		return false
 	}
 
+	cwd := env.getwd()
 	// Ignore anything that's likely to be a cmake configuration step. These put the compiler
 	// into a TryCompile dir.
-	if strings.Contains(env.getwd(), "CMakeFiles/CMakeScratch/TryCompile-") {
+	if strings.Contains(cwd, "CMakeFiles/CMakeScratch/TryCompile-") {
 		return true
 	}
 
@@ -126,6 +127,13 @@ func isLikelyAConfTest(env env, cfg *config, cmd *command) bool {
 		// `-o ${some_dir}/.sconf.temp/conftest_${hash}_${num}.o`.
 		if wasLastArgOutput {
 			if strings.HasSuffix(a, ".o") && strings.Contains(a, "/.sconf.temp/conftest_") {
+				return true
+			}
+
+			// b/424460547: perf (and other kernel tools, seemingly) have a special method of running
+			// configure checks during src_compile. Detect that here. Generally speaking, these builds are
+			// run in the `build/feature` subdirectory, and have `-o test-*` on their commandline.
+			if strings.HasPrefix(path.Base(a), "test-") && strings.HasSuffix(cwd, "tools/build/feature") && strings.Contains(cwd, "/dev-util/perf-") {
 				return true
 			}
 			wasLastArgOutput = false

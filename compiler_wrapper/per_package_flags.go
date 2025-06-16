@@ -17,7 +17,7 @@ func getExtraPerPackageFlags(llvmRev int, packageName string) []string {
 	var result []string
 
 	if llvmRev >= 563880 {
-		result = append(result, getWarningSuppressionsForLLVM_r563880(packageName)...)
+		result = append(result, warningSuppressionsForLLVM_r563880(packageName)...)
 	}
 
 	return result

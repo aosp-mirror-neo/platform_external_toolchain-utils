@@ -50,10 +50,6 @@ func callCompiler(env env, cfg *config, inputCmd *command) int {
 }
 
 func containsTracesOfRetryableBug(env env, stdoutOrStderr []byte) bool {
-	if containsTracesOfKernelBug(stdoutOrStderr) {
-		return true
-	}
-
 	// b/417125943: temporarily work around crashes in fcp builds. Since bazel filters the
 	// environment, determine whether to retry using the current directory.
 	if strings.Contains(env.getwd(), "/sys-cluster/fcp") {
@@ -302,8 +298,7 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 				env.run(compilerCmd, getStdin(), stdoutBuffer, stderrBuffer))
 
 			if compilerErr != nil || exitCode != 0 {
-				if retryAttempt < retryableBugRetryLimit && (errorContainsTracesOfKernelBug(compilerErr) ||
-					containsTracesOfRetryableBug(env, stdoutBuffer.Bytes()) || containsTracesOfRetryableBug(env, stderrBuffer.Bytes())) {
+				if retryAttempt < retryableBugRetryLimit && (containsTracesOfRetryableBug(env, stdoutBuffer.Bytes()) || containsTracesOfRetryableBug(env, stderrBuffer.Bytes())) {
 					return exitCode, errRetryCompilation
 				}
 			}

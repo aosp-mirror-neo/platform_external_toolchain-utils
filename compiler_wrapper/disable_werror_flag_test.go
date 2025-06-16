@@ -155,6 +155,15 @@ func TestKnownConfigureDirParsing(t *testing.T) {
 	})
 }
 
+func TestPerfFeatureTestParsing(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		ctx.wd = "/build/arm-generic/tmp/portage/dev-util/perf-5.15.68-r5/work/linux-5.15/tools/build/feature"
+		if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, "test-foo.c", "-o", "test-foo.o")) {
+			t.Error("perf conf test detection failed")
+		}
+	})
+}
+
 func TestDoubleBuildWithKnownConfigureFile(t *testing.T) {
 	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
