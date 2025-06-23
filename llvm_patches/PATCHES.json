@@ -726,5 +726,20 @@
       "from": 563880,
       "until": 578705
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [MachineOutliner] Preserve instruction bundles (#106402)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/de37da8e37c4c9042563e186068adca98bf59e07.patch",
+    "version_range": {
+      "from": 547379,
+      "until": 548467
+    }
   }
 ]
