@@ -6,6 +6,7 @@
 
 import dataclasses
 import datetime
+import re
 from typing import List
 import unittest
 
@@ -23,7 +24,7 @@ def arbitrary_chrome_gs_profile_name() -> str:
     major_bench_version = major_cwp_version + 1
     return (
         f"chromeos-chrome-arm-none-{major_cwp_version}-6440.4-1716810247-"
-        f"benchmark-{major_bench_version}.1.6533.2-r3-redacted.afdo.xz"
+        f"benchmark-{major_bench_version}.1.6533.2_pre99-r3-redacted.afdo.xz"
     )
 
 
@@ -101,6 +102,7 @@ class Test(unittest.TestCase):
                     minor=1,
                     build=6533,
                     patch=2,
+                    pre=99,
                     revision=3,
                 ),
                 cwp_part_version=monitor_chrome_afdo.ChromeVersion(
@@ -108,6 +110,43 @@ class Test(unittest.TestCase):
                     minor=0,
                     build=6440,
                     patch=4,
+                    pre=None,
+                    revision=0,
+                ),
+                cwp_timestamp=1716810247,
+            ),
+        )
+
+    def test_gs_profile_parsing_without_pre(self):
+        last_modified = arbitrary_time()
+        # Not all profiles have `_pre${X}` in them; this verifies that that
+        # still works.
+        profile_name = re.sub(
+            r"_pre\d+", "", arbitrary_chrome_gs_profile_name()
+        )
+        self.assertEqual(
+            monitor_chrome_afdo.ChromeGsProfile.from_full_name_if_new_enough(
+                last_modified=last_modified,
+                full_name=profile_name,
+            ),
+            monitor_chrome_afdo.ChromeGsProfile(
+                last_modified=last_modified,
+                arch=monitor_chrome_afdo.ProfileArch.ARM,
+                subtype=monitor_chrome_afdo.ProfileSubtype.NONE,
+                benchmark_part_version=monitor_chrome_afdo.ChromeVersion(
+                    major=monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION + 1,
+                    minor=1,
+                    build=6533,
+                    patch=2,
+                    pre=None,
+                    revision=3,
+                ),
+                cwp_part_version=monitor_chrome_afdo.ChromeVersion(
+                    major=monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION,
+                    minor=0,
+                    build=6440,
+                    patch=4,
+                    pre=None,
                     revision=0,
                 ),
                 cwp_timestamp=1716810247,
@@ -157,6 +196,20 @@ class Test(unittest.TestCase):
                     "files/",
                     "chromeos-chrome-9999.ebuild",
                     "chromeos-chrome-127.0.6533.0_rc-r1.ebuild",
+                    "chromeos-chrome-126.0.6014.0_rc-r2.ebuild",
+                ]
+            ),
+            "127.0.6533.0",
+        )
+
+    def test_finding_newest_chrome_version_pre(self):
+        self.assertEqual(
+            monitor_chrome_afdo.find_newest_chrome_version(
+                [
+                    "MANIFEST",
+                    "files/",
+                    "chromeos-chrome-9999.ebuild",
+                    "chromeos-chrome-127.0.6533.0_pre1234_rc-r1.ebuild",
                     "chromeos-chrome-126.0.6014.0_rc-r2.ebuild",
                 ]
             ),

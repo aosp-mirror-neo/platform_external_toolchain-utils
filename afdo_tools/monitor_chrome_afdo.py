@@ -114,6 +114,7 @@ class ChromeVersion:
     minor: int
     build: int
     patch: int
+    pre: Optional[int]
     revision: int
 
 
@@ -148,13 +149,17 @@ class ChromeGsProfile:
         r"(?P<bench_major>\d+)\."
         r"(?P<bench_minor>\d+)\."
         r"(?P<bench_build>\d+)\."
-        r"(?P<bench_patch>\d+)-"
+        r"(?P<bench_patch>\d+)"
+        r"(?:_pre(?P<bench_pre>\d+))?-"
         r"r(?P<bench_revision>\d+)"
         r"-redacted\.afdo\.xz"
         r"$"
     )
 
     def full_name(self) -> str:
+        pre_segment = ""
+        if self.benchmark_part_version.pre:
+            pre_segment = f"_pre{self.benchmark_part_version.pre}"
         return (
             "chromeos-chrome-"
             f"{self.arch.value}-"
@@ -167,7 +172,8 @@ class ChromeGsProfile:
             f"{self.benchmark_part_version.major}."
             f"{self.benchmark_part_version.minor}."
             f"{self.benchmark_part_version.build}."
-            f"{self.benchmark_part_version.patch}-"
+            f"{self.benchmark_part_version.patch}"
+            f"{pre_segment}-"
             f"r{self.benchmark_part_version.revision}"
             "-redacted.afdo.xz"
         )
@@ -194,13 +200,18 @@ class ChromeGsProfile:
             minor=0,
             build=int(groups["cwp_build"]),
             patch=int(groups["cwp_patch"]),
+            pre=None,
             revision=0,
         )
+        bench_pre = None
+        if pre := groups["bench_pre"]:
+            bench_pre = int(pre)
         benchmark_part_version = ChromeVersion(
             major=int(groups["bench_major"]),
             minor=int(groups["bench_minor"]),
             build=int(groups["bench_build"]),
             patch=int(groups["bench_patch"]),
+            pre=bench_pre,
             revision=int(groups["bench_revision"]),
         )
         return cls(
@@ -357,7 +368,8 @@ def find_newest_chrome_version(chromeos_chrome_files: List[str]) -> str:
         repository.
     """
     chrome_re = re.compile(
-        r"^chromeos-chrome-((\d+)\.(\d+)\.(\d+)\.(\d+))_rc-r(\d+).ebuild$"
+        r"^chromeos-chrome-((\d+)\.(\d+)\.(\d+)\.(\d+))"
+        r"(?:_pre(\d+))?_rc-r(\d+).ebuild$"
     )
     candidates = []
     for f in chromeos_chrome_files:
@@ -365,12 +377,16 @@ def find_newest_chrome_version(chromeos_chrome_files: List[str]) -> str:
         if not m:
             continue
 
-        full_version, major, minor, build, patch, revision = m.groups()
+        full_version, major, minor, build, patch, pre, revision = m.groups()
+        parsed_pre = None
+        if pre:
+            parsed_pre = int(pre)
         ver = ChromeVersion(
             major=int(major),
             minor=int(minor),
             build=int(build),
             patch=int(patch),
+            pre=parsed_pre,
             revision=int(revision),
         )
         candidates.append((ver, full_version))
