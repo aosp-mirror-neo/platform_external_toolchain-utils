@@ -741,5 +741,20 @@
       "from": 547379,
       "until": 548467
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Revert [Clang][counted_by] Refactor __builtin_dynamic_object_size on FAMs (#122198)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Revert-Clang-counted_by-Refactor-__builtin_dynamic_o.patch",
+    "version_range": {
+      "from": 563729,
+      "until": 563880
+    }
   }
 ]
