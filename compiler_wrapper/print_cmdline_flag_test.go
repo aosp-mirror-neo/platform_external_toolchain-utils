@@ -28,16 +28,6 @@ func TestPrintCompilerCommand(t *testing.T) {
 	})
 }
 
-func TestPrintNestedCommand(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		// Note: -clang-syntax calls clang to check the syntax
-		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, "-print-cmdline", "-clang-syntax", mainCc)))
-		if matched, _ := regexp.MatchString(`cd '.*' && '.*usr/bin/clang'.*'main.cc'.*'-fsyntax-only'`, ctx.stderrString()); !matched {
-			t.Errorf("sub command not printed to stderr. Got: %s", ctx.stderrString())
-		}
-	})
-}
-
 func TestPrintCmdWd(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		printCmd(ctx, &command{

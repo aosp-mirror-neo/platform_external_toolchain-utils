@@ -14,7 +14,7 @@ const crostcApplyFlagsForEnv = "CROSTC_ADD_IMPLICIT_CFLAGS_FOR"
 const crostcApplyFlagsForFlag = "-D_CROSTC_ADD_IMPLICIT_CFLAGS_FOR="
 
 func getExtraPerPackageFlags(llvmRev int, packageName string) []string {
-	var result []string
+	result := warningSuppressionsForLLVM_b296092419(packageName)
 
 	if llvmRev >= 563880 {
 		result = append(result, warningSuppressionsForLLVM_r563880(packageName)...)

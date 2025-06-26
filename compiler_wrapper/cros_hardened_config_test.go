@@ -54,7 +54,6 @@ func TestCrosHardenedConfigWithoutCCache(t *testing.T) {
 		runGoldenRecords(ctx, crosHardenedNoCCacheGoldenDir, []goldenFile{
 			createGccPathGoldenInputs(ctx, gomaEnv),
 			createClangPathGoldenInputs(ctx, gomaEnv),
-			createClangSyntaxGoldenInputs(gomaEnv),
 			createForceDisableWErrorGoldenInputs(),
 			createClangTidyGoldenInputs(gomaEnv),
 		})
@@ -78,7 +77,6 @@ func TestCrosHardenedConfigWithLlvmNext(t *testing.T) {
 		runGoldenRecords(ctx, crosHardenedLlvmNextGoldenDir, []goldenFile{
 			createGccPathGoldenInputs(ctx, gomaEnv),
 			createClangPathGoldenInputs(ctx, gomaEnv),
-			createClangSyntaxGoldenInputs(gomaEnv),
 			createForceDisableWErrorGoldenInputs(),
 			createClangTidyGoldenInputs(gomaEnv),
 		})
@@ -96,7 +94,6 @@ func createSyswrapperGoldenInputs(ctx *testContext) []goldenFile {
 		createSysrootWrapperCommonGoldenInputs("gcc", gomaEnv),
 		createSanitizerGoldenInputs("gcc"),
 		createGccArgsGoldenInputs(),
-		createClangSyntaxGoldenInputs(gomaEnv),
 		createClangPathGoldenInputs(ctx, gomaEnv),
 		createGoldenInputsForAllTargets("clang", mainCc),
 		createGoldenInputsForAllTargets("clang", "-ftrapv", mainCc),
@@ -332,40 +329,6 @@ func createClangTidyGoldenInputs(gomaEnv string) goldenFile {
 				Env:        []string{tidyEnv, gomaEnv},
 				Cmds: []commandResult{
 					{Stdout: "someResourceDir"},
-					okResult,
-					errorResult,
-				},
-			},
-		},
-	}
-}
-
-func createClangSyntaxGoldenInputs(gomaEnv string) goldenFile {
-	return goldenFile{
-		Name: "gcc_clang_syntax.json",
-		Records: []goldenRecord{
-			{
-				WrapperCmd: newGoldenCmd(gccX86_64, "-clang-syntax", mainCc),
-				Cmds: []commandResult{
-					okResult,
-					okResult,
-				},
-			},
-			{
-				WrapperCmd: newGoldenCmd(gccX86_64, "-clang-syntax", mainCc),
-				Env:        []string{gomaEnv},
-				Cmds: []commandResult{
-					okResult,
-					okResult,
-				},
-			},
-			{
-				WrapperCmd: newGoldenCmd(gccX86_64, "-clang-syntax", mainCc),
-				Cmds:       errorResults,
-			},
-			{
-				WrapperCmd: newGoldenCmd(gccX86_64, "-clang-syntax", mainCc),
-				Cmds: []commandResult{
 					okResult,
 					errorResult,
 				},

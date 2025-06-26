@@ -215,18 +215,6 @@ func createBuilderArgs(fromUser bool, args []string) []builderArg {
 	return builderArgs
 }
 
-func (builder *commandBuilder) clone() *commandBuilder {
-	return &commandBuilder{
-		path:           builder.path,
-		args:           append([]builderArg{}, builder.args...),
-		env:            builder.env,
-		cfg:            builder.cfg,
-		rootPath:       builder.rootPath,
-		target:         builder.target,
-		absWrapperPath: builder.absWrapperPath,
-	}
-}
-
 func (builder *commandBuilder) wrapPath(path string, extraFlags ...string) {
 	newArgs := createBuilderArgs( /*fromUser=*/ false, extraFlags)
 	newArgs = append(newArgs, builderArg{value: builder.path, fromUser: false})
