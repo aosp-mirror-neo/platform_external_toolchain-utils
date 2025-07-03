@@ -38,7 +38,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         }
       }
     ],
@@ -94,7 +94,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         },
         "exitcode": 1,
         "stderr": "error: foo [-Werror,-Wfoo]"
@@ -138,7 +138,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         }
       }
     ],
@@ -195,7 +195,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         },
         "exitcode": 1,
         "stderr": "error: foo [-Werror,-Wfoo]"
@@ -239,7 +239,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         },
         "exitcode": 1,
         "stderr": "someerror",

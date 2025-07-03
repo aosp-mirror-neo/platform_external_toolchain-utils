@@ -193,15 +193,13 @@ func TestDoubleBuildWithWNoErrorAndCCache(t *testing.T) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 			switch ctx.cmdCount {
 			case 1:
-				// TODO: This is a bug in the old wrapper that it drops the ccache path
-				// during double build. Fix this once we don't compare to the old wrapper anymore.
-				if err := verifyPath(cmd, "ccache"); err != nil {
+				if err := verifyPath(cmd, "/usr/bin/ccache"); err != nil {
 					return err
 				}
 				fmt.Fprint(stderr, arbitraryWerrorStderr)
 				return newExitCodeError(1)
 			case 2:
-				if err := verifyPath(cmd, "ccache"); err != nil {
+				if err := verifyPath(cmd, "/usr/bin/ccache"); err != nil {
 					return err
 				}
 				return nil

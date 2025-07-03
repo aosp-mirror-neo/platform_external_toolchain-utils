@@ -177,11 +177,6 @@ func getWnoErrorFlags(stdout, stderr []byte) []string {
 func doubleBuildWithWNoError(env env, cfg *config, originalCmd *command, werrorConfig forceDisableWerrorConfig) (exitCode int, err error) {
 	originalStdoutBuffer := &bytes.Buffer{}
 	originalStderrBuffer := &bytes.Buffer{}
-	// TODO: This is a bug in the old wrapper that it drops the ccache path
-	// during double build. Fix this once we don't compare to the old wrapper anymore.
-	if originalCmd.Path == "/usr/bin/ccache" {
-		originalCmd.Path = "ccache"
-	}
 
 	getStdin, err := prebufferStdinIfNeeded(env, originalCmd)
 	if err != nil {
