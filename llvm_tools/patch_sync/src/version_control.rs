@@ -9,7 +9,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-const CHROMIUMOS_OVERLAY_REL_PATH: &str = "src/third_party/chromiumos-overlay";
+const CROS_TOOLCHAIN_UTILS_REL_PATH: &str = "src/third_party/toolchain-utils";
+const CROS_PATCH_WORKDIR: &str = "llvm_patches";
 const ANDROID_LLVM_REL_PATH: &str = "toolchain/llvm_android";
 
 // Need to checkout the upstream, rather than the local clone.
@@ -36,14 +37,24 @@ impl RepoSetupContext {
             {
                 let crpp = self.cros_patches_path();
                 let cros_git = crpp.parent().unwrap();
+                ensure!(
+                    cros_git.is_dir(),
+                    "cros_git '{}' is not a dir",
+                    cros_git.display()
+                );
                 git_cd_cmd(cros_git, ["checkout", CROS_MAIN_BRANCH])?;
             }
             {
                 let anpp = self.android_patches_path();
                 let android_git = anpp.parent().unwrap();
+                ensure!(
+                    android_git.is_dir(),
+                    "android_git '{}' is not a dir",
+                    android_git.display()
+                );
                 git_cd_cmd(android_git, ["checkout", ANDROID_MAIN_BRANCH])?;
             }
-            repo_cd_cmd(&self.cros_checkout, ["sync", CHROMIUMOS_OVERLAY_REL_PATH])?;
+            repo_cd_cmd(&self.cros_checkout, ["sync", CROS_TOOLCHAIN_UTILS_REL_PATH])?;
             repo_cd_cmd(&self.android_checkout, ["sync", ANDROID_LLVM_REL_PATH])?;
         }
         Ok(())
@@ -52,8 +63,8 @@ impl RepoSetupContext {
     pub fn cros_repo_upload<S: AsRef<str>>(&self, reviewers: &[S]) -> Result<()> {
         let llvm_dir = self
             .cros_checkout
-            .join(CHROMIUMOS_OVERLAY_REL_PATH)
-            .join("sys-devel/llvm");
+            .join(CROS_TOOLCHAIN_UTILS_REL_PATH)
+            .join(CROS_PATCH_WORKDIR);
         ensure!(
             llvm_dir.is_dir(),
             "CrOS LLVM dir {} is not a directory",
@@ -78,7 +89,7 @@ impl RepoSetupContext {
         }
         Self::repo_upload(
             &self.cros_checkout,
-            CHROMIUMOS_OVERLAY_REL_PATH,
+            CROS_TOOLCHAIN_UTILS_REL_PATH,
             &Self::build_commit_msg(
                 "llvm: Synchronize patches from android",
                 "android",
@@ -116,7 +127,7 @@ impl RepoSetupContext {
     }
 
     fn cros_cleanup(&self) -> Result<()> {
-        let git_path = self.cros_checkout.join(CHROMIUMOS_OVERLAY_REL_PATH);
+        let git_path = self.cros_checkout.join(CROS_TOOLCHAIN_UTILS_REL_PATH);
         Self::cleanup_branch(&git_path, CROS_MAIN_BRANCH, WORK_BRANCH_NAME)
             .with_context(|| format!("cleaning up branch {}", WORK_BRANCH_NAME))?;
         Ok(())
@@ -149,16 +160,17 @@ impl RepoSetupContext {
     /// Get the ChromiumOS path to the PATCHES.json file
     pub fn cros_patches_path(&self) -> PathBuf {
         self.cros_checkout
-            .join(CHROMIUMOS_OVERLAY_REL_PATH)
-            .join("sys-devel/llvm/files/PATCHES.json")
+            .join(CROS_TOOLCHAIN_UTILS_REL_PATH)
+            .join(CROS_PATCH_WORKDIR)
+            .join("PATCHES.json")
     }
 
     /// Return the contents of the old PATCHES.json from ChromiumOS
     pub fn old_cros_patch_contents(&self, hash: &str) -> Result<String> {
         Self::old_file_contents(
             hash,
-            &self.cros_checkout.join(CHROMIUMOS_OVERLAY_REL_PATH),
-            Path::new("sys-devel/llvm/files/PATCHES.json"),
+            &self.cros_checkout.join(CROS_TOOLCHAIN_UTILS_REL_PATH),
+            &Path::new(CROS_PATCH_WORKDIR).join("PATCHES.json"),
         )
     }
 

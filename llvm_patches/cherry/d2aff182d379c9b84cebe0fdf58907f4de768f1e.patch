@@ -1,0 +1,1050 @@
+From 5d655218ef7b1c79170b11e417ee2e6d7716e25a Mon Sep 17 00:00:00 2001
+From: abhishek-kaushik22 <abhishek.kaushik@intel.com>
+Date: Thu, 7 Nov 2024 17:10:28 +0800
+Subject: [PATCH] Revert "TLS loads opimization (hoist)" (#114740)
+
+This reverts commit c31014322c0b5ae596da129cbb844fb2198b4ef4.
+
+Based on the discussions in #112772, this pass is not needed after the
+introduction of `llvm.threadlocal.address` intrinsic.
+
+Fixes https://github.com/llvm/llvm-project/issues/112771.
+
+patch.cherry: true
+patch.metadata.original_sha: d2aff182d379c9b84cebe0fdf58907f4de768f1e
+patch.platforms: chromiumos
+patch.version_range.from: 455363
+patch.version_range.until: 555342
+
+---
+ llvm/docs/LangRef.rst                         |   5 -
+ llvm/include/llvm/InitializePasses.h          |   1 -
+ llvm/include/llvm/LinkAllPasses.h             |   1 -
+ llvm/include/llvm/Transforms/Scalar.h         |   6 -
+ .../llvm/Transforms/Scalar/TLSVariableHoist.h | 131 --------
+ llvm/lib/CodeGen/TargetPassConfig.cpp         |   3 -
+ llvm/lib/Passes/PassBuilder.cpp               |   1 -
+ llvm/lib/Passes/PassRegistry.def              |   1 -
+ llvm/lib/Transforms/Scalar/CMakeLists.txt     |   1 -
+ llvm/lib/Transforms/Scalar/Scalar.cpp         |   1 -
+ .../Transforms/Scalar/TLSVariableHoist.cpp    | 293 ------------------
+ llvm/test/CodeGen/AArch64/O3-pipeline.ll      |   1 -
+ llvm/test/CodeGen/AMDGPU/llc-pipeline.ll      |   7 -
+ llvm/test/CodeGen/ARM/O3-pipeline.ll          |   1 -
+ llvm/test/CodeGen/LoongArch/opt-pipeline.ll   |   1 -
+ llvm/test/CodeGen/M68k/pipeline.ll            |   1 -
+ llvm/test/CodeGen/PowerPC/O3-pipeline.ll      |   1 -
+ llvm/test/CodeGen/RISCV/O3-pipeline.ll        |   1 -
+ llvm/test/CodeGen/X86/opt-pipeline.ll         |   2 -
+ llvm/test/CodeGen/X86/tls-loads-control.ll    | 248 ---------------
+ llvm/test/CodeGen/X86/tls-loads-control2.ll   |  50 ---
+ llvm/tools/llc/llc.cpp                        |   1 -
+ 22 files changed, 758 deletions(-)
+ delete mode 100644 llvm/include/llvm/Transforms/Scalar/TLSVariableHoist.h
+ delete mode 100644 llvm/lib/Transforms/Scalar/TLSVariableHoist.cpp
+ delete mode 100644 llvm/test/CodeGen/X86/tls-loads-control.ll
+ delete mode 100644 llvm/test/CodeGen/X86/tls-loads-control2.ll
+
+diff --git a/llvm/docs/LangRef.rst b/llvm/docs/LangRef.rst
+index 445980a18e7e..cbf67cd92e9b 100644
+--- a/llvm/docs/LangRef.rst
++++ b/llvm/docs/LangRef.rst
+@@ -2469,11 +2469,6 @@ example:
+     function with a tail call. The prototype of a thunk should not be used for
+     optimization purposes. The caller is expected to cast the thunk prototype to
+     match the thunk target prototype.
+-
+-``"tls-load-hoist"``
+-    This attribute indicates that the function will try to reduce redundant
+-    tls address calculation by hoisting tls variable.
+-
+ ``uwtable[(sync|async)]``
+     This attribute indicates that the ABI being targeted requires that
+     an unwind table entry be produced for this function even if we can
+diff --git a/llvm/include/llvm/InitializePasses.h b/llvm/include/llvm/InitializePasses.h
+index cc5e93c58f56..5003f0df907f 100644
+--- a/llvm/include/llvm/InitializePasses.h
++++ b/llvm/include/llvm/InitializePasses.h
+@@ -301,7 +301,6 @@ void initializeTailDuplicatePass(PassRegistry &);
+ void initializeTargetLibraryInfoWrapperPassPass(PassRegistry &);
+ void initializeTargetPassConfigPass(PassRegistry &);
+ void initializeTargetTransformInfoWrapperPassPass(PassRegistry &);
+-void initializeTLSVariableHoistLegacyPassPass(PassRegistry &);
+ void initializeTwoAddressInstructionLegacyPassPass(PassRegistry &);
+ void initializeTypeBasedAAWrapperPassPass(PassRegistry &);
+ void initializeTypePromotionLegacyPass(PassRegistry &);
+diff --git a/llvm/include/llvm/LinkAllPasses.h b/llvm/include/llvm/LinkAllPasses.h
+index 1da02153d846..9f419c0258ed 100644
+--- a/llvm/include/llvm/LinkAllPasses.h
++++ b/llvm/include/llvm/LinkAllPasses.h
+@@ -112,7 +112,6 @@ struct ForcePassLinking {
+     (void)llvm::createSROAPass();
+     (void)llvm::createSingleLoopExtractorPass();
+     (void)llvm::createTailCallEliminationPass();
+-    (void)llvm::createTLSVariableHoistPass();
+     (void)llvm::createConstantHoistingPass();
+     (void)llvm::createCodeGenPrepareLegacyPass();
+     (void)llvm::createPostInlineEntryExitInstrumenterPass();
+diff --git a/llvm/include/llvm/Transforms/Scalar.h b/llvm/include/llvm/Transforms/Scalar.h
+index 17f4327eb3e1..fc772a7639c4 100644
+--- a/llvm/include/llvm/Transforms/Scalar.h
++++ b/llvm/include/llvm/Transforms/Scalar.h
+@@ -151,12 +151,6 @@ Pass *createMergeICmpsLegacyPass();
+ FunctionPass *createInferAddressSpacesPass(unsigned AddressSpace = ~0u);
+ extern char &InferAddressSpacesID;
+ 
+-//===----------------------------------------------------------------------===//
+-//
+-// TLSVariableHoist - This pass reduce duplicated TLS address call.
+-//
+-FunctionPass *createTLSVariableHoistPass();
+-
+ //===----------------------------------------------------------------------===//
+ //
+ // PartiallyInlineLibCalls - Tries to inline the fast path of library
+diff --git a/llvm/include/llvm/Transforms/Scalar/TLSVariableHoist.h b/llvm/include/llvm/Transforms/Scalar/TLSVariableHoist.h
+deleted file mode 100644
+index 2a1b02b40eeb..000000000000
+--- a/llvm/include/llvm/Transforms/Scalar/TLSVariableHoist.h
++++ /dev/null
+@@ -1,131 +0,0 @@
+-//==- TLSVariableHoist.h ------ Remove Redundant TLS Loads -------*- C++ -*-==//
+-//
+-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+-// See https://llvm.org/LICENSE.txt for license information.
+-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// This pass identifies/eliminates Redundant TLS Loads if related option is set.
+-// For example:
+-// static __thread int x;
+-// int g();
+-// int f(int c) {
+-//   int *px = &x;
+-//   while (c--)
+-//     *px += g();
+-//   return *px;
+-// }
+-//
+-// will generate Redundant TLS Loads by compiling it with
+-// clang++ -fPIC -ftls-model=global-dynamic -O2 -S
+-//
+-// .LBB0_2:                                # %while.body
+-//                                         # =>This Inner Loop Header: Depth=1
+-//         callq   _Z1gv@PLT
+-//         movl    %eax, %ebp
+-//         leaq    _ZL1x@TLSLD(%rip), %rdi
+-//         callq   __tls_get_addr@PLT
+-//         addl    _ZL1x@DTPOFF(%rax), %ebp
+-//         movl    %ebp, _ZL1x@DTPOFF(%rax)
+-//         addl    $-1, %ebx
+-//         jne     .LBB0_2
+-//         jmp     .LBB0_3
+-// .LBB0_4:                                # %entry.while.end_crit_edge
+-//         leaq    _ZL1x@TLSLD(%rip), %rdi
+-//         callq   __tls_get_addr@PLT
+-//         movl    _ZL1x@DTPOFF(%rax), %ebp
+-//
+-// The Redundant TLS Loads will hurt the performance, especially in loops.
+-// So we try to eliminate/move them if required by customers, let it be:
+-//
+-// # %bb.0:                                # %entry
+-//         ...
+-//         movl    %edi, %ebx
+-//         leaq    _ZL1x@TLSLD(%rip), %rdi
+-//         callq   __tls_get_addr@PLT
+-//         leaq    _ZL1x@DTPOFF(%rax), %r14
+-//         testl   %ebx, %ebx
+-//         je      .LBB0_1
+-// .LBB0_2:                                # %while.body
+-//                                         # =>This Inner Loop Header: Depth=1
+-//         callq   _Z1gv@PLT
+-//         addl    (%r14), %eax
+-//         movl    %eax, (%r14)
+-//         addl    $-1, %ebx
+-//         jne     .LBB0_2
+-//         jmp     .LBB0_3
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#ifndef LLVM_TRANSFORMS_SCALAR_TLSVARIABLEHOIST_H
+-#define LLVM_TRANSFORMS_SCALAR_TLSVARIABLEHOIST_H
+-
+-#include "llvm/ADT/MapVector.h"
+-#include "llvm/ADT/SmallVector.h"
+-#include "llvm/Analysis/LoopInfo.h"
+-#include "llvm/IR/PassManager.h"
+-
+-namespace llvm {
+-
+-class BasicBlock;
+-class DominatorTree;
+-class Function;
+-class GlobalVariable;
+-class Instruction;
+-
+-/// A private "module" namespace for types and utilities used by
+-/// TLSVariableHoist. These are implementation details and should
+-/// not be used by clients.
+-namespace tlshoist {
+-
+-/// Keeps track of the user of a TLS variable and the operand index
+-/// where the variable is used.
+-struct TLSUser {
+-  Instruction *Inst;
+-  unsigned OpndIdx;
+-
+-  TLSUser(Instruction *Inst, unsigned Idx) : Inst(Inst), OpndIdx(Idx) {}
+-};
+-
+-/// Keeps track of a TLS variable candidate and its users.
+-struct TLSCandidate {
+-  SmallVector<TLSUser, 8> Users;
+-
+-  /// Add the user to the use list and update the cost.
+-  void addUser(Instruction *Inst, unsigned Idx) {
+-    Users.push_back(TLSUser(Inst, Idx));
+-  }
+-};
+-
+-} // end namespace tlshoist
+-
+-class TLSVariableHoistPass : public PassInfoMixin<TLSVariableHoistPass> {
+-public:
+-  PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
+-
+-  // Glue for old PM.
+-  bool runImpl(Function &F, DominatorTree &DT, LoopInfo &LI);
+-
+-private:
+-  DominatorTree *DT;
+-  LoopInfo *LI;
+-
+-  /// Keeps track of TLS variable candidates found in the function.
+-  using TLSCandMapType = MapVector<GlobalVariable *, tlshoist::TLSCandidate>;
+-  TLSCandMapType TLSCandMap;
+-
+-  void collectTLSCandidates(Function &Fn);
+-  void collectTLSCandidate(Instruction *Inst);
+-  Instruction *getNearestLoopDomInst(BasicBlock *BB, Loop *L);
+-  Instruction *getDomInst(Instruction *I1, Instruction *I2);
+-  BasicBlock::iterator findInsertPos(Function &Fn, GlobalVariable *GV,
+-                                     BasicBlock *&PosBB);
+-  Instruction *genBitCastInst(Function &Fn, GlobalVariable *GV);
+-  bool tryReplaceTLSCandidates(Function &Fn);
+-  bool tryReplaceTLSCandidate(Function &Fn, GlobalVariable *GV);
+-};
+-
+-} // end namespace llvm
+-
+-#endif // LLVM_TRANSFORMS_SCALAR_TLSVARIABLEHOIST_H
+diff --git a/llvm/lib/CodeGen/TargetPassConfig.cpp b/llvm/lib/CodeGen/TargetPassConfig.cpp
+index 1d52ebe6717f..035246a539e9 100644
+--- a/llvm/lib/CodeGen/TargetPassConfig.cpp
++++ b/llvm/lib/CodeGen/TargetPassConfig.cpp
+@@ -881,9 +881,6 @@ void TargetPassConfig::addIRPasses() {
+   if (!DisableExpandReductions)
+     addPass(createExpandReductionsPass());
+ 
+-  if (getOptLevel() != CodeGenOptLevel::None)
+-    addPass(createTLSVariableHoistPass());
+-
+   // Convert conditional moves to conditional jumps when profitable.
+   if (getOptLevel() != CodeGenOptLevel::None && !DisableSelectOptimize)
+     addPass(createSelectOptimizePass());
+diff --git a/llvm/lib/Passes/PassBuilder.cpp b/llvm/lib/Passes/PassBuilder.cpp
+index 17eed97fd950..b4a73462c1e0 100644
+--- a/llvm/lib/Passes/PassBuilder.cpp
++++ b/llvm/lib/Passes/PassBuilder.cpp
+@@ -281,7 +281,6 @@
+ #include "llvm/Transforms/Scalar/SpeculativeExecution.h"
+ #include "llvm/Transforms/Scalar/StraightLineStrengthReduce.h"
+ #include "llvm/Transforms/Scalar/StructurizeCFG.h"
+-#include "llvm/Transforms/Scalar/TLSVariableHoist.h"
+ #include "llvm/Transforms/Scalar/TailRecursionElimination.h"
+ #include "llvm/Transforms/Scalar/WarnMissedTransforms.h"
+ #include "llvm/Transforms/Utils/AddDiscriminators.h"
+diff --git a/llvm/lib/Passes/PassRegistry.def b/llvm/lib/Passes/PassRegistry.def
+index d6067089c6b5..98f69c97b764 100644
+--- a/llvm/lib/Passes/PassRegistry.def
++++ b/llvm/lib/Passes/PassRegistry.def
+@@ -466,7 +466,6 @@ FUNCTION_PASS("slsr", StraightLineStrengthReducePass())
+ FUNCTION_PASS("stack-protector", StackProtectorPass(TM))
+ FUNCTION_PASS("strip-gc-relocates", StripGCRelocates())
+ FUNCTION_PASS("tailcallelim", TailCallElimPass())
+-FUNCTION_PASS("tlshoist", TLSVariableHoistPass())
+ FUNCTION_PASS("transform-warning", WarnMissedTransformationsPass())
+ FUNCTION_PASS("trigger-crash-function", TriggerCrashFunctionPass())
+ FUNCTION_PASS("trigger-verifier-error", TriggerVerifierErrorPass())
+diff --git a/llvm/lib/Transforms/Scalar/CMakeLists.txt b/llvm/lib/Transforms/Scalar/CMakeLists.txt
+index 939a14572395..84a5b02043d0 100644
+--- a/llvm/lib/Transforms/Scalar/CMakeLists.txt
++++ b/llvm/lib/Transforms/Scalar/CMakeLists.txt
+@@ -78,7 +78,6 @@ add_llvm_component_library(LLVMScalarOpts
+   StraightLineStrengthReduce.cpp
+   StructurizeCFG.cpp
+   TailRecursionElimination.cpp
+-  TLSVariableHoist.cpp
+   WarnMissedTransforms.cpp
+ 
+   ADDITIONAL_HEADER_DIRS
+diff --git a/llvm/lib/Transforms/Scalar/Scalar.cpp b/llvm/lib/Transforms/Scalar/Scalar.cpp
+index 7aeee1d31f7e..6bbb870ab3f9 100644
+--- a/llvm/lib/Transforms/Scalar/Scalar.cpp
++++ b/llvm/lib/Transforms/Scalar/Scalar.cpp
+@@ -43,7 +43,6 @@ void llvm::initializeScalarOpts(PassRegistry &Registry) {
+   initializeStructurizeCFGLegacyPassPass(Registry);
+   initializeSinkingLegacyPassPass(Registry);
+   initializeTailCallElimPass(Registry);
+-  initializeTLSVariableHoistLegacyPassPass(Registry);
+   initializeSeparateConstOffsetFromGEPLegacyPassPass(Registry);
+   initializeSpeculativeExecutionLegacyPassPass(Registry);
+   initializeStraightLineStrengthReduceLegacyPassPass(Registry);
+diff --git a/llvm/lib/Transforms/Scalar/TLSVariableHoist.cpp b/llvm/lib/Transforms/Scalar/TLSVariableHoist.cpp
+deleted file mode 100644
+index 58ea5b68d548..000000000000
+--- a/llvm/lib/Transforms/Scalar/TLSVariableHoist.cpp
++++ /dev/null
+@@ -1,293 +0,0 @@
+-//===- TLSVariableHoist.cpp -------- Remove Redundant TLS Loads ---------===//
+-//
+-// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
+-// See https://llvm.org/LICENSE.txt for license information.
+-// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+-//
+-//===----------------------------------------------------------------------===//
+-//
+-// This pass identifies/eliminate Redundant TLS Loads if related option is set.
+-// The example: Please refer to the comment at the head of TLSVariableHoist.h.
+-//
+-//===----------------------------------------------------------------------===//
+-
+-#include "llvm/ADT/SmallVector.h"
+-#include "llvm/IR/BasicBlock.h"
+-#include "llvm/IR/Dominators.h"
+-#include "llvm/IR/Function.h"
+-#include "llvm/IR/InstrTypes.h"
+-#include "llvm/IR/Instruction.h"
+-#include "llvm/IR/Instructions.h"
+-#include "llvm/IR/IntrinsicInst.h"
+-#include "llvm/IR/Module.h"
+-#include "llvm/IR/Value.h"
+-#include "llvm/InitializePasses.h"
+-#include "llvm/Pass.h"
+-#include "llvm/Support/Casting.h"
+-#include "llvm/Support/Debug.h"
+-#include "llvm/Support/raw_ostream.h"
+-#include "llvm/Transforms/Scalar.h"
+-#include "llvm/Transforms/Scalar/TLSVariableHoist.h"
+-#include <algorithm>
+-#include <cassert>
+-#include <cstdint>
+-#include <iterator>
+-#include <utility>
+-
+-using namespace llvm;
+-using namespace tlshoist;
+-
+-#define DEBUG_TYPE "tlshoist"
+-
+-static cl::opt<bool> TLSLoadHoist(
+-    "tls-load-hoist", cl::init(false), cl::Hidden,
+-    cl::desc("hoist the TLS loads in PIC model to eliminate redundant "
+-             "TLS address calculation."));
+-
+-namespace {
+-
+-/// The TLS Variable hoist pass.
+-class TLSVariableHoistLegacyPass : public FunctionPass {
+-public:
+-  static char ID; // Pass identification, replacement for typeid
+-
+-  TLSVariableHoistLegacyPass() : FunctionPass(ID) {
+-    initializeTLSVariableHoistLegacyPassPass(*PassRegistry::getPassRegistry());
+-  }
+-
+-  bool runOnFunction(Function &Fn) override;
+-
+-  StringRef getPassName() const override { return "TLS Variable Hoist"; }
+-
+-  void getAnalysisUsage(AnalysisUsage &AU) const override {
+-    AU.setPreservesCFG();
+-    AU.addRequired<DominatorTreeWrapperPass>();
+-    AU.addRequired<LoopInfoWrapperPass>();
+-  }
+-
+-private:
+-  TLSVariableHoistPass Impl;
+-};
+-
+-} // end anonymous namespace
+-
+-char TLSVariableHoistLegacyPass::ID = 0;
+-
+-INITIALIZE_PASS_BEGIN(TLSVariableHoistLegacyPass, "tlshoist",
+-                      "TLS Variable Hoist", false, false)
+-INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
+-INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
+-INITIALIZE_PASS_END(TLSVariableHoistLegacyPass, "tlshoist",
+-                    "TLS Variable Hoist", false, false)
+-
+-FunctionPass *llvm::createTLSVariableHoistPass() {
+-  return new TLSVariableHoistLegacyPass();
+-}
+-
+-/// Perform the TLS Variable Hoist optimization for the given function.
+-bool TLSVariableHoistLegacyPass::runOnFunction(Function &Fn) {
+-  if (skipFunction(Fn))
+-    return false;
+-
+-  LLVM_DEBUG(dbgs() << "********** Begin TLS Variable Hoist **********\n");
+-  LLVM_DEBUG(dbgs() << "********** Function: " << Fn.getName() << '\n');
+-
+-  bool MadeChange =
+-      Impl.runImpl(Fn, getAnalysis<DominatorTreeWrapperPass>().getDomTree(),
+-                   getAnalysis<LoopInfoWrapperPass>().getLoopInfo());
+-
+-  if (MadeChange) {
+-    LLVM_DEBUG(dbgs() << "********** Function after TLS Variable Hoist: "
+-                      << Fn.getName() << '\n');
+-    LLVM_DEBUG(dbgs() << Fn);
+-  }
+-  LLVM_DEBUG(dbgs() << "********** End TLS Variable Hoist **********\n");
+-
+-  return MadeChange;
+-}
+-
+-void TLSVariableHoistPass::collectTLSCandidate(Instruction *Inst) {
+-  // Skip all cast instructions. They are visited indirectly later on.
+-  if (Inst->isCast())
+-    return;
+-
+-  // Scan all operands.
+-  for (unsigned Idx = 0, E = Inst->getNumOperands(); Idx != E; ++Idx) {
+-    auto *GV = dyn_cast<GlobalVariable>(Inst->getOperand(Idx));
+-    if (!GV || !GV->isThreadLocal())
+-      continue;
+-
+-    // Add Candidate to TLSCandMap (GV --> Candidate).
+-    TLSCandMap[GV].addUser(Inst, Idx);
+-  }
+-}
+-
+-void TLSVariableHoistPass::collectTLSCandidates(Function &Fn) {
+-  // First, quickly check if there is TLS Variable.
+-  Module *M = Fn.getParent();
+-
+-  bool HasTLS = llvm::any_of(
+-      M->globals(), [](GlobalVariable &GV) { return GV.isThreadLocal(); });
+-
+-  // If non, directly return.
+-  if (!HasTLS)
+-    return;
+-
+-  TLSCandMap.clear();
+-
+-  // Then, collect TLS Variable info.
+-  for (BasicBlock &BB : Fn) {
+-    // Ignore unreachable basic blocks.
+-    if (!DT->isReachableFromEntry(&BB))
+-      continue;
+-
+-    for (Instruction &Inst : BB)
+-      collectTLSCandidate(&Inst);
+-  }
+-}
+-
+-static bool oneUseOutsideLoop(tlshoist::TLSCandidate &Cand, LoopInfo *LI) {
+-  if (Cand.Users.size() != 1)
+-    return false;
+-
+-  BasicBlock *BB = Cand.Users[0].Inst->getParent();
+-  if (LI->getLoopFor(BB))
+-    return false;
+-
+-  return true;
+-}
+-
+-Instruction *TLSVariableHoistPass::getNearestLoopDomInst(BasicBlock *BB,
+-                                                         Loop *L) {
+-  assert(L && "Unexcepted Loop status!");
+-
+-  // Get the outermost loop.
+-  while (Loop *Parent = L->getParentLoop())
+-    L = Parent;
+-
+-  BasicBlock *PreHeader = L->getLoopPreheader();
+-
+-  // There is unique predecessor outside the loop.
+-  if (PreHeader)
+-    return PreHeader->getTerminator();
+-
+-  BasicBlock *Header = L->getHeader();
+-  BasicBlock *Dom = Header;
+-  for (BasicBlock *PredBB : predecessors(Header))
+-    Dom = DT->findNearestCommonDominator(Dom, PredBB);
+-
+-  assert(Dom && "Not find dominator BB!");
+-  Instruction *Term = Dom->getTerminator();
+-
+-  return Term;
+-}
+-
+-Instruction *TLSVariableHoistPass::getDomInst(Instruction *I1,
+-                                              Instruction *I2) {
+-  if (!I1)
+-    return I2;
+-  return DT->findNearestCommonDominator(I1, I2);
+-}
+-
+-BasicBlock::iterator TLSVariableHoistPass::findInsertPos(Function &Fn,
+-                                                         GlobalVariable *GV,
+-                                                         BasicBlock *&PosBB) {
+-  tlshoist::TLSCandidate &Cand = TLSCandMap[GV];
+-
+-  // We should hoist the TLS use out of loop, so choose its nearest instruction
+-  // which dominate the loop and the outside loops (if exist).
+-  Instruction *LastPos = nullptr;
+-  for (auto &User : Cand.Users) {
+-    BasicBlock *BB = User.Inst->getParent();
+-    Instruction *Pos = User.Inst;
+-    if (Loop *L = LI->getLoopFor(BB)) {
+-      Pos = getNearestLoopDomInst(BB, L);
+-      assert(Pos && "Not find insert position out of loop!");
+-    }
+-    Pos = getDomInst(LastPos, Pos);
+-    LastPos = Pos;
+-  }
+-
+-  assert(LastPos && "Unexpected insert position!");
+-  BasicBlock *Parent = LastPos->getParent();
+-  PosBB = Parent;
+-  return LastPos->getIterator();
+-}
+-
+-// Generate a bitcast (no type change) to replace the uses of TLS Candidate.
+-Instruction *TLSVariableHoistPass::genBitCastInst(Function &Fn,
+-                                                  GlobalVariable *GV) {
+-  BasicBlock *PosBB = &Fn.getEntryBlock();
+-  BasicBlock::iterator Iter = findInsertPos(Fn, GV, PosBB);
+-  Type *Ty = GV->getType();
+-  auto *CastInst = new BitCastInst(GV, Ty, "tls_bitcast");
+-  CastInst->insertInto(PosBB, Iter);
+-  return CastInst;
+-}
+-
+-bool TLSVariableHoistPass::tryReplaceTLSCandidate(Function &Fn,
+-                                                  GlobalVariable *GV) {
+-
+-  tlshoist::TLSCandidate &Cand = TLSCandMap[GV];
+-
+-  // If only used 1 time and not in loops, we no need to replace it.
+-  if (oneUseOutsideLoop(Cand, LI))
+-    return false;
+-
+-  // Generate a bitcast (no type change)
+-  auto *CastInst = genBitCastInst(Fn, GV);
+-
+-  // to replace the uses of TLS Candidate
+-  for (auto &User : Cand.Users)
+-    User.Inst->setOperand(User.OpndIdx, CastInst);
+-
+-  return true;
+-}
+-
+-bool TLSVariableHoistPass::tryReplaceTLSCandidates(Function &Fn) {
+-  if (TLSCandMap.empty())
+-    return false;
+-
+-  bool Replaced = false;
+-  for (auto &GV2Cand : TLSCandMap) {
+-    GlobalVariable *GV = GV2Cand.first;
+-    Replaced |= tryReplaceTLSCandidate(Fn, GV);
+-  }
+-
+-  return Replaced;
+-}
+-
+-/// Optimize expensive TLS variables in the given function.
+-bool TLSVariableHoistPass::runImpl(Function &Fn, DominatorTree &DT,
+-                                   LoopInfo &LI) {
+-  if (Fn.hasOptNone())
+-    return false;
+-
+-  if (!TLSLoadHoist && !Fn.getAttributes().hasFnAttr("tls-load-hoist"))
+-    return false;
+-
+-  this->LI = &LI;
+-  this->DT = &DT;
+-  assert(this->LI && this->DT && "Unexcepted requirement!");
+-
+-  // Collect all TLS variable candidates.
+-  collectTLSCandidates(Fn);
+-
+-  bool MadeChange = tryReplaceTLSCandidates(Fn);
+-
+-  return MadeChange;
+-}
+-
+-PreservedAnalyses TLSVariableHoistPass::run(Function &F,
+-                                            FunctionAnalysisManager &AM) {
+-
+-  auto &LI = AM.getResult<LoopAnalysis>(F);
+-  auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
+-
+-  if (!runImpl(F, DT, LI))
+-    return PreservedAnalyses::all();
+-
+-  PreservedAnalyses PA;
+-  PA.preserveSet<CFGAnalyses>();
+-  return PA;
+-}
+diff --git a/llvm/test/CodeGen/AArch64/O3-pipeline.ll b/llvm/test/CodeGen/AArch64/O3-pipeline.ll
+index 3465b717261c..abdedd58294f 100644
+--- a/llvm/test/CodeGen/AArch64/O3-pipeline.ll
++++ b/llvm/test/CodeGen/AArch64/O3-pipeline.ll
+@@ -64,7 +64,6 @@
+ ; CHECK-NEXT:       Scalarize Masked Memory Intrinsics
+ ; CHECK-NEXT:       Expand reduction intrinsics
+ ; CHECK-NEXT:       Natural Loop Information
+-; CHECK-NEXT:       TLS Variable Hoist
+ ; CHECK-NEXT:       Post-Dominator Tree Construction
+ ; CHECK-NEXT:       Branch Probability Analysis
+ ; CHECK-NEXT:       Block Frequency Analysis
+diff --git a/llvm/test/CodeGen/AMDGPU/llc-pipeline.ll b/llvm/test/CodeGen/AMDGPU/llc-pipeline.ll
+index 1b1ea52520c0..a445fb9d3ca2 100644
+--- a/llvm/test/CodeGen/AMDGPU/llc-pipeline.ll
++++ b/llvm/test/CodeGen/AMDGPU/llc-pipeline.ll
+@@ -224,8 +224,6 @@
+ ; GCN-O1-NEXT:      Instrument function entry/exit with calls to e.g. mcount() (post inlining)
+ ; GCN-O1-NEXT:      Scalarize Masked Memory Intrinsics
+ ; GCN-O1-NEXT:      Expand reduction intrinsics
+-; GCN-O1-NEXT:      Natural Loop Information
+-; GCN-O1-NEXT:      TLS Variable Hoist
+ ; GCN-O1-NEXT:    CallGraph Construction
+ ; GCN-O1-NEXT:    Call Graph SCC Pass Manager
+ ; GCN-O1-NEXT:      AMDGPU Annotate Kernel Features
+@@ -512,8 +510,6 @@
+ ; GCN-O1-OPTS-NEXT:      Instrument function entry/exit with calls to e.g. mcount() (post inlining)
+ ; GCN-O1-OPTS-NEXT:      Scalarize Masked Memory Intrinsics
+ ; GCN-O1-OPTS-NEXT:      Expand reduction intrinsics
+-; GCN-O1-OPTS-NEXT:      Natural Loop Information
+-; GCN-O1-OPTS-NEXT:      TLS Variable Hoist
+ ; GCN-O1-OPTS-NEXT:      Early CSE
+ ; GCN-O1-OPTS-NEXT:    CallGraph Construction
+ ; GCN-O1-OPTS-NEXT:    Call Graph SCC Pass Manager
+@@ -819,8 +815,6 @@
+ ; GCN-O2-NEXT:      Instrument function entry/exit with calls to e.g. mcount() (post inlining)
+ ; GCN-O2-NEXT:      Scalarize Masked Memory Intrinsics
+ ; GCN-O2-NEXT:      Expand reduction intrinsics
+-; GCN-O2-NEXT:      Natural Loop Information
+-; GCN-O2-NEXT:      TLS Variable Hoist
+ ; GCN-O2-NEXT:      Early CSE
+ ; GCN-O2-NEXT:    CallGraph Construction
+ ; GCN-O2-NEXT:    Call Graph SCC Pass Manager
+@@ -1135,7 +1129,6 @@
+ ; GCN-O3-NEXT:      Scalarize Masked Memory Intrinsics
+ ; GCN-O3-NEXT:      Expand reduction intrinsics
+ ; GCN-O3-NEXT:      Natural Loop Information
+-; GCN-O3-NEXT:      TLS Variable Hoist
+ ; GCN-O3-NEXT:      Basic Alias Analysis (stateless AA impl)
+ ; GCN-O3-NEXT:      Function Alias Analysis Results
+ ; GCN-O3-NEXT:      Memory Dependence Analysis
+diff --git a/llvm/test/CodeGen/ARM/O3-pipeline.ll b/llvm/test/CodeGen/ARM/O3-pipeline.ll
+index 9b983d96f793..0be61d7da816 100644
+--- a/llvm/test/CodeGen/ARM/O3-pipeline.ll
++++ b/llvm/test/CodeGen/ARM/O3-pipeline.ll
+@@ -42,7 +42,6 @@
+ ; CHECK-NEXT:      Scalarize Masked Memory Intrinsics
+ ; CHECK-NEXT:      Expand reduction intrinsics
+ ; CHECK-NEXT:      Natural Loop Information
+-; CHECK-NEXT:      TLS Variable Hoist
+ ; CHECK-NEXT:      Scalar Evolution Analysis
+ ; CHECK-NEXT:      Basic Alias Analysis (stateless AA impl)
+ ; CHECK-NEXT:      Function Alias Analysis Results
+diff --git a/llvm/test/CodeGen/LoongArch/opt-pipeline.ll b/llvm/test/CodeGen/LoongArch/opt-pipeline.ll
+index 50f154663177..8409f38fc313 100644
+--- a/llvm/test/CodeGen/LoongArch/opt-pipeline.ll
++++ b/llvm/test/CodeGen/LoongArch/opt-pipeline.ll
+@@ -65,7 +65,6 @@
+ ; LAXX-NEXT:       Scalarize Masked Memory Intrinsics
+ ; LAXX-NEXT:       Expand reduction intrinsics
+ ; LAXX-NEXT:       Natural Loop Information
+-; LAXX-NEXT:       TLS Variable Hoist
+ ; LAXX-NEXT:       Type Promotion
+ ; LAXX-NEXT:       CodeGen Prepare
+ ; LAXX-NEXT:       Dominator Tree Construction
+diff --git a/llvm/test/CodeGen/M68k/pipeline.ll b/llvm/test/CodeGen/M68k/pipeline.ll
+index 76d72f5a5042..eecf4e3c036b 100644
+--- a/llvm/test/CodeGen/M68k/pipeline.ll
++++ b/llvm/test/CodeGen/M68k/pipeline.ll
+@@ -36,7 +36,6 @@
+ ; CHECK-NEXT:      Scalarize Masked Memory Intrinsics
+ ; CHECK-NEXT:      Expand reduction intrinsics
+ ; CHECK-NEXT:      Natural Loop Information
+-; CHECK-NEXT:      TLS Variable Hoist
+ ; CHECK-NEXT:      CodeGen Prepare
+ ; CHECK-NEXT:      Dominator Tree Construction
+ ; CHECK-NEXT:      Exception handling preparation
+diff --git a/llvm/test/CodeGen/PowerPC/O3-pipeline.ll b/llvm/test/CodeGen/PowerPC/O3-pipeline.ll
+index 60d42704ca79..62d63ded382a 100644
+--- a/llvm/test/CodeGen/PowerPC/O3-pipeline.ll
++++ b/llvm/test/CodeGen/PowerPC/O3-pipeline.ll
+@@ -66,7 +66,6 @@
+ ; CHECK-NEXT:       Scalarize Masked Memory Intrinsics
+ ; CHECK-NEXT:       Expand reduction intrinsics
+ ; CHECK-NEXT:       Natural Loop Information
+-; CHECK-NEXT:       TLS Variable Hoist
+ ; CHECK-NEXT:       CodeGen Prepare
+ ; CHECK-NEXT:       Dominator Tree Construction
+ ; CHECK-NEXT:       Exception handling preparation
+diff --git a/llvm/test/CodeGen/RISCV/O3-pipeline.ll b/llvm/test/CodeGen/RISCV/O3-pipeline.ll
+index 44c270fdc3c2..64833b5b5f17 100644
+--- a/llvm/test/CodeGen/RISCV/O3-pipeline.ll
++++ b/llvm/test/CodeGen/RISCV/O3-pipeline.ll
+@@ -67,7 +67,6 @@
+ ; CHECK-NEXT:       Scalarize Masked Memory Intrinsics
+ ; CHECK-NEXT:       Expand reduction intrinsics
+ ; CHECK-NEXT:       Natural Loop Information
+-; CHECK-NEXT:       TLS Variable Hoist
+ ; CHECK-NEXT:       Type Promotion
+ ; CHECK-NEXT:       CodeGen Prepare
+ ; CHECK-NEXT:       Dominator Tree Construction
+diff --git a/llvm/test/CodeGen/X86/opt-pipeline.ll b/llvm/test/CodeGen/X86/opt-pipeline.ll
+index 12c16a03b134..80d96091ce00 100644
+--- a/llvm/test/CodeGen/X86/opt-pipeline.ll
++++ b/llvm/test/CodeGen/X86/opt-pipeline.ll
+@@ -62,8 +62,6 @@
+ ; CHECK-NEXT:       Instrument function entry/exit with calls to e.g. mcount() (post inlining)
+ ; CHECK-NEXT:       Scalarize Masked Memory Intrinsics
+ ; CHECK-NEXT:       Expand reduction intrinsics
+-; CHECK-NEXT:       Natural Loop Information
+-; CHECK-NEXT:       TLS Variable Hoist
+ ; CHECK-NEXT:       Interleaved Access Pass
+ ; CHECK-NEXT:       X86 Partial Reduction
+ ; CHECK-NEXT:       Expand indirectbr instructions
+diff --git a/llvm/test/CodeGen/X86/tls-loads-control.ll b/llvm/test/CodeGen/X86/tls-loads-control.ll
+deleted file mode 100644
+index 8d9bf61c53fa..000000000000
+--- a/llvm/test/CodeGen/X86/tls-loads-control.ll
++++ /dev/null
+@@ -1,248 +0,0 @@
+-; RUN: llc -mtriple=x86_64-unknown-unknown -O2 --relocation-model=pic --tls-load-hoist=true --stop-after=tlshoist -o - %s | FileCheck %s
+-; RUN: llc -mtriple=x86_64-unknown-unknown -O2 --relocation-model=pic --stop-after=tlshoist -o - %s | FileCheck %s
+-
+-; This test come from compiling clang/test/CodeGen/intel/tls_loads.cpp with:
+-; (clang tls_loads.cpp -fPIC -ftls-model=global-dynamic -O2 -S -emit-llvm)
+-
+-; // Variable declaration and definition:
+-; thread_local int thl_x;
+-; thread_local int thl_x2;
+-;
+-; struct SS {
+-;   char thl_c;
+-;   int num;
+-; };
+-;
+-; int gfunc();
+-; int gfunc2(int);
+-
+-; // First function (@_Z2f1i):
+-; int f1(int c) {
+-;   while (c)
+-;     c++;
+-;
+-;   int *px = &thl_x;
+-;   c -= gfunc();
+-;
+-;   while(c++) {
+-;     c = gfunc();
+-;     while (c--)
+-;       *px += gfunc2(thl_x2);
+-;   }
+-;   return *px;
+-; }
+-
+-$_ZTW5thl_x = comdat any
+-
+-$_ZTW6thl_x2 = comdat any
+-
+-@thl_x = thread_local global i32 0, align 4
+-@thl_x2 = thread_local global i32 0, align 4
+-@_ZZ2f2iE2st.0 = internal thread_local unnamed_addr global i8 0, align 4
+-@_ZZ2f2iE2st.1 = internal thread_local unnamed_addr global i32 0, align 4
+-
+-; Function Attrs: mustprogress uwtable
+-define noundef i32 @_Z2f1i(i32 noundef %c) local_unnamed_addr #0 {
+-; CHECK-LABEL: _Z2f1i
+-; CHECK:      entry:
+-; CHECK-NEXT:   %call = tail call noundef i32 @_Z5gfuncv()
+-; CHECK-NEXT:   %phi.cmp = icmp eq i32 %call, 0
+-; CHECK-NEXT:   %tls_bitcast1 = bitcast ptr @thl_x to ptr
+-; CHECK-NEXT:   br i1 %phi.cmp, label %while.end11, label %while.body4.preheader
+-
+-; CHECK:      while.body4.preheader:
+-; CHECK-NEXT:   %tls_bitcast = bitcast ptr @thl_x2 to ptr
+-; CHECK-NEXT:   br label %while.body4
+-
+-; CHECK:      while.body4:
+-; CHECK-NEXT:   %call5 = tail call noundef i32 @_Z5gfuncv()
+-; CHECK-NEXT:   %tobool7.not18 = icmp eq i32 %call5, 0
+-; CHECK-NEXT:   br i1 %tobool7.not18, label %while.body4.backedge, label %while.body8.preheader
+-
+-; CHECK:      while.body8.preheader:
+-; CHECK-NEXT:   br label %while.body8
+-
+-; CHECK:      while.body4.backedge.loopexit:
+-; CHECK-NEXT:   br label %while.body4.backedge
+-
+-; CHECK:      while.body4.backedge:
+-; CHECK-NEXT:   br label %while.body4, !llvm.loop !4
+-
+-; CHECK:      while.body8:
+-; CHECK-NEXT:   %c.addr.219 = phi i32 [ %dec, %while.body8 ], [ %call5, %while.body8.preheader ]
+-; CHECK-NEXT:   %dec = add i32 %c.addr.219, -1
+-; CHECK-NEXT:   %0 = load i32, ptr %tls_bitcast, align 4
+-; CHECK-NEXT:   %call9 = tail call noundef i32 @_Z6gfunc2i(i32 noundef %0)
+-; CHECK-NEXT:   %1 = load i32, ptr %tls_bitcast1, align 4
+-; CHECK-NEXT:   %add = add nsw i32 %1, %call9
+-; CHECK-NEXT:   store i32 %add, ptr %tls_bitcast1, align 4
+-; CHECK-NEXT:   %tobool7.not = icmp eq i32 %dec, 0
+-; CHECK-NEXT:   br i1 %tobool7.not, label %while.body4.backedge.loopexit, label %while.body8, !llvm.loop !4
+-
+-; CHECK:      while.end11:
+-; CHECK-NEXT:   %2 = load i32, ptr %tls_bitcast1, align 4
+-; CHECK-NEXT:   ret i32 %2
+-
+-entry:
+-  %call = tail call noundef i32 @_Z5gfuncv()
+-  %phi.cmp = icmp eq i32 %call, 0
+-  br i1 %phi.cmp, label %while.end11, label %while.body4
+-
+-while.body4:                                      ; preds = %entry, %while.body4.backedge
+-  %call5 = tail call noundef i32 @_Z5gfuncv()
+-  %tobool7.not18 = icmp eq i32 %call5, 0
+-  br i1 %tobool7.not18, label %while.body4.backedge, label %while.body8
+-
+-while.body4.backedge:                             ; preds = %while.body8, %while.body4
+-  br label %while.body4, !llvm.loop !4
+-
+-while.body8:                                      ; preds = %while.body4, %while.body8
+-  %c.addr.219 = phi i32 [ %dec, %while.body8 ], [ %call5, %while.body4 ]
+-  %dec = add nsw i32 %c.addr.219, -1
+-  %0 = load i32, ptr @thl_x2, align 4
+-  %call9 = tail call noundef i32 @_Z6gfunc2i(i32 noundef %0)
+-  %1 = load i32, ptr @thl_x, align 4
+-  %add = add nsw i32 %1, %call9
+-  store i32 %add, ptr @thl_x, align 4
+-  %tobool7.not = icmp eq i32 %dec, 0
+-  br i1 %tobool7.not, label %while.body4.backedge, label %while.body8, !llvm.loop !4
+-
+-while.end11:                                      ; preds = %entry
+-  %2 = load i32, ptr @thl_x, align 4
+-  ret i32 %2
+-}
+-
+-; // Sencond function (@_Z2f2i):
+-; int f2(int c) {
+-;   thread_local struct SS st;
+-;   c += gfunc();
+-;   while (c--) {
+-;     thl_x += gfunc();
+-;     st.thl_c += (char)gfunc();
+-;     st.num += gfunc();
+-;   }
+-;   return thl_x;
+-; }
+-declare noundef i32 @_Z5gfuncv() local_unnamed_addr #1
+-
+-declare noundef i32 @_Z6gfunc2i(i32 noundef) local_unnamed_addr #1
+-
+-; Function Attrs: mustprogress uwtable
+-define noundef i32 @_Z2f2i(i32 noundef %c) local_unnamed_addr #0 {
+-; CHECK-LABEL: _Z2f2i
+-; CHECK:      entry:
+-; CHECK-NEXT:   %call = tail call noundef i32 @_Z5gfuncv()
+-; CHECK-NEXT:   %add = add nsw i32 %call, %c
+-; CHECK-NEXT:   %tobool.not12 = icmp eq i32 %add, 0
+-; CHECK-NEXT:   %tls_bitcast = bitcast ptr @thl_x to ptr
+-; CHECK-NEXT:   br i1 %tobool.not12, label %while.end, label %while.body.preheader
+-
+-; CHECK:      while.body.preheader:
+-; CHECK-NEXT:   %tls_bitcast1 = bitcast ptr @_ZZ2f2iE2st.0 to ptr
+-; CHECK-NEXT:   %tls_bitcast2 = bitcast ptr @_ZZ2f2iE2st.1 to ptr
+-; CHECK-NEXT:   br label %while.body
+-
+-; CHECK:      while.body:
+-; CHECK-NEXT:   %c.addr.013 = phi i32 [ %dec, %while.body ], [ %add, %while.body.preheader ]
+-; CHECK-NEXT:   %dec = add i32 %c.addr.013, -1
+-; CHECK-NEXT:   %call1 = tail call noundef i32 @_Z5gfuncv()
+-; CHECK-NEXT:   %0 = load i32, ptr %tls_bitcast, align 4
+-; CHECK-NEXT:   %add2 = add nsw i32 %0, %call1
+-; CHECK-NEXT:   store i32 %add2, ptr %tls_bitcast, align 4
+-; CHECK-NEXT:   %call3 = tail call noundef i32 @_Z5gfuncv()
+-; CHECK-NEXT:   %1 = load i8, ptr %tls_bitcast1, align 4
+-; CHECK-NEXT:   %2 = trunc i32 %call3 to i8
+-; CHECK-NEXT:   %conv7 = add i8 %1, %2
+-; CHECK-NEXT:   store i8 %conv7, ptr %tls_bitcast1, align 4
+-; CHECK-NEXT:   %call8 = tail call noundef i32 @_Z5gfuncv()
+-; CHECK-NEXT:   %3 = load i32, ptr %tls_bitcast2, align 4
+-; CHECK-NEXT:   %add9 = add nsw i32 %3, %call8
+-; CHECK-NEXT:   store i32 %add9, ptr %tls_bitcast2, align 4
+-; CHECK-NEXT:   %tobool.not = icmp eq i32 %dec, 0
+-; CHECK-NEXT:   br i1 %tobool.not, label %while.end.loopexit, label %while.body
+-
+-; CHECK:      while.end.loopexit:
+-; CHECK-NEXT:   br label %while.end
+-
+-; CHECK:      while.end:
+-; CHECK-NEXT:   %4 = load i32, ptr %tls_bitcast, align 4
+-; CHECK-NEXT:   ret i32 %4
+-entry:
+-  %call = tail call noundef i32 @_Z5gfuncv()
+-  %add = add nsw i32 %call, %c
+-  %tobool.not12 = icmp eq i32 %add, 0
+-  br i1 %tobool.not12, label %while.end, label %while.body
+-
+-while.body:                                       ; preds = %entry, %while.body
+-  %c.addr.013 = phi i32 [ %dec, %while.body ], [ %add, %entry ]
+-  %dec = add nsw i32 %c.addr.013, -1
+-  %call1 = tail call noundef i32 @_Z5gfuncv()
+-  %0 = load i32, ptr @thl_x, align 4
+-  %add2 = add nsw i32 %0, %call1
+-  store i32 %add2, ptr @thl_x, align 4
+-  %call3 = tail call noundef i32 @_Z5gfuncv()
+-  %1 = load i8, ptr @_ZZ2f2iE2st.0, align 4
+-  %2 = trunc i32 %call3 to i8
+-  %conv7 = add i8 %1, %2
+-  store i8 %conv7, ptr @_ZZ2f2iE2st.0, align 4
+-  %call8 = tail call noundef i32 @_Z5gfuncv()
+-  %3 = load i32, ptr @_ZZ2f2iE2st.1, align 4
+-  %add9 = add nsw i32 %3, %call8
+-  store i32 %add9, ptr @_ZZ2f2iE2st.1, align 4
+-  %tobool.not = icmp eq i32 %dec, 0
+-  br i1 %tobool.not, label %while.end, label %while.body
+-
+-while.end:                                        ; preds = %while.body, %entry
+-  %4 = load i32, ptr @thl_x, align 4
+-  ret i32 %4
+-}
+-
+-; // Third function (@_Z2f3i):
+-; int f3(int c) {
+-;   int *px = &thl_x;
+-;   gfunc2(*px);
+-;   gfunc2(*px);
+-;   return 1;
+-; }
+-
+-; Function Attrs: mustprogress uwtable
+-define noundef i32 @_Z2f3i(i32 noundef %c) local_unnamed_addr #0 {
+-; CHECK-LABEL: _Z2f3i
+-; CHECK:      entry:
+-; CHECK-NEXT:   %tls_bitcast = bitcast ptr @thl_x to ptr
+-; CHECK-NEXT:   %0 = load i32, ptr %tls_bitcast, align 4
+-; CHECK-NEXT:   %call = tail call noundef i32 @_Z6gfunc2i(i32 noundef %0)
+-; CHECK-NEXT:   %1 = load i32, ptr %tls_bitcast, align 4
+-; CHECK-NEXT:   %call1 = tail call noundef i32 @_Z6gfunc2i(i32 noundef %1)
+-; CHECK-NEXT:   ret i32 1
+-entry:
+-  %0 = load i32, ptr @thl_x, align 4
+-  %call = tail call noundef i32 @_Z6gfunc2i(i32 noundef %0)
+-  %1 = load i32, ptr @thl_x, align 4
+-  %call1 = tail call noundef i32 @_Z6gfunc2i(i32 noundef %1)
+-  ret i32 1
+-}
+-
+-; Function Attrs: uwtable
+-define weak_odr hidden noundef ptr @_ZTW5thl_x() local_unnamed_addr #2 comdat {
+-  ret ptr @thl_x
+-}
+-
+-; Function Attrs: uwtable
+-define weak_odr hidden noundef ptr @_ZTW6thl_x2() local_unnamed_addr #2 comdat {
+-  ret ptr @thl_x2
+-}
+-
+-attributes #0 = { mustprogress uwtable "tls-load-hoist" "frame-pointer"="none" "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+-attributes #1 = { "frame-pointer"="none" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+-attributes #2 = { uwtable "frame-pointer"="none" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+-
+-!llvm.module.flags = !{!0, !1, !2}
+-!llvm.ident = !{!3}
+-
+-!0 = !{i32 1, !"wchar_size", i32 4}
+-!1 = !{i32 7, !"PIC Level", i32 2}
+-!2 = !{i32 7, !"uwtable", i32 2}
+-!3 = !{!"clang version 15.0.0"}
+-!4 = distinct !{!4, !5}
+-!5 = !{!"llvm.loop.mustprogress"}
+diff --git a/llvm/test/CodeGen/X86/tls-loads-control2.ll b/llvm/test/CodeGen/X86/tls-loads-control2.ll
+deleted file mode 100644
+index fb0f1d2d7398..000000000000
+--- a/llvm/test/CodeGen/X86/tls-loads-control2.ll
++++ /dev/null
+@@ -1,50 +0,0 @@
+-; RUN: opt -S -mtriple=x86_64-unknown-unknown -passes=tlshoist --relocation-model=pic --tls-load-hoist=true -o - %s | FileCheck %s --check-prefix=HOIST0
+-; RUN: opt -S -mtriple=x86_64-unknown-unknown -passes=tlshoist --relocation-model=pic -o - %s | FileCheck %s --check-prefix=HOIST2
+-
+-$_ZTW5thl_x = comdat any
+-
+-@thl_x = thread_local global i32 0, align 4
+-
+-; Function Attrs: mustprogress uwtable
+-define i32 @_Z2f1i(i32 %c) local_unnamed_addr #0 {
+-entry:
+-  %0 = load i32, ptr @thl_x, align 4
+-  %call = tail call i32 @_Z5gfunci(i32 %0)
+-  %1 = load i32, ptr @thl_x, align 4
+-  %call1 = tail call i32 @_Z5gfunci(i32 %1)
+-  ret i32 1
+-}
+-
+-;HOIST0-LABEL: _Z2f1i
+-;HOIST0:     entry:
+-;HOIST0-NEXT:  %tls_bitcast = bitcast ptr @thl_x to ptr
+-;HOIST0-NEXT:  %0 = load i32, ptr %tls_bitcast, align 4
+-;HOIST0-NEXT:  %call = tail call i32 @_Z5gfunci(i32 %0)
+-;HOIST0-NEXT:  %1 = load i32, ptr %tls_bitcast, align 4
+-;HOIST0-NEXT:  %call1 = tail call i32 @_Z5gfunci(i32 %1)
+-;HOIST0-NEXT:  ret i32 1
+-
+-;HOIST2-LABEL: _Z2f1i
+-;HOIST2:     entry:
+-;HOIST2-NEXT:  %0 = load i32, ptr @thl_x, align 4
+-;HOIST2-NEXT:  %call = tail call i32 @_Z5gfunci(i32 %0)
+-;HOIST2-NEXT:  %1 = load i32, ptr @thl_x, align 4
+-;HOIST2-NEXT:  %call1 = tail call i32 @_Z5gfunci(i32 %1)
+-;HOIST2-NEXT:  ret i32 1
+-
+-declare i32 @_Z5gfunci(i32) local_unnamed_addr #1
+-
+-; Function Attrs: uwtable
+-define weak_odr hidden ptr @_ZTW5thl_x() local_unnamed_addr #2 comdat {
+-  ret ptr @thl_x
+-}
+-
+-attributes #0 = { mustprogress uwtable "frame-pointer"="none" "min-legal-vector-width"="0" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+-attributes #1 = { "frame-pointer"="none" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+-attributes #2 = { uwtable "frame-pointer"="none" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "tune-cpu"="generic" }
+-
+-!llvm.module.flags = !{!0, !1, !2}
+-
+-!0 = !{i32 1, !"wchar_size", i32 4}
+-!1 = !{i32 7, !"PIC Level", i32 2}
+-!2 = !{i32 7, !"uwtable", i32 1}
+diff --git a/llvm/tools/llc/llc.cpp b/llvm/tools/llc/llc.cpp
+index 80c84a977c26..c1201107787e 100644
+--- a/llvm/tools/llc/llc.cpp
++++ b/llvm/tools/llc/llc.cpp
+@@ -346,7 +346,6 @@ int main(int argc, char **argv) {
+   initializeHardwareLoopsLegacyPass(*Registry);
+   initializeTransformUtils(*Registry);
+   initializeReplaceWithVeclibLegacyPass(*Registry);
+-  initializeTLSVariableHoistLegacyPassPass(*Registry);
+ 
+   // Initialize debugging passes.
+   initializeScavengerTestPass(*Registry);
+-- 
+2.49.0.395.g12beb8f557-goog

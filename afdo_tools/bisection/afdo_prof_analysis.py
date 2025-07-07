@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -20,17 +18,16 @@ exit code. The codes known to this script are:
   - >127: quit immediately
 """
 
-
 import argparse
+from datetime import date
+from enum import IntEnum
 import json
 import logging
 import os
 import random
 import subprocess
-import time
-from datetime import date
-from enum import IntEnum
 from tempfile import mkstemp
+import time
 
 
 class StatusEnum(IntEnum):
@@ -325,7 +322,6 @@ def range_search(decider, good, bad, common_funcs, lo, hi):
     mid_hi_funcs = []
     min_range_funcs = []
     for _ in range(_NUM_RUNS_RANGE_SEARCH):
-
         if min_range_funcs:  # only examine range we've already narrowed to
             random.shuffle(lo_mid_funcs)
             random.shuffle(mid_hi_funcs)
@@ -435,7 +431,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def main(flags):
+def main_impl(flags):
     logging.getLogger().setLevel(logging.INFO)
     if not flags.no_resume and flags.seed:  # conflicting seeds
         raise RuntimeError(
@@ -485,5 +481,5 @@ def main(flags):
     return results
 
 
-if __name__ == "__main__":
-    main(parse_args())
+def main():
+    main_impl(parse_args())

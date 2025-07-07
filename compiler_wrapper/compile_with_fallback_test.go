@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -240,7 +239,7 @@ func TestCompileWithFallbackLogCommandAndErrors(t *testing.T) {
 
 		log := readCompileWithFallbackErrorLog(ctx)
 		if log != `==================COMMAND:====================
-./clang.real main.cc -fno-color-diagnostics -a -b
+./clang-real main.cc -fno-color-diagnostics -a -b
 
 someerror
 ==============================================
@@ -276,7 +275,7 @@ func TestCompileWithFallbackAppendToLog(t *testing.T) {
 		if !strings.Contains(log, "oldContent") {
 			t.Errorf("old content not present: %s", log)
 		}
-		if !strings.Contains(log, "clang.real") {
+		if !strings.Contains(log, "clang-real") {
 			t.Errorf("new content not present: %s", log)
 		}
 	})
@@ -295,7 +294,7 @@ func withCompileWithFallbackTestContext(t *testing.T, work func(ctx *testContext
 
 func readCompileWithFallbackErrorLog(ctx *testContext) string {
 	logFile := filepath.Join(ctx.tempDir, "fallback_stderr")
-	data, err := ioutil.ReadFile(logFile)
+	data, err := os.ReadFile(logFile)
 	if err != nil {
 		ctx.t.Fatalf("error reading log file %s: %s", logFile, err)
 	}

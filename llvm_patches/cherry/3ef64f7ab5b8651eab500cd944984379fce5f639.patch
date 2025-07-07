@@ -1,0 +1,301 @@
+From b2b5fccad7ab2abd773c3b1dbadd28006811bf1d Mon Sep 17 00:00:00 2001
+From: NAKAMURA Takumi <geek4civic@gmail.com>
+Date: Sun, 25 Aug 2024 08:17:48 +0900
+Subject: [PATCH] Revert "Enable logf128 constant folding for hosts with 128bit
+ long double (#104929)"
+
+ConstantFolding behaves differently depending on host's `HAS_IEE754_FLOAT128`.
+LLVM should not change the behavior depending on host configurations.
+
+This reverts commit 14c7e4a1844904f3db9b2dc93b722925a8c66b27.
+(llvmorg-20-init-3262-g14c7e4a18449 and llvmorg-20-init-3498-g001e423ac626)
+
+patch.cherry: true
+patch.metadata.original_sha: 3ef64f7ab5b8651eab500cd944984379fce5f639
+patch.platforms: chromiumos
+patch.version_range.from: 547379
+patch.version_range.until: 547478
+
+---
+ llvm/CMakeLists.txt                   |  2 ++
+ llvm/cmake/config-ix.cmake            | 18 +++++++++-------
+ llvm/include/llvm/ADT/APFloat.h       | 15 +++++++++++---
+ llvm/include/llvm/ADT/APInt.h         |  8 +++++++
+ llvm/include/llvm/Support/float128.h  | 14 +++++++------
+ llvm/lib/Analysis/CMakeLists.txt      |  6 ++++++
+ llvm/lib/Analysis/ConstantFolding.cpp | 30 ++++++---------------------
+ llvm/lib/Support/APFloat.cpp          | 24 +++++++++++++++++++--
+ 8 files changed, 75 insertions(+), 42 deletions(-)
+
+diff --git a/llvm/CMakeLists.txt b/llvm/CMakeLists.txt
+index 0c4b17720461..2a5a09fc3634 100644
+--- a/llvm/CMakeLists.txt
++++ b/llvm/CMakeLists.txt
+@@ -560,6 +560,8 @@ set(LLVM_USE_STATIC_ZSTD FALSE CACHE BOOL "Use static version of zstd. Can be TR
+ 
+ set(LLVM_ENABLE_CURL "OFF" CACHE STRING "Use libcurl for the HTTP client if available. Can be ON, OFF, or FORCE_ON")
+ 
++set(LLVM_HAS_LOGF128 "OFF" CACHE STRING "Use logf128 to constant fold fp128 logarithm calls. Can be ON, OFF, or FORCE_ON")
++
+ set(LLVM_ENABLE_HTTPLIB "OFF" CACHE STRING "Use cpp-httplib HTTP server library if available. Can be ON, OFF, or FORCE_ON")
+ 
+ set(LLVM_Z3_INSTALL_DIR "" CACHE STRING "Install directory of the Z3 solver.")
+diff --git a/llvm/cmake/config-ix.cmake b/llvm/cmake/config-ix.cmake
+index 471dd1615c2e..f76eacb9d513 100644
+--- a/llvm/cmake/config-ix.cmake
++++ b/llvm/cmake/config-ix.cmake
+@@ -246,6 +246,17 @@ else()
+   set(HAVE_LIBEDIT 0)
+ endif()
+ 
++if(LLVM_HAS_LOGF128)
++  include(CheckCXXSymbolExists)
++  check_cxx_symbol_exists(logf128 math.h HAS_LOGF128)
++
++  if(LLVM_HAS_LOGF128 STREQUAL FORCE_ON AND NOT HAS_LOGF128)
++    message(FATAL_ERROR "Failed to configure logf128")
++  endif()
++
++  set(LLVM_HAS_LOGF128 "${HAS_LOGF128}")
++endif()
++
+ # function checks
+ check_symbol_exists(arc4random "stdlib.h" HAVE_DECL_ARC4RANDOM)
+ find_package(Backtrace)
+@@ -259,13 +270,6 @@ if(C_SUPPORTS_WERROR_UNGUARDED_AVAILABILITY_NEW)
+   set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -Werror=unguarded-availability-new")
+ endif()
+ 
+-check_cxx_symbol_exists(logf128 cmath HAS_LOGF128)
+-check_symbol_exists(__powerpc64le__ "" __PPC64LE)
+-if(HAS_LOGF128 AND NOT __PPC64LE)
+-    set(LLVM_HAS_LOGF128 On)
+-    add_compile_definitions(HAS_LOGF128)
+-endif()
+-
+ # Determine whether we can register EH tables.
+ check_symbol_exists(__register_frame "${CMAKE_CURRENT_LIST_DIR}/unwind.h" HAVE_REGISTER_FRAME)
+ check_symbol_exists(__deregister_frame "${CMAKE_CURRENT_LIST_DIR}/unwind.h" HAVE_DEREGISTER_FRAME)
+diff --git a/llvm/include/llvm/ADT/APFloat.h b/llvm/include/llvm/ADT/APFloat.h
+index 925d03d4c066..7039e961bff8 100644
+--- a/llvm/include/llvm/ADT/APFloat.h
++++ b/llvm/include/llvm/ADT/APFloat.h
+@@ -19,6 +19,7 @@
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/FloatingPointMode.h"
+ #include "llvm/Support/ErrorHandling.h"
++#include "llvm/Support/float128.h"
+ #include <memory>
+ 
+ #define APFLOAT_DISPATCH_ON_SEMANTICS(METHOD_CALL)                             \
+@@ -377,6 +378,9 @@ public:
+   Expected<opStatus> convertFromString(StringRef, roundingMode);
+   APInt bitcastToAPInt() const;
+   double convertToDouble() const;
++#ifdef HAS_IEE754_FLOAT128
++  float128 convertToQuad() const;
++#endif
+   float convertToFloat() const;
+ 
+   /// @}
+@@ -1270,9 +1274,14 @@ public:
+   /// shorter semantics, like IEEEsingle and others.
+   double convertToDouble() const;
+ 
+-  /// Return true if this APFloat has quadruple precision floating point
+-  /// semantics
+-  bool isValidIEEEQuad() const;
++  /// Converts this APFloat to host float value.
++  ///
++  /// \pre The APFloat must be built using semantics, that can be represented by
++  /// the host float type without loss of precision. It can be IEEEquad and
++  /// shorter semantics, like IEEEdouble and others.
++#ifdef HAS_IEE754_FLOAT128
++  float128 convertToQuad() const;
++#endif
+ 
+   /// Converts this APFloat to host float value.
+   ///
+diff --git a/llvm/include/llvm/ADT/APInt.h b/llvm/include/llvm/ADT/APInt.h
+index 13837413ae49..65ba3f15305c 100644
+--- a/llvm/include/llvm/ADT/APInt.h
++++ b/llvm/include/llvm/ADT/APInt.h
+@@ -17,6 +17,7 @@
+ 
+ #include "llvm/Support/Compiler.h"
+ #include "llvm/Support/MathExtras.h"
++#include "llvm/Support/float128.h"
+ #include <cassert>
+ #include <climits>
+ #include <cstring>
+@@ -1676,6 +1677,13 @@ public:
+   /// any bit width. Exactly 64 bits will be translated.
+   double bitsToDouble() const { return llvm::bit_cast<double>(getWord(0)); }
+ 
++#ifdef HAS_IEE754_FLOAT128
++  float128 bitsToQuad() const {
++    __uint128_t ul = ((__uint128_t)U.pVal[1] << 64) + U.pVal[0];
++    return llvm::bit_cast<float128>(ul);
++  }
++#endif
++
+   /// Converts APInt bits to a float
+   ///
+   /// The conversion does not do a translation from integer to float, it just
+diff --git a/llvm/include/llvm/Support/float128.h b/llvm/include/llvm/Support/float128.h
+index 618b320086ba..e15a98dc5a67 100644
+--- a/llvm/include/llvm/Support/float128.h
++++ b/llvm/include/llvm/Support/float128.h
+@@ -9,16 +9,18 @@
+ #ifndef LLVM_FLOAT128
+ #define LLVM_FLOAT128
+ 
+-#include <cmath>
+-
+ namespace llvm {
+ 
+-#ifdef HAS_LOGF128
+-#if !defined(__LONG_DOUBLE_IBM128__) && (__SIZEOF_INT128__ == 16)
+-typedef decltype(logf128(0.)) float128;
++#if defined(__clang__) && defined(__FLOAT128__) &&                             \
++    defined(__SIZEOF_INT128__) && !defined(__LONG_DOUBLE_IBM128__)
++#define HAS_IEE754_FLOAT128
++typedef __float128 float128;
++#elif defined(__FLOAT128__) && defined(__SIZEOF_INT128__) &&                   \
++    !defined(__LONG_DOUBLE_IBM128__) &&                                        \
++    (defined(__GNUC__) || defined(__GNUG__))
+ #define HAS_IEE754_FLOAT128
++typedef _Float128 float128;
+ #endif
+-#endif // HAS_LOGF128
+ 
+ } // namespace llvm
+ #endif // LLVM_FLOAT128
+diff --git a/llvm/lib/Analysis/CMakeLists.txt b/llvm/lib/Analysis/CMakeLists.txt
+index 3127f45cc54c..393803fad893 100644
+--- a/llvm/lib/Analysis/CMakeLists.txt
++++ b/llvm/lib/Analysis/CMakeLists.txt
+@@ -162,3 +162,9 @@ add_llvm_component_library(LLVMAnalysis
+   Support
+   TargetParser
+   )
++
++include(CheckCXXSymbolExists)
++check_cxx_symbol_exists(logf128 math.h HAS_LOGF128)
++if(HAS_LOGF128)
++ target_compile_definitions(LLVMAnalysis PRIVATE HAS_LOGF128)
++endif()
+diff --git a/llvm/lib/Analysis/ConstantFolding.cpp b/llvm/lib/Analysis/ConstantFolding.cpp
+index 81c4d4ec5be4..defcacdfa8b1 100644
+--- a/llvm/lib/Analysis/ConstantFolding.cpp
++++ b/llvm/lib/Analysis/ConstantFolding.cpp
+@@ -54,7 +54,6 @@
+ #include "llvm/Support/ErrorHandling.h"
+ #include "llvm/Support/KnownBits.h"
+ #include "llvm/Support/MathExtras.h"
+-#include "llvm/Support/float128.h"
+ #include <cassert>
+ #include <cerrno>
+ #include <cfenv>
+@@ -1742,7 +1741,7 @@ Constant *GetConstantFoldFPValue(double V, Type *Ty) {
+   llvm_unreachable("Can only constant fold half/float/double");
+ }
+ 
+-#if defined(HAS_IEE754_FLOAT128)
++#if defined(HAS_IEE754_FLOAT128) && defined(HAS_LOGF128)
+ Constant *GetConstantFoldFPValue128(float128 V, Type *Ty) {
+   if (Ty->isFP128Ty())
+     return ConstantFP::get(Ty, V);
+@@ -1782,25 +1781,11 @@ Constant *ConstantFoldFP(double (*NativeFP)(double), const APFloat &V,
+   return GetConstantFoldFPValue(Result, Ty);
+ }
+ 
+-#if defined(HAS_IEE754_FLOAT128)
+-float128 ConvertToQuad(const APFloat &Apf) {
+-  APInt Api = Apf.bitcastToAPInt();
+-  __uint128_t Uint128 =
+-      ((__uint128_t)Api.extractBitsAsZExtValue(64, 64) << 64) +
+-      Api.extractBitsAsZExtValue(64, 0);
+-  return llvm::bit_cast<float128>(Uint128);
+-}
+-#endif
+-
+-#if defined(HAS_IEE754_FLOAT128)
++#if defined(HAS_IEE754_FLOAT128) && defined(HAS_LOGF128)
+ Constant *ConstantFoldFP128(float128 (*NativeFP)(float128), const APFloat &V,
+                             Type *Ty) {
+   llvm_fenv_clearexcept();
+-  if (!V.isValidIEEEQuad())
+-    return nullptr;
+-
+-  float128 Result = NativeFP(ConvertToQuad(V));
+-
++  float128 Result = NativeFP(V.convertToQuad());
+   if (llvm_fenv_testexcept()) {
+     llvm_fenv_clearexcept();
+     return nullptr;
+@@ -2129,16 +2114,13 @@ static Constant *ConstantFoldScalarCall1(StringRef Name,
+     if (IntrinsicID == Intrinsic::canonicalize)
+       return constantFoldCanonicalize(Ty, Call, U);
+ 
+-#if defined(HAS_IEE754_FLOAT128)
++#if defined(HAS_IEE754_FLOAT128) && defined(HAS_LOGF128)
+     if (Ty->isFP128Ty()) {
+       if (IntrinsicID == Intrinsic::log) {
+-        APFloat Value = Op->getValueAPF();
+-        if (!Value.isValidIEEEQuad())
+-          return nullptr;
+-
+-        float128 Result = logf128(ConvertToQuad(Value));
++        float128 Result = logf128(Op->getValueAPF().convertToQuad());
+         return GetConstantFoldFPValue128(Result, Ty);
+       }
++
+       LibFunc Fp128Func = NotLibFunc;
+       if (TLI->getLibFunc(Name, Fp128Func) && TLI->has(Fp128Func) &&
+           Fp128Func == LibFunc_logl)
+diff --git a/llvm/lib/Support/APFloat.cpp b/llvm/lib/Support/APFloat.cpp
+index 2ddf99f56f88..7f68c5ab9b7c 100644
+--- a/llvm/lib/Support/APFloat.cpp
++++ b/llvm/lib/Support/APFloat.cpp
+@@ -3749,6 +3749,15 @@ double IEEEFloat::convertToDouble() const {
+   return api.bitsToDouble();
+ }
+ 
++#ifdef HAS_IEE754_FLOAT128
++float128 IEEEFloat::convertToQuad() const {
++  assert(semantics == (const llvm::fltSemantics *)&semIEEEquad &&
++         "Float semantics are not IEEEquads");
++  APInt api = bitcastToAPInt();
++  return api.bitsToQuad();
++}
++#endif
++
+ /// Integer bit is explicit in this format.  Intel hardware (387 and later)
+ /// does not support these bit patterns:
+ ///  exponent = all 1's, integer bit 0, significand 0 ("pseudoinfinity")
+@@ -5397,9 +5406,20 @@ double APFloat::convertToDouble() const {
+   return Temp.getIEEE().convertToDouble();
+ }
+ 
+-bool APFloat::isValidIEEEQuad() const {
+-  return (&getSemantics() == (const llvm::fltSemantics *)&semIEEEquad);
++#ifdef HAS_IEE754_FLOAT128
++float128 APFloat::convertToQuad() const {
++  if (&getSemantics() == (const llvm::fltSemantics *)&semIEEEquad)
++    return getIEEE().convertToQuad();
++  assert(getSemantics().isRepresentableBy(semIEEEquad) &&
++         "Float semantics is not representable by IEEEquad");
++  APFloat Temp = *this;
++  bool LosesInfo;
++  opStatus St = Temp.convert(semIEEEquad, rmNearestTiesToEven, &LosesInfo);
++  assert(!(St & opInexact) && !LosesInfo && "Unexpected imprecision");
++  (void)St;
++  return Temp.getIEEE().convertToQuad();
+ }
++#endif
+ 
+ float APFloat::convertToFloat() const {
+   if (&getSemantics() == (const llvm::fltSemantics *)&semIEEEsingle)
+-- 
+2.49.0.395.g12beb8f557-goog

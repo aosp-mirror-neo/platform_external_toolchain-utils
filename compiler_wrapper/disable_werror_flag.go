@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"regexp"
@@ -104,10 +103,16 @@ func disableWerrorFlags(originalArgs, extraFlags []string) []string {
 	return append(newArgs, allExtraFlags...)
 }
 
-func isLikelyAConfTest(cfg *config, cmd *command) bool {
+func isLikelyAConfTest(env env, cfg *config, cmd *command) bool {
 	// Android doesn't do mid-build `configure`s, so we don't need to worry about this there.
 	if cfg.isAndroidWrapper {
 		return false
+	}
+
+	// Ignore anything that's likely to be a cmake configuration step. These put the compiler
+	// into a TryCompile dir.
+	if strings.Contains(env.getwd(), "CMakeFiles/CMakeScratch/TryCompile-") {
+		return true
 	}
 
 	for _, a := range cmd.Args {
@@ -176,7 +181,7 @@ func doubleBuildWithWNoError(env env, cfg *config, originalCmd *command, werrorC
 	// The only way we can do anything useful is if it looks like the failure
 	// was -Werror-related.
 	retryWithExtraFlags := []string{}
-	if originalExitCode != 0 && !isLikelyAConfTest(cfg, originalCmd) {
+	if originalExitCode != 0 && !isLikelyAConfTest(env, cfg, originalCmd) {
 		retryWithExtraFlags = getWnoErrorFlags(originalStdoutBuffer.Bytes(), originalStderrBuffer.Bytes())
 	}
 	if len(retryWithExtraFlags) == 0 {
@@ -283,7 +288,7 @@ func doubleBuildWithWNoError(env env, cfg *config, originalCmd *command, werrorC
 	// Coming up with a consistent name for this is difficult (compiler command's
 	// SHA can clash in the case of identically named files in different
 	// directories, or similar); let's use a random one.
-	tmpFile, err := ioutil.TempFile(reportDir, "warnings_report*.json"+incompleteSuffix)
+	tmpFile, err := os.CreateTemp(reportDir, "warnings_report*.json"+incompleteSuffix)
 	if err != nil {
 		return 0, wrapErrorwithSourceLocf(err, "error creating warnings file")
 	}
@@ -335,7 +340,7 @@ func collectProcessData(pid int) (args, env []string, parentPid int, err error) 
 	procDir := fmt.Sprintf("/proc/%d", pid)
 
 	readFile := func(fileName string) (string, error) {
-		s, err := ioutil.ReadFile(path.Join(procDir, fileName))
+		s, err := os.ReadFile(path.Join(procDir, fileName))
 		if err != nil {
 			return "", fmt.Errorf("reading %s: %v", fileName, err)
 		}

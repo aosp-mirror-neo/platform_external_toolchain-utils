@@ -9,7 +9,7 @@ import json
 import logging
 import re
 import subprocess
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 
 BuildID = int
@@ -67,26 +67,28 @@ class ChangeListURL:
     patch_set: Optional[int] = None
     internal: bool = False
 
+    _URL_PARSE_RE = re.compile(
+        # Match an optional https:// header.
+        r"(?:https?://)?"
+        # Leaving the CL number and patch set as the next parts, match either
+        # crrev...
+        r"(crrev\.com/[ci]/"
+        # ...or chromium-review URLs. Note that chromium-review can either be
+        # served by googlesource or git.corp.google hosts.
+        r"|(?:chromium|chrome-internal)-review\."
+        r"(?:git\.corp\.google|googlesource)\.com/.*/\+/)"
+        # Match the CL number...
+        r"(\d+)"
+        # and (optionally) the patch-set, as well as consuming any of the
+        # path after the patch-set.
+        r"(?:/(\d+)?(?:/.*)?)?"
+        # Validate any sort of GET params for completeness.
+        r"(?:$|[?&].*)"
+    )
+
     @classmethod
     def parse(cls, url: str) -> "ChangeListURL":
-        url_re = re.compile(
-            # Match an optional https:// header.
-            r"(?:https?://)?"
-            # Match either chromium-review or crrev, leaving the CL number and
-            # patch set as the next parts. These can be parsed in unison.
-            r"(chromium-review\.googlesource\.com.*/\+/"
-            r"|crrev\.com/[ci]/"
-            r"|chrome-internal-review\.googlesource\.com.*/\+/)"
-            # Match the CL number...
-            r"(\d+)"
-            # and (optionally) the patch-set, as well as consuming any of the
-            # path after the patch-set.
-            r"(?:/(\d+)?(?:/.*)?)?"
-            # Validate any sort of GET params for completeness.
-            r"(?:$|[?&].*)"
-        )
-
-        m = url_re.fullmatch(url)
+        m = cls._URL_PARSE_RE.fullmatch(url)
         if not m:
             raise ValueError(
                 f"URL {url!r} was not recognized. Supported URL formats are "
@@ -112,12 +114,17 @@ class ChangeListURL:
             raise ValueError("A patchset number must be specified.")
         return result
 
-    def crrev_url_without_http(self):
+    def crrev_url_without_http(self) -> str:
         namespace = "i" if self.internal else "c"
         result = f"crrev.com/{namespace}/{self.cl_id}"
         if self.patch_set is not None:
             result += f"/{self.patch_set}"
         return result
+
+    @property
+    def gerrit_tool_id(self) -> str:
+        """Returns an identifier for this CL for use with the 'gerrit' tool."""
+        return f"*{self.cl_id}" if self.internal else f"{self.cl_id}"
 
     def __str__(self):
         return f"https://{self.crrev_url_without_http()}"
@@ -238,6 +245,17 @@ class CQBoardBuilderOutput:
                 artifacts_link = output["properties"].get("artifact_link")
             results.append(cls(status=status, artifacts_link=artifacts_link))
         return results
+
+
+def fetch_cq_orchestrator_or_board_builder(
+    bot_id: BuildID,
+) -> Tuple[str, Union[CQOrchestratorOutput, CQBoardBuilderOutput]]:
+    """Figures out the builder type of bot_id, then fetches it."""
+    result = _run_bb_decoding_output(["get", str(bot_id)])
+    builder_name = result["builder"]["builder"]
+    if builder_name == "cq-orchestrator":
+        return builder_name, CQOrchestratorOutput.fetch(bot_id)
+    return builder_name, CQBoardBuilderOutput.fetch_many((bot_id,))[0]
 
 
 def parse_release_from_builder_artifacts_link(artifacts_link: str) -> str:

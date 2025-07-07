@@ -9,7 +9,6 @@ import (
 	"context"
 	"errors"
 	"flag"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
@@ -239,7 +238,7 @@ func TestNewProcessEnvResolvesPwdAwayProperly(t *testing.T) {
 		}
 	}()
 
-	tempDir, err := ioutil.TempDir("", "wrapper_env_test")
+	tempDir, err := os.MkdirTemp("", "wrapper_env_test")
 	if err != nil {
 		t.Fatalf("Failed making temp dir: %v", err)
 	}

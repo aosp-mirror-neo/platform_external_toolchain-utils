@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2022 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -113,6 +112,8 @@ import shutil
 import subprocess
 import sys
 from typing import cast, List, Mapping, Optional
+
+from cros_utils import cros_paths
 
 
 TARGET_TRIPLES = [
@@ -466,9 +467,10 @@ def benchmark_pgo(args):
         crate_name=args.bench_crate_name, crate_version=args.bench_crate_version
     )
 
-    files_dir = Path(
-        "/mnt/host/source/src/third_party/chromiumos-overlay",
-        "dev-lang/rust/files",
+    files_dir = (
+        cros_paths.CHROOT_SOURCE_ROOT
+        / cros_paths.CHROMIUMOS_OVERLAY
+        / "dev-lang/rust/files"
     )
 
     logging.info("Copying profile data to be used in building Rust")
@@ -561,7 +563,7 @@ def main(argv: List[str]) -> int:
     )
 
     parser = argparse.ArgumentParser(
-        prog=argv[0],
+        prog=sys.argv[0],
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
@@ -663,7 +665,7 @@ def main(argv: List[str]) -> int:
         "rustc versions",
     )
 
-    args = parser.parse_args(argv[1:])
+    args = parser.parse_args(argv)
 
     (LOCAL_BASE / "crates").mkdir(parents=True, exist_ok=True)
     (LOCAL_BASE / "llvm-profraw").mkdir(parents=True, exist_ok=True)
@@ -673,7 +675,3 @@ def main(argv: List[str]) -> int:
     args.func(args)
 
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv))

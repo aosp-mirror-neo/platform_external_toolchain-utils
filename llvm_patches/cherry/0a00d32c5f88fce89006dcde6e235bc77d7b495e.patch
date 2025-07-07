@@ -1,0 +1,63 @@
+From 0a00d32c5f88fce89006dcde6e235bc77d7b495e Mon Sep 17 00:00:00 2001
+From: Jordan R AW <ajordanr@google.com>
+Date: Thu, 29 Aug 2024 10:16:17 -0700
+Subject: [PATCH] [lldb] Add armv7a and armv8a ArchSpecs (#106433)
+
+armv7a and armv8a are common names for the application subarch for arm.
+
+These names in particular are used in ChromeOS, Android, and a few other
+known applications. In ChromeOS, we encountered a bug where armv7a arch
+was not recognised and segfaulted when starting an executable on an
+arm32 device.
+
+Google Issue Tracker:
+https://issuetracker.google.com/361414339
+---
+ lldb/include/lldb/Utility/ArchSpec.h | 2 ++
+ lldb/source/Utility/ArchSpec.cpp     | 4 ++++
+ 2 files changed, 6 insertions(+)
+
+diff --git a/lldb/include/lldb/Utility/ArchSpec.h b/lldb/include/lldb/Utility/ArchSpec.h
+index 50830b889b91..5990f984b09e 100644
+--- a/lldb/include/lldb/Utility/ArchSpec.h
++++ b/lldb/include/lldb/Utility/ArchSpec.h
+@@ -123,6 +123,7 @@ public:
+     eCore_arm_armv6,
+     eCore_arm_armv6m,
+     eCore_arm_armv7,
++    eCore_arm_armv7a,
+     eCore_arm_armv7l,
+     eCore_arm_armv7f,
+     eCore_arm_armv7s,
+@@ -145,6 +146,7 @@ public:
+     eCore_thumbv7em,
+     eCore_arm_arm64,
+     eCore_arm_armv8,
++    eCore_arm_armv8a,
+     eCore_arm_armv8l,
+     eCore_arm_arm64e,
+     eCore_arm_arm64_32,
+diff --git a/lldb/source/Utility/ArchSpec.cpp b/lldb/source/Utility/ArchSpec.cpp
+index 4fd1a800023c..85bb85044ec1 100644
+--- a/lldb/source/Utility/ArchSpec.cpp
++++ b/lldb/source/Utility/ArchSpec.cpp
+@@ -60,6 +60,8 @@ static const CoreDefinition g_core_definitions[] = {
+      "armv6m"},
+     {eByteOrderLittle, 4, 2, 4, llvm::Triple::arm, ArchSpec::eCore_arm_armv7,
+      "armv7"},
++    {eByteOrderLittle, 4, 2, 4, llvm::Triple::arm, ArchSpec::eCore_arm_armv7a,
++     "armv7a"},
+     {eByteOrderLittle, 4, 2, 4, llvm::Triple::arm, ArchSpec::eCore_arm_armv7l,
+      "armv7l"},
+     {eByteOrderLittle, 4, 2, 4, llvm::Triple::arm, ArchSpec::eCore_arm_armv7f,
+@@ -102,6 +104,8 @@ static const CoreDefinition g_core_definitions[] = {
+      ArchSpec::eCore_arm_arm64, "arm64"},
+     {eByteOrderLittle, 8, 4, 4, llvm::Triple::aarch64,
+      ArchSpec::eCore_arm_armv8, "armv8"},
++    {eByteOrderLittle, 8, 4, 4, llvm::Triple::aarch64,
++     ArchSpec::eCore_arm_armv8a, "armv8a"},
+     {eByteOrderLittle, 4, 2, 4, llvm::Triple::arm, ArchSpec::eCore_arm_armv8l,
+      "armv8l"},
+     {eByteOrderLittle, 8, 4, 4, llvm::Triple::aarch64,
+-- 
+2.46.0.469.g59c65b2a67-goog

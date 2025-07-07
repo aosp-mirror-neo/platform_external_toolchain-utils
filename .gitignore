@@ -4,4 +4,5 @@
 /rust-analyzer-chromiumos-wrapper/target
 compiler_wrapper/compiler_wrapper
 llvm-project-copy/
+.llvm-project-copy/
 logs

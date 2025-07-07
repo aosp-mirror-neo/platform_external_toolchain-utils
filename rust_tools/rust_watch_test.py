@@ -14,7 +14,7 @@ import unittest
 import unittest.mock
 
 from cros_utils import tiny_render
-import rust_watch
+from rust_tools import rust_watch
 
 
 class Test(unittest.TestCase):
@@ -180,7 +180,3 @@ class Test(unittest.TestCase):
                 newest_release=rust_watch.RustReleaseVersion(1, 0, 0),
             )
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

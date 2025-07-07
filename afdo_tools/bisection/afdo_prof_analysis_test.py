@@ -6,9 +6,8 @@
 
 """Tests for afdo_prof_analysis."""
 
-
-import random
 import io
+import random
 import unittest
 
 from afdo_tools.bisection import afdo_prof_analysis as analysis
@@ -74,7 +73,6 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         self.assertEqual(analysis.json_to_text(example_prof), expected_text)
 
     def test_bisect_profiles(self):
-
         # mock run of external script with arbitrarily-chosen bad profile vals
         # save_run specified and unused b/c afdo_prof_analysis.py
         # will call with argument explicitly specified
@@ -94,7 +92,6 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         self.assertEqual(results["ranges"], [])
 
     def test_range_search(self):
-
         # arbitrarily chosen functions whose values in the bad profile constitute
         # a problematic pair
         # pylint: disable=unused-argument
@@ -162,7 +159,3 @@ class AfdoProfAnalysisTest(unittest.TestCase):
                 DeciderClass(), self.good_items, self.bad_items
             )
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

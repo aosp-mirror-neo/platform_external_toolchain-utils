@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -19,18 +18,15 @@ Run this from inside of the chroot.
 import argparse
 import contextlib
 import logging
-from pathlib import Path
 import subprocess
 import sys
 from typing import List
 
-import chroot
-import get_upstream_patch
-import manifest_utils
-import patch_utils
-
-
-CROS_SOURCE_ROOT = Path("/mnt/host/source")
+from cros_utils import cros_paths
+from llvm_tools import chroot
+from llvm_tools import get_llvm_hash
+from llvm_tools import manifest_utils
+from llvm_tools import patch_utils
 
 
 @contextlib.contextmanager
@@ -39,7 +35,7 @@ def llvm_checked_out_to(checkout_sha: str):
 
     Restores LLVM to the prior SHA when exited.
     """
-    llvm_dir = CROS_SOURCE_ROOT / manifest_utils.LLVM_PROJECT_PATH
+    llvm_dir = cros_paths.CHROOT_SOURCE_ROOT / manifest_utils.LLVM_PROJECT_PATH
     original_sha = subprocess.run(
         ["git", "rev-parse", "HEAD"],
         check=True,
@@ -88,11 +84,10 @@ def llvm_checked_out_to(checkout_sha: str):
 
 
 def resolve_llvm_sha(llvm_next: bool) -> str:
-    sys_devel_llvm = (
-        CROS_SOURCE_ROOT / "src/third_party/chromiumos-overlay/sys-devel/llvm"
-    )
-    sha = "llvm-next" if llvm_next else "llvm"
-    return get_upstream_patch.resolve_symbolic_sha(sha, str(sys_devel_llvm))
+    hash_obj = get_llvm_hash.LLVMHash()
+    if llvm_next:
+        return hash_obj.GetCrOSLLVMNextHash()
+    return hash_obj.GetCrOSCurrentLLVMHash(cros_paths.CHROOT_SOURCE_ROOT)
 
 
 def main(argv: List[str]) -> None:
@@ -120,10 +115,12 @@ def main(argv: List[str]) -> None:
     desired_sha = resolve_llvm_sha(opts.llvm_next)
 
     with llvm_checked_out_to(desired_sha):
-        packages_to_stabilize = patch_utils.CHROMEOS_PATCHES_JSON_PACKAGES
+        packages_to_stabilize = patch_utils.CHROMEOS_LLVM_SUBPACKAGES
         logging.info("Stabilizing %s...", ", ".join(packages_to_stabilize))
 
-        cros_overlay = CROS_SOURCE_ROOT / "src/third_party/chromiumos-overlay"
+        cros_overlay = (
+            cros_paths.CHROOT_SOURCE_ROOT / cros_paths.CHROMIUMOS_OVERLAY
+        )
         return_code = subprocess.run(
             [
                 "cros_mark_as_stable",
@@ -135,7 +132,3 @@ def main(argv: List[str]) -> None:
             stdin=subprocess.DEVNULL,
         ).returncode
         sys.exit(return_code)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -16,6 +15,7 @@ Note that this script has a few (perhaps surprising) side-effects:
 """
 
 import argparse
+import contextlib
 import dataclasses
 import logging
 import os
@@ -26,9 +26,9 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from typing import Dict, FrozenSet, List, Optional
+from typing import Dict, Generator, List, Optional
 
-import pgo_tools
+from pgo_tools import pgo_utils
 
 
 # This script runs `quickpkg` on LLVM. This file saves the version of LLVM that
@@ -69,49 +69,80 @@ def ensure_llvm_binpkg_exists() -> bool:
         if pkg.exists():
             return False
 
-    pkg = pgo_tools.quickpkg_llvm()
+    pkg = pgo_utils.quickpkg_llvm()
     SAVED_LLVM_BINPKG_STAMP.write_text(str(pkg), encoding="utf-8")
     return True
 
 
-def restore_llvm_binpkg():
+class CrosWorkonState:
+    """Manages cros-workon state for a given host package."""
+
+    @staticmethod
+    def _is_cros_workoned(pkg: str) -> bool:
+        stdout = pgo_utils.run(
+            ["cros-workon", "--host", "list", pkg],
+            stdout=subprocess.PIPE,
+        ).stdout
+        # If `cros-workon --host list ${pkg}` printed anything other than
+        # spaces, it means that `pkg` is being worked on.
+        return bool(stdout.strip())
+
+    def __init__(self, pkg: str):
+        self.pkg = pkg
+        self.is_workoned = self._is_cros_workoned(pkg)
+
+    def set_workon(self, value: bool) -> None:
+        if self.is_workoned == value:
+            return
+
+        verb = "start" if value else "stop"
+        logging.info("%s'ing cros-workon for %s", verb, self.pkg)
+        pgo_utils.run(["cros-workon", "--host", verb, self.pkg])
+        self.is_workoned = value
+
+    @contextlib.contextmanager
+    def temporarily_set_workon(
+        self, value: bool
+    ) -> Generator[None, None, None]:
+        initial_workon_bit = self.is_workoned
+        self.set_workon(value)
+        try:
+            yield
+        finally:
+            self.set_workon(initial_workon_bit)
+
+
+def restore_llvm_binpkg() -> None:
     """Installs the binpkg created by ensure_llvm_binpkg_exists."""
     logging.info("Restoring non-PGO'ed LLVM installation")
     pkg = Path(SAVED_LLVM_BINPKG_STAMP.read_text(encoding="utf-8"))
     assert (
         pkg.exists()
     ), f"Non-PGO'ed binpkg at {pkg} does not exist. Can't restore"
-    pgo_tools.run(pgo_tools.generate_quickpkg_restoration_command(pkg))
+
+    # If:
+    # - the binpkg that was built was of 9999, and we're not 9999, we need to
+    #   cros-workon, so the package is considered viable
+    # - the binpkg isn't 9999, but we've `cros-workon`'ed llvm, we need to
+    #   temporarily disable the cros-workon, since `package.mask` will block
+    #   the binpkg's installation.
+    llvm_workon_state = CrosWorkonState("sys-devel/llvm")
+    binpkg_is_cros_workon = "-9999" in pkg.name
+    with llvm_workon_state.temporarily_set_workon(binpkg_is_cros_workon):
+        pgo_utils.run(pgo_utils.generate_quickpkg_restoration_command(pkg))
 
 
-def find_missing_cross_libs() -> FrozenSet[str]:
-    """Returns cross-* libraries that need to be installed for workloads."""
-    equery_result = pgo_tools.run(
-        ["equery", "l", "--format=$cp", "cross-*/*"],
-        check=False,
-        stdout=subprocess.PIPE,
-    )
-
-    # If no matching package is found, equery will exit with code 3.
-    if equery_result.returncode == 3:
-        return ALL_NEEDED_CROSS_LIBS
-
-    equery_result.check_returncode()
-    has_packages = {x.strip() for x in equery_result.stdout.splitlines()}
-    return ALL_NEEDED_CROSS_LIBS - has_packages
-
-
-def ensure_cross_libs_are_installed():
-    """Ensures that we have cross-* libs for all `IMPORTANT_TRIPLES`."""
-    missing_packages = find_missing_cross_libs()
-    if not missing_packages:
-        logging.info("All cross-compiler libraries are already installed")
-        return
-
-    missing_packages = sorted(missing_packages)
-    logging.info("Installing cross-compiler libs: %s", missing_packages)
-    pgo_tools.run(
-        ["sudo", "emerge", "-j", "-G"] + missing_packages,
+def ensure_toolchain_is_up_to_date():
+    """Ensures that all toolchain/cross-compiler packages are up-to-date."""
+    logging.info("Updating all toolchain packages to the new toolchain")
+    # Using the command from go/crostc-mage-misc#using-the-new-toolchain
+    pgo_utils.run(
+        [
+            "sudo",
+            "cros_setup_toolchains",
+            "--include-boards=amd64-generic",
+            "--nousepkg",
+        ],
     )
 
 
@@ -139,7 +170,7 @@ def emerge_pgo_generate_llvm():
     force_features = "ccache"
     features = (os.environ.get("FEATURES", "") + " " + force_features).strip()
     logging.info("Building LLVM with USE=%s", shlex.quote(use))
-    pgo_tools.run(
+    pgo_utils.run(
         [
             "sudo",
             f"FEATURES={features}",
@@ -167,7 +198,7 @@ def ensure_clang_invocations_generate_profiles(clang_bin: str, tmpdir: Path):
     """
     tmpdir = tmpdir / "ensure_profiles_generated"
     tmpdir.mkdir(parents=True)
-    pgo_tools.run(
+    pgo_utils.run(
         [clang_bin, "--help"],
         extra_env=build_profiling_env(tmpdir),
         stdout=subprocess.DEVNULL,
@@ -198,6 +229,36 @@ def write_unified_cmake_file(
     )
 
 
+def patch_absl(absl_dir: Path):
+    """Patches absl's sources."""
+    # b/366159701#comment7: the current absl has a bug in its cmake files. This
+    # is fixed by cl/675148126. Since the diff is a single line, patch it
+    # directly.
+    #
+    # If you've upgraded absl, this patching logic can probably be safely
+    # removed.
+    patch_text = textwrap.dedent(
+        """\
+        --- a/absl/base/CMakeLists.txt
+        +++ b/absl/base/CMakeLists.txt
+        @@ -534,6 +534,7 @@ absl_cc_test(
+             absl::no_destructor
+             absl::config
+             absl::raw_logging_internal
+        +    GTest::gmock
+             GTest::gtest_main
+         )
+        """
+    )
+    subprocess.run(
+        ["patch", "-p1"],
+        check=True,
+        cwd=absl_dir,
+        encoding="utf-8",
+        input=patch_text,
+    )
+
+
 def fetch_workloads_into(target_dir: Path):
     """Fetches PGO generation workloads into `target_dir`."""
     # The workload here is absl and gtest. The reasoning behind that selection
@@ -212,7 +273,7 @@ def fetch_workloads_into(target_dir: Path):
 
     def fetch_and_extract(gs_url: str, into_dir: Path):
         tgz_full = target_dir / os.path.basename(gs_url)
-        pgo_tools.run(
+        pgo_utils.run(
             [
                 "gsutil",
                 "cp",
@@ -222,7 +283,7 @@ def fetch_workloads_into(target_dir: Path):
         )
         into_dir.mkdir()
 
-        pgo_tools.run(
+        pgo_utils.run(
             ["tar", "xaf", tgz_full],
             cwd=into_dir,
         )
@@ -230,18 +291,20 @@ def fetch_workloads_into(target_dir: Path):
     absl_dir = target_dir / "absl"
     fetch_and_extract(
         gs_url="gs://chromeos-localmirror/distfiles/"
-        "abseil-cpp-a86bb8a97e38bc1361289a786410c0eb5824099c.tar.bz2",
+        "abseil-cpp-20240722.0.tar.gz",
         into_dir=absl_dir,
     )
+
+    unpacked_absl_dir = read_exactly_one_dirent(absl_dir)
+    patch_absl(unpacked_absl_dir)
 
     gtest_dir = target_dir / "gtest"
     fetch_and_extract(
         gs_url="gs://chromeos-mirror/gentoo/distfiles/"
-        "gtest-1b18723e874b256c1e39378c6774a90701d70f7a.tar.gz",
+        "gtest-1.14.0_p20220421.tar.gz",
         into_dir=gtest_dir,
     )
 
-    unpacked_absl_dir = read_exactly_one_dirent(absl_dir)
     unpacked_gtest_dir = read_exactly_one_dirent(gtest_dir)
     write_unified_cmake_file(
         into_dir=target_dir,
@@ -278,7 +341,7 @@ class WorkloadRunner:
         if sysroot:
             profiling_env["SYSROOT"] = sysroot
 
-        cmake_command: pgo_tools.Command = [
+        cmake_command: pgo_utils.Command = [
             "cmake",
             "-G",
             "Ninja",
@@ -298,13 +361,13 @@ class WorkloadRunner:
             )
 
         cmake_command.append(self.target_dir)
-        pgo_tools.run(
+        pgo_utils.run(
             cmake_command,
             extra_env=profiling_env,
             cwd=self.out_dir,
         )
 
-        pgo_tools.run(
+        pgo_utils.run(
             ["ninja", "-v", "all"],
             extra_env=profiling_env,
             cwd=self.out_dir,
@@ -370,7 +433,7 @@ def convert_profraw_to_pgo_profile(profraw_dir: Path) -> Path:
         "--instr",
         f"--output={output}",
     ]
-    pgo_tools.run(generate_command + profile_files)
+    pgo_utils.run(generate_command + profile_files)
     return output
 
 
@@ -403,7 +466,7 @@ def main(argv: List[str]):
     )
     opts = parser.parse_args(argv)
 
-    pgo_tools.exit_if_not_in_chroot()
+    pgo_utils.exit_if_not_in_chroot()
 
     output = opts.output
 
@@ -421,19 +484,21 @@ def main(argv: List[str]):
             )
         )
 
-    logging.info("Ensuring `cross-` libraries are installed")
-    ensure_cross_libs_are_installed()
+    logging.info("Installing the new toolchain...")
+    ensure_toolchain_is_up_to_date()
     tempdir = Path(tempfile.mkdtemp(prefix="generate_llvm_pgo_profile_"))
     try:
         workloads_path = tempdir / "workloads"
         logging.info("Fetching workloads")
         fetch_workloads_into(workloads_path)
 
-        # If our binpkg is not fresh, we may be operating with a weird LLVM
-        # (e.g., a PGO'ed one ;) ). Ensure we always start with that binpkg as
-        # our baseline.
-        if not llvm_binpkg_is_fresh:
-            restore_llvm_binpkg()
+        # Subtle: ensure we always start with the initial LLVM. The new one
+        # might emit a PGO profile version that the old one can't parse, which
+        # makes it impossible to build the new with the old (w/ PGO enabled).
+        #
+        # The cross-compiler libs being out of sync is fine; `sys-devel/llvm`
+        # ships with the cross-compiler libs it needs for host builds.
+        restore_llvm_binpkg()
 
         logging.info("Building PGO instrumented LLVM")
         emerge_pgo_generate_llvm()
@@ -471,7 +536,3 @@ def main(argv: List[str]):
     logging.info("Removing now-obsolete tempdir")
     shutil.rmtree(tempdir)
     logging.info("PGO profile is available at %s.", output)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

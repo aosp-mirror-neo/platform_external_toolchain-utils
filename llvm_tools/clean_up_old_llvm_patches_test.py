@@ -1,16 +1,11 @@
-#!/usr/bin/env python3
 # Copyright 2024 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests for clean_up_old_llvm_patches"""
 
-from pathlib import Path
-import shutil
-import tempfile
-import unittest
-
-import clean_up_old_llvm_patches
+from llvm_tools import clean_up_old_llvm_patches
+from llvm_tools import test_helpers
 
 
 ANDROID_VERSION_PY_EXAMPLE = """
@@ -19,18 +14,18 @@ def get_svn_revision():
 """
 
 
-class Test(unittest.TestCase):
+class Test(test_helpers.TempDirTestCase):
     """Tests for clean_up_old_llvm_patches"""
-
-    def make_tempdir(self) -> Path:
-        tmpdir = Path(tempfile.mkdtemp(prefix="patch_utils_unittest"))
-        self.addCleanup(shutil.rmtree, tmpdir)
-        return tmpdir
 
     def test_android_version_autodetection(self):
         android_root = self.make_tempdir()
         android_version_py = (
-            android_root / "toolchain" / "llvm_android" / "android_version.py"
+            android_root
+            / "toolchain"
+            / "llvm_android"
+            / "src"
+            / "llvm_android"
+            / "android_version.py"
         )
         android_version_py.parent.mkdir(parents=True)
         android_version_py.write_text(
@@ -62,7 +57,3 @@ class Test(unittest.TestCase):
             ),
             123456,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

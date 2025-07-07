@@ -157,36 +157,6 @@ func TestLogRusageAndForceDisableWError(t *testing.T) {
 	})
 }
 
-func TestErrorOnLogRusageAndBisect(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		ctx.NoteTestWritesToUmask()
-
-		ctx.env = []string{
-			"BISECT_STAGE=xyz",
-			"TOOLCHAIN_RUSAGE_OUTPUT=rusage.log",
-		}
-		stderr := ctx.mustFail(callCompiler(ctx, ctx.cfg, ctx.newCommand(gccX86_64, mainCc)))
-		if err := verifyNonInternalError(stderr, "TOOLCHAIN_RUSAGE_OUTPUT is meaningless with BISECT_STAGE"); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
-func TestErrorOnBisectAndForceDisableWError(t *testing.T) {
-	withTestContext(t, func(ctx *testContext) {
-		ctx.NoteTestWritesToUmask()
-
-		ctx.env = []string{
-			"BISECT_STAGE=xyz",
-			"FORCE_DISABLE_WERROR=1",
-		}
-		stderr := ctx.mustFail(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
-		if err := verifyNonInternalError(stderr, "BISECT_STAGE is meaningless with FORCE_DISABLE_WERROR"); err != nil {
-			t.Error(err)
-		}
-	})
-}
-
 func TestPrintUserCompilerError(t *testing.T) {
 	buffer := bytes.Buffer{}
 	printCompilerError(&buffer, newUserErrorf("abcd"))
@@ -227,22 +197,22 @@ func TestCalculateAndroidWrapperPath(t *testing.T) {
 		{
 			mainBuilderPath: "/foo/bar",
 			absWrapperPath:  "/bar/baz",
-			want:            "/foo/baz.real",
+			want:            "/foo/baz-real",
 		},
 		{
 			mainBuilderPath: "/my_wrapper",
 			absWrapperPath:  "/bar/baz",
-			want:            "/baz.real",
+			want:            "/baz-real",
 		},
 		{
 			mainBuilderPath: "no_seps",
 			absWrapperPath:  "/bar/baz",
-			want:            "baz.real",
+			want:            "baz-real",
 		},
 		{
 			mainBuilderPath: "./a_sep",
 			absWrapperPath:  "/bar/baz",
-			want:            "./baz.real",
+			want:            "./baz-real",
 		},
 	}
 
