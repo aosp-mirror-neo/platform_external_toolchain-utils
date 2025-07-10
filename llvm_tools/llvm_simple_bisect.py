@@ -22,7 +22,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Optional, Text
+from typing import Optional
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -47,20 +47,20 @@ class CommandResult:
     """Results a command"""
 
     return_code: int
-    output: Text
+    output: str
 
     def success(self) -> bool:
         """Checks if command exited successfully."""
         return self.return_code == 0
 
-    def search(self, error_string: Text) -> bool:
+    def search(self, error_string: str) -> bool:
         """Checks if command has error_string in output."""
         return error_string in self.output
 
     def exit_assert(
         self,
-        error_string: Text,
-        llvm_hash: Text,
+        error_string: str,
+        llvm_hash: str,
         log_dir: Optional[Path] = None,
     ):
         """Exit program with error code based on result."""
@@ -82,7 +82,7 @@ class CommandResult:
             self.log_result(log_dir, llvm_hash, decision_str)
         sys.exit(decision)
 
-    def log_result(self, log_dir: Path, llvm_hash: Text, decision: Text):
+    def log_result(self, log_dir: Path, llvm_hash: str, decision: str):
         """Log command's output to `{log_dir}/{llvm_hash}.{decision}`.
 
         Args:
@@ -113,7 +113,7 @@ class LLVMRepo:
     def __init__(self):
         self.workon: Optional[bool] = None
 
-    def get_current_hash(self) -> Text:
+    def get_current_hash(self) -> str:
         try:
             output = subprocess.check_output(
                 ["git", "rev-parse", "HEAD"],
@@ -156,7 +156,7 @@ class LLVMRepo:
             logging.exception("LLVM could not be reset.")
             raise AbortingException
 
-    def build(self, use_flags: Text) -> CommandResult:
+    def build(self, use_flags: str) -> CommandResult:
         """Build selected LLVM version."""
         logging.info(
             "Building llvm with candidate hash. Use flags will be %s", use_flags
@@ -176,7 +176,7 @@ class LLVMRepo:
         return CommandResult(return_code, output)
 
 
-def run_test(command: Text) -> CommandResult:
+def run_test(command: str) -> CommandResult:
     """Run test command and get a CommandResult."""
     logging.info("Running test command: %s", command)
     result = subprocess.run(
