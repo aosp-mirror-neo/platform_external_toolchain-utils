@@ -394,6 +394,16 @@ pub fn filter_patches_by_platform(collection: &PatchCollection, platform: &str) 
     })
 }
 
+/// Filter a collection by patches that don't apply to the given LLVM revision.
+pub fn filter_patches_by_version(collection: &PatchCollection, version: u64) -> PatchCollection {
+    collection.filter_patches(|p| match (p.get_from_version(), p.get_until_version()) {
+        (Some(start), Some(end)) => start <= version && version < end,
+        (Some(start), None) => start <= version,
+        (None, Some(end)) => version < end,
+        (None, None) => true,
+    })
+}
+
 /// Verify the patches all exist and apply to the given platform.
 ///
 /// If all good, return Unit. Otherwise, return an Err.

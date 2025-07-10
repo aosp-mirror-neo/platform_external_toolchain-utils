@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-mod android_utils;
+mod llvm_version_extraction;
 mod patch_parsing;
 mod version_control;
 
@@ -13,7 +13,10 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use structopt::StructOpt;
 
-use patch_parsing::{filter_patches_by_platform, PatchCollection, PatchDictSchema, VersionRange};
+use patch_parsing::{
+    filter_patches_by_platform, filter_patches_by_version, PatchCollection, PatchDictSchema,
+    VersionRange,
+};
 use version_control::{RepoSetupContext, RepoUploadOpts};
 
 fn main() -> Result<()> {
@@ -180,10 +183,10 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
     // want patches outside of the start/end bounds.
     let android_llvm_version: u64 = {
         let android_llvm_version_str =
-            android_utils::get_android_llvm_version(&ctx.android_checkout)?;
+            llvm_version_extraction::get_android_llvm_version(&ctx.android_checkout)?;
         android_llvm_version_str.parse::<u64>().with_context(|| {
             format!(
-                "converting llvm version to u64: '{}'",
+                "converting android llvm version to u64: {:?}",
                 android_llvm_version_str
             )
         })?
@@ -191,13 +194,50 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
     if args.verbose {
         println!("Android LLVM version: r{}", android_llvm_version);
     }
-    let new_cros_patches =
-        new_cros_patches.filter_patches(|p| match (p.get_from_version(), p.get_until_version()) {
-            (Some(start), Some(end)) => start <= android_llvm_version && android_llvm_version < end,
-            (Some(start), None) => start <= android_llvm_version,
-            (None, Some(end)) => android_llvm_version < end,
-            (None, None) => true,
-        });
+    let new_cros_patches = filter_patches_by_version(&new_cros_patches, android_llvm_version);
+
+    let chromiumos_llvm_cur_version: u64 = {
+        let chromiumos_llvm_version_str: String =
+            llvm_version_extraction::get_chromiumos_llvm_version(&ctx.cros_checkout)?;
+        chromiumos_llvm_version_str
+            .parse::<u64>()
+            .with_context(|| {
+                format!(
+                    "converting chromiumos llvm version to u64: {:?}",
+                    chromiumos_llvm_version_str
+                )
+            })?
+    };
+    if args.verbose {
+        println!(
+            "ChromiumOS LLVM Current version: r{}",
+            chromiumos_llvm_cur_version
+        );
+    }
+
+    let chromiumos_llvm_next_version: u64 = {
+        let chromiumos_llvm_version_str: String =
+            llvm_version_extraction::get_chromiumos_llvm_next_version(&ctx.cros_checkout)?;
+        chromiumos_llvm_version_str
+            .parse::<u64>()
+            .with_context(|| {
+                format!(
+                    "converting chromiumos llvm-next version to u64: {:?}",
+                    chromiumos_llvm_version_str
+                )
+            })?
+    };
+    if args.verbose {
+        println!(
+            "ChromiumOS LLVM Next version: r{}",
+            chromiumos_llvm_next_version
+        );
+    }
+
+    let new_android_patches =
+        filter_patches_by_version(&new_android_patches, chromiumos_llvm_cur_version).union(
+            &filter_patches_by_version(&new_android_patches, chromiumos_llvm_next_version),
+        )?;
 
     // Need to filter version updates to only existing patches to the other platform.
     let cros_version_updates =
@@ -287,7 +327,7 @@ fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) 
             .context("uploading chromiumos changes")?;
     }
     if !opt.new_cros_patches.is_empty() {
-        if let Err(e) = android_utils::sort_android_patches(&ctx.android_checkout) {
+        if let Err(e) = llvm_version_extraction::sort_android_patches(&ctx.android_checkout) {
             eprintln!(
                 "Couldn't sort Android patches; continuing. Caused by: {}",
                 e
