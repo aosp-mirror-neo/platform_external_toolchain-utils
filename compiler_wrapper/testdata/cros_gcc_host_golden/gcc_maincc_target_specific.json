@@ -4,9 +4,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -29,9 +26,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -54,9 +48,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -79,9 +70,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -104,9 +92,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -129,9 +114,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -154,9 +136,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -179,9 +158,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],
@@ -204,9 +180,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "main.cc"
           ],

@@ -6,9 +6,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=kernel-address",
@@ -43,9 +40,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=kernel-address",
@@ -80,9 +74,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=kernel-address",
@@ -117,9 +108,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=kernel-address",
@@ -154,9 +142,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=fuzzer",
@@ -190,9 +175,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=address",
@@ -228,9 +210,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fsanitize=address",
@@ -264,9 +243,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-fprofile-instr-generate",
