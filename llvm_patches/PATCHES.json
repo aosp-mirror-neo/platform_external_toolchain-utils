@@ -741,5 +741,20 @@
       "from": 563729,
       "until": 563880
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/183acdd27985afd332463e3d9fd4a2ca46d85cf1.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 580792
+    }
   }
 ]
