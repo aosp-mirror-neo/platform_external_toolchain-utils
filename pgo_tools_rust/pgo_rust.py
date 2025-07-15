@@ -230,7 +230,7 @@ def build_crate(
     crate_name: str,
     crate_version: str,
     target_triple: str,
-    time_file: Optional[str] = None,
+    time_file: Optional[Path] = None,
 ):
     local_path = LOCAL_BASE / "crates" / f"{crate_name}-{crate_version}"
     with chdir(local_path):
