@@ -70,13 +70,13 @@ But we can store other data elsewhere, like gs://chromeos-toolchain-artifacts.
 
 GS locations:
 
-{GS_BASE}/crates/ - store crates we may use for generating profiles or
+{GS_PERMANENT_BASE}/crates/ - store crates we may use for generating profiles or
 benchmarking PGO optimized Rust compilers
 
-{GS_BASE}/benchmarks/{rust_version}/nopgo/
+{GS_TEMP_BASE}/benchmarks/{rust_version}/nopgo/
   {bench_crate_name}-{bench_crate_version}-{triple}
 
-{GS_BASE}/benchmarks/{rust_version}/{crate_name}-{crate_version}/
+{GS_TEMP_BASE}/benchmarks/{rust_version}/{crate_name}-{crate_version}/
   {bench_crate_name}-{bench_crate_version}-{triple}
 
 Local locations:
@@ -125,7 +125,8 @@ TARGET_TRIPLES = [
 
 LOCAL_BASE = Path("/tmp/rust-pgo")
 
-GS_BASE = PurePosixPath("/chromeos-toolchain-artifacts/rust-pgo")
+GS_PERMANENT_BASE = PurePosixPath("/chromeos-localmirror/distfiles/rust-pgo")
+GS_TEMP_BASE = PurePosixPath("/chromeos-toolchain-artifacts/rust-pgo")
 
 GS_DISTFILES = PurePosixPath("/chromeos-localmirror/distfiles")
 
@@ -215,7 +216,7 @@ def get_rust_version() -> str:
 
 def download_unpack_crate(*, crate_name: str, crate_version: str):
     filename_no_extension = f"{crate_name}-{crate_version}"
-    gs_path = GS_BASE / "crates" / f"{filename_no_extension}.tar.xz"
+    gs_path = GS_PERMANENT_BASE / "crates" / f"{filename_no_extension}.tar.xz"
     local_path = LOCAL_BASE / "crates"
     shutil.rmtree(
         local_path / f"{crate_name}-{crate_version}", ignore_errors=True
@@ -453,7 +454,7 @@ def benchmark_nopgo(args):
 
     rust_version = get_rust_version()
     dest_directory = (
-        GS_BASE / "benchmarks" / rust_version / f"nopgo{args.suffix}"
+        GS_TEMP_BASE / "benchmarks" / rust_version / f"nopgo{args.suffix}"
     )
     logging.info("Uploading benchmark data")
     for file in time_directory.iterdir():
@@ -520,7 +521,7 @@ def benchmark_pgo(args):
 
     rust_version = get_rust_version()
     dest_directory = (
-        GS_BASE
+        GS_TEMP_BASE
         / "benchmarks"
         / rust_version
         / f"{args.crate_name}-{args.crate_version}{args.suffix}"
