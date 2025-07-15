@@ -42,6 +42,7 @@ from typing import (
     Optional,
     Protocol,
     Sequence,
+    Tuple,
     TypeVar,
     Union,
 )
@@ -135,20 +136,15 @@ class SignatureVerificationError(Exception):
         self.path = path
 
 
-def get_command_output_unchecked(command: Command, *args, **kwargs) -> str:
-    # pylint: disable=subprocess-run-check
-    return subprocess.run(
+def get_command_output_unchecked(command: Command) -> Tuple[str, str]:
+    proc = subprocess.run(
         command,
-        *args,
-        **dict(
-            {
-                "check": False,
-                "stdout": subprocess.PIPE,
-                "encoding": "utf-8",
-            },
-            **kwargs,
-        ),
-    ).stdout.strip()
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    return proc.stdout.strip(), proc.stderr.strip()
 
 
 class RustVersion(NamedTuple):
@@ -425,9 +421,9 @@ it to the local mirror using gsutil cp.
     # the file as a non-owner.
     cmd = [GSUTIL, "acl", "get", mirror_file]
     logging.info("Running %r", cmd)
-    output = get_command_output_unchecked(cmd, stderr=subprocess.STDOUT)
+    output, stderr = get_command_output_unchecked(cmd)
     acl_verified = False
-    if "AccessDeniedException:" in output:
+    if "AccessDeniedException:" in stderr:
         acl_verified = True
     else:
         acl = json.loads(output)

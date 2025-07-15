@@ -63,7 +63,7 @@ class FetchDistfileTest(unittest.TestCase):
     @mock.patch.object(
         rust_uprev,
         "get_command_output_unchecked",
-        return_value="AccessDeniedException: Access denied.",
+        return_value=("", "AccessDeniedException: Access denied."),
     )
     @mock.patch.object(
         rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
@@ -75,7 +75,7 @@ class FetchDistfileTest(unittest.TestCase):
     @mock.patch.object(
         rust_uprev,
         "get_command_output_unchecked",
-        return_value='[ { "entity": "allUsers", "role": "READER" } ]',
+        return_value=('[ { "entity": "allUsers", "role": "READER" } ]', ""),
     )
     @mock.patch.object(
         rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
@@ -87,7 +87,10 @@ class FetchDistfileTest(unittest.TestCase):
     @mock.patch.object(
         rust_uprev,
         "get_command_output_unchecked",
-        return_value='[ { "entity": "___fake@google.com", "role": "OWNER" } ]',
+        return_value=(
+            '[ { "entity": "___fake@google.com", "role": "OWNER" } ]',
+            "",
+        ),
     )
     @mock.patch.object(
         rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
