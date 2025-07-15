@@ -71,8 +71,7 @@ class RunStepFn(Protocol):
         step_fn: Callable[[], T],
         result_from_json: Optional[Callable[[Any], T]] = None,
         result_to_json: Optional[Callable[[T], Any]] = None,
-    ) -> T:
-        ...
+    ) -> T: ...
 
 
 def get_command_output(command: Command, *args, **kwargs) -> str:
@@ -81,18 +80,27 @@ def get_command_output(command: Command, *args, **kwargs) -> str:
     ).strip()
 
 
-def _get_source_root() -> Path:
+def get_source_root() -> Path:
     """Returns the path to the chromiumos directory."""
-    return Path(get_command_output(["repo", "--show-toplevel"]))
+    return cros_paths.script_chromiumos_checkout_or_exit()
 
 
-SOURCE_ROOT = _get_source_root()
+def ebuild_prefix() -> Path:
+    return get_source_root() / cros_paths.CHROMIUMOS_OVERLAY
+
+
+def cros_rustc_eclass() -> Path:
+    return ebuild_prefix() / "eclass/cros-rustc.eclass"
+
+
+def rust_path() -> Path:
+    return Path(ebuild_prefix(), "dev-lang", "rust")
+
+
 EQUERY = "equery"
 GPG = "gpg"
 GSUTIL = "gsutil.py"
 MIRROR_PATH = "gs://chromeos-localmirror/distfiles"
-EBUILD_PREFIX = SOURCE_ROOT / cros_paths.CHROMIUMOS_OVERLAY
-CROS_RUSTC_ECLASS = EBUILD_PREFIX / "eclass/cros-rustc.eclass"
 # Keyserver to use with GPG. Not all keyservers have Rust's signing key;
 # this must be set to a keyserver that does.
 GPG_KEYSERVER = "keyserver.ubuntu.com"
@@ -100,7 +108,6 @@ PGO_RUST = Path(
     "/mnt/host/source"
     "/src/third_party/toolchain-utils/py/bin/pgo_tools_rust/pgo_rust.py"
 )
-RUST_PATH = Path(EBUILD_PREFIX, "dev-lang", "rust")
 # This is the signing key used by upstream Rust as of 2023-08-09.
 # If the project switches to a different key, this will have to be updated.
 # We require the key to be updated manually so that we have an opportunity
@@ -187,7 +194,7 @@ class RustVersion(NamedTuple):
 
 
 def compute_ebuild_path(category: str, name: str, version: RustVersion) -> Path:
-    return EBUILD_PREFIX / category / name / f"{name}-{version}.ebuild"
+    return ebuild_prefix() / category / name / f"{name}-{version}.ebuild"
 
 
 def compute_rustc_src_name(version: RustVersion) -> str:
@@ -506,7 +513,7 @@ def fetch_rust_src_from_upstream(uri: str, local_path: Path) -> None:
 
 def get_distdir() -> Path:
     """Returns portage's distdir outside the chroot."""
-    return SOURCE_ROOT / ".cache/distfiles"
+    return get_source_root() / ".cache/distfiles"
 
 
 def mirror_has_file(name: str) -> bool:
@@ -555,7 +562,7 @@ def mirror_rust_source(version: RustVersion) -> None:
 def update_rust_packages(
     pkgatom: str, rust_version: RustVersion, add: bool
 ) -> None:
-    package_file = EBUILD_PREFIX.joinpath(
+    package_file = ebuild_prefix().joinpath(
         "profiles/targets/chromeos/package.provided"
     )
     with open(package_file, encoding="utf-8") as f:
@@ -646,14 +653,14 @@ def create_rust_uprev(
     run_step(
         "update cros-rustc.eclass bootstrap version",
         lambda: update_ebuild_variable_version(
-            CROS_RUSTC_ECLASS, "BOOTSTRAP_VERSION", template_version
+            cros_rustc_eclass(), "BOOTSTRAP_VERSION", template_version
         ),
     )
 
     run_step(
         "update cros-rustc.eclass rust version",
         lambda: update_ebuild_variable_version(
-            CROS_RUSTC_ECLASS, "RUSTC_STABLE_VERSION", rust_version
+            cros_rustc_eclass(), "RUSTC_STABLE_VERSION", rust_version
         ),
     )
 
@@ -673,7 +680,7 @@ def create_rust_uprev(
 
     run_step(
         "turn off profile data sources in cros-rustc.eclass",
-        lambda: set_include_profdata_src(CROS_RUSTC_ECLASS, include=False),
+        lambda: set_include_profdata_src(cros_rustc_eclass(), include=False),
     )
 
     run_step(
@@ -697,7 +704,7 @@ def create_rust_uprev(
     )
     run_step(
         "turn on profile data sources in cros-rustc.eclass",
-        lambda: set_include_profdata_src(CROS_RUSTC_ECLASS, include=True),
+        lambda: set_include_profdata_src(cros_rustc_eclass(), include=True),
     )
     run_step(
         "update dev-lang/rust-host manifest to add profile data",
@@ -729,7 +736,7 @@ def find_stable_rust_version() -> RustVersion:
     """Returns the RustVersion of the stable dev-lang/rust ebuild."""
     rust_versions = [
         RustVersion.parse_from_ebuild(ebuild)
-        for ebuild in RUST_PATH.iterdir()
+        for ebuild in rust_path().iterdir()
         if ebuild.suffix == ".ebuild"
         and not ebuild.name.endswith("-9999.ebuild")
         and not ebuild.is_symlink()
@@ -743,7 +750,7 @@ def find_stable_rust_version() -> RustVersion:
 
 def find_ebuild_for_rust_version(version: RustVersion) -> Path:
     """Returns the path of the ebuild for the given version of dev-lang/rust."""
-    return find_ebuild_path(RUST_PATH, "rust", version)
+    return find_ebuild_path(rust_path(), "rust", version)
 
 
 def rebuild_packages(workon_packages: List[str]):
@@ -799,26 +806,26 @@ def remove_files(filename: PathOrStr, path: PathOrStr) -> None:
 
 
 def rust_bootstrap_path() -> Path:
-    return EBUILD_PREFIX.joinpath("dev-lang/rust-bootstrap")
+    return ebuild_prefix().joinpath("dev-lang/rust-bootstrap")
 
 
 def create_rust_uprev_branch(rust_version: RustVersion) -> None:
     output = get_command_output(
-        ["git", "status", "--porcelain"], cwd=EBUILD_PREFIX
+        ["git", "status", "--porcelain"], cwd=ebuild_prefix()
     )
     if output:
         raise RuntimeError(
-            f"{EBUILD_PREFIX} has uncommitted changes, please either discard "
+            f"{ebuild_prefix()} has uncommitted changes, please either discard "
             "them or commit them."
         )
     git_utils.create_branch(
-        EBUILD_PREFIX, branch_name=f"rust-to-{rust_version}"
+        ebuild_prefix(), branch_name=f"rust-to-{rust_version}"
     )
 
 
 def build_cross_compiler(template_version: RustVersion) -> None:
     # Get target triples in ebuild
-    rust_ebuild = find_ebuild_path(RUST_PATH, "rust", template_version)
+    rust_ebuild = find_ebuild_path(rust_path(), "rust", template_version)
     contents = rust_ebuild.read_text(encoding="utf-8")
 
     target_triples_re = re.compile(r"RUSTC_TARGET_TRIPLES=\(([^)]+)\)")
@@ -846,9 +853,9 @@ def build_cross_compiler(template_version: RustVersion) -> None:
 
 
 def create_new_commit(rust_version: RustVersion) -> None:
-    subprocess.check_call(["git", "add", "-A"], cwd=EBUILD_PREFIX)
+    subprocess.check_call(["git", "add", "-A"], cwd=ebuild_prefix())
     sha = git_utils.commit_all_changes(
-        EBUILD_PREFIX,
+        ebuild_prefix(),
         message=textwrap.dedent(
             f"""\
             [DO NOT SUBMIT] dev-lang/rust: upgrade to Rust {rust_version}
@@ -861,7 +868,7 @@ def create_new_commit(rust_version: RustVersion) -> None:
         ),
     )
     git_utils.upload_to_gerrit(
-        EBUILD_PREFIX,
+        ebuild_prefix(),
         remote=git_utils.CROS_EXTERNAL_REMOTE,
         branch=git_utils.CROS_MAIN_BRANCH,
         ref=sha,
