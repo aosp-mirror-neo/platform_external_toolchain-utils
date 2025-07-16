@@ -699,10 +699,13 @@ def create_rust_uprev(
     )
     run_step(
         "upload profile data for rustc",
-        lambda: run_in_chroot([PGO_RUST, "upload-profdata"]),
-        # Avoid returning subprocess.CompletedProcess, which cannot be
-        # serialized to JSON.
-        result_to_json=lambda _x: None,
+        # NOTE: This is not invoked through running the script inside of the
+        # chroot, since by default, chroots have read-only gs credentials. Since
+        # this is writing, run outside of the chroot to use more powerful creds.
+        lambda: pgo_rust.upload_profdata_impl(
+            chroot_tmpdir_prefix=get_source_root() / "out",
+            force_rust_version=str(rust_version),
+        ),
     )
     run_step(
         "turn on profile data sources in cros-rustc.eclass",
