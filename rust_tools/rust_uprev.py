@@ -419,21 +419,27 @@ it to the local mirror using gsutil cp.
     # If we get an AccessDeniedAcception here, that also
     # counts as a success, because we were able to fetch
     # the file as a non-owner.
-    cmd = [GSUTIL, "acl", "get", mirror_file]
+    cmd = (GSUTIL, "acl", "get", mirror_file)
     logging.info("Running %r", cmd)
     output, stderr = get_command_output_unchecked(cmd)
-    acl_verified = False
     if "AccessDeniedException:" in stderr:
-        acl_verified = True
-    else:
+        return
+
+    try:
         acl = json.loads(output)
-        for x in acl:
-            if x["entity"] == "allUsers" and x["role"] == "READER":
-                acl_verified = True
-                break
-    if not acl_verified:
-        logging.error("Output from acl get:\n%s", output)
-        raise Exception("Could not verify that allUsers has READER permission")
+    except Exception:
+        logging.error("Failed parsing output from acl get:\n%r", output)
+        raise
+
+    allusers_is_reader = any(
+        x["entity"] == "allUsers" and x["role"] == "READER" for x in acl
+    )
+
+    if not allusers_is_reader:
+        raise Exception(
+            "Could not verify that allUsers has READER permission; "
+            f"ACL object:\n{acl}"
+        )
 
 
 def fetch_rust_distfiles(version: RustVersion) -> None:
