@@ -6,9 +6,13 @@
 
 import dataclasses
 import datetime
+from pathlib import Path
 import re
+import subprocess
+import textwrap
 from typing import List
 import unittest
+from unittest import mock
 
 from afdo_tools import monitor_chrome_afdo
 
@@ -156,10 +160,15 @@ class Test(unittest.TestCase):
     def test_gs_profile_name_round_trips(self):
         last_modified = arbitrary_time()
         profile_name = arbitrary_chrome_gs_profile_name()
-        self.assertEqual(
+        result = (
             monitor_chrome_afdo.ChromeGsProfile.from_full_name_if_new_enough(
                 last_modified=last_modified, full_name=profile_name
-            ).full_name(),
+            )
+        )
+        # Appease pyright's None-ness analysis.
+        assert result is not None
+        self.assertEqual(
+            result.full_name(),
             profile_name,
         )
 
@@ -199,7 +208,14 @@ class Test(unittest.TestCase):
                     "chromeos-chrome-126.0.6014.0_rc-r2.ebuild",
                 ]
             ),
-            "127.0.6533.0",
+            monitor_chrome_afdo.ChromeVersion(
+                major=127,
+                minor=0,
+                build=6533,
+                patch=0,
+                pre=None,
+                revision=1,
+            ),
         )
 
     def test_finding_newest_chrome_version_pre(self):
@@ -213,7 +229,14 @@ class Test(unittest.TestCase):
                     "chromeos-chrome-126.0.6014.0_rc-r2.ebuild",
                 ]
             ),
-            "127.0.6533.0",
+            monitor_chrome_afdo.ChromeVersion(
+                major=127,
+                minor=0,
+                build=6533,
+                patch=0,
+                pre=1234,
+                revision=1,
+            ),
         )
 
     def test_afdo_version_finding_works(self):
@@ -233,6 +256,36 @@ class Test(unittest.TestCase):
                 profiles, profile2.full_name()
             ),
             profile2,
+        )
+
+    @mock.patch.object(subprocess, "run")
+    def test_chrome_tag_parsing(self, mock_subprocess_run):
+        mock_subprocess_run.return_value.stdout = textwrap.dedent(
+            """\
+            1.2.3.4
+            100.2.3.5
+            some-nonsensical-tag
+            another-textual-tag
+
+            99.2.3.6
+            """
+        )
+        loaded_tags = monitor_chrome_afdo.load_upstream_chrome_git_tags(
+            chrome_src=Path("/does/not/exist")
+        )
+        self.assertEqual(
+            loaded_tags,
+            [
+                monitor_chrome_afdo.UpstreamChromeVersion(
+                    major=1, minor=2, build=3, patch=4
+                ),
+                monitor_chrome_afdo.UpstreamChromeVersion(
+                    major=99, minor=2, build=3, patch=6
+                ),
+                monitor_chrome_afdo.UpstreamChromeVersion(
+                    major=100, minor=2, build=3, patch=5
+                ),
+            ],
         )
 
     def test_branch_profile_finding_works_in_simple_cases(self):

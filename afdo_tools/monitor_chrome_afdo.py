@@ -13,6 +13,7 @@ import logging
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 import textwrap
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -107,8 +108,21 @@ def monitored_profile_configs() -> Iterable[Tuple[ProfileArch, ProfileSubtype]]:
 
 
 @dataclasses.dataclass(frozen=True, order=True, eq=True)
+class UpstreamChromeVersion:
+    """Chrome version from upstream Chrome."""
+
+    major: int
+    minor: int
+    build: int
+    patch: int
+
+    def __str__(self):
+        return f"{self.major}.{self.minor}.{self.build}.{self.patch}"
+
+
+@dataclasses.dataclass(frozen=True, order=True, eq=True)
 class ChromeVersion:
-    """Chrome version."""
+    """Chrome version from Portage."""
 
     major: int
     minor: int
@@ -116,6 +130,14 @@ class ChromeVersion:
     patch: int
     pre: Optional[int]
     revision: int
+
+    def as_upstream(self) -> UpstreamChromeVersion:
+        return UpstreamChromeVersion(
+            major=self.major,
+            minor=self.minor,
+            build=self.build,
+            patch=self.patch,
+        )
 
 
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -360,7 +382,9 @@ def check_cwp_profiles_are_new(
     return complaints
 
 
-def find_newest_chrome_version(chromeos_chrome_files: List[str]) -> str:
+def find_newest_chrome_version(
+    chromeos_chrome_files: List[str],
+) -> ChromeVersion:
     """Returns the newest Chrome version from the given ebuilds.
 
     Returns:
@@ -368,7 +392,7 @@ def find_newest_chrome_version(chromeos_chrome_files: List[str]) -> str:
         repository.
     """
     chrome_re = re.compile(
-        r"^chromeos-chrome-((\d+)\.(\d+)\.(\d+)\.(\d+))"
+        r"^chromeos-chrome-(\d+)\.(\d+)\.(\d+)\.(\d+)"
         r"(?:_pre(\d+))?_rc-r(\d+).ebuild$"
     )
     candidates = []
@@ -377,7 +401,7 @@ def find_newest_chrome_version(chromeos_chrome_files: List[str]) -> str:
         if not m:
             continue
 
-        full_version, major, minor, build, patch, pre, revision = m.groups()
+        major, minor, build, patch, pre, revision = m.groups()
         parsed_pre = None
         if pre:
             parsed_pre = int(pre)
@@ -389,14 +413,13 @@ def find_newest_chrome_version(chromeos_chrome_files: List[str]) -> str:
             pre=parsed_pre,
             revision=int(revision),
         )
-        candidates.append((ver, full_version))
+        candidates.append(ver)
 
     if not candidates:
         raise ValueError(
             f"No stable Chrome ebuilds found in {chromeos_chrome_files}"
         )
-    _, result = max(candidates)
-    return result
+    return max(candidates)
 
 
 def find_afdo_profile_by_version(
@@ -493,6 +516,43 @@ def maybe_diagnose_current_chrome_afdo_profile(
     return complaint
 
 
+def load_upstream_chrome_git_tags(
+    chrome_src: Path,
+) -> List[UpstreamChromeVersion]:
+    """Returns a list of upstream Git tags from Chrome's repo."""
+    logging.info("Loading Chrome git tags...")
+    git_tags = subprocess.run(
+        ("git", "tag"),
+        check=True,
+        cwd=chrome_src,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ).stdout
+
+    chrome_version_re = re.compile(r"^(\d+)\.(\d+)\.(\d+)\.(\d+)$")
+    results = []
+    for tag in git_tags.splitlines():
+        tag = tag.strip()
+        if not tag:
+            continue
+
+        if m := chrome_version_re.match(tag):
+            major, minor, build, patch = m.groups()
+            results.append(
+                UpstreamChromeVersion(
+                    major=int(major),
+                    minor=int(minor),
+                    build=int(build),
+                    patch=int(patch),
+                )
+            )
+    # Git likes returning in alphanumeric order; it's nicer if we return in
+    # sorted order.
+    results.sort()
+    return results
+
+
 def check_afdo_profiles_are_new(
     *,
     chrome_src: Path,
@@ -507,6 +567,7 @@ def check_afdo_profiles_are_new(
     Returns:
         Complaints about profiles, per-milestone.
     """
+    upstream_tags = None
     complaints = {}
     for channel, branch in branches:
         if branch.release_number in SKIP_MILESTONES:
@@ -532,25 +593,47 @@ def check_afdo_profiles_are_new(
                 f"{branch.branch_name}"
             )
 
-        newest_chrome_version = find_newest_chrome_version(
+        newest_chromeos_chrome_version = find_newest_chrome_version(
             chromeos_chrome_contents
         )
+
+        newest_chrome_version = newest_chromeos_chrome_version.as_upstream()
+        # If there's a `_pre` in the chromeos-chrome version, then this tag
+        # hasn't actually been released, and we need to walk back to identify
+        # the most recent Chrome version before this one.
+        if newest_chromeos_chrome_version.pre:
+            if upstream_tags is None:
+                upstream_tags = load_upstream_chrome_git_tags(chrome_src)
+
+            newest_lesser_chrome_version = max(
+                x for x in upstream_tags if x < newest_chrome_version
+            )
+            logging.info(
+                "Newest Chrome version on %s is %s, but is `_pre`; walked "
+                "back to %s",
+                channel,
+                newest_chrome_version,
+                newest_lesser_chrome_version,
+            )
+            newest_chrome_version = newest_lesser_chrome_version
+
         logging.info(
             "Newest Chrome version on %s is %s", channel, newest_chrome_version
         )
 
+        newest_chrome_version_str = str(newest_chrome_version)
         branch_complaints = []
         for arch, subtype in monitored_profile_configs():
             stamp_file = CHROME_STAMP_FILE_LOCATIONS[(arch, subtype)]
             stamp_contents = git_utils.maybe_show_file_at_commit(
                 git_dir=chrome_src,
-                ref=newest_chrome_version,
+                ref=newest_chrome_version_str,
                 path_from_git_root=stamp_file,
             )
             if not stamp_contents:
                 raise ValueError(
                     f"No version file found at {stamp_file} in Chromium at "
-                    f"{newest_chrome_version}"
+                    f"{newest_chrome_version_str}"
                 )
 
             maybe_complaint = maybe_diagnose_current_chrome_afdo_profile(
