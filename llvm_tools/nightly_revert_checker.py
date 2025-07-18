@@ -96,20 +96,20 @@ def _find_interesting_android_shas(
     android_llvm_toolchain_dir: str,
 ) -> List[Tuple[str, str]]:
     llvm_project = Path(android_llvm_toolchain_dir) / "toolchain/llvm-project"
-    aosp_main_sha = git_utils.resolve_ref(llvm_project, "aosp/main")
+    android_main_sha = git_utils.resolve_ref(llvm_project, "goog/main")
     merge_base = subprocess.check_output(
-        ["git", "merge-base", aosp_main_sha, "aosp/upstream-main"],
+        ["git", "merge-base", android_main_sha, "goog/upstream-main"],
         cwd=llvm_project,
         encoding="utf-8",
     ).strip()
     logging.info(
-        "Merge-base for aosp/main (HEAD == %s) and aosp/upstream-main is %s",
-        aosp_main_sha,
+        "Merge-base for goog/main (HEAD == %s) and goog/upstream-main is %s",
+        android_main_sha,
         merge_base,
     )
 
     # Android no longer has a testing branch, so just follow main.
-    return [("aosp/main", merge_base)]
+    return [("goog/main", merge_base)]
 
 
 def _find_interesting_chromeos_shas(
