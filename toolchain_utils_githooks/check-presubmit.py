@@ -9,6 +9,7 @@ import argparse
 import dataclasses
 import datetime
 import functools
+import json
 import multiprocessing
 import multiprocessing.pool
 import os
@@ -67,20 +68,10 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 
-# The files and directories on which we run the mypy typechecker. The paths are
-# relative to the root of the toolchain-utils repository.
-MYPY_CHECKED_PATHS = (
-    "afdo_tools/update_kernel_afdo.py",
-    "check_portable_toolchains.py",
-    "cros_utils/bugs.py",
-    "cros_utils/bugs_test.py",
-    "cros_utils/tiny_render.py",
-    "llvm_tools",
-    "pgo_tools",
-    "pgo_tools_rust/pgo_rust.py",
-    "rust_tools",
-    "toolchain_utils_githooks/check-presubmit.py",
-)
+# A list of types stubs to install alongside mypy. These are only autoinstalled
+# inside of the chroot. If mypy fails outside of the chroot due to lack of
+# these, it'll print a command to allow the user to install the missing stubs.
+MYPY_TYPES_PACKAGES = ("types-PyYAML",)
 
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
 LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
@@ -136,9 +127,18 @@ class MyPyInvocation:
     """An invocation of mypy."""
 
     command: List[str]
-    # Entries to add to PYTHONPATH, formatted for direct use in the PYTHONPATH
-    # env var.
-    pythonpath_additions: str
+
+
+def list_installed_pip_packages(pip: List[str]) -> List[str]:
+    list_output = subprocess.run(
+        pip + ["list", "--format=json"],
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    # This listing is just a list of {"name": x, "version": y} dicts.
+    return [x["name"] for x in json.loads(list_output)]
 
 
 def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
@@ -156,40 +156,36 @@ def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
             - any environment variables to set when invoking mypy
     """
     if has_executable_on_path("mypy"):
-        return MyPyInvocation(command=["mypy"], pythonpath_additions="")
+        return MyPyInvocation(command=["mypy"])
 
     pip = get_pip()
     if not pip:
         assert not is_in_chroot()
         return None
 
-    def get_from_pip() -> Optional[MyPyInvocation]:
-        rc, output = run_command_unchecked(pip + ["show", "mypy"])
-        if rc:
-            return None
+    installed_packages = set(list_installed_pip_packages(pip))
+    pip_mypy_invocation = MyPyInvocation(
+        command=[
+            "python3",
+            "-m",
+            "mypy",
+        ],
+    )
 
-        m = re.search(r"^Location: (.*)", output, re.MULTILINE)
-        if not m:
-            return None
+    # If we're not in the chroot, don't try to install packages into the user's
+    # pip environment. If they're missing mypy, they'll get warned about that.
+    # If they're missing relevant typing packages, mypy will error out & print
+    # commands that allow the user to install those on their own.
+    if not is_in_chroot():
+        if "mypy" in installed_packages:
+            return pip_mypy_invocation
+        return None
 
-        pythonpath = m.group(1)
-        return MyPyInvocation(
-            command=[
-                "python3",
-                "-m",
-                "mypy",
-            ],
-            pythonpath_additions=pythonpath,
-        )
-
-    from_pip = get_from_pip()
-    if from_pip:
-        return from_pip
-
-    if is_in_chroot():
-        subprocess.check_call(pip + ["install", "--user", "mypy"])
-        return get_from_pip()
-    return None
+    need_packages = ("mypy",) + MYPY_TYPES_PACKAGES
+    missing_packages = [x for x in need_packages if x not in installed_packages]
+    if missing_packages:
+        subprocess.check_call(pip + ["install", "--user"] + missing_packages)
+    return pip_mypy_invocation
 
 
 def get_pip() -> Optional[List[str]]:
@@ -373,12 +369,6 @@ def check_mypy(
 ) -> CheckResult:
     """Checks type annotations using mypy."""
     fixed_env = env_with_pythonpath(toolchain_utils_root)
-    if mypy.pythonpath_additions:
-        new_pythonpath = (
-            f"{mypy.pythonpath_additions}:{fixed_env['PYTHONPATH']}"
-        )
-        fixed_env["PYTHONPATH"] = new_pythonpath
-
     # Show the version number, mainly for troubleshooting purposes.
     cmd = mypy.command + ["--version"]
     exit_code, output = run_command_unchecked(
@@ -518,40 +508,13 @@ def check_py_format(
     return [(name, get_check_result_or_catch(task)) for name, task in tasks]
 
 
-def file_is_relative_to(file: Path, potential_parent: Path) -> bool:
-    """file.is_relative_to(potential_parent), but for Python < 3.9."""
-    try:
-        file.relative_to(potential_parent)
-        return True
-    except ValueError:
-        return False
-
-
-def is_file_in_any_of(file: Path, files_and_dirs: List[Path]) -> bool:
-    """Returns whether `files_and_dirs` encompasses `file`.
-
-    `files_and_dirs` is considered to encompass `file` if `files_and_dirs`
-    contains `file` directly, or if it contains a directory that is a parent of
-    `file`.
-
-    Args:
-        file: a path to check
-        files_and_dirs: a list of directories to check
-    """
-    # This could technically be made sublinear, but it's running at most a few
-    # dozen times on a `files_and_dirs` that's currently < 10 elems.
-    return any(
-        file == x or file_is_relative_to(file, x) for x in files_and_dirs
-    )
-
-
 def check_py_types(
     mypy: Optional[MyPyInvocation],
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
     files: Iterable[str],
 ) -> CheckResults:
-    """Runs static type checking for files in MYPY_CHECKED_FILES."""
+    """Runs static type checking for Python files."""
     if not mypy:
         return CheckResult(
             ok=False,
@@ -560,14 +523,7 @@ def check_py_types(
             autofix_commands=[],
         )
 
-    path_root = Path(toolchain_utils_root)
-    check_locations = [path_root / x for x in MYPY_CHECKED_PATHS]
-    to_check = [
-        x
-        for x in files
-        if x.endswith(".py") and is_file_in_any_of(Path(x), check_locations)
-    ]
-
+    to_check = [x for x in files if x.endswith(".py")]
     if not to_check:
         return CheckResult(
             ok=True,

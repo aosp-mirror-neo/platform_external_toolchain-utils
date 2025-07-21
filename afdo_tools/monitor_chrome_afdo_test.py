@@ -6,8 +6,13 @@
 
 import dataclasses
 import datetime
+from pathlib import Path
+import re
+import subprocess
+import textwrap
 from typing import List
 import unittest
+from unittest import mock
 
 from afdo_tools import monitor_chrome_afdo
 
@@ -17,13 +22,13 @@ def arbitrary_time() -> datetime.datetime:
     return datetime.datetime(2020, 1, 2, 3, 4, 5, 6, datetime.timezone.utc)
 
 
-def arbitrary_chrome_gs_profile_name() -> monitor_chrome_afdo.ChromeGsProfile:
+def arbitrary_chrome_gs_profile_name() -> str:
     """Returns an arbitrary profile name >= MIN_PROFILE_MAJOR_VERSION."""
     major_cwp_version = monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION
     major_bench_version = major_cwp_version + 1
     return (
         f"chromeos-chrome-arm-none-{major_cwp_version}-6440.4-1716810247-"
-        f"benchmark-{major_bench_version}.1.6533.2-r3-redacted.afdo.xz"
+        f"benchmark-{major_bench_version}.1.6533.2_pre99-r3-redacted.afdo.xz"
     )
 
 
@@ -101,6 +106,7 @@ class Test(unittest.TestCase):
                     minor=1,
                     build=6533,
                     patch=2,
+                    pre=99,
                     revision=3,
                 ),
                 cwp_part_version=monitor_chrome_afdo.ChromeVersion(
@@ -108,6 +114,43 @@ class Test(unittest.TestCase):
                     minor=0,
                     build=6440,
                     patch=4,
+                    pre=None,
+                    revision=0,
+                ),
+                cwp_timestamp=1716810247,
+            ),
+        )
+
+    def test_gs_profile_parsing_without_pre(self):
+        last_modified = arbitrary_time()
+        # Not all profiles have `_pre${X}` in them; this verifies that that
+        # still works.
+        profile_name = re.sub(
+            r"_pre\d+", "", arbitrary_chrome_gs_profile_name()
+        )
+        self.assertEqual(
+            monitor_chrome_afdo.ChromeGsProfile.from_full_name_if_new_enough(
+                last_modified=last_modified,
+                full_name=profile_name,
+            ),
+            monitor_chrome_afdo.ChromeGsProfile(
+                last_modified=last_modified,
+                arch=monitor_chrome_afdo.ProfileArch.ARM,
+                subtype=monitor_chrome_afdo.ProfileSubtype.NONE,
+                benchmark_part_version=monitor_chrome_afdo.ChromeVersion(
+                    major=monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION + 1,
+                    minor=1,
+                    build=6533,
+                    patch=2,
+                    pre=None,
+                    revision=3,
+                ),
+                cwp_part_version=monitor_chrome_afdo.ChromeVersion(
+                    major=monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION,
+                    minor=0,
+                    build=6440,
+                    patch=4,
+                    pre=None,
                     revision=0,
                 ),
                 cwp_timestamp=1716810247,
@@ -117,10 +160,15 @@ class Test(unittest.TestCase):
     def test_gs_profile_name_round_trips(self):
         last_modified = arbitrary_time()
         profile_name = arbitrary_chrome_gs_profile_name()
-        self.assertEqual(
+        result = (
             monitor_chrome_afdo.ChromeGsProfile.from_full_name_if_new_enough(
                 last_modified=last_modified, full_name=profile_name
-            ).full_name(),
+            )
+        )
+        # Appease pyright's None-ness analysis.
+        assert result is not None
+        self.assertEqual(
+            result.full_name(),
             profile_name,
         )
 
@@ -160,7 +208,35 @@ class Test(unittest.TestCase):
                     "chromeos-chrome-126.0.6014.0_rc-r2.ebuild",
                 ]
             ),
-            "127.0.6533.0",
+            monitor_chrome_afdo.ChromeVersion(
+                major=127,
+                minor=0,
+                build=6533,
+                patch=0,
+                pre=None,
+                revision=1,
+            ),
+        )
+
+    def test_finding_newest_chrome_version_pre(self):
+        self.assertEqual(
+            monitor_chrome_afdo.find_newest_chrome_version(
+                [
+                    "MANIFEST",
+                    "files/",
+                    "chromeos-chrome-9999.ebuild",
+                    "chromeos-chrome-127.0.6533.0_pre1234_rc-r1.ebuild",
+                    "chromeos-chrome-126.0.6014.0_rc-r2.ebuild",
+                ]
+            ),
+            monitor_chrome_afdo.ChromeVersion(
+                major=127,
+                minor=0,
+                build=6533,
+                patch=0,
+                pre=1234,
+                revision=1,
+            ),
         )
 
     def test_afdo_version_finding_works(self):
@@ -180,6 +256,36 @@ class Test(unittest.TestCase):
                 profiles, profile2.full_name()
             ),
             profile2,
+        )
+
+    @mock.patch.object(subprocess, "run")
+    def test_chrome_tag_parsing(self, mock_subprocess_run):
+        mock_subprocess_run.return_value.stdout = textwrap.dedent(
+            """\
+            1.2.3.4
+            100.2.3.5
+            some-nonsensical-tag
+            another-textual-tag
+
+            99.2.3.6
+            """
+        )
+        loaded_tags = monitor_chrome_afdo.load_upstream_chrome_git_tags(
+            chrome_src=Path("/does/not/exist")
+        )
+        self.assertEqual(
+            loaded_tags,
+            [
+                monitor_chrome_afdo.UpstreamChromeVersion(
+                    major=1, minor=2, build=3, patch=4
+                ),
+                monitor_chrome_afdo.UpstreamChromeVersion(
+                    major=99, minor=2, build=3, patch=6
+                ),
+                monitor_chrome_afdo.UpstreamChromeVersion(
+                    major=100, minor=2, build=3, patch=5
+                ),
+            ],
         )
 
     def test_branch_profile_finding_works_in_simple_cases(self):

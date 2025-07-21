@@ -1,0 +1,686 @@
+From 44ca10f48eb08fd6366672a0052838ca343e1388 Mon Sep 17 00:00:00 2001
+From: Nikita Popov <npopov@redhat.com>
+Date: Mon, 30 Jun 2025 14:48:37 +0200
+Subject: Revert global widening transform (#144652)
+
+Partially reverts e37d736def5b95a2710f92881b5fc8b0494d8a05.
+
+The transform has a number of correctness and code quality issues, and
+will benefit from a from-scratch re-review more than incremental fixes.
+
+The correctness issues are hinted at in
+https://github.com/llvm/llvm-project/pull/144641, but I think it needs a
+larger rework to stop working on ArrayTypes and the implementation could
+use some other improvements (like callInstIsMemcpy should just be
+`dyn_cast<MemCpyInst>`). I can comment in more detail on a resubmission
+of the patch.
+---
+ llvm/lib/Transforms/IPO/GlobalOpt.cpp         | 165 ------------------
+ .../GlobalOpt/ARM/arm-widen-dest-non-array.ll |  39 -----
+ .../GlobalOpt/ARM/arm-widen-global-dest.ll    |  28 ---
+ .../GlobalOpt/ARM/arm-widen-non-byte-array.ll |  22 ---
+ .../ARM/arm-widen-non-const-global.ll         |  21 ---
+ .../ARM/arm-widen-string-multi-use.ll         |  33 ----
+ .../GlobalOpt/ARM/arm-widen-strings-1.ll      |  21 ---
+ .../GlobalOpt/ARM/arm-widen-strings-2.ll      |  21 ---
+ .../arm-widen-strings-lengths-dont-match.ll   |  26 ---
+ .../arm-widen-strings-more-than-64-bytes.ll   |  28 ---
+ .../ARM/arm-widen-strings-ptrtoint.ll         |  54 ------
+ .../ARM/arm-widen-strings-struct-test.ll      |  45 -----
+ .../ARM/arm-widen-strings-volatile.ll         |  29 ---
+ .../Transforms/GlobalOpt/ARM/lit.local.cfg    |   2 -
+ 14 files changed, 534 deletions(-)
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-dest-non-array.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-global-dest.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-byte-array.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-const-global.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-string-multi-use.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-1.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-2.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-lengths-dont-match.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-more-than-64-bytes.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-ptrtoint.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-struct-test.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-volatile.ll
+ delete mode 100644 llvm/test/Transforms/GlobalOpt/ARM/lit.local.cfg
+
+diff --git a/llvm/lib/Transforms/IPO/GlobalOpt.cpp b/llvm/lib/Transforms/IPO/GlobalOpt.cpp
+index 9586fc97a39f..c4d67c3ac643 100644
+--- a/llvm/lib/Transforms/IPO/GlobalOpt.cpp
++++ b/llvm/lib/Transforms/IPO/GlobalOpt.cpp
+@@ -92,8 +92,6 @@ STATISTIC(NumInternalFunc, "Number of internal functions");
+ STATISTIC(NumColdCC, "Number of functions marked coldcc");
+ STATISTIC(NumIFuncsResolved, "Number of statically resolved IFuncs");
+ STATISTIC(NumIFuncsDeleted, "Number of IFuncs removed");
+-STATISTIC(NumGlobalArraysPadded,
+-          "Number of global arrays padded to alignment boundary");
+ 
+ static cl::opt<bool>
+     OptimizeNonFMVCallers("optimize-non-fmv-callers",
+@@ -2037,165 +2035,6 @@ OptimizeFunctions(Module &M,
+   return Changed;
+ }
+ 
+-static bool callInstIsMemcpy(CallInst *CI) {
+-  if (!CI)
+-    return false;
+-
+-  Function *F = CI->getCalledFunction();
+-  if (!F || !F->isIntrinsic() || F->getIntrinsicID() != Intrinsic::memcpy)
+-    return false;
+-
+-  return true;
+-}
+-
+-static bool destArrayCanBeWidened(CallInst *CI) {
+-  auto *IsVolatile = dyn_cast<ConstantInt>(CI->getArgOperand(3));
+-  auto *Alloca = dyn_cast<AllocaInst>(CI->getArgOperand(0));
+-
+-  if (!Alloca || !IsVolatile || IsVolatile->isOne())
+-    return false;
+-
+-  if (!Alloca->isStaticAlloca())
+-    return false;
+-
+-  if (!Alloca->getAllocatedType()->isArrayTy())
+-    return false;
+-
+-  return true;
+-}
+-
+-static GlobalVariable *widenGlobalVariable(GlobalVariable *OldVar, Function *F,
+-                                           unsigned NumBytesToPad,
+-                                           unsigned NumBytesToCopy) {
+-  if (!OldVar->hasInitializer())
+-    return nullptr;
+-
+-  ConstantDataArray *DataArray =
+-      dyn_cast<ConstantDataArray>(OldVar->getInitializer());
+-  if (!DataArray)
+-    return nullptr;
+-
+-  // Update to be word aligned (memcpy(...,X,...))
+-  // create replacement with padded null bytes.
+-  StringRef Data = DataArray->getRawDataValues();
+-  std::vector<uint8_t> StrData(Data.begin(), Data.end());
+-  for (unsigned int p = 0; p < NumBytesToPad; p++)
+-    StrData.push_back('\0');
+-  auto Arr = ArrayRef(StrData.data(), NumBytesToCopy + NumBytesToPad);
+-  // Create new padded version of global variable.
+-  Constant *SourceReplace = ConstantDataArray::get(F->getContext(), Arr);
+-  GlobalVariable *NewGV = new GlobalVariable(
+-      *(F->getParent()), SourceReplace->getType(), true, OldVar->getLinkage(),
+-      SourceReplace, SourceReplace->getName());
+-  // Copy any other attributes from original global variable
+-  // e.g. unamed_addr
+-  NewGV->copyAttributesFrom(OldVar);
+-  NewGV->takeName(OldVar);
+-  return NewGV;
+-}
+-
+-static void widenDestArray(CallInst *CI, const unsigned NumBytesToPad,
+-                           const unsigned NumBytesToCopy,
+-                           ConstantDataArray *SourceDataArray) {
+-
+-  auto *Alloca = dyn_cast<AllocaInst>(CI->getArgOperand(0));
+-  if (Alloca) {
+-    unsigned ElementByteWidth = SourceDataArray->getElementByteSize();
+-    unsigned int TotalBytes = NumBytesToCopy + NumBytesToPad;
+-    unsigned NumElementsToCopy = divideCeil(TotalBytes, ElementByteWidth);
+-    // Update destination array to be word aligned (memcpy(X,...,...))
+-    IRBuilder<> BuildAlloca(Alloca);
+-    AllocaInst *NewAlloca = BuildAlloca.CreateAlloca(ArrayType::get(
+-        Alloca->getAllocatedType()->getArrayElementType(), NumElementsToCopy));
+-    NewAlloca->takeName(Alloca);
+-    NewAlloca->setAlignment(Alloca->getAlign());
+-    Alloca->replaceAllUsesWith(NewAlloca);
+-    Alloca->eraseFromParent();
+-  }
+-}
+-
+-static bool tryWidenGlobalArrayAndDests(Function *F, GlobalVariable *SourceVar,
+-                                        const unsigned NumBytesToPad,
+-                                        const unsigned NumBytesToCopy,
+-                                        ConstantInt *BytesToCopyOp,
+-                                        ConstantDataArray *SourceDataArray) {
+-  auto *NewSourceGV =
+-      widenGlobalVariable(SourceVar, F, NumBytesToPad, NumBytesToCopy);
+-  if (!NewSourceGV)
+-    return false;
+-
+-  // Update arguments of remaining uses  that
+-  // are memcpys.
+-  for (auto *User : SourceVar->users()) {
+-    auto *CI = dyn_cast<CallInst>(User);
+-    if (!callInstIsMemcpy(CI) || !destArrayCanBeWidened(CI))
+-      continue;
+-
+-    if (CI->getArgOperand(1) != SourceVar)
+-      continue;
+-
+-    widenDestArray(CI, NumBytesToPad, NumBytesToCopy, SourceDataArray);
+-
+-    CI->setArgOperand(2, ConstantInt::get(BytesToCopyOp->getType(),
+-                                          NumBytesToCopy + NumBytesToPad));
+-  }
+-  SourceVar->replaceAllUsesWith(NewSourceGV);
+-
+-  NumGlobalArraysPadded++;
+-  return true;
+-}
+-
+-static bool tryWidenGlobalArraysUsedByMemcpy(
+-    GlobalVariable *GV,
+-    function_ref<TargetTransformInfo &(Function &)> GetTTI) {
+-
+-  if (!GV->hasInitializer() || !GV->isConstant() || !GV->hasLocalLinkage() ||
+-      !GV->hasGlobalUnnamedAddr())
+-    return false;
+-
+-  for (auto *User : GV->users()) {
+-    CallInst *CI = dyn_cast<CallInst>(User);
+-    if (!callInstIsMemcpy(CI) || !destArrayCanBeWidened(CI))
+-      continue;
+-
+-    Function *F = CI->getCalledFunction();
+-
+-    auto *BytesToCopyOp = dyn_cast<ConstantInt>(CI->getArgOperand(2));
+-    if (!BytesToCopyOp)
+-      continue;
+-
+-    ConstantDataArray *SourceDataArray =
+-        dyn_cast<ConstantDataArray>(GV->getInitializer());
+-    if (!SourceDataArray)
+-      continue;
+-
+-    unsigned NumBytesToCopy = BytesToCopyOp->getZExtValue();
+-
+-    auto *Alloca = dyn_cast<AllocaInst>(CI->getArgOperand(0));
+-    uint64_t DZSize = Alloca->getAllocatedType()->getArrayNumElements();
+-    uint64_t SZSize = SourceDataArray->getType()->getNumElements();
+-    unsigned ElementByteWidth = SourceDataArray->getElementByteSize();
+-    // Calculate the number of elements to copy while avoiding floored
+-    // division of integers returning wrong values i.e. copying one byte
+-    // from an array of i16 would yield 0 elements to copy as supposed to 1.
+-    unsigned NumElementsToCopy = divideCeil(NumBytesToCopy, ElementByteWidth);
+-
+-    // For safety purposes lets add a constraint and only pad when
+-    // NumElementsToCopy == destination array size ==
+-    // source which is a constant
+-    if (NumElementsToCopy != DZSize || DZSize != SZSize)
+-      continue;
+-
+-    unsigned NumBytesToPad = GetTTI(*F).getNumBytesToPadGlobalArray(
+-        NumBytesToCopy, SourceDataArray->getType());
+-    if (NumBytesToPad) {
+-      return tryWidenGlobalArrayAndDests(F, GV, NumBytesToPad, NumBytesToCopy,
+-                                         BytesToCopyOp, SourceDataArray);
+-    }
+-  }
+-  return false;
+-}
+-
+ static bool
+ OptimizeGlobalVars(Module &M,
+                    function_ref<TargetTransformInfo &(Function &)> GetTTI,
+@@ -2225,10 +2064,6 @@ OptimizeGlobalVars(Module &M,
+       continue;
+     }
+ 
+-    // For global variable arrays called in a memcpy
+-    // we try to pad to nearest valid alignment boundary
+-    Changed |= tryWidenGlobalArraysUsedByMemcpy(&GV, GetTTI);
+-
+     Changed |= processGlobal(GV, GetTTI, GetTLI, LookupDomTree);
+   }
+   return Changed;
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-dest-non-array.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-dest-non-array.ll
+deleted file mode 100644
+index ab04e0a5bc69..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-dest-non-array.ll
++++ /dev/null
+@@ -1,39 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@.i8 = private unnamed_addr constant [3 x i8] [i8 1, i8 2, i8 3] , align 1
+-
+-define  void @memcpy_struct()  {
+-; CHECK-LABEL: define void @memcpy_struct() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca { i8, i8, i8 }, align 1
+-; CHECK-NEXT:    [[CALL1:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING]], ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca {i8, i8, i8}, align 1
+-  %call1 = call i32 @bar(ptr nonnull %something)
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-  ret void
+-}
+-
+-
+-@.i8_multi = private unnamed_addr constant [2 x [3 x i8]] [[3 x i8] [i8 1, i8 2, i8 3], [3 x i8] [i8 4, i8 5, i8 6]] , align 1
+-
+-define  void @memcpy_array_multidimensional()  {
+-; CHECK-LABEL: define void @memcpy_array_multidimensional() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [2 x [3 x i8]], align 1
+-; CHECK-NEXT:    [[CALL1:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING]], ptr noundef nonnull align 1 dereferenceable(3) @.i8_multi, i32 3, i1 false)
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [2 x [3 x i8]], align 1
+-  %call1 = call i32 @bar(ptr nonnull %something)
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something, ptr noundef nonnull align 1 dereferenceable(3) @.i8_multi, i32 3, i1 false)
+-  ret void
+-}
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-global-dest.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-global-dest.ll
+deleted file mode 100644
+index f435ffdeed2c..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-global-dest.ll
++++ /dev/null
+@@ -1,28 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-; CHECK: [3 x i8]
+-@other = private unnamed_addr global [3 x i8] [i8 1, i8 2, i8 3] , align 1
+-; CHECK: [4 x i8]
+-@.i8 = private unnamed_addr constant [3 x i8] [i8 1, i8 2, i8 3] , align 1
+-
+-define  void @memcpy_multiple()  {
+-; CHECK-LABEL: define void @memcpy_multiple() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [4 x i8], align 1
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    [[CALL3:%.*]] = call i32 @bar(ptr nonnull @other)
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) @other, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING]], ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 4, i1 false)
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [3 x i8], align 1
+-  %call1 = call i32 @bar(ptr nonnull %something)
+-  %call2 = call i32 @bar(ptr nonnull @other)
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) @other, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-  ret void
+-}
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-byte-array.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-byte-array.ll
+deleted file mode 100644
+index c7ca7271fd3d..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-byte-array.ll
++++ /dev/null
+@@ -1,22 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@.i16 = private unnamed_addr constant [5 x i16] [i16 1, i16 2, i16 3, i16 4, i16 5] , align 1
+-
+-define  void @memcpy_i16_array()  {
+-; CHECK-LABEL: define void @memcpy_i16_array() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING1:%.*]] = alloca [6 x i16], align 1
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(10) [[SOMETHING1]], ptr noundef nonnull align 1 dereferenceable(10) @.i16, i32 12, i1 false)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING1]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [5 x i16], align 1
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(10) %something, ptr noundef nonnull align 1 dereferenceable(10) @.i16, i32 10, i1 false)
+-  %call2 = call i32 @bar(ptr nonnull %something)
+-  ret void
+-}
+-
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-const-global.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-const-global.ll
+deleted file mode 100644
+index 3d9c42fe1f3d..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-non-const-global.ll
++++ /dev/null
+@@ -1,21 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@.str = unnamed_addr global [3 x i8] c"12\00", align 1
+-
+-define  void @foo()  {
+-; CHECK-LABEL: define void @foo() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [3 x i8], align 1
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING]], ptr noundef nonnull align 1 dereferenceable(3) @.str, i32 3, i1 false)
+-; CHECK-NEXT:    [[CALL1:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [3 x i8], align 1
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something, ptr noundef nonnull align 1 dereferenceable(3) @.str, i32 3, i1 false)
+-  %call1 = call i32 @bar(ptr nonnull %something)
+-  ret void
+-}
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-string-multi-use.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-string-multi-use.ll
+deleted file mode 100644
+index e37925a78d2c..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-string-multi-use.ll
++++ /dev/null
+@@ -1,33 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@.i8 = private unnamed_addr constant [3 x i8] [i8 1, i8 2, i8 3] , align 1
+-
+-define  void @memcpy_multiple()  {
+-; CHECK-LABEL: define void @memcpy_multiple() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING2:%.*]] = alloca [4 x i8], align 1
+-; CHECK-NEXT:    [[SOMETHING1:%.*]] = alloca [4 x i8], align 1
+-; CHECK-NEXT:    [[SOMETHING3:%.*]] = alloca [4 x i8], align 1
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING2]], ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 4, i1 false)
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING1]], ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 4, i1 false)
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) [[SOMETHING3]], ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 4, i1 false)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING2]])
+-; CHECK-NEXT:    [[CALL3:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING1]])
+-; CHECK-NEXT:    [[CALL4:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING3]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [3 x i8], align 1
+-  %something1 = alloca [3 x i8], align 1
+-  %something2 = alloca [3 x i8], align 1
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something1, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(3) %something2, ptr noundef nonnull align 1 dereferenceable(3) @.i8, i32 3, i1 false)
+-  %call2 = call i32 @bar(ptr nonnull %something)
+-  %call3 = call i32 @bar(ptr nonnull %something1)
+-  %call4 = call i32 @bar(ptr nonnull %something2)
+-  ret void
+-}
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-1.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-1.ll
+deleted file mode 100644
+index 8ea9e2804370..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-1.ll
++++ /dev/null
+@@ -1,21 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@.str = private unnamed_addr constant [10 x i8] c"123456789\00", align 1
+-
+-define  void @foo()  {
+-; CHECK-LABEL: define void @foo() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [12 x i8], align 1
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(10) [[SOMETHING]], ptr noundef nonnull align 1 dereferenceable(10) @.str, i32 12, i1 false)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [10 x i8], align 1
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(10) %something, ptr noundef nonnull align 1 dereferenceable(10) @.str, i32 10, i1 false)
+-  %call2 = call i32 @bar(ptr nonnull %something)
+-  ret void
+-}
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-2.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-2.ll
+deleted file mode 100644
+index ad3620b14ea2..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-2.ll
++++ /dev/null
+@@ -1,21 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@.str = private unnamed_addr constant [62 x i8] c"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\00", align 1
+-
+-define  void @foo()  {
+-; CHECK-LABEL: define void @foo() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [64 x i8], align 1
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(62) [[SOMETHING]], ptr noundef nonnull align 1 dereferenceable(62) @.str, i32 64, i1 false)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [62 x i8], align 1
+-  call void @llvm.memcpy.p0.p0.i32(ptr noundef nonnull align 1 dereferenceable(62) %something, ptr noundef nonnull align 1 dereferenceable(62) @.str, i32 62, i1 false)
+-  %call2 = call i32 @bar(ptr nonnull %something)
+-  ret void
+-}
+-
+-declare i32 @bar(...)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-lengths-dont-match.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-lengths-dont-match.ll
+deleted file mode 100644
+index b8e02c3f996d..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-lengths-dont-match.ll
++++ /dev/null
+@@ -1,26 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-; CHECK: [17 x i8]
+-@.str = private unnamed_addr constant [17 x i8] c"aaaaaaaaaaaaaaaa\00", align 1
+-
+-; Function Attrs: nounwind
+-define  void @foo()   {
+-; CHECK-LABEL: define void @foo() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [20 x i8], align 1
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 20, ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr nonnull align 1 [[SOMETHING]], ptr align 1 @.str, i32 17, i1 false)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 20, ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [20 x i8], align 1
+-  call void @llvm.lifetime.start(i64 20, ptr nonnull %something) #3
+-  call void @llvm.memcpy.p0i8.p0i8.i32(ptr align 1 nonnull %something, ptr align 1 @.str, i32 17, i1 false)
+-  %call2 = call i32 @bar(ptr nonnull %something) #3
+-  call void @llvm.lifetime.end(i64 20, ptr nonnull %something) #3
+-  ret void
+-}
+-
+-declare i32 @bar(...)  #2
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-more-than-64-bytes.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-more-than-64-bytes.ll
+deleted file mode 100644
+index 4ac31aa2f976..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-more-than-64-bytes.ll
++++ /dev/null
+@@ -1,28 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-; CHECK: [65 x i8]
+-; CHECK-NOT: [68 x i8]
+-@.str = private unnamed_addr constant [65 x i8] c"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaazzz\00", align 1
+-
+-; Function Attrs: nounwind
+-define  void @foo()   {
+-; CHECK-LABEL: define void @foo() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [65 x i8], align 1
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 65, ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr nonnull align 1 [[SOMETHING]], ptr align 1 @.str, i32 65, i1 false)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 65, ptr nonnull [[SOMETHING]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [65 x i8], align 1
+-  call void @llvm.lifetime.start(i64 65, ptr nonnull %something) #3
+-  call void @llvm.memcpy.p0i8.p0i8.i32(ptr align 1 nonnull %something, ptr align 1 @.str, i32 65, i1 false)
+-  %call2 = call i32 @bar(ptr nonnull %something) #3
+-  call void @llvm.lifetime.end(i64 65, ptr nonnull %something) #3
+-  ret void
+-}
+-
+-declare i32 @bar(...)  #2
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-ptrtoint.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-ptrtoint.ll
+deleted file mode 100644
+index 64f57884cd39..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-ptrtoint.ll
++++ /dev/null
+@@ -1,54 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-@f.string1 = private unnamed_addr constant [45 x i8] c"The quick brown dog jumps over the lazy fox.\00", align 1
+-
+-; Function Attrs: nounwind
+-define  i32 @f() {
+-; CHECK-LABEL: define i32 @f() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[STRING1:%.*]] = alloca [48 x i8], align 1
+-; CHECK-NEXT:    [[POS:%.*]] = alloca i32, align 4
+-; CHECK-NEXT:    [[TOKEN:%.*]] = alloca ptr, align 4
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 45, ptr [[STRING1]])
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 1 [[STRING1]], ptr align 1 @f.string1, i32 48, i1 false)
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 4, ptr [[POS]])
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 4, ptr [[TOKEN]])
+-; CHECK-NEXT:    [[CALL:%.*]] = call ptr @strchr(ptr [[STRING1]], i32 101)
+-; CHECK-NEXT:    store ptr [[CALL]], ptr [[TOKEN]], align 4
+-; CHECK-NEXT:    [[TMP1:%.*]] = load ptr, ptr [[TOKEN]], align 4
+-; CHECK-NEXT:    [[SUB_PTR_LHS_CAST:%.*]] = ptrtoint ptr [[TMP1]] to i32
+-; CHECK-NEXT:    [[SUB_PTR_RHS_CAST:%.*]] = ptrtoint ptr [[STRING1]] to i32
+-; CHECK-NEXT:    [[SUB_PTR_SUB:%.*]] = sub i32 [[SUB_PTR_LHS_CAST]], [[SUB_PTR_RHS_CAST]]
+-; CHECK-NEXT:    [[ADD:%.*]] = add nsw i32 [[SUB_PTR_SUB]], 1
+-; CHECK-NEXT:    store i32 [[ADD]], ptr [[POS]], align 4
+-; CHECK-NEXT:    [[TMP2:%.*]] = load i32, ptr [[POS]], align 4
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 4, ptr [[TOKEN]])
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 4, ptr [[POS]])
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 45, ptr [[STRING1]])
+-; CHECK-NEXT:    ret i32 [[TMP2]]
+-;
+-entry:
+-  %string1 = alloca [45 x i8], align 1
+-  %pos = alloca i32, align 4
+-  %token = alloca ptr, align 4
+-  call void @llvm.lifetime.start.p0i8(i64 45, ptr %string1)
+-  call void @llvm.memcpy.p0i8.p0i8.i32(ptr align 1 %string1, ptr align 1 @f.string1, i32 45, i1 false)
+-  call void @llvm.lifetime.start.p0i8(i64 4, ptr %pos)
+-  call void @llvm.lifetime.start.p0i8(i64 4, ptr %token)
+-  %call = call ptr @strchr(ptr %string1, i32 101)
+-  store ptr %call, ptr %token, align 4
+-  %0 = load ptr, ptr %token, align 4
+-  %sub.ptr.lhs.cast = ptrtoint ptr %0 to i32
+-  %sub.ptr.rhs.cast = ptrtoint ptr %string1 to i32
+-  %sub.ptr.sub = sub i32 %sub.ptr.lhs.cast, %sub.ptr.rhs.cast
+-  %add = add nsw i32 %sub.ptr.sub, 1
+-  store i32 %add, ptr %pos, align 4
+-  %1 = load i32, ptr %pos, align 4
+-  call void @llvm.lifetime.end.p0i8(i64 4, ptr %token)
+-  call void @llvm.lifetime.end.p0i8(i64 4, ptr %pos)
+-  call void @llvm.lifetime.end.p0i8(i64 45, ptr %string1)
+-  ret i32 %1
+-}
+-
+-declare ptr @strchr(ptr, i32)
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-struct-test.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-struct-test.ll
+deleted file mode 100644
+index 5367572704b1..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-struct-test.ll
++++ /dev/null
+@@ -1,45 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-%struct.P = type { i32, [13 x i8] }
+-
+-; CHECK-NOT: [16 x i8]
+-@.str = private unnamed_addr constant [13 x i8] c"hello world\0A\00", align 1
+-
+-; Function Attrs: nounwind
+-define  i32 @main()   {
+-; CHECK-LABEL: define i32 @main() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[P:%.*]] = alloca [[STRUCT_P:%.*]], align 4
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 20, ptr nonnull [[P]])
+-; CHECK-NEXT:    store i32 10, ptr [[P]], align 4, !tbaa [[TBAA0:![0-9]+]]
+-; CHECK-NEXT:    [[ARRAYDECAY:%.*]] = getelementptr inbounds [[STRUCT_P]], ptr [[P]], i32 0, i32 1, i32 0
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr align 1 [[ARRAYDECAY]], ptr align 1 @.str, i32 13, i1 false)
+-; CHECK-NEXT:    [[PUTS:%.*]] = call i32 @puts(ptr [[ARRAYDECAY]])
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 20, ptr nonnull [[P]])
+-; CHECK-NEXT:    ret i32 0
+-;
+-entry:
+-  %p = alloca %struct.P, align 4
+-  call void @llvm.lifetime.start(i64 20, ptr nonnull %p) #2
+-  store i32 10, ptr %p, align 4, !tbaa !1
+-  %arraydecay = getelementptr inbounds %struct.P, ptr %p, i32 0, i32 1, i32 0
+-  call void @llvm.memcpy.p0i8.p0i8.i32(ptr align 1 %arraydecay, ptr align 1 @.str, i32 13, i1 false)
+-  %puts = call i32 @puts(ptr %arraydecay)
+-  call void @llvm.lifetime.end(i64 20, ptr nonnull %p) #2
+-  ret i32 0
+-}
+-
+-declare i32 @puts(ptr nocapture readonly) #2
+-
+-!1 = !{!2, !3, i64 0}
+-!2 = !{!"P", !3, i64 0, !4, i64 4}
+-!3 = !{!"int", !4, i64 0}
+-!4 = !{!"omnipotent char", !5, i64 0}
+-!5 = !{!"Simple C/C++ TBAA"}
+-;.
+-; CHECK: [[TBAA0]] = !{[[META1:![0-9]+]], [[META2:![0-9]+]], i64 0}
+-; CHECK: [[META1]] = !{!"P", [[META2]], i64 0, [[META3:![0-9]+]], i64 4}
+-; CHECK: [[META2]] = !{!"int", [[META3]], i64 0}
+-; CHECK: [[META3]] = !{!"omnipotent char", [[META4:![0-9]+]], i64 0}
+-; CHECK: [[META4]] = !{!"Simple C/C++ TBAA"}
+-;.
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-volatile.ll b/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-volatile.ll
+deleted file mode 100644
+index b735a7788742..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/arm-widen-strings-volatile.ll
++++ /dev/null
+@@ -1,29 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt < %s -mtriple=arm-none-eabi -passes=globalopt -S | FileCheck %s
+-
+-; CHECK-NOT: [64 x i8]
+-@.str = private unnamed_addr constant [62 x i8] c"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\00", align 1
+-
+-; Function Attrs: nounwind
+-define  void @foo()   {
+-; CHECK-LABEL: define void @foo() local_unnamed_addr {
+-; CHECK-NEXT:  [[ENTRY:.*:]]
+-; CHECK-NEXT:    [[SOMETHING:%.*]] = alloca [62 x i8], align 1
+-; CHECK-NEXT:    [[TMP0:%.*]] = getelementptr inbounds [62 x i8], ptr [[SOMETHING]], i32 0, i32 0
+-; CHECK-NEXT:    call void @llvm.lifetime.start.p0(i64 62, ptr nonnull [[TMP0]])
+-; CHECK-NEXT:    call void @llvm.memcpy.p0.p0.i32(ptr nonnull align 1 [[TMP0]], ptr align 1 @.str, i32 62, i1 true)
+-; CHECK-NEXT:    [[CALL2:%.*]] = call i32 @bar(ptr nonnull [[TMP0]])
+-; CHECK-NEXT:    call void @llvm.lifetime.end.p0(i64 62, ptr nonnull [[TMP0]])
+-; CHECK-NEXT:    ret void
+-;
+-entry:
+-  %something = alloca [62 x i8], align 1
+-  %0 = getelementptr inbounds [62 x i8], ptr %something, i32 0, i32 0
+-  call void @llvm.lifetime.start(i64 62, ptr nonnull %0) #3
+-  call void @llvm.memcpy.p0i8.p0i8.i32(ptr align 1 nonnull %0, ptr align 1 @.str, i32 62, i1 true)
+-  %call2 = call i32 @bar(ptr nonnull %0) #3
+-  call void @llvm.lifetime.end(i64 62, ptr nonnull %0) #3
+-  ret void
+-}
+-
+-declare i32 @bar(...)  #2
+diff --git a/llvm/test/Transforms/GlobalOpt/ARM/lit.local.cfg b/llvm/test/Transforms/GlobalOpt/ARM/lit.local.cfg
+deleted file mode 100644
+index 7c23e4f98013..000000000000
+--- a/llvm/test/Transforms/GlobalOpt/ARM/lit.local.cfg
++++ /dev/null
+@@ -1,2 +0,0 @@
+-if not "ARM" in config.root.targets:
+-    config.unsupported = True
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

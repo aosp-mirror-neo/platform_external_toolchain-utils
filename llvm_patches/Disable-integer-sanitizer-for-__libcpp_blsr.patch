@@ -1,0 +1,35 @@
+From 9e7249d518d59d4c35fab13a5482c75a2648dff1 Mon Sep 17 00:00:00 2001
+From: Yi Kong <yikong@google.com>
+Date: Wed, 28 May 2025 14:53:56 +0900
+Subject: [PATCH] Disable integer sanitizer for __libcpp_blsr
+
+Change-Id: If9c46e0de44635a53a1f57b7e9e2f0913f7eeea5
+---
+ libcxx/include/__bit/blsr.h | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/libcxx/include/__bit/blsr.h b/libcxx/include/__bit/blsr.h
+index 76bd521f5c30..21d4a162524a 100644
+--- a/libcxx/include/__bit/blsr.h
++++ b/libcxx/include/__bit/blsr.h
+@@ -17,14 +17,17 @@
+ 
+ _LIBCPP_BEGIN_NAMESPACE_STD
+ 
++__attribute__((no_sanitize("integer")))
+ inline _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR unsigned __libcpp_blsr(unsigned __x) _NOEXCEPT {
+   return __x ^ (__x & -__x);
+ }
+ 
++__attribute__((no_sanitize("integer")))
+ inline _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR unsigned long __libcpp_blsr(unsigned long __x) _NOEXCEPT {
+   return __x ^ (__x & -__x);
+ }
+ 
++__attribute__((no_sanitize("integer")))
+ inline _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR unsigned long long __libcpp_blsr(unsigned long long __x) _NOEXCEPT {
+   return __x ^ (__x & -__x);
+ }
+-- 
+2.49.0.1164.gab81da1b16-goog
+

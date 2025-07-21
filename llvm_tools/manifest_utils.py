@@ -176,7 +176,7 @@ def format_manifest(repo_manifest: Path, cwd: Optional[Path] = None):
     """Use cros format to format the given manifest."""
     if not shutil.which("cros"):
         raise FormattingError(
-            "unable to format manifest, 'cros'" " executable not in PATH"
+            "unable to format manifest, 'cros' executable not in PATH"
         )
     cmd: List[Union[str, Path]] = ["cros", "format", repo_manifest]
     subprocess.run(cmd, check=True, cwd=cwd)

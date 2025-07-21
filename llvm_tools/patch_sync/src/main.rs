@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
-mod android_utils;
+mod llvm_version_extraction;
 mod patch_parsing;
 mod version_control;
 
@@ -13,8 +13,11 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result};
 use structopt::StructOpt;
 
-use patch_parsing::{filter_patches_by_platform, PatchCollection, PatchDictSchema, VersionRange};
-use version_control::RepoSetupContext;
+use patch_parsing::{
+    filter_patches_by_platform, filter_patches_by_version, PatchCollection, PatchDictSchema,
+    VersionRange,
+};
+use version_control::{RepoSetupContext, RepoUploadOpts};
 
 fn main() -> Result<()> {
     match Opt::from_args() {
@@ -42,6 +45,7 @@ fn main() -> Result<()> {
             no_commit,
             wip,
             disable_cq,
+            no_add_autoreview_topic,
             uprev,
         } => transpose_subcmd(TransposeOpt {
             cros_checkout_path,
@@ -60,6 +64,7 @@ fn main() -> Result<()> {
             no_commit,
             wip,
             disable_cq,
+            no_add_autoreview_topic,
             uprev_ebuilds: uprev,
         }),
     }
@@ -83,8 +88,6 @@ fn show_subcmd(args: ShowOpt) -> Result<()> {
         cros_checkout: cros_checkout_path,
         android_checkout: android_checkout_path,
         sync_before: sync,
-        wip_mode: true,   // Has no effect, as we're not making changes
-        enable_cq: false, // Has no effect, as we're not uploading anything
         uprev_ebuilds: false,
     };
     ctx.setup()?;
@@ -121,6 +124,7 @@ struct TransposeOpt {
     verbose: bool,
     dry_run: bool,
     no_commit: bool,
+    no_add_autoreview_topic: bool,
     cros_reviewers: Vec<String>,
     android_reviewers: Vec<String>,
     wip: bool,
@@ -129,12 +133,19 @@ struct TransposeOpt {
 }
 
 fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
+    let commit_opt = if args.no_commit {
+        CommitOpt::NoCommit
+    } else {
+        CommitOpt::CommitAndUpload(RepoUploadOpts {
+            wip_mode: args.wip,
+            enable_cq: !args.disable_cq,
+            set_autoreview_topic: !args.no_add_autoreview_topic,
+        })
+    };
     let ctx = RepoSetupContext {
         cros_checkout: args.cros_checkout_path,
         android_checkout: args.android_checkout_path,
         sync_before: args.sync,
-        wip_mode: args.wip,
-        enable_cq: !args.disable_cq,
         uprev_ebuilds: args.uprev_ebuilds,
     };
     ctx.setup()?;
@@ -172,10 +183,10 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
     // want patches outside of the start/end bounds.
     let android_llvm_version: u64 = {
         let android_llvm_version_str =
-            android_utils::get_android_llvm_version(&ctx.android_checkout)?;
+            llvm_version_extraction::get_android_llvm_version(&ctx.android_checkout)?;
         android_llvm_version_str.parse::<u64>().with_context(|| {
             format!(
-                "converting llvm version to u64: '{}'",
+                "converting android llvm version to u64: {:?}",
                 android_llvm_version_str
             )
         })?
@@ -183,13 +194,50 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
     if args.verbose {
         println!("Android LLVM version: r{}", android_llvm_version);
     }
-    let new_cros_patches =
-        new_cros_patches.filter_patches(|p| match (p.get_from_version(), p.get_until_version()) {
-            (Some(start), Some(end)) => start <= android_llvm_version && android_llvm_version < end,
-            (Some(start), None) => start <= android_llvm_version,
-            (None, Some(end)) => android_llvm_version < end,
-            (None, None) => true,
-        });
+    let new_cros_patches = filter_patches_by_version(&new_cros_patches, android_llvm_version);
+
+    let chromiumos_llvm_cur_version: u64 = {
+        let chromiumos_llvm_version_str: String =
+            llvm_version_extraction::get_chromiumos_llvm_version(&ctx.cros_checkout)?;
+        chromiumos_llvm_version_str
+            .parse::<u64>()
+            .with_context(|| {
+                format!(
+                    "converting chromiumos llvm version to u64: {:?}",
+                    chromiumos_llvm_version_str
+                )
+            })?
+    };
+    if args.verbose {
+        println!(
+            "ChromiumOS LLVM Current version: r{}",
+            chromiumos_llvm_cur_version
+        );
+    }
+
+    let chromiumos_llvm_next_version: u64 = {
+        let chromiumos_llvm_version_str: String =
+            llvm_version_extraction::get_chromiumos_llvm_next_version(&ctx.cros_checkout)?;
+        chromiumos_llvm_version_str
+            .parse::<u64>()
+            .with_context(|| {
+                format!(
+                    "converting chromiumos llvm-next version to u64: {:?}",
+                    chromiumos_llvm_version_str
+                )
+            })?
+    };
+    if args.verbose {
+        println!(
+            "ChromiumOS LLVM Next version: r{}",
+            chromiumos_llvm_next_version
+        );
+    }
+
+    let new_android_patches =
+        filter_patches_by_version(&new_android_patches, chromiumos_llvm_cur_version).union(
+            &filter_patches_by_version(&new_android_patches, chromiumos_llvm_next_version),
+        )?;
 
     // Need to filter version updates to only existing patches to the other platform.
     let cros_version_updates =
@@ -211,7 +259,7 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
 
     modify_repos(
         &ctx,
-        args.no_commit,
+        &commit_opt,
         ModifyOpt {
             new_cros_patches,
             cur_cros_collection,
@@ -225,6 +273,11 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
     )
 }
 
+enum CommitOpt {
+    NoCommit,
+    CommitAndUpload(RepoUploadOpts),
+}
+
 struct ModifyOpt {
     new_cros_patches: PatchCollection,
     cur_cros_collection: PatchCollection,
@@ -236,7 +289,7 @@ struct ModifyOpt {
     android_reviewers: Vec<String>,
 }
 
-fn modify_repos(ctx: &RepoSetupContext, no_commit: bool, opt: ModifyOpt) -> Result<()> {
+fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) -> Result<()> {
     // Cleanup on scope exit.
     scopeguard::defer! {
         ctx.cleanup();
@@ -258,25 +311,29 @@ fn modify_repos(ctx: &RepoSetupContext, no_commit: bool, opt: ModifyOpt) -> Resu
             .transpose_write(&mut cur_cros_collection)?;
     }
 
-    if no_commit {
-        println!("--no-commit specified; not committing or uploading");
-        return Ok(());
-    }
+    let upload_opts = match &commit_opt {
+        CommitOpt::NoCommit => {
+            println!("--no-commit specified; not committing or uploading");
+            return Ok(());
+        }
+        CommitOpt::CommitAndUpload(x) => x,
+    };
+
     // Commit and upload for review ------------------------------------------
     // Note we want to check if the android patches are empty for CrOS, and
     // vice versa. This is a little counterintuitive.
     if !opt.new_android_patches.is_empty() {
-        ctx.cros_repo_upload(&opt.cros_reviewers)
+        ctx.cros_repo_upload(&opt.cros_reviewers, upload_opts)
             .context("uploading chromiumos changes")?;
     }
     if !opt.new_cros_patches.is_empty() {
-        if let Err(e) = android_utils::sort_android_patches(&ctx.android_checkout) {
+        if let Err(e) = llvm_version_extraction::sort_android_patches(&ctx.android_checkout) {
             eprintln!(
                 "Couldn't sort Android patches; continuing. Caused by: {}",
                 e
             );
         }
-        ctx.android_repo_upload(&opt.android_reviewers)
+        ctx.android_repo_upload(&opt.android_reviewers, upload_opts)
             .context("uploading android changes")?;
     }
     Ok(())
@@ -398,5 +455,10 @@ enum Opt {
         /// Don't run CQ if set. Only has an effect if uploading.
         #[structopt(long)]
         disable_cq: bool,
+
+        /// Don't add an autoreview Gerrit topic after uploading, if possible. Only has an effect if
+        /// uploading.
+        #[structopt(long)]
+        no_add_autoreview_topic: bool,
     },
 }

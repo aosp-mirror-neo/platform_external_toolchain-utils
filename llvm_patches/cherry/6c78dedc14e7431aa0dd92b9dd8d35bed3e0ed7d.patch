@@ -1,0 +1,39 @@
+From 6c78dedc14e7431aa0dd92b9dd8d35bed3e0ed7d Mon Sep 17 00:00:00 2001
+From: Emre Kultursay <emrekultursay@google.com>
+Date: Fri, 25 Apr 2025 23:16:53 +0000
+Subject: [PATCH] Skip tests if socket name is longer than 107 bytes (#137405)
+
+To fix the test failures introduced in Commit 488eeb3
+---
+ lldb/unittests/Host/SocketTest.cpp | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/lldb/unittests/Host/SocketTest.cpp b/lldb/unittests/Host/SocketTest.cpp
+index 5bfb48b52f7e..77366593f05f 100644
+--- a/lldb/unittests/Host/SocketTest.cpp
++++ b/lldb/unittests/Host/SocketTest.cpp
+@@ -349,6 +349,10 @@ TEST_F(SocketTest, DomainSocketFromBoundNativeSocket) {
+   ASSERT_FALSE(EC);
+   llvm::sys::path::append(name, "test");
+ 
++  // Skip the test if the $TMPDIR is too long to hold a domain socket.
++  if (name.size() > 107u)
++    GTEST_SKIP() << "$TMPDIR is too long to hold a domain socket";
++
+   DomainSocket socket(true);
+   Status error = socket.Listen(name, /*backlog=*/10);
+   ASSERT_THAT_ERROR(error.takeError(), llvm::Succeeded());
+@@ -370,6 +374,10 @@ TEST_F(SocketTest, AbstractSocketFromBoundNativeSocket) {
+                                   true);
+   llvm::sys::path::append(name, "test");
+ 
++  // Skip the test if the $TMPDIR is too long to hold a domain socket.
++  if (name.size() > 107u)
++    GTEST_SKIP() << "$TMPDIR is too long to hold a domain socket";
++
+   AbstractSocket socket;
+   Status error = socket.Listen(name, /*backlog=*/10);
+   ASSERT_THAT_ERROR(error.takeError(), llvm::Succeeded());
+-- 
+2.49.0.901.g37484f566f-goog
+

@@ -50,6 +50,15 @@ def parse_args():
         `--version`.
         """,
     )
+    parser.add_argument(
+        "--llvm_revision",
+        type=int,
+        help="""
+        The synthetic revision of LLVM, as an integer. If not specified, none
+        will be given to the compiler wrapper (see `LlvmRevision` in the wrapper
+        for the implications of this).
+        """,
+    )
     args = parser.parse_args()
 
     if args.static is None:
@@ -77,6 +86,9 @@ def calc_go_args(args, version, build_dir, output_file):
         # Quote this, as `version` may have spaces in it.
         "'main.Version=" + version + "'",
     ]
+
+    if args.llvm_revision is not None:
+        ldFlags += ("-X", f"main.LlvmRevision={args.llvm_revision}")
 
     # If the wrapper is intended for ChromeOS, we need to use libc's exec.
     extra_args = []

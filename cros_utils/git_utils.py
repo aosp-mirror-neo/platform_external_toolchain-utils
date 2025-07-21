@@ -8,11 +8,12 @@ import contextlib
 import dataclasses
 import enum
 import logging
+import os
 from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Dict, Generator, Iterable, List, Optional
+from typing import Dict, Generator, Iterable, List, Optional, Union
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -341,7 +342,7 @@ def create_worktree(
         logging.info(
             "Establishing worktree of %s in %s", git_directory, tempdir
         )
-        cmd = [
+        cmd: List[Union[str, os.PathLike]] = [
             "git",
             "worktree",
             "add",

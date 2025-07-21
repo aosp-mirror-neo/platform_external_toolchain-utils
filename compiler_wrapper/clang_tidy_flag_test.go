@@ -170,16 +170,6 @@ func TestOmitClangTidyForGcc(t *testing.T) {
 	})
 }
 
-func TestOmitClangTidyForGccWithClangSyntax(t *testing.T) {
-	withClangTidyTestContext(t, func(ctx *testContext) {
-		ctx.must(callCompiler(ctx, ctx.cfg,
-			ctx.newCommand(gccX86_64, "-clang-syntax", mainCc)))
-		if ctx.cmdCount > 2 {
-			t.Errorf("expected 2 commands. Got: %d", ctx.cmdCount)
-		}
-	})
-}
-
 func TestUseClangTidyBasedOnFileExtension(t *testing.T) {
 	withClangTidyTestContext(t, func(ctx *testContext) {
 		testData := []struct {

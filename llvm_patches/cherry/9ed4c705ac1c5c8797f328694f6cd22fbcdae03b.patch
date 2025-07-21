@@ -1,0 +1,224 @@
+From 9ed4c705ac1c5c8797f328694f6cd22fbcdae03b Mon Sep 17 00:00:00 2001
+From: Florian Mayer <fmayer@google.com>
+Date: Thu, 17 Apr 2025 09:52:41 -0700
+Subject: [PATCH] [MTE] decide whether to tag global in AsmPrinter (#135891)
+
+there are llvm passes that would invalidate the decision we make in
+clang.
+---
+ clang/lib/CodeGen/SanitizerMetadata.cpp    | 45 +++------------------
+ clang/test/CodeGen/memtag-globals.cpp      |  7 ++--
+ llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | 47 ++++++++++++++++++++++
+ llvm/lib/IR/Verifier.cpp                   |  4 --
+ llvm/unittests/IR/VerifierTest.cpp         | 21 ----------
+ 5 files changed, 56 insertions(+), 68 deletions(-)
+
+diff --git a/clang/lib/CodeGen/SanitizerMetadata.cpp b/clang/lib/CodeGen/SanitizerMetadata.cpp
+index b7b212ba46ef..288f7f6415f4 100644
+--- a/clang/lib/CodeGen/SanitizerMetadata.cpp
++++ b/clang/lib/CodeGen/SanitizerMetadata.cpp
+@@ -32,37 +32,6 @@ static SanitizerMask expandKernelSanitizerMasks(SanitizerMask Mask) {
+   return Mask;
+ }
+ 
+-static bool shouldTagGlobal(const llvm::GlobalVariable &G) {
+-  // For now, don't instrument constant data, as it'll be in .rodata anyway. It
+-  // may be worth instrumenting these in future to stop them from being used as
+-  // gadgets.
+-  if (G.getName().starts_with("llvm.") || G.isThreadLocal() || G.isConstant())
+-    return false;
+-
+-  // Globals can be placed implicitly or explicitly in sections. There's two
+-  // different types of globals that meet this criteria that cause problems:
+-  //  1. Function pointers that are going into various init arrays (either
+-  //     explicitly through `__attribute__((section(<foo>)))` or implicitly
+-  //     through `__attribute__((constructor)))`, such as ".(pre)init(_array)",
+-  //     ".fini(_array)", ".ctors", and ".dtors". These function pointers end up
+-  //     overaligned and overpadded, making iterating over them problematic, and
+-  //     each function pointer is individually tagged (so the iteration over
+-  //     them causes SIGSEGV/MTE[AS]ERR).
+-  //  2. Global variables put into an explicit section, where the section's name
+-  //     is a valid C-style identifier. The linker emits a `__start_<name>` and
+-  //     `__stop_<name>` symbol for the section, so that you can iterate over
+-  //     globals within this section. Unfortunately, again, these globals would
+-  //     be tagged and so iteration causes SIGSEGV/MTE[AS]ERR.
+-  //
+-  // To mitigate both these cases, and because specifying a section is rare
+-  // outside of these two cases, disable MTE protection for globals in any
+-  // section.
+-  if (G.hasSection())
+-    return false;
+-
+-  return true;
+-}
+-
+ void SanitizerMetadata::reportGlobal(llvm::GlobalVariable *GV,
+                                      SourceLocation Loc, StringRef Name,
+                                      QualType Ty,
+@@ -89,15 +58,11 @@ void SanitizerMetadata::reportGlobal(llvm::GlobalVariable *GV,
+   Meta.NoHWAddress |= CGM.isInNoSanitizeList(
+       FsanitizeArgument.Mask & SanitizerKind::HWAddress, GV, Loc, Ty);
+ 
+-  if (shouldTagGlobal(*GV)) {
+-    Meta.Memtag |= static_cast<bool>(FsanitizeArgument.Mask &
+-                                     SanitizerKind::MemtagGlobals);
+-    Meta.Memtag &= !NoSanitizeAttrSet.hasOneOf(SanitizerKind::MemTag);
+-    Meta.Memtag &= !CGM.isInNoSanitizeList(
+-        FsanitizeArgument.Mask & SanitizerKind::MemTag, GV, Loc, Ty);
+-  } else {
+-    Meta.Memtag = false;
+-  }
++  Meta.Memtag |=
++      static_cast<bool>(FsanitizeArgument.Mask & SanitizerKind::MemtagGlobals);
++  Meta.Memtag &= !NoSanitizeAttrSet.hasOneOf(SanitizerKind::MemTag);
++  Meta.Memtag &= !CGM.isInNoSanitizeList(
++      FsanitizeArgument.Mask & SanitizerKind::MemTag, GV, Loc, Ty);
+ 
+   Meta.IsDynInit = IsDynInit && !Meta.NoAddress &&
+                    FsanitizeArgument.has(SanitizerKind::Address) &&
+diff --git a/clang/test/CodeGen/memtag-globals.cpp b/clang/test/CodeGen/memtag-globals.cpp
+index 0d7fe22a7b0f..407eea1c37cf 100644
+--- a/clang/test/CodeGen/memtag-globals.cpp
++++ b/clang/test/CodeGen/memtag-globals.cpp
+@@ -25,8 +25,9 @@ void func() {
+ // CHECK: @{{.*}}extra_global{{.*}} ={{.*}} sanitize_memtag
+ // CHECK: @{{.*}}global{{.*}} ={{.*}} sanitize_memtag
+ 
+-// CHECK:     @{{.*}}section_global{{.*}} =
+-// CHECK-NOT: sanitize_memtag
++// This DOES NOT mean we are instrumenting the section global,
++// but we are ignoring it in AsmPrinter rather than in clang.
++// CHECK:     @{{.*}}section_global{{.*}} ={{.*}} sanitize_memtag
+ // CHECK:     @{{.*}}attributed_global{{.*}} =
+ // CHECK-NOT: sanitize_memtag
+ // CHECK:     @{{.*}}disable_instrumentation_global{{.*}} =
+@@ -35,7 +36,7 @@ void func() {
+ // CHECK-NOT: sanitize_memtag
+ 
+ // CHECK: @{{.*}}static_var{{.*}} ={{.*}} sanitize_memtag
+-// CHECK: @{{.*}} = {{.*}} c"Hello, world!\00"{{.*}}
++// CHECK: @{{.*}} = {{.*}} c"Hello, world!\00"{{.*}} sanitize_memtag
+ // CHECK: @{{.*}}external_global{{.*}} ={{.*}} sanitize_memtag
+ 
+ // IGNORELIST: @{{.*}}extra_global{{.*}} ={{.*}} sanitize_memtag
+diff --git a/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp b/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+index 4b05ad398f05..6b1f3df12ee4 100644
+--- a/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
++++ b/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+@@ -2398,6 +2398,41 @@ void AsmPrinter::emitRemarksSection(remarks::RemarkStreamer &RS) {
+   OutStreamer->emitBinaryData(Buf);
+ }
+ 
++static bool shouldTagGlobal(const llvm::GlobalVariable &G) {
++  // We used to do this in clang, but there are optimization passes that turn
++  // non-constant globals into constants. So now, clang only tells us whether
++  // it would *like* a global to be tagged, but we still make the decision here.
++  //
++  // For now, don't instrument constant data, as it'll be in .rodata anyway. It
++  // may be worth instrumenting these in future to stop them from being used as
++  // gadgets.
++  if (G.getName().starts_with("llvm.") || G.isThreadLocal() || G.isConstant())
++    return false;
++
++  // Globals can be placed implicitly or explicitly in sections. There's two
++  // different types of globals that meet this criteria that cause problems:
++  //  1. Function pointers that are going into various init arrays (either
++  //     explicitly through `__attribute__((section(<foo>)))` or implicitly
++  //     through `__attribute__((constructor)))`, such as ".(pre)init(_array)",
++  //     ".fini(_array)", ".ctors", and ".dtors". These function pointers end up
++  //     overaligned and overpadded, making iterating over them problematic, and
++  //     each function pointer is individually tagged (so the iteration over
++  //     them causes SIGSEGV/MTE[AS]ERR).
++  //  2. Global variables put into an explicit section, where the section's name
++  //     is a valid C-style identifier. The linker emits a `__start_<name>` and
++  //     `__stop_<name>` symbol for the section, so that you can iterate over
++  //     globals within this section. Unfortunately, again, these globals would
++  //     be tagged and so iteration causes SIGSEGV/MTE[AS]ERR.
++  //
++  // To mitigate both these cases, and because specifying a section is rare
++  // outside of these two cases, disable MTE protection for globals in any
++  // section.
++  if (G.hasSection())
++    return false;
++
++  return true;
++}
++
+ static void tagGlobalDefinition(Module &M, GlobalVariable *G) {
+   Constant *Initializer = G->getInitializer();
+   uint64_t SizeInBytes =
+@@ -2430,6 +2465,12 @@ static void tagGlobalDefinition(Module &M, GlobalVariable *G) {
+   G->setUnnamedAddr(GlobalValue::UnnamedAddr::None);
+ }
+ 
++static void removeMemtagFromGlobal(GlobalVariable &G) {
++  auto Meta = G.getSanitizerMetadata();
++  Meta.Memtag = false;
++  G.setSanitizerMetadata(Meta);
++}
++
+ bool AsmPrinter::doFinalization(Module &M) {
+   // Set the MachineFunction to nullptr so that we can catch attempted
+   // accesses to MF specific features at the module level and so that
+@@ -2440,6 +2481,12 @@ bool AsmPrinter::doFinalization(Module &M) {
+   for (GlobalVariable &G : M.globals()) {
+     if (G.isDeclaration() || !G.isTagged())
+       continue;
++    if (!shouldTagGlobal(G)) {
++      assert(G.hasSanitizerMetadata()); // because isTagged.
++      removeMemtagFromGlobal(G);
++      assert(!G.isTagged());
++      continue;
++    }
+     GlobalsToTag.push_back(&G);
+   }
+   for (GlobalVariable *G : GlobalsToTag)
+diff --git a/llvm/lib/IR/Verifier.cpp b/llvm/lib/IR/Verifier.cpp
+index 765befc95032..35c4d60cf325 100644
+--- a/llvm/lib/IR/Verifier.cpp
++++ b/llvm/lib/IR/Verifier.cpp
+@@ -807,10 +807,6 @@ void Verifier::visitGlobalValue(const GlobalValue &GV) {
+           "visibility must be dso_local!",
+           &GV);
+ 
+-  if (GV.isTagged()) {
+-    Check(!GV.hasSection(), "tagged GlobalValue must not be in section.", &GV);
+-  }
+-
+   forEachUser(&GV, GlobalValueVisited, [&](const Value *V) -> bool {
+     if (const Instruction *I = dyn_cast<Instruction>(V)) {
+       if (!I->getParent() || !I->getParent()->getParent())
+diff --git a/llvm/unittests/IR/VerifierTest.cpp b/llvm/unittests/IR/VerifierTest.cpp
+index 2b51f3c4ea2c..7a136e6a382a 100644
+--- a/llvm/unittests/IR/VerifierTest.cpp
++++ b/llvm/unittests/IR/VerifierTest.cpp
+@@ -416,26 +416,5 @@ TEST(VerifierTest, GetElementPtrInst) {
+       << Error;
+ }
+ 
+-TEST(VerifierTest, DetectTaggedGlobalInSection) {
+-  LLVMContext C;
+-  Module M("M", C);
+-  GlobalVariable *GV = new GlobalVariable(
+-      Type::getInt64Ty(C), false, GlobalValue::InternalLinkage,
+-      ConstantInt::get(Type::getInt64Ty(C), 1));
+-  GV->setDSOLocal(true);
+-  GlobalValue::SanitizerMetadata MD{};
+-  MD.Memtag = true;
+-  GV->setSanitizerMetadata(MD);
+-  GV->setSection("foo");
+-  M.insertGlobalVariable(GV);
+-
+-  std::string Error;
+-  raw_string_ostream ErrorOS(Error);
+-  EXPECT_TRUE(verifyModule(M, &ErrorOS));
+-  EXPECT_TRUE(
+-      StringRef(Error).starts_with("tagged GlobalValue must not be in section"))
+-      << Error;
+-}
+-
+ } // end anonymous namespace
+ } // end namespace llvm
+-- 
+2.49.0.805.g082f7c87e0-goog
+

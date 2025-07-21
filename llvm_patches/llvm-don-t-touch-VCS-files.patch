@@ -1,0 +1,57 @@
+From fefa022c8232afddfbca4db0b3366587c9905933 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Mon, 28 Apr 2025 12:42:26 -0600
+Subject: [PATCH] llvm: don't touch VCS files
+
+Builds of LLVM (& its subpackages) try to touch `.git/logs/HEAD` in
+order to be able to cheaply determine when a header file that contains
+VCS info should be updated.
+
+As mentioned in the comment, users of this have to gracefully handle the
+`touch` failing, but Portage's sandbox reports it as a violation and
+fails the build regardless.
+
+Just unconditionally skip touching the file so we avoid the sandbox
+issues.
+
+BUG=b:412322904
+TEST=`emerge llvm` got to src_compile() instead of dying at
+TEST=src_configure().
+
+patch.cherry: false
+patch.platforms: chromiumos
+patch.version_range.from: 547379
+patch.version_range.until: null
+
+---
+ llvm/cmake/modules/AddLLVM.cmake | 15 +++++++--------
+ 1 file changed, 7 insertions(+), 8 deletions(-)
+
+diff --git a/llvm/cmake/modules/AddLLVM.cmake b/llvm/cmake/modules/AddLLVM.cmake
+index 99959ecfae9c..f015085b818b 100644
+--- a/llvm/cmake/modules/AddLLVM.cmake
++++ b/llvm/cmake/modules/AddLLVM.cmake
+@@ -2542,14 +2542,13 @@ function(find_first_existing_vc_file path out_var)
+       get_filename_component(git_dir ${git_output} ABSOLUTE BASE_DIR ${path})
+       # Some branchless cases (e.g. 'repo') may not yet have .git/logs/HEAD
+       if (NOT EXISTS "${git_dir}/logs/HEAD")
+-        execute_process(COMMAND ${CMAKE_COMMAND} -E touch HEAD
+-          WORKING_DIRECTORY "${git_dir}/logs"
+-          RESULT_VARIABLE touch_head_result
+-          ERROR_QUIET)
+-        if (NOT touch_head_result EQUAL 0)
+-          set(${out_var} "" PARENT_SCOPE)
+-          return()
+-        endif()
++        # ChromeOS-local: we often operate in the Portage sandbox, so patch out
++        # the creation of this file. Users of this function _must_ gracefully
++        # handle when it can't be written to, but Portage will still break the
++        # build after-the-fact because it observed an attempt to violate the
++        # sandbox. b/412322904
++        set(${out_var} "" PARENT_SCOPE)
++        return()
+       endif()
+       set(${out_var} "${git_dir}/logs/HEAD" PARENT_SCOPE)
+     endif()
+-- 
+2.49.0.1112.g889b7c5bd8-goog

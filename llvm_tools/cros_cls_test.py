@@ -169,3 +169,17 @@ class Test(unittest.TestCase):
             ),
             "R122-15711.0.0",
         )
+
+    def test_parse_build_status(self):
+        self.assertEqual(
+            cros_cls.BuilderStatus.parse("SCHEDULED"),
+            cros_cls.BuilderStatus.SCHEDULED,
+        )
+        self.assertEqual(
+            cros_cls.BuilderStatus.parse("started"),
+            cros_cls.BuilderStatus.STARTED,
+        )
+        with self.assertRaisesRegex(
+            ValueError, "Unknown builder status: UNKNOWN"
+        ):
+            cros_cls.BuilderStatus.parse("UNKNOWN")

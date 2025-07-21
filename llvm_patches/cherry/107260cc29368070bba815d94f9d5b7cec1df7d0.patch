@@ -1,0 +1,177 @@
+From 107260cc29368070bba815d94f9d5b7cec1df7d0 Mon Sep 17 00:00:00 2001
+From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+Date: Tue, 25 Mar 2025 10:09:25 +0000
+Subject: [PATCH] [AArch64][SME2] Don't preserve ZT0 around SME ABI routines
+ (#132722)
+
+This caused ZT0 to be preserved around `__arm_tpidr2_save` in functions
+with "aarch64_new_zt0". The block in which `__arm_tpidr2_save` is called
+is added by the SMEABIPass and may be reachable in cases where ZA has
+not been enabled* (so using `str zt0` is invalid).
+
+* (when za_save_buffer is null and num_za_save_slices is zero)
+---
+ .../AArch64/Utils/AArch64SMEAttributes.h      |  3 +-
+ .../AArch64/sme-disable-gisel-fisel.ll        |  9 +--
+ llvm/test/CodeGen/AArch64/sme-zt0-state.ll    | 61 +++++++++++++------
+ 3 files changed, 46 insertions(+), 27 deletions(-)
+
+diff --git a/llvm/lib/Target/AArch64/Utils/AArch64SMEAttributes.h b/llvm/lib/Target/AArch64/Utils/AArch64SMEAttributes.h
+index fb093da70c46..a3ebf764a6e0 100644
+--- a/llvm/lib/Target/AArch64/Utils/AArch64SMEAttributes.h
++++ b/llvm/lib/Target/AArch64/Utils/AArch64SMEAttributes.h
+@@ -133,7 +133,8 @@ public:
+   bool hasZT0State() const { return isNewZT0() || sharesZT0(); }
+   bool requiresPreservingZT0(const SMEAttrs &Callee) const {
+     return hasZT0State() && !Callee.sharesZT0() &&
+-           !Callee.hasAgnosticZAInterface();
++           !Callee.hasAgnosticZAInterface() &&
++           !(Callee.Bitmask & SME_ABI_Routine);
+   }
+   bool requiresDisablingZABeforeCall(const SMEAttrs &Callee) const {
+     return hasZT0State() && !hasZAState() && Callee.hasPrivateZAInterface() &&
+diff --git a/llvm/test/CodeGen/AArch64/sme-disable-gisel-fisel.ll b/llvm/test/CodeGen/AArch64/sme-disable-gisel-fisel.ll
+index 33d08beae2ca..4a52bf27a759 100644
+--- a/llvm/test/CodeGen/AArch64/sme-disable-gisel-fisel.ll
++++ b/llvm/test/CodeGen/AArch64/sme-disable-gisel-fisel.ll
+@@ -475,16 +475,12 @@ declare double @zt0_shared_callee(double) "aarch64_inout_zt0"
+ define double  @zt0_new_caller_to_zt0_shared_callee(double %x) nounwind noinline optnone "aarch64_new_zt0" {
+ ; CHECK-COMMON-LABEL: zt0_new_caller_to_zt0_shared_callee:
+ ; CHECK-COMMON:       // %bb.0: // %prelude
+-; CHECK-COMMON-NEXT:    sub sp, sp, #80
+-; CHECK-COMMON-NEXT:    str x30, [sp, #64] // 8-byte Folded Spill
++; CHECK-COMMON-NEXT:    str x30, [sp, #-16]! // 8-byte Folded Spill
+ ; CHECK-COMMON-NEXT:    mrs x8, TPIDR2_EL0
+ ; CHECK-COMMON-NEXT:    cbz x8, .LBB13_2
+ ; CHECK-COMMON-NEXT:    b .LBB13_1
+ ; CHECK-COMMON-NEXT:  .LBB13_1: // %save.za
+-; CHECK-COMMON-NEXT:    mov x8, sp
+-; CHECK-COMMON-NEXT:    str zt0, [x8]
+ ; CHECK-COMMON-NEXT:    bl __arm_tpidr2_save
+-; CHECK-COMMON-NEXT:    ldr zt0, [x8]
+ ; CHECK-COMMON-NEXT:    msr TPIDR2_EL0, xzr
+ ; CHECK-COMMON-NEXT:    b .LBB13_2
+ ; CHECK-COMMON-NEXT:  .LBB13_2: // %entry
+@@ -495,8 +491,7 @@ define double  @zt0_new_caller_to_zt0_shared_callee(double %x) nounwind noinline
+ ; CHECK-COMMON-NEXT:    fmov d1, x8
+ ; CHECK-COMMON-NEXT:    fadd d0, d0, d1
+ ; CHECK-COMMON-NEXT:    smstop za
+-; CHECK-COMMON-NEXT:    ldr x30, [sp, #64] // 8-byte Folded Reload
+-; CHECK-COMMON-NEXT:    add sp, sp, #80
++; CHECK-COMMON-NEXT:    ldr x30, [sp], #16 // 8-byte Folded Reload
+ ; CHECK-COMMON-NEXT:    ret
+ entry:
+   %call = call double @zt0_shared_callee(double %x)
+diff --git a/llvm/test/CodeGen/AArch64/sme-zt0-state.ll b/llvm/test/CodeGen/AArch64/sme-zt0-state.ll
+index 312537630e77..500fff4eb20d 100644
+--- a/llvm/test/CodeGen/AArch64/sme-zt0-state.ll
++++ b/llvm/test/CodeGen/AArch64/sme-zt0-state.ll
+@@ -112,7 +112,7 @@ define void @za_zt0_shared_caller_za_zt0_shared_callee() "aarch64_inout_za" "aar
+   ret void;
+ }
+ 
+-; New-ZA Callee
++; New-ZT0 Callee
+ 
+ ; Expect spill & fill of ZT0 around call
+ ; Expect smstop/smstart za around call
+@@ -134,6 +134,39 @@ define void @zt0_in_caller_zt0_new_callee() "aarch64_in_zt0" nounwind {
+   ret void;
+ }
+ 
++; New-ZT0 Callee
++
++; Expect commit of lazy-save if ZA is dormant
++; Expect smstart ZA & clear ZT0
++; Expect spill & fill of ZT0 around call
++; Before return, expect smstop ZA
++define void @zt0_new_caller_zt0_new_callee() "aarch64_new_zt0" nounwind {
++; CHECK-LABEL: zt0_new_caller_zt0_new_callee:
++; CHECK:       // %bb.0: // %prelude
++; CHECK-NEXT:    sub sp, sp, #80
++; CHECK-NEXT:    stp x30, x19, [sp, #64] // 16-byte Folded Spill
++; CHECK-NEXT:    mrs x8, TPIDR2_EL0
++; CHECK-NEXT:    cbz x8, .LBB6_2
++; CHECK-NEXT:  // %bb.1: // %save.za
++; CHECK-NEXT:    bl __arm_tpidr2_save
++; CHECK-NEXT:    msr TPIDR2_EL0, xzr
++; CHECK-NEXT:  .LBB6_2:
++; CHECK-NEXT:    smstart za
++; CHECK-NEXT:    zero { zt0 }
++; CHECK-NEXT:    mov x19, sp
++; CHECK-NEXT:    str zt0, [x19]
++; CHECK-NEXT:    smstop za
++; CHECK-NEXT:    bl callee
++; CHECK-NEXT:    smstart za
++; CHECK-NEXT:    ldr zt0, [x19]
++; CHECK-NEXT:    smstop za
++; CHECK-NEXT:    ldp x30, x19, [sp, #64] // 16-byte Folded Reload
++; CHECK-NEXT:    add sp, sp, #80
++; CHECK-NEXT:    ret
++  call void @callee() "aarch64_new_zt0";
++  ret void;
++}
++
+ ;
+ ; New-ZA Caller
+ ;
+@@ -144,23 +177,18 @@ define void @zt0_in_caller_zt0_new_callee() "aarch64_in_zt0" nounwind {
+ define void @zt0_new_caller() "aarch64_new_zt0" nounwind {
+ ; CHECK-LABEL: zt0_new_caller:
+ ; CHECK:       // %bb.0: // %prelude
+-; CHECK-NEXT:    sub sp, sp, #80
+-; CHECK-NEXT:    str x30, [sp, #64] // 8-byte Folded Spill
++; CHECK-NEXT:    str x30, [sp, #-16]! // 8-byte Folded Spill
+ ; CHECK-NEXT:    mrs x8, TPIDR2_EL0
+-; CHECK-NEXT:    cbz x8, .LBB6_2
++; CHECK-NEXT:    cbz x8, .LBB7_2
+ ; CHECK-NEXT:  // %bb.1: // %save.za
+-; CHECK-NEXT:    mov x8, sp
+-; CHECK-NEXT:    str zt0, [x8]
+ ; CHECK-NEXT:    bl __arm_tpidr2_save
+-; CHECK-NEXT:    ldr zt0, [x8]
+ ; CHECK-NEXT:    msr TPIDR2_EL0, xzr
+-; CHECK-NEXT:  .LBB6_2:
++; CHECK-NEXT:  .LBB7_2:
+ ; CHECK-NEXT:    smstart za
+ ; CHECK-NEXT:    zero { zt0 }
+ ; CHECK-NEXT:    bl callee
+ ; CHECK-NEXT:    smstop za
+-; CHECK-NEXT:    ldr x30, [sp, #64] // 8-byte Folded Reload
+-; CHECK-NEXT:    add sp, sp, #80
++; CHECK-NEXT:    ldr x30, [sp], #16 // 8-byte Folded Reload
+ ; CHECK-NEXT:    ret
+   call void @callee() "aarch64_in_zt0";
+   ret void;
+@@ -172,24 +200,19 @@ define void @zt0_new_caller() "aarch64_new_zt0" nounwind {
+ define void @new_za_zt0_caller() "aarch64_new_za" "aarch64_new_zt0" nounwind {
+ ; CHECK-LABEL: new_za_zt0_caller:
+ ; CHECK:       // %bb.0: // %prelude
+-; CHECK-NEXT:    sub sp, sp, #80
+-; CHECK-NEXT:    str x30, [sp, #64] // 8-byte Folded Spill
++; CHECK-NEXT:    str x30, [sp, #-16]! // 8-byte Folded Spill
+ ; CHECK-NEXT:    mrs x8, TPIDR2_EL0
+-; CHECK-NEXT:    cbz x8, .LBB7_2
++; CHECK-NEXT:    cbz x8, .LBB8_2
+ ; CHECK-NEXT:  // %bb.1: // %save.za
+-; CHECK-NEXT:    mov x8, sp
+-; CHECK-NEXT:    str zt0, [x8]
+ ; CHECK-NEXT:    bl __arm_tpidr2_save
+-; CHECK-NEXT:    ldr zt0, [x8]
+ ; CHECK-NEXT:    msr TPIDR2_EL0, xzr
+-; CHECK-NEXT:  .LBB7_2:
++; CHECK-NEXT:  .LBB8_2:
+ ; CHECK-NEXT:    smstart za
+ ; CHECK-NEXT:    zero {za}
+ ; CHECK-NEXT:    zero { zt0 }
+ ; CHECK-NEXT:    bl callee
+ ; CHECK-NEXT:    smstop za
+-; CHECK-NEXT:    ldr x30, [sp, #64] // 8-byte Folded Reload
+-; CHECK-NEXT:    add sp, sp, #80
++; CHECK-NEXT:    ldr x30, [sp], #16 // 8-byte Folded Reload
+ ; CHECK-NEXT:    ret
+   call void @callee() "aarch64_inout_za" "aarch64_in_zt0";
+   ret void;
+-- 
+2.49.0.906.g1f30a19c02-goog
+

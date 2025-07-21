@@ -7,18 +7,9 @@
 
 package main
 
-import (
-	"os/exec"
-	"syscall"
-)
-
 // Implement exec for users that don't need to dynamically link with glibc
 // See b/144783188 and libc_exec.go.
 
 func execCmd(env env, cmd *command) error {
-	execCmd := exec.Command(cmd.Path, cmd.Args...)
-	mergedEnv := mergeEnvValues(env.environ(), cmd.EnvUpdates)
-
-	ret := syscall.Exec(execCmd.Path, execCmd.Args, mergedEnv)
-	return newErrorwithSourceLocf("exec error: %v", ret)
+	return execCmdWithoutLibc(env, cmd)
 }

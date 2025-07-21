@@ -8,18 +8,9 @@
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
-            "-Wno-deprecated-declarations",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-unknown-warning-option",
             "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-Wno-error=vla-cxx-extension",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
             "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
             "-ftrivial-auto-var-init=zero",
             "-fcommon",
             "-fstack-protector-strong",
@@ -39,7 +30,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         }
       }
     ],
@@ -65,18 +56,9 @@
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
-            "-Wno-deprecated-declarations",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-unknown-warning-option",
             "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-Wno-error=vla-cxx-extension",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
             "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
             "-ftrivial-auto-var-init=zero",
             "-fcommon",
             "-fstack-protector-strong",
@@ -96,7 +78,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         },
         "exitcode": 1,
         "stderr": "error: foo [-Werror,-Wfoo]"
@@ -108,18 +90,9 @@
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
-            "-Wno-deprecated-declarations",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-unknown-warning-option",
             "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-Wno-error=vla-cxx-extension",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
             "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
             "-ftrivial-auto-var-init=zero",
             "-fcommon",
             "-fstack-protector-strong",
@@ -141,7 +114,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         }
       }
     ],
@@ -168,18 +141,9 @@
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
-            "-Wno-deprecated-declarations",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-unknown-warning-option",
             "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-Wno-error=vla-cxx-extension",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
             "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
             "-ftrivial-auto-var-init=zero",
             "-fcommon",
             "-fstack-protector-strong",
@@ -199,7 +163,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         },
         "exitcode": 1,
         "stderr": "error: foo [-Werror,-Wfoo]"
@@ -211,18 +175,9 @@
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-Qunused-arguments",
             "-Werror=poison-system-directories",
-            "-Wno-deprecated-declarations",
-            "-Wno-error=implicit-function-declaration",
-            "-Wno-error=implicit-int",
-            "-Wno-unknown-warning-option",
             "-fdebug-default-version=5",
-            "-Wno-int-conversion",
-            "-Wno-incompatible-function-pointer-types",
-            "-Wno-error=vla-cxx-extension",
             "-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
             "--unwindlib=libunwind",
-            "-Wno-section",
-            "-fno-addrsig",
             "-ftrivial-auto-var-init=zero",
             "-fcommon",
             "-fstack-protector-strong",
@@ -244,7 +199,7 @@
             "CCACHE_UMASK=002",
             "CCACHE_CPP2=yes"
           ],
-          "path": "ccache"
+          "path": "/usr/bin/ccache"
         },
         "exitcode": 1,
         "stderr": "someerror",

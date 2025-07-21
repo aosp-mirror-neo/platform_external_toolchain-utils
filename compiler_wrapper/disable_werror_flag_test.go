@@ -133,6 +133,15 @@ func TestKnownConfigureFileParsing(t *testing.T) {
 				t.Errorf("%q isn't considered a conf test file", f)
 			}
 		}
+
+		sconsFlags := []string{
+			"-Wfoo",
+			"-o",
+			"chrome-os-chroot/.sconf.temp/conftest_h4sh.o",
+		}
+		if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, sconsFlags...)) {
+			t.Errorf("compile command with args %q isn't considered a conf test", sconsFlags)
+		}
 	})
 }
 
@@ -142,6 +151,15 @@ func TestKnownConfigureDirParsing(t *testing.T) {
 		ctx.wd = wd
 		if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, "foo.c")) {
 			t.Errorf("%q isn't considered a conf test pwd", wd)
+		}
+	})
+}
+
+func TestPerfFeatureTestParsing(t *testing.T) {
+	withTestContext(t, func(ctx *testContext) {
+		ctx.wd = "/build/arm-generic/tmp/portage/dev-util/perf-5.15.68-r5/work/linux-5.15/tools/build/feature"
+		if !isLikelyAConfTest(ctx, ctx.cfg, ctx.newCommand(clangX86_64, "test-foo.c", "-o", "test-foo.o")) {
+			t.Error("perf conf test detection failed")
 		}
 	})
 }
@@ -175,15 +193,13 @@ func TestDoubleBuildWithWNoErrorAndCCache(t *testing.T) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 			switch ctx.cmdCount {
 			case 1:
-				// TODO: This is a bug in the old wrapper that it drops the ccache path
-				// during double build. Fix this once we don't compare to the old wrapper anymore.
-				if err := verifyPath(cmd, "ccache"); err != nil {
+				if err := verifyPath(cmd, "/usr/bin/ccache"); err != nil {
 					return err
 				}
 				fmt.Fprint(stderr, arbitraryWerrorStderr)
 				return newExitCodeError(1)
 			case 2:
-				if err := verifyPath(cmd, "ccache"); err != nil {
+				if err := verifyPath(cmd, "/usr/bin/ccache"); err != nil {
 					return err
 				}
 				return nil

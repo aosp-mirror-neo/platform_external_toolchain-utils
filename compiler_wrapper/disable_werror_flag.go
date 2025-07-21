@@ -109,16 +109,36 @@ func isLikelyAConfTest(env env, cfg *config, cmd *command) bool {
 		return false
 	}
 
+	cwd := env.getwd()
 	// Ignore anything that's likely to be a cmake configuration step. These put the compiler
 	// into a TryCompile dir.
-	if strings.Contains(env.getwd(), "CMakeFiles/CMakeScratch/TryCompile-") {
+	if strings.Contains(cwd, "CMakeFiles/CMakeScratch/TryCompile-") {
 		return true
 	}
 
+	wasLastArgOutput := false
 	for _, a := range cmd.Args {
 		// The kernel, for example, will do configure tests with /dev/null as a source file.
 		if a == "/dev/null" || strings.HasPrefix(a, "conftest.c") {
 			return true
+		}
+
+		// b/417950454: scons conftests run during src_compile at times, but consistently use
+		// `-o ${some_dir}/.sconf.temp/conftest_${hash}_${num}.o`.
+		if wasLastArgOutput {
+			if strings.HasSuffix(a, ".o") && strings.Contains(a, "/.sconf.temp/conftest_") {
+				return true
+			}
+
+			// b/424460547: perf (and other kernel tools, seemingly) have a special method of running
+			// configure checks during src_compile. Detect that here. Generally speaking, these builds are
+			// run in the `build/feature` subdirectory, and have `-o test-*` on their commandline.
+			if strings.HasPrefix(path.Base(a), "test-") && strings.HasSuffix(cwd, "tools/build/feature") && strings.Contains(cwd, "/dev-util/perf-") {
+				return true
+			}
+			wasLastArgOutput = false
+		} else {
+			wasLastArgOutput = a == "-o"
 		}
 	}
 	return false
@@ -157,11 +177,6 @@ func getWnoErrorFlags(stdout, stderr []byte) []string {
 func doubleBuildWithWNoError(env env, cfg *config, originalCmd *command, werrorConfig forceDisableWerrorConfig) (exitCode int, err error) {
 	originalStdoutBuffer := &bytes.Buffer{}
 	originalStderrBuffer := &bytes.Buffer{}
-	// TODO: This is a bug in the old wrapper that it drops the ccache path
-	// during double build. Fix this once we don't compare to the old wrapper anymore.
-	if originalCmd.Path == "/usr/bin/ccache" {
-		originalCmd.Path = "ccache"
-	}
 
 	getStdin, err := prebufferStdinIfNeeded(env, originalCmd)
 	if err != nil {

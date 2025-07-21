@@ -50,6 +50,7 @@ package main
 import "C"
 import (
 	"os/exec"
+	"strings"
 	"unsafe"
 )
 
@@ -60,8 +61,23 @@ import (
 // See crbug.com/1000863 for details.
 // To use this version of exec, please add '-tags libc_exec' when building Go binary.
 // Without the tags, libc_exec.go will not be used.
+//
+// To work around b/406369220, this function calls execCmdWithoutLibc
+// when "sandbox.so" is not present in LD_PRELOAD.
 
 func execCmd(env env, cmd *command) error {
+	// Workaround for b/406369220 (segmentation faults).
+	//
+	// LD_PRELOAD is a list separated by ':'s. If *sandbox.so is in that
+	// list, we conclude we're running inside the Portage sandbox and
+	// must use the libc code path. Else, we use execCmdWithoutLibc.
+	// This avoids segmentation faults which happen on the libc code path.
+	ldPreload, _ := env.getenv("LD_PRELOAD")
+	inSandbox := strings.HasSuffix(ldPreload, "sandbox.so") || strings.Contains(ldPreload, "sandbox.so:")
+	if !inSandbox {
+		return execCmdWithoutLibc(env, cmd)
+	}
+
 	freeList := []unsafe.Pointer{}
 	defer func() {
 		for _, ptr := range freeList {
@@ -77,19 +93,21 @@ func execCmd(env env, cmd *command) error {
 
 	goSliceToC := func(goSlice []string) **C.char {
 		// len(goSlice)+1 as the c array needs to be null terminated.
-		cArray := C.malloc(C.size_t(len(goSlice)+1) * C.size_t(unsafe.Sizeof(uintptr(0))))
+		arrayLen := len(goSlice) + 1
+		cArray := C.malloc(C.size_t(arrayLen) * C.size_t(unsafe.Sizeof(uintptr(0))))
 		freeList = append(freeList, cArray)
 
+		cArrayPtr := (**C.char)(cArray)
 		// Convert the C array to a Go Array so we can index it.
 		// Note: Storing pointers to the c heap in go pointer types is ok
 		// (see https://golang.org/cmd/cgo/).
-		cArrayForIndex := (*[1<<30 - 1]*C.char)(cArray)
+		cArrayForIndex := unsafe.Slice(cArrayPtr, arrayLen)
 		for i, str := range goSlice {
 			cArrayForIndex[i] = goStrToC(str)
 		}
-		cArrayForIndex[len(goSlice)] = nil
+		cArrayForIndex[arrayLen-1] = nil
 
-		return (**C.char)(cArray)
+		return cArrayPtr
 	}
 
 	execCmd := exec.Command(cmd.Path, cmd.Args...)

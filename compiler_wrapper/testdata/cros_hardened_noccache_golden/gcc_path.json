@@ -6,8 +6,6 @@
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-fno-reorder-blocks-and-partition",
-            "-Wno-unused-local-typedefs",
-            "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
             "-D_FORTIFY_SOURCE=3",
@@ -38,8 +36,6 @@
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-fno-reorder-blocks-and-partition",
-            "-Wno-unused-local-typedefs",
-            "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
             "-D_FORTIFY_SOURCE=3",
@@ -76,8 +72,6 @@
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-fno-reorder-blocks-and-partition",
-            "-Wno-unused-local-typedefs",
-            "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
             "-D_FORTIFY_SOURCE=3",
@@ -108,8 +102,6 @@
           "args": [
             "--sysroot=/tmp/stable/a/b/usr/x86_64-cros-linux-gnu",
             "-fno-reorder-blocks-and-partition",
-            "-Wno-unused-local-typedefs",
-            "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
             "-D_FORTIFY_SOURCE=3",
@@ -140,8 +132,6 @@
           "args": [
             "--sysroot=/tmp/stable/a/b/usr/x86_64-cros-linux-gnu",
             "-fno-reorder-blocks-and-partition",
-            "-Wno-unused-local-typedefs",
-            "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
             "-D_FORTIFY_SOURCE=3",
@@ -172,8 +162,6 @@
           "args": [
             "--sysroot=/usr/x86_64-cros-linux-gnu",
             "-fno-reorder-blocks-and-partition",
-            "-Wno-unused-local-typedefs",
-            "-Wno-maybe-uninitialized",
             "-fcommon",
             "-fstack-protector-strong",
             "-D_FORTIFY_SOURCE=3",

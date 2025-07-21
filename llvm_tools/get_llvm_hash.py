@@ -373,7 +373,7 @@ def IsSvnOption(svn_option: str) -> Union[int, str]:
 
 
 def GetLLVMHashAndVersionFromSVNOption(
-    svn_option: Union[int, str]
+    svn_option: Union[int, str],
 ) -> Tuple[str, int]:
     """Gets the LLVM hash and LLVM version based off of the svn option.
 
@@ -419,7 +419,6 @@ def GetCrOSCurrentLLVMHash(chromeos_root: Path) -> str:
     assert chroot.IsChromeOSRoot(
         chromeos_root
     ), f"{chromeos_root} isn't the root of a ChromeOS checkout"
-    llvm_project = chromeos_root / cros_paths.LLVM_PROJECT
     hash_or_ref = manifest_utils.extract_current_llvm_hash_or_ref(chromeos_root)
     refs_heads = "refs/heads/"
     # If this is a hash, we're done.
@@ -437,7 +436,8 @@ def GetCrOSCurrentLLVMHash(chromeos_root: Path) -> str:
     )
     if not merge_base:
         raise ValueError(
-            f"Can't find a merge-base between {cros_ref} and {llvm_upstream_main}"
+            "Can't find a merge-base between "
+            f"{cros_ref} and {llvm_upstream_main}"
         )
     return merge_base
 
