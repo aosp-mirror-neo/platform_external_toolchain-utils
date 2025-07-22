@@ -148,6 +148,11 @@ func processClangFlags(builder *commandBuilder) error {
 		} else {
 			builder.addPostUserArgs("-target", builder.target.target)
 		}
+		// An lld bug related to ICF prevents us from using LLVMs addrsig sections for
+		// armv7a. See b/413702636.
+		if builder.target.arch == "armv7a" {
+			builder.addPreUserArgs("-fno-addrsig")
+		}
 	}
 	return nil
 }

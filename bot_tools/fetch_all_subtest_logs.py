@@ -70,7 +70,7 @@ def find_cros_test_platform_child_of_cq_orchestrator(
 
 
 def find_gs_links_in_test_log(log: Dict[str, Any]) -> List[str]:
-    empty_dict = {}
+    empty_dict: Dict[Any, Any] = {}
     results = []
     for result_sets in log.values():
         for result_set in result_sets:

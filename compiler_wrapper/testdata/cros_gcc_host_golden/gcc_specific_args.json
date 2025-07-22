@@ -4,9 +4,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "-march=goldmont",
             "main.cc"
@@ -31,9 +28,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "-march=goldmont-plus",
             "main.cc"
@@ -58,9 +52,6 @@
       {
         "cmd": {
           "args": [
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-fcommon",
             "-march=skylake",
             "main.cc"

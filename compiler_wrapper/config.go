@@ -38,12 +38,12 @@ var Version = ""
 
 // UseCCache can be set via a linker flag.
 // Value will be passed to strconv.ParseBool.
-// E.g. go build -ldflags '-X config.UseCCache=true'.
+// E.g. go build -ldflags '-X main.UseCCache=true'.
 var UseCCache = "unknown"
 
 // UseLlvmNext can be set via a linker flag.
 // Value will be passed to strconv.ParseBool.
-// E.g. go build -ldflags '-X config.UseLlvmNext=true'.
+// E.g. go build -ldflags '-X main.UseLlvmNext=true'.
 var UseLlvmNext = "unknown"
 
 // ConfigName can be set via a linker flag.
@@ -51,6 +51,12 @@ var UseLlvmNext = "unknown"
 // - "cros.hardened"
 // - "cros.nonhardened"
 var ConfigName = "unknown"
+
+// LlvmRevision can be set via a linker flag.
+// Value, if provided, will be passed to strconv.ParseInt. If none is provided, logic
+// predicated on the current LLVM revision will be skipped.
+// E.g. go build -ldflags '-X main.LlvmRevision=12345'.
+var LlvmRevision = ""
 
 // Returns the configuration matching the UseCCache and ConfigName.
 func getRealConfig() (*config, error) {
@@ -98,23 +104,10 @@ func getConfig(configName string, useCCache bool, useLlvmNext bool, version stri
 }
 
 func crosCommonClangFlags() []string {
-	// Temporarily disable tautological-*-compare chromium:778316.
-	// Temporarily add no-unknown-warning-option to deal with old clang versions.
-	// Temporarily disable Wdeprecated-declarations. b/193860318
-	// b/230345382: Temporarily disable Wimplicit-function-declaration.
-	// b/231987783: Temporarily disable Wimplicit-int.
 	return []string{
 		"-Qunused-arguments",
 		"-Werror=poison-system-directories",
-		"-Wno-deprecated-declarations",
-		"-Wno-error=implicit-function-declaration",
-		"-Wno-error=implicit-int",
-		"-Wno-unknown-warning-option",
 		"-fdebug-default-version=5",
-		"-Wno-int-conversion",
-		"-Wno-incompatible-function-pointer-types",
-		// TODO(b/316021385): Temporarily disables warnings for variable length arrays.
-		"-Wno-error=vla-cxx-extension",
 		"-D_LIBCPP_ENABLE_CXX17_REMOVED_FEATURES",
 	}
 }
@@ -128,7 +121,6 @@ func crosCommonClangPostFlags() []string {
 
 // Full hardening.
 func getCrosHardenedConfig() *config {
-	// Temporarily disable function splitting because of chromium:434751.
 	return &config{
 		clangRootRelPath: "../..",
 		gccRootRelPath:   "../../../../..",
@@ -142,18 +134,12 @@ func getCrosHardenedConfig() *config {
 		},
 		gccFlags: []string{
 			"-fno-reorder-blocks-and-partition",
-			"-Wno-unused-local-typedefs",
-			"-Wno-maybe-uninitialized",
 		},
-		// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
-		// Disable "-faddrsig" since it produces object files that strip doesn't understand, chromium:915742.
 		// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
 		//   removed that flag for now.
 		clangFlags: append(
 			crosCommonClangFlags(),
 			"--unwindlib=libunwind",
-			"-Wno-section",
-			"-fno-addrsig",
 			"-ftrivial-auto-var-init=zero",
 		),
 		clangPostFlags: crosCommonClangPostFlags(),
@@ -167,16 +153,9 @@ func getCrosNonHardenedConfig() *config {
 		gccRootRelPath:   "../../../../..",
 		commonFlags:      []string{},
 		gccFlags: []string{
-			"-Wno-maybe-uninitialized",
-			"-Wno-unused-local-typedefs",
-			"-Wno-deprecated-declarations",
 			"-Wtrampolines",
 		},
-		// Temporarily disable Wsection since kernel gets a bunch of these. chromium:778867
-		clangFlags: append(
-			crosCommonClangFlags(),
-			"-Wno-section",
-		),
+		clangFlags:     crosCommonClangFlags(),
 		clangPostFlags: crosCommonClangPostFlags(),
 	}
 }
@@ -192,19 +171,10 @@ func getCrosHostConfig() *config {
 		commonFlags: []string{
 			"-fcommon",
 		},
-		gccFlags: []string{
-			"-Wno-maybe-uninitialized",
-			"-Wno-unused-local-typedefs",
-			"-Wno-deprecated-declarations",
-		},
+		gccFlags: []string{},
 		// crbug.com/1103065: -grecord-gcc-switches pollutes the Goma cache;
 		//   removed that flag for now.
-		clangFlags: append(
-			crosCommonClangFlags(),
-			"-Wno-unused-local-typedefs",
-			"-fno-addrsig",
-		),
-		// Temporarily disable Wdeprecated-copy. b/191479033
+		clangFlags:     crosCommonClangFlags(),
 		clangPostFlags: crosCommonClangPostFlags(),
 	}
 }

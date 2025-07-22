@@ -28,6 +28,9 @@ import re
 import sys
 
 
+DEFAULT_DEDUP_MAX_REPEATS = 100
+
+
 def _count_samples(samples):
     """Count the total number of samples in a function."""
     line_re = re.compile(r"^(\s*)\d+(?:\.\d+)?: (\d+)\s*$")
@@ -158,7 +161,9 @@ def _read_textual_afdo_profile(stream):
 #
 # Non-nm based approaches are superior because they don't require any prior
 # build artifacts; just an AFDO profile.
-def dedup_records(profile_records, summary_file, max_repeats=100):
+def dedup_records(
+    profile_records, summary_file, max_repeats=DEFAULT_DEDUP_MAX_REPEATS
+):
     """Removes heavily duplicated records from profile_records.
 
     profile_records is expected to be an iterable of ProfileRecord.
@@ -207,23 +212,19 @@ def dedup_records(profile_records, summary_file, max_repeats=100):
         num_kept += len(records)
         num_samples_kept += all_sample_count
         num_top_samples_kept += top_sample_count
-        for record in records:
-            yield record
+        yield from records
 
     print(
-        "Retained {:,}/{:,} functions".format(num_kept, num_total),
+        f"Retained {num_kept:,}/{num_total:,} functions",
         file=summary_file,
     )
     print(
-        "Retained {:,}/{:,} samples, total".format(
-            num_samples_kept, num_samples_total
-        ),
+        f"Retained {num_samples_kept:,}/{num_samples_total:,} samples, total",
         file=summary_file,
     )
     print(
-        "Retained {:,}/{:,} top-level samples".format(
-            num_top_samples_kept, num_top_samples_total
-        ),
+        f"Retained {num_top_samples_kept:,}/{num_top_samples_total:,} "
+        "top-level samples",
         file=summary_file,
     )
 
@@ -231,8 +232,8 @@ def dedup_records(profile_records, summary_file, max_repeats=100):
 def run(profile_input_file, summary_output_file, profile_output_file):
     profile_records = _read_textual_afdo_profile(profile_input_file)
 
-    # Sort this so we get deterministic output. AFDO doesn't care what order it's
-    # in.
+    # Sort this so we get deterministic output. AFDO doesn't care what order
+    # it's in.
     deduped = sorted(
         dedup_records(profile_records, summary_output_file),
         key=lambda r: r.function_line,

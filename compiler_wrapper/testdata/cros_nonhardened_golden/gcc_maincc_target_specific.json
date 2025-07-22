@@ -6,9 +6,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "main.cc",
@@ -40,9 +37,6 @@
           "args": [
             "./x86_64-cros-eabi-gcc.real",
             "--sysroot=/usr/x86_64-cros-eabi",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "main.cc",
@@ -74,9 +68,6 @@
           "args": [
             "./x86_64-cros-win-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-win-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "main.cc",
@@ -108,9 +99,6 @@
           "args": [
             "./armv7m-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/armv7m-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-mthumb",
@@ -142,9 +130,6 @@
           "args": [
             "./armv7m-cros-eabi-gcc.real",
             "--sysroot=/usr/armv7m-cros-eabi",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "main.cc",
@@ -175,9 +160,6 @@
           "args": [
             "./armv7m-cros-win-gnu-gcc.real",
             "--sysroot=/usr/armv7m-cros-win-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-mthumb",
@@ -209,9 +191,6 @@
           "args": [
             "./armv8m-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/armv8m-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-mthumb",
@@ -243,9 +222,6 @@
           "args": [
             "./armv8m-cros-eabi-gcc.real",
             "--sysroot=/usr/armv8m-cros-eabi",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "main.cc",
@@ -276,9 +252,6 @@
           "args": [
             "./armv8m-cros-win-gnu-gcc.real",
             "--sysroot=/usr/armv8m-cros-win-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-mthumb",

@@ -139,7 +139,10 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	env = mainBuilder.env
 	var compilerCmd *command
 	disableWerrorConfig := processForceDisableWerrorFlag(env, cfg, mainBuilder)
-	clangSyntax := processClangSyntaxFlag(mainBuilder)
+
+	if err := processPerPackageFlags(cfg, mainBuilder); err != nil {
+		return 0, err
+	}
 
 	rusageEnabled := isRusageEnabled(env)
 
@@ -148,7 +151,6 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	allowCCache := !rusageEnabled
 	remoteBuildUsed := false
 
-	workAroundKernelBugWithRetries := false
 	if cfg.isAndroidWrapper {
 		mainBuilder.path = calculateAndroidWrapperPath(mainBuilder.path, mainBuilder.absWrapperPath)
 		switch mainBuilder.target.compilerType {
@@ -208,23 +210,10 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 			}
 			compilerCmd = mainBuilder.build()
 		} else {
-			if clangSyntax {
-				allowCCache = false
-				_, clangCmd, err := calcClangCommand(crashArtifactsDir, allowCCache, mainBuilder.clone())
-				if err != nil {
-					return 0, err
-				}
-				_, gccCmd, err := calcGccCommand(rusageEnabled, mainBuilder)
-				if err != nil {
-					return 0, err
-				}
-				return checkClangSyntax(env, clangCmd, gccCmd)
-			}
 			remoteBuildUsed, compilerCmd, err = calcGccCommand(rusageEnabled, mainBuilder)
 			if err != nil {
 				return 0, err
 			}
-			workAroundKernelBugWithRetries = true
 		}
 	}
 
@@ -248,79 +237,34 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 		return compileWithFallback(env, cfg, compilerCmd, mainBuilder.absWrapperPath)
 	}
 
-	errRetryCompilation := errors.New("compilation retry requested")
-	var runCompiler func(willLogRusage bool) (int, error)
-	if !workAroundKernelBugWithRetries {
-		runCompiler = func(willLogRusage bool) (int, error) {
-			var err error
-			if willLogRusage {
-				err = env.run(compilerCmd, env.stdin(), env.stdout(), env.stderr())
-			} else if cfg.isAndroidWrapper && mainBuilder.target.compilerType == clangTidyType {
-				// Only clang-tidy has timeout feature now.
-				err = runAndroidClangTidy(env, compilerCmd)
-			} else {
-				// Note: We return from this in non-fatal circumstances only if the
-				// underlying env is not really doing an exec, e.g. commandRecordingEnv.
-				err = env.exec(compilerCmd)
-			}
-			return wrapSubprocessErrorWithSourceLoc(compilerCmd, err)
-		}
-	} else {
-		getStdin, err := prebufferStdinIfNeeded(env, compilerCmd)
-		if err != nil {
-			return 0, wrapErrorwithSourceLocf(err, "prebuffering stdin: %v", err)
+	commitRusage, err := maybeCaptureRusage(env, compilerCmd, func(willLogRusage bool) error {
+		var err error
+		if willLogRusage {
+			err = env.run(compilerCmd, env.stdin(), env.stdout(), env.stderr())
+		} else if cfg.isAndroidWrapper && mainBuilder.target.compilerType == clangTidyType {
+			// Only clang-tidy has timeout feature now.
+			err = runAndroidClangTidy(env, compilerCmd)
+		} else {
+			// Note: We return from this in non-fatal circumstances only if the
+			// underlying env is not really doing an exec, e.g. commandRecordingEnv.
+			err = env.exec(compilerCmd)
 		}
 
-		stdoutBuffer := &bytes.Buffer{}
-		stderrBuffer := &bytes.Buffer{}
-		retryAttempt := 0
-		runCompiler = func(willLogRusage bool) (int, error) {
-			retryAttempt++
-			stdoutBuffer.Reset()
-			stderrBuffer.Reset()
+		// N.B., exitCode is captured and returned by code after `maybeCaptureRusage`.
+		exitCode, err = wrapSubprocessErrorWithSourceLoc(compilerCmd, err)
+		return err
+	})
 
-			exitCode, compilerErr := wrapSubprocessErrorWithSourceLoc(compilerCmd,
-				env.run(compilerCmd, getStdin(), stdoutBuffer, stderrBuffer))
-
-			if compilerErr != nil || exitCode != 0 {
-				if retryAttempt < kernelBugRetryLimit && (errorContainsTracesOfKernelBug(compilerErr) || containsTracesOfKernelBug(stdoutBuffer.Bytes()) || containsTracesOfKernelBug(stderrBuffer.Bytes())) {
-					return exitCode, errRetryCompilation
-				}
-			}
-			_, stdoutErr := stdoutBuffer.WriteTo(env.stdout())
-			_, stderrErr := stderrBuffer.WriteTo(env.stderr())
-			if stdoutErr != nil {
-				return exitCode, wrapErrorwithSourceLocf(err, "writing stdout: %v", stdoutErr)
-			}
-			if stderrErr != nil {
-				return exitCode, wrapErrorwithSourceLocf(err, "writing stderr: %v", stderrErr)
-			}
-			return exitCode, compilerErr
-		}
+	if err != nil {
+		return exitCode, err
 	}
 
-	for {
-		var exitCode int
-		commitRusage, err := maybeCaptureRusage(env, compilerCmd, func(willLogRusage bool) error {
-			var err error
-			exitCode, err = runCompiler(willLogRusage)
-			return err
-		})
-
-		switch {
-		case err == errRetryCompilation:
-			// Loop around again.
-		case err != nil:
-			return exitCode, err
-		default:
-			if !remoteBuildUsed {
-				if err := commitRusage(exitCode); err != nil {
-					return exitCode, fmt.Errorf("commiting rusage: %v", err)
-				}
-			}
-			return exitCode, err
+	if !remoteBuildUsed {
+		if err := commitRusage(exitCode); err != nil {
+			return exitCode, fmt.Errorf("commiting rusage: %v", err)
 		}
 	}
+	return exitCode, err
 }
 
 func hasUserArg(argName string, builder *commandBuilder) bool {
@@ -347,18 +291,6 @@ func prepareClangCommand(crashArtifactsDir string, builder *commandBuilder) (err
 	builder.addPostUserArgs(builder.cfg.clangPostFlags...)
 	calcCommonPreUserArgs(builder)
 	return processClangFlags(builder)
-}
-
-func calcClangCommand(crashArtifactsDir string, allowCCache bool, builder *commandBuilder) (bool, *command, error) {
-	err := prepareClangCommand(crashArtifactsDir, builder)
-	if err != nil {
-		return false, nil, err
-	}
-	remoteBuildUsed, err := processRemoteBuildAndCCacheFlags(allowCCache, builder)
-	if err != nil {
-		return remoteBuildUsed, nil, err
-	}
-	return remoteBuildUsed, builder.build(), nil
 }
 
 func calcGccCommand(enableRusage bool, builder *commandBuilder) (bool, *command, error) {

@@ -189,14 +189,10 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_state_autoupgrades_from_json_properly(self):
-        state = nightly_revert_checker.State.from_json({"abc123": ["def456"]})
-        self.assertEqual(state.seen_reverts, {"abc123": ["def456"]})
-        self.assertEqual(state.heads, {})
-
     def test_state_round_trips_through_json(self):
         state = nightly_revert_checker.State(
             seen_reverts={"abc123": ["def456"]},
+            last_seen_llvm_shas={"abc123": 456},
             heads={
                 "head_name": nightly_revert_checker.HeadInfo(
                     last_sha="abc",

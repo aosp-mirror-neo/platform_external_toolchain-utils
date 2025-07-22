@@ -34,6 +34,10 @@ ONE_DAY_SECS = 24 * 60 * 60
 HEAD_STALENESS_ALERT_INTERVAL_SECS = 21 * ONE_DAY_SECS
 # How long to wait after a HEAD changes for the first 'update' email to be sent.
 HEAD_STALENESS_ALERT_INITIAL_SECS = 60 * ONE_DAY_SECS
+# How long to keep `seen_reverts` in state after their LLVM SHA has been
+# removed. This is useful, since it keeps us from re-alerting about reverts if
+# an llvm-next roll has to be reverted.
+REVERT_LIST_GC_TIMEOUT = 14 * ONE_DAY_SECS
 
 
 # Not frozen, as `next_notification_timestamp` may be mutated.
@@ -62,21 +66,20 @@ class State:
 
     # Mapping of LLVM SHA -> List of reverts that have been seen for it
     seen_reverts: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+    # A mapping of LLVM SHA -> the last timestamp at which it was considered
+    # 'interesting'.
+    last_seen_llvm_shas: Dict[str, int] = dataclasses.field(
+        default_factory=dict
+    )
     # Mapping of friendly HEAD name (e.g., main-legacy) to last-known info
     # about it.
     heads: Dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_json(cls, json_object: Any) -> "State":
-        # Autoupgrade old JSON files.
-        if "heads" not in json_object:
-            json_object = {
-                "seen_reverts": json_object,
-                "heads": {},
-            }
-
         return cls(
             seen_reverts=json_object["seen_reverts"],
+            last_seen_llvm_shas=json_object.get("last_seen_llvm_shas", {}),
             heads={
                 k: HeadInfo.from_json(v)
                 for k, v in json_object["heads"].items()
@@ -84,30 +87,29 @@ class State:
         )
 
     def to_json(self) -> Any:
-        return {
-            "seen_reverts": self.seen_reverts,
-            "heads": {k: v.to_json() for k, v in self.heads.items()},
-        }
+        result = dataclasses.asdict(self)
+        result["heads"] = {k: v.to_json() for k, v in self.heads.items()}
+        return result
 
 
 def _find_interesting_android_shas(
     android_llvm_toolchain_dir: str,
 ) -> List[Tuple[str, str]]:
     llvm_project = Path(android_llvm_toolchain_dir) / "toolchain/llvm-project"
-    aosp_main_sha = git_utils.resolve_ref(llvm_project, "aosp/main")
+    android_main_sha = git_utils.resolve_ref(llvm_project, "goog/main")
     merge_base = subprocess.check_output(
-        ["git", "merge-base", aosp_main_sha, "aosp/upstream-main"],
+        ["git", "merge-base", android_main_sha, "goog/upstream-main"],
         cwd=llvm_project,
         encoding="utf-8",
     ).strip()
     logging.info(
-        "Merge-base for aosp/main (HEAD == %s) and aosp/upstream-main is %s",
-        aosp_main_sha,
+        "Merge-base for goog/main (HEAD == %s) and goog/upstream-main is %s",
+        android_main_sha,
         merge_base,
     )
 
     # Android no longer has a testing branch, so just follow main.
-    return [("aosp/main", merge_base)]
+    return [("goog/main", merge_base)]
 
 
 def _find_interesting_chromeos_shas(
@@ -251,6 +253,8 @@ def locate_new_reverts_across_shas(
     """Locates and returns yet-unseen reverts across `interesting_shas`."""
     new_state = State()
     revert_infos = []
+
+    now = int(time.time())
     for friendly_name, sha in interesting_shas:
         logging.info("Finding reverts across %s (%s)", friendly_name, sha)
         all_reverts = revert_checker.find_reverts(
@@ -283,7 +287,6 @@ def locate_new_reverts_across_shas(
                 new_head_info = old_head_info
 
         if new_head_info is None:
-            now = int(time.time())
             notify_at = HEAD_STALENESS_ALERT_INITIAL_SECS + now
             new_head_info = HeadInfo(
                 last_sha=sha,
@@ -299,6 +302,32 @@ def locate_new_reverts_across_shas(
                 new_reverts=new_reverts,
             )
         )
+
+    for head in new_state.seen_reverts:
+        new_state.last_seen_llvm_shas[head] = now
+
+    # b/421163819: copy over the old state's HEADs for a while, even if they're
+    # no longer relevant. A revert of an upstream toolchain may 'revive' them.
+    for head, seen_reverts in state.seen_reverts.items():
+        if head in new_state.last_seen_llvm_shas:
+            continue
+
+        if last_seen := state.last_seen_llvm_shas.get(head):
+            if last_seen + REVERT_LIST_GC_TIMEOUT < now:
+                logging.info(
+                    "Dropping LLVM HEAD %s; it's not been seen for a while",
+                    head,
+                )
+                continue
+        else:
+            # No data exists on when this was last seen, fill in current info.
+            # This case mostly exists for "we're dealing with a state file
+            # created before `last_seen_llvm_shas` was added" - it can be
+            # removed in July of 2025 or so.
+            last_seen = now
+        new_state.last_seen_llvm_shas[head] = last_seen
+        new_state.seen_reverts[head] = seen_reverts.copy()
+
     return new_state, revert_infos
 
 
@@ -436,23 +465,28 @@ def _upload_revert_cherry_pick(
     # merge-conflict markers baked in. If the mage cares, they can fix it up
     # and land it.
     if cherry_pick_returncode:
-        if not git_utils.has_discardable_changes(llvm_worktree):
-            logging.warning(
-                "Cherry-pick of SHA %s would be empty; skipping upload", sha
-            )
-            return
-
         logging.error(
             "Cherry-pick failed. Still uploading, but with highlights."
         )
         subprocess.run(
-            ["git", "add", "."],
+            ("git", "add", "."),
             check=True,
             cwd=llvm_worktree,
             stdin=subprocess.DEVNULL,
         )
+        if not git_utils.has_discardable_changes(llvm_worktree):
+            logging.warning(
+                "Cherry-pick of SHA %s would be empty; skipping upload", sha
+            )
+            subprocess.run(
+                ("git", "cherry-pick", "--abort"),
+                check=True,
+                cwd=llvm_worktree,
+                stdin=subprocess.DEVNULL,
+            )
+            return
         subprocess.run(
-            ["git", "cherry-pick", "--continue"],
+            ("git", "cherry-pick", "--continue"),
             check=True,
             cwd=llvm_worktree,
             stdin=subprocess.DEVNULL,

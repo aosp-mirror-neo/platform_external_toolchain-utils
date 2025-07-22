@@ -5,10 +5,13 @@
 """Tools for interacting with CrOS CLs, and the CQ in particular."""
 
 import dataclasses
+import enum
 import json
 import logging
 import re
+import shlex
 import subprocess
+import time
 from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
 
 
@@ -130,9 +133,114 @@ class ChangeListURL:
         return f"https://{self.crrev_url_without_http()}"
 
 
+class BuilderStatus(enum.StrEnum):
+    """Statuses from builders."""
+
+    SCHEDULED = "SCHEDULED"
+    STARTED = "STARTED"
+    SUCCESS = "SUCCESS"
+    FAILURE = "FAILURE"
+    INFRA_FAILURE = "INFRA_FAILURE"
+    CANCELED = "CANCELED"
+
+    @classmethod
+    def parse(cls, s: str) -> "BuilderStatus":
+        try:
+            # Some statuses come in lower-case, others come in upper-case. The
+            # latter is by far the dominant style, so normalize to that.
+            return cls[s.upper()]
+        except KeyError:
+            raise ValueError(f"Unknown builder status: {s}") from None
+
+    @property
+    def is_running(self) -> bool:
+        return self in (self.SCHEDULED, self.STARTED)
+
+    @property
+    def is_success(self):
+        return self == self.SUCCESS
+
+    @property
+    def is_failure(self):
+        return not (self.is_running or self.is_success)
+
+
 def builder_url(build_id: BuildID) -> str:
     """Returns a builder URL given a build ID."""
     return f"https://ci.chromium.org/b/{build_id}"
+
+
+# Used to parse the build ID from a `bb add` invocation.
+_BOT_SPAWN_BUILD_ID_RE = re.compile(r"http://ci\.chromium\.org/b/(\d+)\b")
+
+
+def spawn_bot(
+    bot_name: str,
+    cls: Iterable[ChangeListURL] = (),
+) -> BuildID:
+    """Uses `bb add` to spawn a builder with the given params."""
+    cmd = ["bb", "add"]
+    for cl in cls:
+        cmd += ("--cl", str(cl))
+    cmd.append(bot_name)
+
+    logging.debug("Running builder with %s", shlex.join(cmd))
+    run_stdout = subprocess.run(
+        cmd,
+        check=True,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ).stdout
+
+    build_ids = _BOT_SPAWN_BUILD_ID_RE.findall(run_stdout)
+    if len(build_ids) != 1:
+        logging.error("Unexpected stdout from `bb add`; got %r", run_stdout)
+        raise ValueError("Expected one build-id from stdout; got {build_ids}")
+
+    build_id = BuildID(build_ids[0])
+    logging.info("Spawned bot: %s", builder_url(build_id))
+    return build_id
+
+
+def wait_for_bot_to_finish(
+    build_id: BuildID, timeout_hours: int
+) -> BuilderStatus:
+    """Waits for the given build to finish, returning its final status.
+
+    Args:
+        build_id: Builder ID
+        timeout_hours: Hours before giving up
+
+    Raises:
+        ValueError if the timeout expires
+    """
+    timeout_at_secs = time.time() + timeout_hours * 60 * 60
+    check_frequency_secs = 10 * 60
+    while True:
+        out = _run_bb_decoding_output(
+            ["get", "-json", "-fields=status", str(build_id)],
+        )
+        status = BuilderStatus(out["status"])
+        if not status.is_running:
+            return status
+
+        if time.time() > timeout_at_secs:
+            raise ValueError(
+                f"Bot hit timeout after {timeout_hours} hours; "
+                f"last status was {status!r}"
+            )
+
+        logging.info("Bot is still running; sleeping for a bit...")
+        time.sleep(check_frequency_secs)
+
+
+def fetch_builder_steps(build_id: BuildID) -> List[Any]:
+    """Returns the JSON dict of the given builder's steps."""
+    result = _run_bb_decoding_output(["get", "-steps", str(build_id)])
+    # A build with no steps is functionally equivalent to a build with an empty
+    # steps list.
+    return result.get("steps", [])
 
 
 def fetch_cq_orchestrator_ids(
@@ -156,7 +264,7 @@ def fetch_cq_orchestrator_ids(
     # at most one value. Filter here instead; parsing one or two extra JSON
     # objects is cheap.
     finished_results = [
-        x for x in results if x["status"] not in ("scheduled", "started")
+        x for x in results if not BuilderStatus(x["status"]).is_running
     ]
 
     # Sort by createTime. Fall back to build ID if a tie needs to be broken.
@@ -171,7 +279,7 @@ class CQOrchestratorOutput:
     """A class representing the output of a cq-orchestrator builder."""
 
     # The status of the CQ builder.
-    status: str
+    status: BuilderStatus
     # A dict of builders that this CQ builder spawned.
     child_builders: Dict[str, BuildID]
 
@@ -213,7 +321,8 @@ class CQOrchestratorOutput:
             if builder in results:
                 raise ValueError(f"Builder {builder} spawned multiple times?")
             results[builder] = int(ids[0])
-        return cls(child_builders=results, status=decoded["status"])
+        status = BuilderStatus.parse(decoded["status"])
+        return cls(child_builders=results, status=status)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -221,7 +330,7 @@ class CQBoardBuilderOutput:
     """A class representing the output of a *-cq builder (e.g., brya-cq)."""
 
     # The status of the CQ builder.
-    status: str
+    status: BuilderStatus
     # Link to artifacts produced by this builder. Not available if the builder
     # isn't yet finished, and not available if the builder failed in a weird
     # way (e.g., INFRA_ERROR)
@@ -237,7 +346,7 @@ class CQBoardBuilderOutput:
         )
         results = []
         for result in bb_output:
-            status = result["status"]
+            status = BuilderStatus.parse(result["status"])
             output = result.get("output")
             if output is None:
                 artifacts_link = None

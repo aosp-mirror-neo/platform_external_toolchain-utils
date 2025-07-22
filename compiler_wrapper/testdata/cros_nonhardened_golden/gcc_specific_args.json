@@ -6,9 +6,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-march=goldmont",
@@ -42,9 +39,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-march=goldmont-plus",
@@ -78,9 +72,6 @@
           "args": [
             "./x86_64-cros-linux-gnu-gcc.real",
             "--sysroot=/usr/x86_64-cros-linux-gnu",
-            "-Wno-maybe-uninitialized",
-            "-Wno-unused-local-typedefs",
-            "-Wno-deprecated-declarations",
             "-Wtrampolines",
             "-static-libgcc",
             "-march=skylake",

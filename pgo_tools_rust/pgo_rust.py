@@ -6,6 +6,8 @@
 
 """Handle most aspects of creating and benchmarking PGO profiles for Rust.
 
+**This script must be run within the chroot.**
+
 This is meant to be done at Rust uprev time. Ultimately profdata files need
 to be placed at
 
@@ -70,13 +72,13 @@ But we can store other data elsewhere, like gs://chromeos-toolchain-artifacts.
 
 GS locations:
 
-{GS_BASE}/crates/ - store crates we may use for generating profiles or
+{GS_PERMANENT_BASE}/crates/ - store crates we may use for generating profiles or
 benchmarking PGO optimized Rust compilers
 
-{GS_BASE}/benchmarks/{rust_version}/nopgo/
+{GS_TEMP_BASE}/benchmarks/{rust_version}/nopgo/
   {bench_crate_name}-{bench_crate_version}-{triple}
 
-{GS_BASE}/benchmarks/{rust_version}/{crate_name}-{crate_version}/
+{GS_TEMP_BASE}/benchmarks/{rust_version}/{crate_name}-{crate_version}/
   {bench_crate_name}-{bench_crate_version}-{triple}
 
 Local locations:
@@ -114,6 +116,7 @@ import sys
 from typing import cast, List, Mapping, Optional
 
 from cros_utils import cros_paths
+from llvm_tools import chroot
 
 
 TARGET_TRIPLES = [
@@ -125,7 +128,8 @@ TARGET_TRIPLES = [
 
 LOCAL_BASE = Path("/tmp/rust-pgo")
 
-GS_BASE = PurePosixPath("/chromeos-toolchain-artifacts/rust-pgo")
+GS_PERMANENT_BASE = PurePosixPath("/chromeos-localmirror/distfiles/rust-pgo")
+GS_TEMP_BASE = PurePosixPath("/chromeos-toolchain-artifacts/rust-pgo")
 
 GS_DISTFILES = PurePosixPath("/chromeos-localmirror/distfiles")
 
@@ -215,7 +219,7 @@ def get_rust_version() -> str:
 
 def download_unpack_crate(*, crate_name: str, crate_version: str):
     filename_no_extension = f"{crate_name}-{crate_version}"
-    gs_path = GS_BASE / "crates" / f"{filename_no_extension}.tar.xz"
+    gs_path = GS_PERMANENT_BASE / "crates" / f"{filename_no_extension}.tar.xz"
     local_path = LOCAL_BASE / "crates"
     shutil.rmtree(
         local_path / f"{crate_name}-{crate_version}", ignore_errors=True
@@ -230,7 +234,7 @@ def build_crate(
     crate_name: str,
     crate_version: str,
     target_triple: str,
-    time_file: Optional[str] = None,
+    time_file: Optional[Path] = None,
 ):
     local_path = LOCAL_BASE / "crates" / f"{crate_name}-{crate_version}"
     with chdir(local_path):
@@ -453,7 +457,7 @@ def benchmark_nopgo(args):
 
     rust_version = get_rust_version()
     dest_directory = (
-        GS_BASE / "benchmarks" / rust_version / f"nopgo{args.suffix}"
+        GS_TEMP_BASE / "benchmarks" / rust_version / f"nopgo{args.suffix}"
     )
     logging.info("Uploading benchmark data")
     for file in time_directory.iterdir():
@@ -520,7 +524,7 @@ def benchmark_pgo(args):
 
     rust_version = get_rust_version()
     dest_directory = (
-        GS_BASE
+        GS_TEMP_BASE
         / "benchmarks"
         / rust_version
         / f"{args.crate_name}-{args.crate_version}{args.suffix}"
@@ -532,18 +536,40 @@ def benchmark_pgo(args):
         )
 
 
-def upload_profdata(args):
-    directory = (
-        LOCAL_BASE / "profdata" / f"{args.crate_name}-{args.crate_version}"
-    )
-    rust_version = get_rust_version()
+def upload_profdata_impl(
+    crate_name: str = CRATE_NAME,
+    crate_version: str = CRATE_VERSION,
+    suffix: str = "",
+    chroot_tmpdir_prefix: Optional[Path] = None,
+    force_rust_version: Optional[str] = None,
+) -> None:
+    # It's supported to run this single function from outside of the chroot; in
+    # that case, the user _must_ specify both the tempdir prefix and forced Rust
+    # version. If this isn't done, we'll either upload to the wrong Rust
+    # version, or will break trying to find profiles.
+    if not (chroot_tmpdir_prefix and force_rust_version):
+        if not chroot.InChroot():
+            raise ValueError(
+                "To call this function outside of the chroot, you "
+                "must specify values for chroot_tmpdir_prefix and "
+                "force_rust_version"
+            )
+
+    local_base = LOCAL_BASE
+    assert local_base.is_absolute(), local_base
+    if chroot_tmpdir_prefix:
+        # Chop off the `/` from `local_base`, so the join doesn't just turn into
+        # an identity function.
+        local_base = chroot_tmpdir_prefix / str(local_base)[1:]
+
+    directory = local_base / "profdata" / f"{crate_name}-{crate_version}"
+    rust_version = force_rust_version or get_rust_version()
 
     logging.info("Uploading LLVM profdata")
     do_upload_profdata(
         source=directory / "llvm.profdata",
         dest=(
-            GS_DISTFILES
-            / f"rust-pgo-{rust_version}-llvm{args.suffix}.profdata.xz"
+            GS_DISTFILES / f"rust-pgo-{rust_version}-llvm{suffix}.profdata.xz"
         ),
     )
 
@@ -552,8 +578,16 @@ def upload_profdata(args):
         source=directory / "frontend.profdata",
         dest=(
             GS_DISTFILES
-            / f"rust-pgo-{rust_version}-frontend{args.suffix}.profdata.xz"
+            / f"rust-pgo-{rust_version}-frontend{suffix}.profdata.xz"
         ),
+    )
+
+
+def upload_profdata(args):
+    upload_profdata_impl(
+        crate_name=args.crate_name,
+        crate_version=args.crate_version,
+        suffix=args.suffix,
     )
 
 
@@ -666,6 +700,7 @@ def main(argv: List[str]) -> int:
     )
 
     args = parser.parse_args(argv)
+    chroot.VerifyInsideChroot()
 
     (LOCAL_BASE / "crates").mkdir(parents=True, exist_ok=True)
     (LOCAL_BASE / "llvm-profraw").mkdir(parents=True, exist_ok=True)

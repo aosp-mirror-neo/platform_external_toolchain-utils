@@ -43,7 +43,7 @@ def find_file_to_execute(argv0: str) -> Path:
     return result
 
 
-def main():
+def main() -> None:
     main_file = find_file_to_execute(sys.argv[0])
     module_name = main_file.with_suffix("").name
     spec = importlib.util.spec_from_file_location(

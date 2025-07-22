@@ -1,0 +1,40 @@
+From 935bc84158e933239047de69b9edc77969b5c70c Mon Sep 17 00:00:00 2001
+From: Emre Kultursay <emrekultursay@google.com>
+Date: Fri, 25 Apr 2025 23:14:18 +0000
+Subject: [PATCH] Fix Windows build (#137414)
+
+Windows doesn't have domain sockets, so we must properly #ifdef the code
+that touches DomainSocket. Fixes the windows build break introduced by
+Commit
+https://github.com/llvm/llvm-project/commit/488eeb3ae508221f8e476bbc9d2e9f014542862e
+---
+ lldb/tools/lldb-server/lldb-platform.cpp | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/lldb/tools/lldb-server/lldb-platform.cpp b/lldb/tools/lldb-server/lldb-platform.cpp
+index b9a85370d649..10d79c63af99 100644
+--- a/lldb/tools/lldb-server/lldb-platform.cpp
++++ b/lldb/tools/lldb-server/lldb-platform.cpp
+@@ -469,6 +469,7 @@ int main_platform(int argc, char *argv[]) {
+     if (gdbserver_port) {
+       socket = std::make_unique<TCPSocket>(sockfd, /*should_close=*/true);
+     } else {
++#if LLDB_ENABLE_POSIX
+       llvm::Expected<std::unique_ptr<DomainSocket>> domain_socket =
+           DomainSocket::FromBoundNativeSocket(sockfd, /*should_close=*/true);
+       if (!domain_socket) {
+@@ -477,6 +478,11 @@ int main_platform(int argc, char *argv[]) {
+         return socket_error;
+       }
+       socket = std::move(domain_socket.get());
++#else
++      WithColor::error() << "lldb-platform child: Unix domain sockets are not "
++                            "supported on this platform.";
++      return socket_error;
++#endif
+     }
+ 
+     GDBRemoteCommunicationServerPlatform platform(socket->GetSocketProtocol(),
+-- 
+2.49.0.901.g37484f566f-goog
+
