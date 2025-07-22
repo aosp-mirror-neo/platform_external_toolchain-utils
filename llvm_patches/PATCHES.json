@@ -108,6 +108,20 @@
     "rel_patch_path": "v6-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
       "from": 563880,
+      "until": 571439
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "v7: Crash when dereferencing nullopt for std::optional"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v7-Crash-when-dereferencing-nullopt-for-std-optional.patch",
+    "version_range": {
+      "from": 571439,
       "until": null
     }
   },
@@ -754,6 +768,21 @@
     "rel_patch_path": "cherry/183acdd27985afd332463e3d9fd4a2ca46d85cf1.patch",
     "version_range": {
       "from": 563880,
+      "until": 565817
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "v2: [UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/v2-183acdd27985afd332463e3d9fd4a2ca46d85cf1.patch",
+    "version_range": {
+      "from": 565817,
       "until": 580792
     }
   },
