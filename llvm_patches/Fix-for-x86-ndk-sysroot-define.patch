@@ -1,0 +1,28 @@
+From 66708de7aa5d4f5d5dbd0dd98b11ade60c86c76f Mon Sep 17 00:00:00 2001
+From: Sharjeel Khan <sharjeelkhan@google.com>
+Date: Fri, 11 Jul 2025 01:52:59 +0000
+Subject: [PATCH] Fix for x86 ndk sysroot define being mixed with parameter for i686 lldb build
+
+Change-Id: Ia4af0478e0b7f8416d82bc4559f22f295763f22b
+---
+ llvm/include/llvm/Demangle/ItaniumDemangle.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/llvm/include/llvm/Demangle/ItaniumDemangle.h b/llvm/include/llvm/Demangle/ItaniumDemangle.h
+index 67d6152c747d..ba17f3e2743b 100644
+--- a/llvm/include/llvm/Demangle/ItaniumDemangle.h
++++ b/llvm/include/llvm/Demangle/ItaniumDemangle.h
+@@ -1750,8 +1750,8 @@ public:
+ };
+ 
+ inline ExpandedSpecialSubstitution::ExpandedSpecialSubstitution(
+-    SpecialSubstitution const *SS)
+-    : ExpandedSpecialSubstitution(SS->SSK) {}
++    SpecialSubstitution const *SSS)
++    : ExpandedSpecialSubstitution(SSS->SSK) {}
+ 
+ class CtorDtorName final : public Node {
+   const Node *Basename;
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

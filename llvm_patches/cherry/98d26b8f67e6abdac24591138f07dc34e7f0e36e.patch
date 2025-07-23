@@ -1,0 +1,28 @@
+From 98d26b8f67e6abdac24591138f07dc34e7f0e36e Mon Sep 17 00:00:00 2001
+From: Alexey Samsonov <vonosmas@gmail.com>
+Date: Wed, 7 May 2025 22:14:21 -0700
+Subject: [PATCH] [libc][bazel] Re-enable memcpy prefetching on x86. (#138945)
+
+It was re-enabled downstream after further performance analysis, so we
+can revert c65ed964657c93d51f3e05de9e0609419768a143, effectively
+re-landing the change.
+---
+ .../bazel/llvm-project-overlay/libc/libc_configure_options.bzl  | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl b/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl
+index f65da9e98226..96d7fa86e9dd 100644
+--- a/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl
++++ b/utils/bazel/llvm-project-overlay/libc/libc_configure_options.bzl
+@@ -24,7 +24,7 @@ LIBC_CONFIGURE_OPTIONS = [
+     # Documentation in libc/src/string/memory_utils/...
+     # "LIBC_COPT_MEMCPY_USE_EMBEDDED_TINY",
+     # "LIBC_COPT_MEMCPY_X86_USE_REPMOVSB_FROM_SIZE",
+-    # "LIBC_COPT_MEMCPY_X86_USE_SOFTWARE_PREFETCHING",
++    "LIBC_COPT_MEMCPY_X86_USE_SOFTWARE_PREFETCHING",
+     "LIBC_COPT_MEMSET_X86_USE_SOFTWARE_PREFETCHING",
+ 
+     # Documentation in libc/docs/dev/printf_behavior.rst
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

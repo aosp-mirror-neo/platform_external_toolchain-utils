@@ -1,0 +1,135 @@
+From b59ab701e94cce455a53358cbe5082a3efb58fbf Mon Sep 17 00:00:00 2001
+From: Aaron Ballman <aaron@aaronballman.com>
+Date: Wed, 7 May 2025 10:05:00 -0400
+Subject: [PATCH] [C] Handle comma operator for implicit int->enum conversions
+ (#138752)
+
+In C++, the type of an enumerator is the type of the enumeration,
+whereas in C, the type of the enumerator is 'int'. The type of a comma
+operator is the type of the right-hand operand, which means you can get
+an implicit conversion with this code in C but not in C++:
+```
+  enum E { Zero };
+  enum E foo() {
+    return ((void)0, Zero);
+  }
+```
+We were previously incorrectly diagnosing this code as being
+incompatible with C++ because the type of the paren expression would be
+'int' there, whereas in C++ the type is 'E'.
+
+So now we handle the comma operator with special logic when analyzing
+implicit conversions in C. When analyzing the left-hand operand of a
+comma operator, we do not need to check for that operand causing an
+implicit conversion for the entire comma expression. So we only check
+for that case with the right-hand operand.
+
+This addresses a concern brought up post-commit:
+https://github.com/llvm/llvm-project/pull/137658#issuecomment-2854525259
+---
+ clang/lib/Sema/SemaChecking.cpp               | 24 ++++++++++++++++++-
+ clang/test/Sema/implicit-cast.c               |  7 +++++-
+ .../test/Sema/implicit-int-enum-conversion.c  | 22 +++++++++++++++++
+ 3 files changed, 51 insertions(+), 2 deletions(-)
+
+diff --git a/clang/lib/Sema/SemaChecking.cpp b/clang/lib/Sema/SemaChecking.cpp
+index 7f45533713ba..a5e0094f7eeb 100644
+--- a/clang/lib/Sema/SemaChecking.cpp
++++ b/clang/lib/Sema/SemaChecking.cpp
+@@ -11647,6 +11647,15 @@ static void DiagnoseFloatingImpCast(Sema &S, Expr *E, QualType T,
+   }
+ }
+ 
++static void CheckCommaOperand(Sema &S, Expr *E, QualType T, SourceLocation CC,
++                              bool ExtraCheckForImplicitConversion) {
++  E = E->IgnoreParenImpCasts();
++  AnalyzeImplicitConversions(S, E, CC);
++
++  if (ExtraCheckForImplicitConversion && E->getType() != T)
++    S.CheckImplicitConversion(E, T, CC);
++}
++
+ /// Analyze the given compound assignment for the possible losing of
+ /// floating-point precision.
+ static void AnalyzeCompoundAssignment(Sema &S, BinaryOperator *E) {
+@@ -12464,7 +12473,7 @@ static void AnalyzeImplicitConversions(
+           << OrigE->getSourceRange() << T->isBooleanType()
+           << FixItHint::CreateReplacement(UO->getBeginLoc(), "!");
+ 
+-  if (const auto *BO = dyn_cast<BinaryOperator>(SourceExpr))
++  if (auto *BO = dyn_cast<BinaryOperator>(SourceExpr))
+     if ((BO->getOpcode() == BO_And || BO->getOpcode() == BO_Or) &&
+         BO->getLHS()->isKnownToHaveBooleanValue() &&
+         BO->getRHS()->isKnownToHaveBooleanValue() &&
+@@ -12490,6 +12499,19 @@ static void AnalyzeImplicitConversions(
+                    (BO->getOpcode() == BO_And ? "&&" : "||"));
+         S.Diag(BO->getBeginLoc(), diag::note_cast_operand_to_int);
+       }
++    } else if (BO->isCommaOp() && !S.getLangOpts().CPlusPlus) {
++      /// Analyze the given comma operator. The basic idea behind the analysis
++      /// is to analyze the left and right operands slightly differently. The
++      /// left operand needs to check whether the operand itself has an implicit
++      /// conversion, but not whether the left operand induces an implicit
++      /// conversion for the entire comma expression itself. This is similar to
++      /// how CheckConditionalOperand behaves; it's as-if the correct operand
++      /// were directly used for the implicit conversion check.
++      CheckCommaOperand(S, BO->getLHS(), T, BO->getOperatorLoc(),
++                        /*ExtraCheckForImplicitConversion=*/false);
++      CheckCommaOperand(S, BO->getRHS(), T, BO->getOperatorLoc(),
++                        /*ExtraCheckForImplicitConversion=*/true);
++      return;
+     }
+ 
+   // For conditional operators, we analyze the arguments as if they
+diff --git a/clang/test/Sema/implicit-cast.c b/clang/test/Sema/implicit-cast.c
+index 088b1958d9b8..4700b7d37a85 100644
+--- a/clang/test/Sema/implicit-cast.c
++++ b/clang/test/Sema/implicit-cast.c
+@@ -1,4 +1,4 @@
+-// RUN: %clang_cc1 -fsyntax-only %s
++// RUN: %clang_cc1 -fsyntax-only -verify %s
+ 
+ static char *test1(int cf) {
+   return cf ? "abc" : 0;
+@@ -6,3 +6,8 @@ static char *test1(int cf) {
+ static char *test2(int cf) {
+   return cf ? 0 : "abc";
+ }
++
++int baz(void) {
++  int f;
++  return ((void)0, f = 1.4f); // expected-warning {{implicit conversion from 'float' to 'int' changes value from 1.4 to 1}}
++}
+diff --git a/clang/test/Sema/implicit-int-enum-conversion.c b/clang/test/Sema/implicit-int-enum-conversion.c
+index 13afb5d297ab..36717f36dd08 100644
+--- a/clang/test/Sema/implicit-int-enum-conversion.c
++++ b/clang/test/Sema/implicit-int-enum-conversion.c
+@@ -50,3 +50,25 @@ enum E1 quux(void) {
+   return E2_Zero;       // expected-warning {{implicit conversion from enumeration type 'enum E2' to different enumeration type 'enum E1'}} \
+                            cxx-error {{cannot initialize return object of type 'enum E1' with an rvalue of type 'E2'}}
+ }
++
++enum E1 comma1(void) {
++  return ((void)0, E1_One);
++}
++
++enum E1 comma2(void) {
++  enum E1 x;
++  return
++    (x = 12,  // expected-warning {{implicit conversion from 'int' to enumeration type 'enum E1' is invalid in C++}} \
++                 cxx-error {{assigning to 'enum E1' from incompatible type 'int'}}
++    E1_One);
++}
++
++enum E1 comma3(void) {
++  enum E1 x;
++  return ((void)0, foo()); // Okay, no conversion in C++
++}
++
++enum E1 comma4(void) {
++  return ((void)1, 2); // expected-warning {{implicit conversion from 'int' to enumeration type 'enum E1' is invalid in C++}} \
++                          cxx-error {{cannot initialize return object of type 'enum E1' with an rvalue of type 'int'}}
++}
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

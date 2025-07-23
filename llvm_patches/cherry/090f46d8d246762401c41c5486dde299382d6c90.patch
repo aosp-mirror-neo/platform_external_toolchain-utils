@@ -1,0 +1,66 @@
+From 090f46d8d246762401c41c5486dde299382d6c90 Mon Sep 17 00:00:00 2001
+From: cor3ntin <corentinjabot@gmail.com>
+Date: Thu, 15 May 2025 23:06:32 +0200
+Subject: [PATCH] [Clang] Fix an assertion in the resolution of perfect matches
+ (#140073)
+
+Function pointers can have an identity conversion to a pointer to member
+function if they are resolved to a member function.
+
+Fix a regression introduced by #136203
+---
+ clang/include/clang/Sema/Overload.h           | 10 ++++++++--
+ ...overload-resolution-deferred-templates.cpp | 19 +++++++++++++++++++
+ 2 files changed, 27 insertions(+), 2 deletions(-)
+
+diff --git a/clang/include/clang/Sema/Overload.h b/clang/include/clang/Sema/Overload.h
+index 58452e159821..9f6282a17dc8 100644
+--- a/clang/include/clang/Sema/Overload.h
++++ b/clang/include/clang/Sema/Overload.h
+@@ -430,8 +430,14 @@ class Sema;
+       if (!ReferenceBinding) {
+ #ifndef NDEBUG
+         auto Decay = [&](QualType T) {
+-          return (T->isArrayType() || T->isFunctionType()) ? C.getDecayedType(T)
+-                                                           : T;
++          if (T->isArrayType() || T->isFunctionType())
++            T = C.getDecayedType(T);
++
++          // A function pointer type can be resolved to a member function type,
++          // which is still an identity conversion.
++          if (auto *N = T->getAs<MemberPointerType>())
++            T = C.getDecayedType(N->getPointeeType());
++          return T;
+         };
+         // The types might differ if there is an array-to-pointer conversion
+         // an function-to-pointer conversion, or lvalue-to-rvalue conversion.
+diff --git a/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp b/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp
+index 277c5df3bb62..d559fb23ca04 100644
+--- a/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp
++++ b/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp
+@@ -232,3 +232,22 @@ struct InitListAreNotPerfectCpy {
+ };
+ 
+ InitListAreNotPerfectCpy InitListAreNotPerfectCpy_test({InitListAreNotPerfectCpy{}});
++
++namespace PointerToMemFunc {
++template <typename>
++class A;
++struct N {
++  template <typename T>
++  void f(T);
++};
++template <typename T>
++struct E {
++  template <class = A<int>>
++  void g() = delete;
++  void g(void (T::*)(char));
++};
++void f() {
++  E<N> e;
++  e.g(&N::f);
++}
++}
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

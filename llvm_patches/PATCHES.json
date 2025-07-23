@@ -815,5 +815,230 @@
       "from": 563880,
       "until": 579344
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [clang] Fix nondeterminism in MemberPointerType (#137910)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/0764f65a7fb06703610b33a86ca79025fa4050a4.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574242
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Preserve CXXParenListInitExpr in TreeTransform. (#138518)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/13926e149081ca2771bdea7c08c07d92d87f7818.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574256
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [C] Handle comma operator for implicit int->enum conversions (#138752)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/b59ab701e94cce455a53358cbe5082a3efb58fbf.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574501
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc][bazel] Re-enable memcpy prefetching on x86. (#138945)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/98d26b8f67e6abdac24591138f07dc34e7f0e36e.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574609
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Revert \"[lld] Merge equivalent symbols found during ICF (#134342)\""
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/fd3fecfc0936703f2715fe6fea890e81b0b3c2ac.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575244
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [C] Fix a false-positive with tentative defn compat (#139738)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/e3f87e15910a5f1c5552fc3ef57e7dda3f68901a.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575291
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [CodeGenPrepare] Make sure instruction get from SunkAddrs is before MemoryInst (#139303)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/59c6d70ed8120b8864e5f796e2bf3de5518a0ef0.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575589
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Fix an assertion in the resolution of perfect matches (#140073)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/090f46d8d246762401c41c5486dde299382d6c90.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575615
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Fix a regression introduced by #140073 (#140288)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/efa28338d858e1ea2bf705d50a0404bc602c8fe1.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575735
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Revert \"[clang][Dependency Scanning] Report What a Module Exports during Scanning (#137421)\" (#140820)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8f4fd864033601aad99a10c2b878769b84df7537.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577150
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Fix an error introduced in #138518 (#142988)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f53216793e15588d65601196b7a0625f73c12cea.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577943
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Revert \"[HIP] use offload wrapper for non-device-only non-rdc (#132869)\" (#143432)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f5e499a3383c1e3b9f60e60151075e8d9c1c3166.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 578300
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Remove delayed typo expressions (#143423)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9eef4d1c5fa6b1bcbbe675c14ca8301d5d346f7b.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 578806
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/183acdd27985afd332463e3d9fd4a2ca46d85cf1-v2.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 580792
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Fix for x86 ndk sysroot define being mixed with parameter for i686 lldb build"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Fix-for-x86-ndk-sysroot-define.patch",
+    "version_range": {
+      "from": 574158,
+      "until": null
+    }
   }
 ]
