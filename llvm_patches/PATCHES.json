@@ -1040,5 +1040,20 @@
       "from": 574158,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Separate implicit int conversion on negation sign to new diagnostic group (#139429)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/0ada5c7b1a52afb668bc42dd2d5573e5805433d1.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577453
+    }
   }
 ]
