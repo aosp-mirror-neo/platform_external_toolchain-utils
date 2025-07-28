@@ -46,6 +46,7 @@ Python practices to keep in mind:
 -    When writing a multiline string literal, use `textwrap.dedent` so the indentation stays consistent.
 -    When implementing conditional logic, prefer early exits (e.g., `if not foo: continue`, `if foo: return`).
 -    When writing a call to file functions that accept an encoding kwarg, always specify `encoding="utf-8"` (e.g., `open("foo", encoding="utf-8")`, `Path("foo").read_text(encoding="utf-8")`).
+-    Inside of a multiline string, never use escaped newlines (e.g., `\n`); only use literal newlines.
 
 ### Common Tasks
 
