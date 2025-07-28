@@ -441,6 +441,7 @@ def maybe_add_newest_prebuilts(
         dry_run being True). False otherwise.
     """
     # A list of (version, maybe_prebuilt_location).
+    uprevved_ebuild = None
     versions_updated: List[Tuple[EbuildVersion, Optional[str]]] = []
     for version, ebuild in collect_stable_ebuilds_by_version(
         rust_bootstrap_dir
@@ -484,6 +485,11 @@ def maybe_add_newest_prebuilts(
     if dry_run:
         logging.info("Dry-run specified; quit.")
         return True
+
+    # uprevved_ebuild is set to None to appease pyright's type-checking.
+    # It should always be non-None here, since `versions_updated` is empty
+    # if uprevved_ebuild is not set.
+    assert uprevved_ebuild, "uprevved_ebuild should've been set by the loop."
 
     # Just pick an arbitrary ebuild to run `ebuild ... manifest` on; it always
     # updates for all ebuilds in the same package.
