@@ -32,6 +32,21 @@ This repository contains a collection of scripts and tools for supporting the Ch
 -   **Rust**:
     -   Standard `cargo` commands (`fmt`, `clippy`, `test`) are used for formatting, linting, and testing within each crate's directory.
 
+#### Python best practices
+
+Python generally follows the ChromiumOS style guidelines, which are very similar to Chromium's and Google's Python style guidelines.
+
+Python practices to keep in mind:
+
+-    `subprocess.run` is preferred over older subprocess interfaces, such as `check_output` or `call`.
+-    `subprocess` calls that support stdin redirection, such as `subprocess.run`, should specify `stdin=subprocess.DEVNULL` unless stdin is actively used by the script.
+-    `subprocess.run` should _always_ specify the `check` kwarg, even if the value is `False`.
+-    `subprocess` calls passed a literal argument list, such as `subprocess.run(("ls", "foo"))`, should pass tuples instead of lists.
+-    When mocking in unittests, use `mock.patch.object(foo.bar, "baz")` instead of `mock.patch("foo.bar.baz")`.
+-    When writing a multiline string literal, use `textwrap.dedent` so the indentation stays consistent.
+-    When implementing conditional logic, prefer early exits (e.g., `if not foo: continue`, `if foo: return`).
+-    When writing a call to file functions that accept an encoding kwarg, always specify `encoding="utf-8"` (e.g., `open("foo", encoding="utf-8")`, `Path("foo").read_text(encoding="utf-8")`).
+
 ### Common Tasks
 
 #### Running Tools
@@ -56,7 +71,7 @@ To execute a Python-based tool, use the symlinks in the `py/bin` directory. For 
     ./run_python_tests.sh llvm_tools/atomic_write_file_test.py
     ```
 
-3.   **When you are done with a series of changes**, you should run `./toolchain_utils_githooks/check-presubmit.py` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests.
+3.   **When you are done with a series of changes**, you should run `./toolchain_utils_githooks/check-presubmit.py` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests. If your change is _committed_ prior to running `check-presubmit.py`, it will automatically run all formatting commands for you. This is the recommended flow.
     ```bash
-    ./toolchain_utils_githooks/check-presubmit.py [your_changed_files]
+    ./toolchain_utils_githooks/check-presubmit.py path/to/changed/file1.py path/to/changed/file2.sh [...]
     ```
