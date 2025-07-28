@@ -25,6 +25,9 @@ DEFAULT_LLVM_PKG_PATH = CHROMIUMOS_OVERLAY / "sys-devel" / "llvm"
 DEFAULT_PATCHES_PATH_IN_TOOLCHAIN_UTILS = Path("llvm_patches") / "PATCHES.json"
 DEFAULT_PATCHES_PATH = TOOLCHAIN_UTILS / DEFAULT_PATCHES_PATH_IN_TOOLCHAIN_UTILS
 
+DEFAULT_CHROOT_OUT_DIR = Path("out")
+DEFAULT_CHROOT_TMPDIR_IN_OUT = Path("tmp")
+
 
 # Don't bind absolute paths to variables; functions are easier to mock.
 #

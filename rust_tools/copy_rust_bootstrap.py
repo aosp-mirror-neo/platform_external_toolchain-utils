@@ -7,31 +7,46 @@
 We use localmirror to host these artifacts, but they've changed a bit over
 time, so simply `gsutil cp $FROM $TO` doesn't work. This script allows the
 convenience of the old `cp` command.
+
+Run this from outside of the chroot; it will enter the chroot as needed.
 """
 
 import argparse
 import logging
-import os
 from pathlib import Path
-import shutil
+import shlex
 import subprocess
 import tempfile
-from typing import List
+from typing import List, Sequence, Union
+
+from cros_utils import cros_paths
+from llvm_tools import chroot
 
 
 _LOCALMIRROR_ROOT = "gs://chromeos-localmirror/distfiles/"
 
 
-def _is_in_chroot() -> bool:
-    return Path("/etc/cros_chroot_version").exists()
+def _chroot_run(command: Sequence[Union[str, Path]], chromiumos_root: Path):
+    run_command: List[Union[str, Path]] = ["cros_sdk", "--"]
+    run_command += command
+    subprocess.run(
+        run_command,
+        check=True,
+        cwd=chromiumos_root,
+        stdin=subprocess.DEVNULL,
+    )
 
 
-def _ensure_lbzip2_is_installed():
-    if shutil.which("lbzip2"):
-        return
-
-    logging.info("Auto-installing lbzip2...")
-    subprocess.run(["sudo", "emerge", "-g", "lbzip2"], check=True)
+def _ensure_lbzip2_is_installed(chromiumos_checkout: Path):
+    logging.info("Ensuring lbzip2 is installed...")
+    # `--noreplace` could be used, but checking `which lbzip2 ||` is
+    # significantly faster than invoking emerge, so prefer that.
+    install_cmd = shlex.join(("sudo", "emerge", "-g", "-j", "app-arch/lbzip2"))
+    update_script = f"which lbzip2 || {install_cmd}"
+    _chroot_run(
+        ("bash", "-cux", update_script),
+        chromiumos_root=chromiumos_checkout,
+    )
 
 
 def determine_target_path(sdk_path: str) -> str:
@@ -54,83 +69,49 @@ def _download(remote_path: str, local_file: Path):
     )
 
 
-def _debinpkgify(binpkg_file: Path) -> Path:
+def _debinpkgify_in_chroot(
+    *,
+    chromiumos_checkout: Path,
+    chroot_binpkg_file: Path,
+    chroot_workdir_path: Path,
+) -> Path:
     """Converts a binpkg into the files it installs.
 
     Note that this function makes temporary files in the same directory as
     `binpkg_file`. It makes no attempt to clean them up.
     """
-    logging.info("Converting %s from a binpkg...", binpkg_file)
+    logging.info("Converting %s from a binpkg...", chroot_binpkg_file)
 
     # The SDK builder produces binary packages:
     # https://wiki.gentoo.org/wiki/Binary_package_guide
     #
-    # Which means that `binpkg_file` is in the XPAK format. We want to split
-    # that out, and recompress it from zstd (which is the compression format
-    # that CrOS uses) to bzip2 (which is what we've historically used, and
-    # which is what our ebuild expects).
-    tmpdir = binpkg_file.parent
+    # Which means that `chroot_binpkg_file` is in the XPAK format. We want to
+    # split that out, and recompress it from zstd (which is the compression
+    # format that CrOS uses) to bzip2 (which is what we've historically used,
+    # and which is what our ebuild expects).
 
-    def _mkstemp(suffix=None) -> Path:
-        fd, file_path = tempfile.mkstemp(dir=tmpdir, suffix=suffix)
-        os.close(fd)
-        return Path(file_path)
+    # SUBTLE: Entering the chroot can lead to `cros_sdk` printing out
+    # housekeeping messages around things like chroot upgrades; the sequence of
+    # commands here is carefully written to keep all redirection _within the
+    # bash executed by `cros_sdk`.
 
-    # First, split the actual artifacts that land in the chroot out to
-    # `temp_file`.
-    artifacts_file = _mkstemp()
-    logging.info(
-        "Extracting artifacts from %s into %s...", binpkg_file, artifacts_file
+    tbz2_file = chroot_workdir_path / "recompressed.tbz2"
+    pipeline = (
+        f"qtbz2 --split --tarbz2 -O {shlex.quote(str(chroot_binpkg_file))}"
+        f" | zstd -d - --stdout"
+        f" | lbzip2 -z -9 --stdout"
+        f" > {shlex.quote(str(tbz2_file))}"
     )
-    with artifacts_file.open("wb") as f:
-        subprocess.run(
-            [
-                "qtbz2",
-                "-s",
-                "-t",
-                "-O",
-                str(binpkg_file),
-            ],
-            check=True,
-            stdout=f,
-        )
-
-    decompressed_artifacts_file = _mkstemp()
-    decompressed_artifacts_file.unlink()
-    logging.info(
-        "Decompressing artifacts from %s to %s...",
-        artifacts_file,
-        decompressed_artifacts_file,
-    )
-    subprocess.run(
-        [
-            "zstd",
-            "-d",
-            str(artifacts_file),
+    _chroot_run(
+        (
+            "bash",
             "-o",
-            str(decompressed_artifacts_file),
-        ],
-        check=True,
+            "pipefail",
+            "-ceux",
+            pipeline,
+        ),
+        chromiumos_checkout,
     )
-
-    # Finally, recompress it as a tbz2.
-    tbz2_file = _mkstemp(".tbz2")
-    logging.info(
-        "Recompressing artifacts from %s to %s (this may take a while)...",
-        decompressed_artifacts_file,
-        tbz2_file,
-    )
-    with tbz2_file.open("wb") as f:
-        subprocess.run(
-            [
-                "lbzip2",
-                "-9",
-                "-c",
-                str(decompressed_artifacts_file),
-            ],
-            check=True,
-            stdout=f,
-        )
     return tbz2_file
 
 
@@ -148,6 +129,9 @@ def _upload(local_file: Path, remote_path: str, force: bool):
 
 
 def main(argv: List[str]):
+    chromiumos_checkout = cros_paths.script_chromiumos_checkout_or_exit()
+    chroot.VerifyOutsideChroot()
+
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
@@ -179,15 +163,38 @@ def main(argv: List[str]):
     )
     opts = parser.parse_args(argv)
 
-    if not _is_in_chroot():
-        parser.error("Run me from within the chroot.")
-    _ensure_lbzip2_is_installed()
+    _ensure_lbzip2_is_installed(chromiumos_checkout=chromiumos_checkout)
+
+    host_tmpdir_base = (
+        chromiumos_checkout
+        / cros_paths.DEFAULT_CHROOT_OUT_DIR
+        / cros_paths.DEFAULT_CHROOT_TMPDIR_IN_OUT
+    )
+    chroot_tmpdir_base = Path("/tmp")
 
     target_path = determine_target_path(opts.sdk_artifact)
-    with tempfile.TemporaryDirectory() as tempdir:
-        download_path = Path(tempdir) / "sdk_artifact"
+    with tempfile.TemporaryDirectory(dir=host_tmpdir_base) as raw_tempdir:
+        host_tmpdir = Path(raw_tempdir)
+        chroot_tmpdir = chroot_tmpdir_base / host_tmpdir.name
+
+        def host_tmp_path_to_chroot(host_path: Path):
+            return chroot_tmpdir / host_path.relative_to(host_tmpdir)
+
+        def chroot_tmp_path_to_host(chroot_path: Path):
+            return host_tmpdir / chroot_path.relative_to(chroot_tmpdir)
+
+        download_path = host_tmpdir / "sdk_artifact"
+        workdir_path = host_tmpdir / "workdir"
+        workdir_path.mkdir(parents=True)
         _download(opts.sdk_artifact, download_path)
-        file_to_upload = _debinpkgify(download_path)
+        chroot_download_path = host_tmp_path_to_chroot(download_path)
+        chroot_workdir_path = host_tmp_path_to_chroot(workdir_path)
+        chroot_file_to_upload = _debinpkgify_in_chroot(
+            chromiumos_checkout=chromiumos_checkout,
+            chroot_binpkg_file=chroot_download_path,
+            chroot_workdir_path=chroot_workdir_path,
+        )
+        file_to_upload = chroot_tmp_path_to_host(chroot_file_to_upload)
         if opts.dry_run:
             logging.info(
                 "--dry-run specified; skipping upload of %s to %s",
