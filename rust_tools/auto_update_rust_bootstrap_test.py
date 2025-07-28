@@ -254,13 +254,18 @@ class Test(unittest.TestCase):
 
         self.assertFalse(
             auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
         )
 
-    @mock.patch.object(auto_update_rust_bootstrap, "update_ebuild_manifest")
+    @mock.patch.object(
+        auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
+    )
     def test_ensure_newest_version_upgrades_rust_bootstrap_properly(
-        self, update_ebuild_manifest
+        self, update_ebuild_manifest_in_chroot
     ):
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
@@ -285,10 +290,14 @@ class Test(unittest.TestCase):
 
         self.assertTrue(
             auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                tempdir, rust_bootstrap, dry_run=False, commit=False
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=False,
+                commit=False,
             )
         )
-        update_ebuild_manifest.assert_called_once()
+        update_ebuild_manifest_in_chroot.assert_called_once()
         rust_bootstrap_1_71 = rust_bootstrap / "rust-bootstrap-1.71.0.ebuild"
 
         self.assertTrue(
@@ -316,7 +325,10 @@ class Test(unittest.TestCase):
 
         self.assertFalse(
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
         )
 
@@ -333,12 +345,19 @@ class Test(unittest.TestCase):
 
         self.assertFalse(
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
         )
 
-    @mock.patch.object(auto_update_rust_bootstrap, "update_ebuild_manifest")
-    def test_version_deletion_deletes_old_files(self, update_ebuild_manifest):
+    @mock.patch.object(
+        auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
+    )
+    def test_version_deletion_deletes_old_files(
+        self, update_ebuild_manifest_in_chroot
+    ):
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -372,13 +391,14 @@ class Test(unittest.TestCase):
 
         self.assertTrue(
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir,
-                rust_bootstrap,
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
                 dry_run=False,
                 commit=False,
             )
         )
-        update_ebuild_manifest.assert_called_once()
+        update_ebuild_manifest_in_chroot.assert_called_once()
 
         self.assertFalse(bootstrap_1_68_symlink.exists())
         self.assertFalse(bootstrap_1_68_symlink_abs.exists())
@@ -403,7 +423,10 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.OldEbuildIsLinkedToError
         ):
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
 
     def test_prebuilt_commit_message_generation_with_one_update(self):

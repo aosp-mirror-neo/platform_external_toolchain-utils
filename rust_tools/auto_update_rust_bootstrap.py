@@ -303,10 +303,20 @@ def uprev_ebuild(ebuild: Path, version: EbuildVersion, dry_run: bool) -> Path:
     return new_ebuild
 
 
-def update_ebuild_manifest(rust_bootstrap_ebuild: Path):
+def update_ebuild_manifest_in_chroot(
+    rust_bootstrap_ebuild: Path, chromiumos_checkout: Path
+):
+    cros_overlay = chromiumos_checkout / cros_paths.CHROMIUMOS_OVERLAY
+    chroot_cros_overlay = (
+        cros_paths.CHROOT_SOURCE_ROOT / cros_paths.CHROMIUMOS_OVERLAY
+    )
+    chroot_ebuild = chroot_cros_overlay / rust_bootstrap_ebuild.relative_to(
+        cros_overlay
+    )
     subprocess.run(
-        ["ebuild", rust_bootstrap_ebuild, "manifest"],
+        ("cros_sdk", "--", "ebuild", chroot_ebuild, "manifest"),
         check=True,
+        cwd=chromiumos_checkout,
         stdin=subprocess.DEVNULL,
     )
 
@@ -414,7 +424,9 @@ def build_commit_message_for_new_prebuilts(
 
 
 def maybe_add_newest_prebuilts(
+    *,
     copy_rust_bootstrap_script: Path,
+    chromiumos_checkout: Path,
     chromiumos_overlay: Path,
     rust_bootstrap_dir: Path,
     dry_run: bool,
@@ -475,7 +487,9 @@ def maybe_add_newest_prebuilts(
 
     # Just pick an arbitrary ebuild to run `ebuild ... manifest` on; it always
     # updates for all ebuilds in the same package.
-    update_ebuild_manifest(uprevved_ebuild)
+    update_ebuild_manifest_in_chroot(
+        uprevved_ebuild, chromiumos_checkout=chromiumos_checkout
+    )
 
     logging.info("Committing changes.")
     git_utils.commit_all_changes(
@@ -503,7 +517,9 @@ def set_rust_bootstrap_prior_version(
 
 
 def maybe_add_new_rust_bootstrap_version(
+    *,
     chromiumos_overlay: Path,
+    chromiumos_checkout: Path,
     rust_bootstrap_dir: Path,
     dry_run: bool,
     commit: bool = True,
@@ -512,6 +528,8 @@ def maybe_add_new_rust_bootstrap_version(
 
     Args:
         chromiumos_overlay: Path to chromiumos-overlay.
+        chromiumos_checkout: Path to the chromiumos checkout to run chroot
+            commands in.
         rust_bootstrap_dir: Path to rust-bootstrap's directory.
         dry_run: if True, don't commit to git or write changes to disk.
             Otherwise, write changes to disk.
@@ -573,7 +591,9 @@ def maybe_add_new_rust_bootstrap_version(
         return True
 
     new_ebuild.write_text(new_ebuild_contents, encoding="utf-8")
-    update_ebuild_manifest(new_ebuild)
+    update_ebuild_manifest_in_chroot(
+        new_ebuild, chromiumos_checkout=chromiumos_checkout
+    )
     if commit:
         newest_no_rev = newest_rust_version.without_rev()
         git_utils.commit_all_changes(
@@ -616,7 +636,9 @@ def find_external_links_to_files_in_dir(
 
 
 def maybe_delete_old_rust_bootstrap_ebuilds(
+    *,
     chromiumos_overlay: Path,
+    chromiumos_checkout: Path,
     rust_bootstrap_dir: Path,
     dry_run: bool,
     commit: bool = True,
@@ -629,6 +651,8 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
 
     Args:
         chromiumos_overlay: Path to chromiumos-overlay.
+        chromiumos_checkout: Path to the chromiumos checkout to run chroot
+            commands in.
         rust_bootstrap_dir: Path to rust-bootstrap's directory.
         dry_run: if True, don't commit to git or write changes to disk.
             Otherwise, write changes to disk.
@@ -721,7 +745,9 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
         for _, ebuild in rust_bootstrap_versions
         if ebuild not in discardable_ebuilds
     )
-    update_ebuild_manifest(remaining_ebuild)
+    update_ebuild_manifest_in_chroot(
+        remaining_ebuild, chromiumos_checkout=chromiumos_checkout
+    )
     if commit:
         many = len(discardable_ebuilds) > 1
         message_lines = [
@@ -798,19 +824,26 @@ def main(argv: List[str]):
     # Ensure prebuilts are up to date first, since it allows
     # `ensure_newest_rust_bootstrap_ebuild_exists` to succeed in edge cases.
     made_changes = maybe_add_newest_prebuilts(
-        copy_rust_bootstrap_script,
-        opts.chromiumos_overlay,
-        rust_bootstrap_dir,
-        dry_run,
+        copy_rust_bootstrap_script=copy_rust_bootstrap_script,
+        chromiumos_checkout=cros_checkout,
+        chromiumos_overlay=opts.chromiumos_overlay,
+        rust_bootstrap_dir=rust_bootstrap_dir,
+        dry_run=dry_run,
     )
 
     made_changes |= maybe_add_new_rust_bootstrap_version(
-        opts.chromiumos_overlay, rust_bootstrap_dir, dry_run
+        chromiumos_overlay=opts.chromiumos_overlay,
+        chromiumos_checkout=cros_checkout,
+        rust_bootstrap_dir=rust_bootstrap_dir,
+        dry_run=dry_run,
     )
 
     try:
         made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
-            opts.chromiumos_overlay, rust_bootstrap_dir, dry_run
+            chromiumos_overlay=opts.chromiumos_overlay,
+            chromiumos_checkout=cros_checkout,
+            rust_bootstrap_dir=rust_bootstrap_dir,
+            dry_run=dry_run,
         )
     except OldEbuildIsLinkedToError:
         logging.exception("An old ebuild is linked to; can't remove it")
