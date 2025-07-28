@@ -12,6 +12,9 @@ This script is responsible for:
 
 It's capable of (and intended to primarily be used for) uploading CLs to do
 these things on its own, so it can easily be regularly run by Chrotomation.
+
+This should be run outside of the chroot, as it may need to upload bits to
+gs://, and the default chroot setup has readonly gs credentials.
 """
 
 import argparse
@@ -30,6 +33,7 @@ from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
+from llvm_tools import chroot
 from rust_tools import copy_rust_bootstrap
 
 
@@ -743,6 +747,8 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
 
 
 def main(argv: List[str]):
+    chroot.VerifyOutsideChroot()
+
     cros_checkout = cros_paths.script_chromiumos_checkout_or_exit()
     py_bin_dir = cros_checkout / cros_paths.TOOLCHAIN_UTILS_PYBIN
 
