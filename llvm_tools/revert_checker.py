@@ -51,7 +51,17 @@ import logging
 import re
 import subprocess
 import sys
-from typing import Dict, Generator, Iterable, List, NamedTuple, Optional, Tuple
+from typing import (
+    Callable,
+    Dict,
+    Generator,
+    Iterable,
+    List,
+    NamedTuple,
+    Optional,
+    Tuple,
+)
+
 
 assert sys.version_info >= (3, 6), "Only Python 3.6+ is supported."
 
@@ -68,8 +78,8 @@ assert sys.version_info >= (3, 6), "Only Python 3.6+ is supported."
 # ```
 # during my sample)
 
-_CommitMessageReverts = NamedTuple(
-    "_CommitMessageReverts",
+CommitMessageReverts = NamedTuple(
+    "CommitMessageReverts",
     [
         ("potential_shas", List[str]),
         ("potential_pr_numbers", List[int]),
@@ -77,9 +87,9 @@ _CommitMessageReverts = NamedTuple(
 )
 
 
-def _try_parse_reverts_from_commit_message(
+def try_parse_reverts_from_commit_message(
     commit_message: str,
-) -> _CommitMessageReverts:
+) -> CommitMessageReverts:
     """Tries to parse revert SHAs and LLVM PR numbers form the commit message.
 
     Returns:
@@ -88,7 +98,7 @@ def _try_parse_reverts_from_commit_message(
         - A list of potentially reverted LLVM PR numbers
     """
     if not commit_message:
-        return _CommitMessageReverts([], [])
+        return CommitMessageReverts([], [])
 
     sha_reverts = re.findall(
         r"This reverts commit ([a-f0-9]{40})\b",
@@ -108,7 +118,7 @@ def _try_parse_reverts_from_commit_message(
         )
     ]
 
-    return _CommitMessageReverts(
+    return CommitMessageReverts(
         potential_shas=sha_reverts,
         potential_pr_numbers=pr_numbers,
     )
@@ -148,7 +158,9 @@ _LogEntry = NamedTuple(
 )
 
 
-def _log_stream(git_dir: str, root_sha: str, end_at_sha: str) -> Iterable[_LogEntry]:
+def _log_stream(
+    git_dir: str, root_sha: str, end_at_sha: str
+) -> Iterable[_LogEntry]:
     sep = 50 * "<>"
     log_command = [
         "git",
@@ -252,7 +264,11 @@ def _load_pr_commit_mappings(
 # enough for the 99% case of reverts: rarely should someone land a cleanish
 # revert of a >6 month old change...
 def find_reverts(
-    git_dir: str, across_ref: str, root: str, max_pr_lookback: int = 20000
+    git_dir: str,
+    across_ref: str,
+    root: str,
+    max_pr_lookback: int = 20000,
+    infer_reverts: Callable[[str, str], CommitMessageReverts] | None = None,
 ) -> List[Revert]:
     """Finds reverts across `across_ref` in `git_dir`, starting from `root`.
 
@@ -266,6 +282,9 @@ def find_reverts(
             SHAs. These heuristics require that commit history from `root` to
             `some_parent_of_root` is loaded in memory. `max_pr_lookback` is how
             many commits behind `across_ref` should be loaded in memory.
+        infer_reverts: Given a commit's `(sha, commit_message)`, returns a
+            `CommitMessageReverts` describing potential reverts by the commit.
+            Defaults to `try_parse_reverts_from_commit_message`.
     """
     across_sha = _rev_parse(git_dir, across_ref)
     root_sha = _rev_parse(git_dir, root)
@@ -287,13 +306,15 @@ def find_reverts(
         root_sha,
     )
 
+    parse_commit = infer_reverts or (
+        lambda _, msg: try_parse_reverts_from_commit_message(msg)
+    )
+
     all_reverts = []
     # Lazily load PR <-> commit mappings, since it can be expensive.
     pr_commit_mappings = None
     for sha, commit_message in _log_stream(git_dir, root_sha, across_sha):
-        reverts, pr_reverts = _try_parse_reverts_from_commit_message(
-            commit_message,
-        )
+        reverts, pr_reverts = parse_commit(sha, commit_message)
         if pr_reverts:
             if pr_commit_mappings is None:
                 logging.info(
@@ -326,7 +347,9 @@ def find_reverts(
         if not reverts:
             continue
 
-        resolved_reverts = sorted(set(_resolve_sha(git_dir, x) for x in reverts))
+        resolved_reverts = sorted(
+            set(_resolve_sha(git_dir, x) for x in reverts)
+        )
         for reverted_sha in resolved_reverts:
             if reverted_sha in intermediate_commits:
                 logging.debug(
@@ -366,7 +389,10 @@ def find_reverts(
             # parent of the revert). This can happen if e.g., the revert has
             # been mirrored to another branch. Treat them the same as
             # reverts of non-commits.
-            if _find_common_parent_commit(git_dir, sha, reverted_sha) != reverted_sha:
+            if (
+                _find_common_parent_commit(git_dir, sha, reverted_sha)
+                != reverted_sha
+            ):
                 logging.error(
                     "%s claims to revert %s, which is a commit that is not "
                     "a parent of the revert",
@@ -377,7 +403,6 @@ def find_reverts(
 
             all_reverts.append(Revert(sha, reverted_sha))
 
-
     # Since `all_reverts` contains reverts in log order (e.g., newer comes before
     # older), we need to reverse this to keep with our guarantee of older =
     # earlier in the result.
@@ -387,11 +412,18 @@ def find_reverts(
 
 def _main() -> None:
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("base_ref", help="Git ref or sha to check for reverts around.")
-    parser.add_argument("-C", "--git_dir", default=".", help="Git directory to use.")
-    parser.add_argument("root", nargs="+", help="Root(s) to search for commits from.")
+    parser.add_argument(
+        "base_ref", help="Git ref or sha to check for reverts around."
+    )
+    parser.add_argument(
+        "-C", "--git_dir", default=".", help="Git directory to use."
+    )
+    parser.add_argument(
+        "root", nargs="+", help="Root(s) to search for commits from."
+    )
     parser.add_argument("--debug", action="store_true")
     parser.add_argument(
         "-u",
@@ -419,7 +451,9 @@ def _main() -> None:
                 all_reverts.append(revert)
 
     sha_prefix = (
-        "https://github.com/llvm/llvm-project/commit/" if opts.review_url else ""
+        "https://github.com/llvm/llvm-project/commit/"
+        if opts.review_url
+        else ""
     )
     for revert in all_reverts:
         sha_fmt = f"{sha_prefix}{revert.sha}"

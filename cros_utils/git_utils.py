@@ -796,3 +796,34 @@ def query_gerrit(chromeos_root: Path, query: str) -> list[int]:
         encoding="utf-8",
     ).stdout
     return [int(x) for x in results.split()]
+
+
+def list_shas_between(git_dir: Path, from_ref: str, to_ref: str) -> list[str]:
+    """Lists all SHAs between `from_ref` and `to_ref` in parent-to-child order.
+
+    That is, given this in `/git_repo/`:
+    ```
+    $ git log --oneline -n3 HEAD
+    abc123 child child commit
+    def456 parent child commit
+    ghi789 parent parent commit
+    ```
+
+    >>> list_shas_between(Path("/git_repo"), "ghi789", "abc123")
+    ['ghi789', 'def456', 'abc123']
+
+    Raises:
+        CalledProcessError if `from_ref` is not a parent commit of `to_ref`.
+    """
+    sha_list = subprocess.run(
+        ("git", "rev-list", f"{from_ref}~..{to_ref}"),
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    results = [x.strip() for x in sha_list.splitlines()]
+    # Git prints newest first, so reverse the list.
+    results.reverse()
+    return results

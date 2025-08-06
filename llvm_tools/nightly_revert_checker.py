@@ -10,6 +10,7 @@ fires off an email. All LLVM SHAs to monitor are autodetected.
 
 import argparse
 import dataclasses
+import datetime
 import json
 import logging
 import os
@@ -23,6 +24,7 @@ from typing import Any, Callable, Iterable, NamedTuple
 from cros_utils import email_sender
 from cros_utils import git_utils
 from cros_utils import tiny_render
+from llvm_tools import gemini_revert_checker
 from llvm_tools import get_llvm_hash
 from llvm_tools import git_llvm_rev
 from llvm_tools import patch_utils
@@ -251,15 +253,63 @@ class NewRevertInfo:
     new_reverts: list[revert_checker.Revert]
 
 
+def infer_reverts_with_gemini(
+    gemini_state: gemini_revert_checker.GeminiState,
+    sha: str,
+    commit_message: str,
+) -> revert_checker.CommitMessageReverts:
+    empty_result = lambda: revert_checker.CommitMessageReverts(
+        potential_shas=[],
+        potential_pr_numbers=[],
+    )
+
+    gemini_result = gemini_state.cached_inference_result_for(sha)
+    if not gemini_result:
+        logging.warning("Commit %s not found precached by Gemini", sha)
+    elif gemini_result.is_reland:
+        logging.info(
+            "Skipping reporting of commit %s - Gemini notes it's a reland.", sha
+        )
+        return empty_result()
+
+    non_gemini_result = revert_checker.try_parse_reverts_from_commit_message(
+        commit_message
+    )
+    if (
+        non_gemini_result.potential_shas
+        or non_gemini_result.potential_pr_numbers
+    ):
+        return non_gemini_result
+
+    if not gemini_result:
+        return empty_result()
+
+    if not gemini_result.is_revert:
+        return empty_result()
+
+    return revert_checker.CommitMessageReverts(
+        potential_shas=list(gemini_result.reverted_shas),
+        potential_pr_numbers=list(gemini_result.reverted_prs),
+    )
+
+
 def locate_new_reverts_across_shas(
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
     interesting_shas: list[tuple[str, str]],
     state: State,
+    gemini_state: gemini_revert_checker.GeminiState | None,
 ) -> tuple[State, list[NewRevertInfo]]:
     """Locates and returns yet-unseen reverts across `interesting_shas`."""
     new_state = State()
     revert_infos = []
+
+    if gemini_state:
+        infer_reverts = lambda sha, msg: infer_reverts_with_gemini(
+            gemini_state, sha, msg
+        )
+    else:
+        infer_reverts = None
 
     now = int(time.time())
     for friendly_name, sha in interesting_shas:
@@ -268,6 +318,7 @@ def locate_new_reverts_across_shas(
             str(llvm_config.dir),
             sha,
             root=f"{llvm_config.remote}/{upstream_main_branch}",
+            infer_reverts=infer_reverts,
         )
         logging.info(
             "Detected the following revert(s) across %s:\n%s",
@@ -351,6 +402,7 @@ def detect_latest_cros_llvm_branch(
 
 
 def do_cherrypick(
+    *,
     chromeos_path: Path,
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
@@ -359,6 +411,7 @@ def do_cherrypick(
     state: State,
     reviewers: list[str],
     cc: list[str],
+    gemini_state: gemini_revert_checker.GeminiState | None,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -366,7 +419,11 @@ def do_cherrypick(
 
     new_state = State()
     new_state, new_revert_infos = locate_new_reverts_across_shas(
-        llvm_config, upstream_main_branch, interesting_shas, state
+        llvm_config,
+        upstream_main_branch,
+        interesting_shas,
+        state,
+        gemini_state=gemini_state,
     )
     llvm_config_dir = Path(llvm_config.dir)
 
@@ -658,6 +715,7 @@ def maybe_email_about_stale_heads(
 
 
 def do_email(
+    *,
     is_dry_run: bool,
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
@@ -665,6 +723,7 @@ def do_email(
     interesting_shas: list[tuple[str, str]],
     state: State,
     recipients: _EmailRecipients,
+    gemini_state: gemini_revert_checker.GeminiState | None,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -678,7 +737,11 @@ def do_email(
         ).strip()
 
     new_state, new_reverts = locate_new_reverts_across_shas(
-        llvm_config, upstream_main_branch, interesting_shas, state
+        llvm_config,
+        upstream_main_branch,
+        interesting_shas,
+        state,
+        gemini_state=gemini_state,
     )
 
     for revert_info in new_reverts:
@@ -707,6 +770,39 @@ def do_email(
     return new_state
 
 
+def _load_up_to_date_gemini_state(
+    gemini_state_file: Path,
+    gemini_api_key: str,
+    llvm_config: git_llvm_rev.LLVMConfig,
+    upstream_main_branch: str,
+    interesting_shas: list[str],
+) -> gemini_revert_checker.GeminiState:
+    """Loads Gemini state, populates it, and discards old entries."""
+    gemini_state = gemini_revert_checker.read_gemini_state_or_default(
+        gemini_state_file
+    )
+    main_ref = f"{llvm_config.remote}/{upstream_main_branch}"
+    llvm_dir = Path(llvm_config.dir)
+    gemini_revert_checker.ensure_state_populated_for(
+        gemini_endpoint=gemini_revert_checker.GeminiEndpoint(
+            gemini_api_key=gemini_api_key
+        ),
+        gemini_state=gemini_state,
+        llvm_dir=llvm_dir,
+        main_ref=main_ref,
+        prepopulate_parent_shas=interesting_shas,
+    )
+    gemini_revert_checker.discard_old_shas(
+        gemini_state,
+        interesting_shas,
+        now=datetime.datetime.now(),
+        llvm_dir=llvm_dir,
+        main_ref=main_ref,
+    )
+    gemini_revert_checker.write_gemini_state(gemini_state_file, gemini_state)
+    return gemini_state
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -720,6 +816,21 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--state_file", required=True, help="File to store persistent state in."
+    )
+    parser.add_argument(
+        "--gemini_api_key",
+        help="""
+        Gemini API key, used to check reverts with. If not provided, Gemini
+        revert checking will be skipped.
+        """,
+    )
+    parser.add_argument(
+        "--gemini_state_file",
+        type=Path,
+        help="""
+        Gemini state file location. Must be provided if --gemini_api_key is
+        provided. If the state file does not exist, it is created with defaults.
+        """,
     )
     parser.add_argument(
         "--llvm_dir", required=True, help="Up-to-date LLVM directory to use."
@@ -762,7 +873,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Up-to-date android-llvm-toolchain directory to use.",
     )
 
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+    if opts.gemini_api_key and not opts.gemini_state_file:
+        parser.error("--gemini_api_key requires --gemini_state_file")
+    return opts
 
 
 def main(argv: list[str]) -> int:
@@ -778,6 +892,8 @@ def main(argv: list[str]) -> int:
     llvm_dir = opts.llvm_dir
     repository = opts.repository
     state_file = opts.state_file
+    gemini_api_key: str | None = opts.gemini_api_key
+    gemini_state_file: Path | None = opts.gemini_state_file
     reviewers = opts.reviewers if opts.reviewers else []
     cc = opts.cc if opts.cc else []
 
@@ -814,6 +930,19 @@ def main(argv: list[str]) -> int:
     state = _read_state(state_file)
     logging.info("Loaded state\n%s", pprint.pformat(state))
 
+    if gemini_api_key:
+        # There is logic in flag parsing to guarantee this.
+        assert gemini_state_file, "need gemini_state_file if key is passed"
+        gemini_state = _load_up_to_date_gemini_state(
+            gemini_state_file=gemini_state_file,
+            gemini_api_key=gemini_api_key,
+            llvm_config=llvm_config,
+            upstream_main_branch=upstream_main_branch,
+            interesting_shas=[sha for _, sha in interesting_shas],
+        )
+    else:
+        gemini_state = None
+
     # We want to be as free of obvious side-effects as possible in case
     # something above breaks. Hence, action as late as possible.
     if action == "cherry-pick":
@@ -831,6 +960,7 @@ def main(argv: list[str]) -> int:
             state=state,
             reviewers=reviewers,
             cc=cc,
+            gemini_state=gemini_state,
         )
     else:
         new_state = do_email(
@@ -841,6 +971,7 @@ def main(argv: list[str]) -> int:
             repository=repository,
             state=state,
             recipients=recipients,
+            gemini_state=gemini_state,
         )
 
     _write_state(state_file, new_state)
