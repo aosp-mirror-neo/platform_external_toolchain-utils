@@ -62,14 +62,11 @@ def main() -> None:
     # - Some return None; others return an exit code.
     # - Some take argv; others take no args.
     # - Some are called `main`, others are called `_main`.
-    # - Some capitalize `Main`, others don't.
     # It'd be nice to make this more uniform, but it's easy enough to handle
     # all of these until that happens.
     main_fns = (
         "main",
-        "Main",
         "_main",
-        "_Main",
     )
     main_fn: Callable[..., Any]
     for f in main_fns:
