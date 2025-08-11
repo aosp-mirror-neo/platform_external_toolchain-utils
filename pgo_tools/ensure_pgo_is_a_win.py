@@ -13,7 +13,6 @@ thin wrapper around `benchmark_pgo_profiles.py`.
 import argparse
 import logging
 import sys
-from typing import List
 
 from pgo_tools import benchmark_pgo_profiles
 from pgo_tools import pgo_utils
@@ -38,7 +37,7 @@ def calculate_pgo_speedup(
     return no_profile.user_time / default_profile.user_time
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

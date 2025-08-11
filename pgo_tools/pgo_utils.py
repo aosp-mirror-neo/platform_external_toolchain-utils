@@ -13,17 +13,17 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from typing import Any, Dict, Generator, IO, List, Optional, Union
+from typing import Any, Generator, IO, Optional, Union
 
 
-Command = List[Union[str, Path]]
+Command = list[Union[str, Path]]
 
 
 def run(
     command: Command,
     cwd: Optional[Path] = None,
     check: bool = True,
-    extra_env: Optional[Dict[str, str]] = None,
+    extra_env: Optional[dict[str, str]] = None,
     stdout: Union[IO[Any], int, None] = None,
     stderr: Union[IO[Any], int, None] = None,
 ) -> subprocess.CompletedProcess:
