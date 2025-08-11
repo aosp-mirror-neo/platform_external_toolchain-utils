@@ -10,7 +10,7 @@ import dataclasses
 import logging
 import re
 import sys
-from typing import Iterable, List, Optional
+from typing import Iterable, Optional
 
 from bot_tools import bot_lints
 from llvm_tools import cros_cls
@@ -82,7 +82,7 @@ DEFAULT_FINDING_EXPECTATIONS = (
 
 def spawn_bot_and_collect_lints(
     cls_to_apply: Iterable[cros_cls.ChangeListURL],
-) -> List[bot_lints.Finding]:
+) -> list[bot_lints.Finding]:
     build_id = cros_cls.spawn_bot(
         "chromeos/cq/atlas-linters-cq", cls=cls_to_apply
     )
@@ -96,7 +96,7 @@ def spawn_bot_and_collect_lints(
 
 
 def log_errors_with_lints(
-    lints: List[bot_lints.Finding],
+    lints: list[bot_lints.Finding],
     finding_expectations: Optional[Iterable[FindingExpectations]] = None,
 ) -> bool:
     """Logs mismatches between the given lints and expectations.
@@ -161,7 +161,7 @@ def log_errors_with_lints(
     return logged_errors
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -180,7 +180,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     opts = parse_args(argv)
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "

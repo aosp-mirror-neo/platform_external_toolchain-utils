@@ -11,7 +11,6 @@ have a step named 'update sdk'.
 import argparse
 import logging
 import sys
-from typing import List
 
 from llvm_tools import cros_cls
 
@@ -101,7 +100,7 @@ def _inspect_and_verify_cq_orchestrator(
 
 
 def _run_and_verify_cq(
-    cl_urls: List[cros_cls.ChangeListURL], timeout_hours: int
+    cl_urls: list[cros_cls.ChangeListURL], timeout_hours: int
 ) -> None:
     """Spawns a CQ orchestrator, waits, and then verifies its children."""
     logging.info(
@@ -124,7 +123,7 @@ def _run_and_verify_cq(
     _inspect_and_verify_cq_orchestrator(build_id)
 
 
-def _parse_args(argv: List[str]) -> argparse.Namespace:
+def _parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -178,7 +177,7 @@ def _parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     opts = _parse_args(argv)
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
