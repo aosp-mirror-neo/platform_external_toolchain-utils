@@ -29,7 +29,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Callable, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Callable, Iterable, Optional, Union
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -198,14 +198,14 @@ def parse_ebuild_version(ebuild_name: str) -> EbuildVersion:
 
 def collect_stable_ebuilds_by_version(
     ebuild_dir: Path,
-) -> List[Tuple[EbuildVersion, Path]]:
+) -> list[tuple[EbuildVersion, Path]]:
     """Returns the latest ebuilds grouped by version.without_rev.
 
     Result is always sorted by version, latest versions are last. 9999 ebuilds
     are ignored.
     """
     ebuilds = ebuild_dir.glob("*.ebuild")
-    versioned_ebuilds: Dict[EbuildVersion, Tuple[EbuildVersion, Path]] = {}
+    versioned_ebuilds: dict[EbuildVersion, tuple[EbuildVersion, Path]] = {}
     for ebuild in ebuilds:
         if ebuild.name.endswith("-9999.ebuild"):
             continue
@@ -236,7 +236,7 @@ def maybe_copy_prebuilt_to_localmirror(
         logging.info("Artifact at %s already exists", upload_to)
         return False
 
-    cmd: List[Union[Path, str]] = [
+    cmd: list[Union[Path, str]] = [
         copy_rust_bootstrap_script,
         prebuilt_gs_path,
     ]
@@ -393,7 +393,7 @@ def set_rust_bootstrap_prebuilt_use(
 
 
 def build_commit_message_for_new_prebuilts(
-    versions_updated: List[Tuple[EbuildVersion, Optional[str]]],
+    versions_updated: list[tuple[EbuildVersion, Optional[str]]],
 ) -> str:
     """Builds a commit message for adding new prebuilts."""
     pretty_artifact_lines = []
@@ -442,7 +442,7 @@ def maybe_add_newest_prebuilts(
     """
     # A list of (version, maybe_prebuilt_location).
     uprevved_ebuild = None
-    versions_updated: List[Tuple[EbuildVersion, Optional[str]]] = []
+    versions_updated: list[tuple[EbuildVersion, Optional[str]]] = []
     for version, ebuild in collect_stable_ebuilds_by_version(
         rust_bootstrap_dir
     ):
@@ -625,7 +625,7 @@ class OldEbuildIsLinkedToError(Exception):
 
 def find_external_links_to_files_in_dir(
     in_dir: Path, files: Iterable[Path]
-) -> Dict[Path, List[Path]]:
+) -> dict[Path, list[Path]]:
     """Returns all symlinks to `files` in `in_dir`, excluding from `files`.
 
     Essentially, if this returns an empty dict, nothing in `in_dir` symlinks to
@@ -778,7 +778,7 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
     return True
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     chroot.VerifyOutsideChroot()
 
     cros_checkout = cros_paths.script_chromiumos_checkout_or_exit()

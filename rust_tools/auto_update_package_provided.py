@@ -15,7 +15,6 @@ from pathlib import Path
 import re
 import subprocess
 import textwrap
-from typing import List
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -90,7 +89,7 @@ def update_package_provided_file(
     return True
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     """Main entry point."""
     cros_checkout = cros_paths.script_chromiumos_checkout_or_exit()
 

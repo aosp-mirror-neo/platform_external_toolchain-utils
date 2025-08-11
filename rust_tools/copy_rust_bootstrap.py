@@ -17,7 +17,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
-from typing import List, Sequence, Union
+from typing import Sequence, Union
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -27,7 +27,7 @@ _LOCALMIRROR_ROOT = "gs://chromeos-localmirror/distfiles/"
 
 
 def _chroot_run(command: Sequence[Union[str, Path]], chromiumos_root: Path):
-    run_command: List[Union[str, Path]] = ["cros_sdk", "--"]
+    run_command: list[Union[str, Path]] = ["cros_sdk", "--"]
     run_command += command
     subprocess.run(
         run_command,
@@ -128,7 +128,7 @@ def _upload(local_file: Path, remote_path: str, force: bool):
     )
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     chromiumos_checkout = cros_paths.script_chromiumos_checkout_or_exit()
     chroot.VerifyOutsideChroot()
 
