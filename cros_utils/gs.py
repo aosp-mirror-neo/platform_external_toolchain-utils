@@ -11,7 +11,7 @@ import re
 import shlex
 import shutil
 import subprocess
-from typing import List, Optional
+from typing import Optional
 
 
 # Determine which gsutil to use.
@@ -38,7 +38,7 @@ def _datetime_from_gs_time(timestamp_str: str) -> datetime.datetime:
     ).replace(tzinfo=datetime.timezone.utc)
 
 
-def _parse_ls_output(stdout: str) -> List[GsEntry]:
+def _parse_ls_output(stdout: str) -> list[GsEntry]:
     """Parses output of `gsutil ls`."""
     stdout_lines = stdout.splitlines()
     # Ignore the last line, since that's always "TOTAL:"
@@ -79,7 +79,7 @@ def _parse_ls_output(stdout: str) -> List[GsEntry]:
     return results
 
 
-def ls(gs_url: str) -> List[GsEntry]:
+def ls(gs_url: str) -> list[GsEntry]:
     """Runs `gsutil ls` on the given `path`.
 
     Globs are forwarded to gs://

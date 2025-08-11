@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Dict, Generator, Iterable, List, Optional, Union
+from typing import Generator, Iterable, Optional, Union
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -62,7 +62,7 @@ class ChannelBranch:
     branch_name: str
 
 
-def autodetect_cros_channels(git_repo: Path) -> Dict[Channel, ChannelBranch]:
+def autodetect_cros_channels(git_repo: Path) -> dict[Channel, ChannelBranch]:
     """Autodetects the current ChromeOS channels from a git repo.
 
     Returns:
@@ -113,7 +113,7 @@ def autodetect_cros_channels(git_repo: Path) -> Dict[Channel, ChannelBranch]:
     }
 
 
-def _parse_cls_from_upload_output(upload_output: str) -> List[int]:
+def _parse_cls_from_upload_output(upload_output: str) -> list[int]:
     """Returns the CL number in the given upload output."""
     id_regex = re.compile(
         r"^remote:\s+https://"
@@ -157,7 +157,7 @@ def generate_upload_to_gerrit_cmd(
     cc: Iterable[str] = (),
     ref: str = "HEAD",
     topic: Optional[str] = None,
-) -> List[str]:
+) -> list[str]:
     """Create a git push CLI command to upload to Gerrit.
 
     This is similar to `upload_to_gerrit`, but doesn't actually
@@ -204,7 +204,7 @@ def upload_to_gerrit(
     cc: Iterable[str] = (),
     ref: str = "HEAD",
     topic: Optional[str] = None,
-) -> List[int]:
+) -> list[int]:
     """Uploads `ref` to gerrit, optionally adding reviewers/CCs.
 
     Args:
@@ -342,7 +342,7 @@ def create_worktree(
         logging.info(
             "Establishing worktree of %s in %s", git_directory, tempdir
         )
-        cmd: List[Union[str, os.PathLike]] = [
+        cmd: list[Union[str, os.PathLike]] = [
             "git",
             "worktree",
             "add",
@@ -546,7 +546,7 @@ def maybe_show_file_at_commit(
 
 def maybe_list_dir_contents_at_commit(
     git_dir: Path, ref: str, path_from_git_root: str
-) -> Optional[List[str]]:
+) -> Optional[list[str]]:
     """Returns files contained in the given directory at the given commit.
 
     Args:
@@ -648,7 +648,7 @@ def get_message_subject(git_dir: Path, ref: str) -> str:
     ).stdout.strip()
 
 
-def get_commit_message_metadata(git_dir: Path, ref: str) -> Dict[str, str]:
+def get_commit_message_metadata(git_dir: Path, ref: str) -> dict[str, str]:
     """Return footer information for a given commit."""
     commit_msg = (
         subprocess.run(
@@ -665,7 +665,7 @@ def get_commit_message_metadata(git_dir: Path, ref: str) -> Dict[str, str]:
     return parse_message_metadata(commit_msg)
 
 
-def parse_message_metadata(message_lines: Iterable[str]) -> Dict[str, str]:
+def parse_message_metadata(message_lines: Iterable[str]) -> dict[str, str]:
     """Return a dictionary of commit message lines' directives."""
     regex = re.compile(r"([-\w.]+):(.+)")
     result = {}
@@ -678,7 +678,7 @@ def parse_message_metadata(message_lines: Iterable[str]) -> Dict[str, str]:
     return result
 
 
-def merge_base(git_dir: Path, refs: List[str]) -> Optional[str]:
+def merge_base(git_dir: Path, refs: list[str]) -> Optional[str]:
     """Return the git merge-base --octopus between branches.
 
     Args:
@@ -702,7 +702,7 @@ def merge_base(git_dir: Path, refs: List[str]) -> Optional[str]:
     return None
 
 
-def branch_list(git_dir: Path, glob: Optional[str] = None) -> List[str]:
+def branch_list(git_dir: Path, glob: Optional[str] = None) -> list[str]:
     """List branches, optionally matching a given glob."""
     addendum = [glob] if glob else []
     return (
@@ -763,7 +763,7 @@ def log(
     ).stdout
 
 
-def query_gerrit(chromeos_root: Path, query: str) -> List[int]:
+def query_gerrit(chromeos_root: Path, query: str) -> list[int]:
     """Returns CLs that match the given `query`."""
     results = subprocess.run(
         ("gerrit", "--raw", "search", query),

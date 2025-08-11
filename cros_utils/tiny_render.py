@@ -53,7 +53,7 @@ The rendering functions should never mutate your input.
 
 import collections
 import html
-import typing as t
+from typing import Any
 
 
 Bold = collections.namedtuple("Bold", ["inner"])
@@ -81,11 +81,11 @@ line_break = LineBreak()
 # ]
 #
 # It doesn't seem possible to have recursive types, so just go with Any.
-Piece = t.Any  # pylint: disable=invalid-name
+Piece = Any  # pylint: disable=invalid-name
 
 
 def _render_text_pieces(
-    piece: Piece, indent_level: int, into: t.List[str]
+    piece: Piece, indent_level: int, into: list[str]
 ) -> None:
     """Helper for |render_text_pieces|. Accumulates strs into |into|."""
     if isinstance(piece, LineBreak):
@@ -126,12 +126,12 @@ def _render_text_pieces(
 
 def render_text_pieces(piece: Piece) -> str:
     """Renders the given Pieces into text."""
-    into: t.List[str] = []
+    into: list[str] = []
     _render_text_pieces(piece, 0, into)
     return "".join(into)
 
 
-def _render_html_pieces(piece: Piece, into: t.List[str]) -> None:
+def _render_html_pieces(piece: Piece, into: list[str]) -> None:
     """Helper for |render_html_pieces|. Accumulates strs into |into|."""
     if piece is line_break:
         into.append("<br />\n")
@@ -176,6 +176,6 @@ def _render_html_pieces(piece: Piece, into: t.List[str]) -> None:
 
 def render_html_pieces(piece: Piece) -> str:
     """Renders the given Pieces into HTML."""
-    into: t.List[str] = []
+    into: list[str] = []
     _render_html_pieces(piece, into)
     return "".join(into)

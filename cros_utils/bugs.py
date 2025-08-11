@@ -9,7 +9,7 @@ import enum
 import json
 import os
 import threading
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 
 # ChromeOS > Infra > Toolchain
@@ -75,7 +75,7 @@ _GLOBAL_NAME_GENERATOR = _FileNameGenerator()
 
 def _WriteBugJSONFile(
     object_type: str,
-    json_object: Dict[str, Any],
+    json_object: dict[str, Any],
     directory: Optional[Union[os.PathLike, str]],
 ):
     """Writes a JSON file to `directory` with the given bug-ish object.
@@ -127,7 +127,7 @@ def CreateNewBug(
     title: str,
     body: str,
     assignee: Optional[str] = None,
-    cc: Optional[List[str]] = None,
+    cc: Optional[list[str]] = None,
     directory: Optional[os.PathLike] = None,
     parent_bug: int = 0,
 ):
