@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, Optional
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -37,7 +37,7 @@ CRONJOB_TURNDOWN_TIME_HOURS = 7 * 24
 # Complaint is used below to make function signatures clearer. Semantically
 # each Complaint is a list of paragraphs that should be printed together as a
 # single diagnostic. Lines may be reflowed.
-Complaint = List[str]
+Complaint = list[str]
 
 # Iterable of milestones to skip monitoring for. Once a milestone leaves
 # stable, it can be removed from this.
@@ -83,7 +83,7 @@ class ProfileSubtype(enum.Enum):
 #
 # Note that `exp` and `arm32` profiles are ignored, as they aren't used in
 # production.
-CHROME_STAMP_FILE_LOCATIONS: Dict[Tuple[ProfileArch, ProfileSubtype], str] = {
+CHROME_STAMP_FILE_LOCATIONS: dict[tuple[ProfileArch, ProfileSubtype], str] = {
     (
         ProfileArch.ARM,
         ProfileSubtype.NONE,
@@ -102,7 +102,7 @@ CHROME_STAMP_FILE_LOCATIONS: Dict[Tuple[ProfileArch, ProfileSubtype], str] = {
 # N.B., This is expected to return a subset of CHROME_STAMP_FILE_LOCATIONS. That
 # said, iterating over CHROME_STAMP_FILE_LOCATIONS.keys() can be confusing
 # in places, so have a thin wrapper.
-def monitored_profile_configs() -> Iterable[Tuple[ProfileArch, ProfileSubtype]]:
+def monitored_profile_configs() -> Iterable[tuple[ProfileArch, ProfileSubtype]]:
     """Returns an iterable of all currently-monitored profile configurations."""
     return CHROME_STAMP_FILE_LOCATIONS.keys()
 
@@ -246,7 +246,7 @@ class ChromeGsProfile:
         )
 
 
-def fetch_release_afdo_profiles() -> Dict[int, List[ChromeGsProfile]]:
+def fetch_release_afdo_profiles() -> dict[int, list[ChromeGsProfile]]:
     """Fetches release Chrome AFDO profiles, grouped by major version.
 
     The major version used is specifically the benchmark part. List ordering is
@@ -271,7 +271,7 @@ def fetch_release_afdo_profiles() -> Dict[int, List[ChromeGsProfile]]:
 
 
 def find_most_recent_branch_profile(
-    afdo_profiles: Dict[int, List[ChromeGsProfile]],
+    afdo_profiles: dict[int, list[ChromeGsProfile]],
     arch: ProfileArch,
     subtype: ProfileSubtype,
     branch_number: int,
@@ -314,11 +314,11 @@ def find_most_recent_branch_profile(
 
 
 def check_cwp_profiles_are_new(
-    branches: List[Tuple[git_utils.Channel, git_utils.ChannelBranch]],
-    afdo_profiles: Dict[int, List[ChromeGsProfile]],
+    branches: list[tuple[git_utils.Channel, git_utils.ChannelBranch]],
+    afdo_profiles: dict[int, list[ChromeGsProfile]],
     now: datetime.datetime,
     max_profile_age: datetime.timedelta,
-) -> Dict[int, List[Complaint]]:
+) -> dict[int, list[Complaint]]:
     """Checks to see if the CWP profile parts for the given channel look good.
 
     Returns:
@@ -383,7 +383,7 @@ def check_cwp_profiles_are_new(
 
 
 def find_newest_chrome_version(
-    chromeos_chrome_files: List[str],
+    chromeos_chrome_files: list[str],
 ) -> ChromeVersion:
     """Returns the newest Chrome version from the given ebuilds.
 
@@ -423,7 +423,7 @@ def find_newest_chrome_version(
 
 
 def find_afdo_profile_by_version(
-    afdo_profiles: Dict[int, List[ChromeGsProfile]],
+    afdo_profiles: dict[int, list[ChromeGsProfile]],
     stamp_contents: str,
 ) -> ChromeGsProfile:
     for profile_listing in afdo_profiles.values():
@@ -442,7 +442,7 @@ def maybe_diagnose_current_chrome_afdo_profile(
     arch: ProfileArch,
     subtype: ProfileSubtype,
     now: datetime.datetime,
-    afdo_profiles: Dict[int, List[ChromeGsProfile]],
+    afdo_profiles: dict[int, list[ChromeGsProfile]],
     current_profile_stamp: str,
     max_profile_age: datetime.timedelta,
 ) -> Optional[Complaint]:
@@ -518,7 +518,7 @@ def maybe_diagnose_current_chrome_afdo_profile(
 
 def load_upstream_chrome_git_tags(
     chrome_src: Path,
-) -> List[UpstreamChromeVersion]:
+) -> list[UpstreamChromeVersion]:
     """Returns a list of upstream Git tags from Chrome's repo."""
     logging.info("Loading Chrome git tags...")
     git_tags = subprocess.run(
@@ -557,11 +557,11 @@ def check_afdo_profiles_are_new(
     *,
     chrome_src: Path,
     chromiumos_overlay: Path,
-    branches: List[Tuple[git_utils.Channel, git_utils.ChannelBranch]],
-    afdo_profiles: Dict[int, List[ChromeGsProfile]],
+    branches: list[tuple[git_utils.Channel, git_utils.ChannelBranch]],
+    afdo_profiles: dict[int, list[ChromeGsProfile]],
     now: datetime.datetime,
     max_profile_age: datetime.timedelta,
-) -> Dict[int, List[Complaint]]:
+) -> dict[int, list[Complaint]]:
     """Checks to see if the AFDO profiles for the given channel look good.
 
     Returns:
@@ -656,8 +656,8 @@ def check_afdo_profiles_are_new(
 
 
 def merge_milestone_complaints(
-    a: Dict[int, List[Complaint]], b: Dict[int, List[Complaint]]
-) -> Dict[int, List[Complaint]]:
+    a: dict[int, list[Complaint]], b: dict[int, list[Complaint]]
+) -> dict[int, list[Complaint]]:
     """Merges two per-milestone Complaints dicts into one."""
     return {k: sorted(a.get(k, []) + b.get(k, [])) for k in a.keys() | b.keys()}
 
@@ -669,7 +669,7 @@ def format_complaint(complaint: Complaint, width: int) -> str:
 
 
 def format_complaints(
-    milestone: int, complaints: List[Complaint], width: int
+    milestone: int, complaints: list[Complaint], width: int
 ) -> str:
     lines = [f"Complaint(s) for M{milestone}:"]
     for complaint in sorted(complaints):
@@ -682,8 +682,8 @@ def format_complaints(
 
 
 def upload_cronjob_reports(
-    branches: List[Tuple[git_utils.Channel, git_utils.ChannelBranch]],
-    milestone_complaints: Dict[int, List[Complaint]],
+    branches: list[tuple[git_utils.Channel, git_utils.ChannelBranch]],
+    milestone_complaints: dict[int, list[Complaint]],
 ) -> None:
     """Uploads synthesized cronjob reports outlining this script's findings."""
     for channel, branch in branches:
@@ -712,7 +712,7 @@ def upload_cronjob_reports(
         )
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

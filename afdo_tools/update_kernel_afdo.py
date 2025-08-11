@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Iterable, Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -73,7 +73,7 @@ class KernelVersion:
 ARM_KERNEL_5_15 = (Arch.ARM, KernelVersion(5, 15))
 
 # Versions that rolling should be skipped on, for one reason or another.
-SKIPPED_VERSIONS: Dict[int, Iterable[Tuple[Arch, KernelVersion]]] = {
+SKIPPED_VERSIONS: dict[int, Iterable[tuple[Arch, KernelVersion]]] = {
     # Kernel tracing was disabled on ARM in 114, b/275560674
     114: (ARM_KERNEL_5_15,),
     115: (ARM_KERNEL_5_15,),
@@ -175,13 +175,13 @@ def git_fetch(git_dir: Path) -> None:
 class ArchUpdateConfig:
     """The AFDO update config for one architecture."""
 
-    versions_to_track: List[KernelVersion]
+    versions_to_track: list[KernelVersion]
     metadata_file: Path
 
 
 def read_update_cfg_file(
     toolchain_utils: Path, file_path: Path
-) -> Dict[Arch, ArchUpdateConfig]:
+) -> dict[Arch, ArchUpdateConfig]:
     """Reads `update_kernel_afdo.cfg`."""
     # These files were originally meant to be `source`d in bash, and are very
     # simple. These are read from branches, so we'd need cherry-picks to go
@@ -261,10 +261,10 @@ class KernelProfileFetcher:
     """Fetches kernel profiles from gs://. Caches results."""
 
     def __init__(self):
-        self._cached_results: Dict[str, List[KernelGsProfile]] = {}
+        self._cached_results: dict[str, list[KernelGsProfile]] = {}
 
     @classmethod
-    def _fetch_impl(cls, gs_url: str) -> List[KernelGsProfile]:
+    def _fetch_impl(cls, gs_url: str) -> list[KernelGsProfile]:
         results = []
         for gs_entry in gs.ls(gs_url):
             profile_name = os.path.basename(gs_entry.gs_path)
@@ -282,7 +282,7 @@ class KernelProfileFetcher:
             )
         return results
 
-    def fetch(self, gs_url: str) -> List[KernelGsProfile]:
+    def fetch(self, gs_url: str) -> list[KernelGsProfile]:
         cached = self._cached_results.get(gs_url)
         if cached is None:
             logging.info("Fetching profiles from %s...", gs_url)
@@ -332,7 +332,7 @@ def find_newest_afdo_artifact(
     )
 
 
-def read_afdo_descriptor_file(path: Path) -> Dict[KernelVersion, str]:
+def read_afdo_descriptor_file(path: Path) -> dict[KernelVersion, str]:
     """Reads the AFDO descriptor file.
 
     "AFDO descriptor file" is jargon to refer to the actual JSON file that PUpr
@@ -363,7 +363,7 @@ def read_afdo_descriptor_file(path: Path) -> Dict[KernelVersion, str]:
 
 
 def write_afdo_descriptor_file(
-    path: Path, contents: Dict[KernelVersion, str]
+    path: Path, contents: dict[KernelVersion, str]
 ) -> bool:
     """Writes the file at path with the given contents.
 
@@ -412,7 +412,7 @@ def fetch_and_validate_newest_afdo_artifact(
     kernel_version: KernelVersion,
     branch: git_utils.ChannelBranch,
     channel: git_utils.Channel,
-) -> Optional[Tuple[str, bool]]:
+) -> Optional[tuple[str, bool]]:
     """Tries to update one AFDO profile on a branch.
 
     Returns:
@@ -460,9 +460,9 @@ def fetch_and_validate_newest_afdo_artifact(
 
 
 def remove_untracked_mappings(
-    descriptors: Dict[KernelVersion, str],
+    descriptors: dict[KernelVersion, str],
     versions_to_track: Iterable[KernelVersion],
-) -> Dict[KernelVersion, str]:
+) -> dict[KernelVersion, str]:
     version_set = set(versions_to_track)
     return {k: v for k, v in descriptors.items() if k in version_set}
 
@@ -473,7 +473,7 @@ def update_afdo_for_channel(
     selection_info: ProfileSelectionInfo,
     channel: git_utils.Channel,
     branch: git_utils.ChannelBranch,
-    skipped_versions: Dict[int, Iterable[Tuple[Arch, KernelVersion]]],
+    skipped_versions: dict[int, Iterable[tuple[Arch, KernelVersion]]],
 ) -> UpdateResult:
     """Updates AFDO on the given channel."""
     git_checkout(toolchain_utils, branch)
@@ -622,7 +622,7 @@ def upload_head_to_gerrit(
     git_utils.set_autoreview_topic_and_labels(chromeos_tree, cl_id)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     toolchain_utils = cros_paths.script_toolchain_utils_root()
 
     opts = get_parser().parse_args(argv)
