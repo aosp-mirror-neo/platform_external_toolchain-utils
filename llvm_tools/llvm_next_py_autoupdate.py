@@ -196,7 +196,7 @@ def update_testing_url_list(
 
 def write_url_list(llvm_next_py_file_path: Path, new_url_list: List[str]):
     llvm_next_py = llvm_next_py_file_path.read_text(encoding="utf-8")
-    var_start_string = "\nLLVM_NEXT_TESTING_CL_URLS: Iterable[str] = ("
+    var_start_string = "\nLLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ("
     testing_cl_urls_start = llvm_next_py.index(var_start_string)
 
     # In a `cros format`'ed file, are two cases to handle here when finding the

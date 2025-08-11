@@ -41,7 +41,7 @@ Complaint = list[str]
 
 # Iterable of milestones to skip monitoring for. Once a milestone leaves
 # stable, it can be removed from this.
-SKIP_MILESTONES = (
+SKIP_MILESTONES: tuple[int, ...] = (
     # b/384142128#comment33
     131,
 )
