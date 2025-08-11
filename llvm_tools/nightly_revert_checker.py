@@ -18,7 +18,7 @@ import pprint
 import re
 import subprocess
 import time
-from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Tuple
+from typing import Any, Callable, Iterable, NamedTuple
 
 from cros_utils import email_sender
 from cros_utils import git_utils
@@ -65,15 +65,15 @@ class State:
     """Persistent state for this script."""
 
     # Mapping of LLVM SHA -> List of reverts that have been seen for it
-    seen_reverts: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+    seen_reverts: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     # A mapping of LLVM SHA -> the last timestamp at which it was considered
     # 'interesting'.
-    last_seen_llvm_shas: Dict[str, int] = dataclasses.field(
+    last_seen_llvm_shas: dict[str, int] = dataclasses.field(
         default_factory=dict
     )
     # Mapping of friendly HEAD name (e.g., main-legacy) to last-known info
     # about it.
-    heads: Dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
+    heads: dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_json(cls, json_object: Any) -> "State":
@@ -94,7 +94,7 @@ class State:
 
 def _find_interesting_android_shas(
     android_llvm_toolchain_dir: str,
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     llvm_project = Path(android_llvm_toolchain_dir) / "toolchain/llvm-project"
     android_main_sha = git_utils.resolve_ref(llvm_project, "goog/main")
     merge_base = subprocess.check_output(
@@ -114,11 +114,11 @@ def _find_interesting_android_shas(
 
 def _find_interesting_chromeos_shas(
     chromeos_path: Path,
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     llvm_hash = get_llvm_hash.LLVMHash()
 
     current_llvm = llvm_hash.GetCrOSCurrentLLVMHash(chromeos_path)
-    results: List[Tuple[str, str]] = [("llvm", current_llvm)]
+    results: list[tuple[str, str]] = [("llvm", current_llvm)]
     next_llvm = llvm_hash.GetCrOSLLVMNextHash()
     if current_llvm != next_llvm:
         results.append(("llvm-next", next_llvm))
@@ -140,7 +140,7 @@ def _generate_revert_email(
     sha: str,
     prettify_sha: Callable[[str], tiny_render.Piece],
     get_sha_description: Callable[[str], tiny_render.Piece],
-    new_reverts: List[revert_checker.Revert],
+    new_reverts: list[revert_checker.Revert],
 ) -> _Email:
     email_pieces = [
         "It looks like there may be %s across %s ("
@@ -186,8 +186,8 @@ def _generate_revert_email(
 _EmailRecipients = NamedTuple(
     "_EmailRecipients",
     [
-        ("well_known", List[str]),
-        ("direct", List[str]),
+        ("well_known", list[str]),
+        ("direct", list[str]),
     ],
 )
 
@@ -241,15 +241,15 @@ class NewRevertInfo:
 
     friendly_name: str
     sha: str
-    new_reverts: List[revert_checker.Revert]
+    new_reverts: list[revert_checker.Revert]
 
 
 def locate_new_reverts_across_shas(
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
-    interesting_shas: List[Tuple[str, str]],
+    interesting_shas: list[tuple[str, str]],
     state: State,
-) -> Tuple[State, List[NewRevertInfo]]:
+) -> tuple[State, list[NewRevertInfo]]:
     """Locates and returns yet-unseen reverts across `interesting_shas`."""
     new_state = State()
     revert_infos = []
@@ -348,10 +348,10 @@ def do_cherrypick(
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
     repository: str,
-    interesting_shas: List[Tuple[str, str]],
+    interesting_shas: list[tuple[str, str]],
     state: State,
-    reviewers: List[str],
-    cc: List[str],
+    reviewers: list[str],
+    cc: list[str],
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -446,8 +446,8 @@ def _upload_revert_cherry_pick(
     reverted_sha: str,
     llvm_config: git_llvm_rev.LLVMConfig,
     llvm_worktree: Path,
-    reviewers: List[str],
-    cc: List[str],
+    reviewers: list[str],
+    cc: list[str],
 ):
     """Mockable helper to create and upload patches."""
     cherry_pick_returncode = subprocess.run(
@@ -638,7 +638,7 @@ def do_email(
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
     repository: str,
-    interesting_shas: List[Tuple[str, str]],
+    interesting_shas: list[tuple[str, str]],
     state: State,
     recipients: _EmailRecipients,
 ) -> State:
@@ -683,7 +683,7 @@ def do_email(
     return new_state
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -741,7 +741,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     opts = parse_args(argv)
 
     logging.basicConfig(

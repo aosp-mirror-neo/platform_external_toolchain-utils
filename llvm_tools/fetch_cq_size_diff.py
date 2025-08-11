@@ -22,7 +22,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from cros_utils import cros_image_tools
 from cros_utils import cros_paths
@@ -176,7 +176,7 @@ def is_probably_non_production_builder(builder_name: str) -> bool:
     )
 
 
-def try_gsutil_ls(paths: List[str]) -> List[str]:
+def try_gsutil_ls(paths: list[str]) -> list[str]:
     """Returns all of the paths `gsutil` matches from `paths`.
 
     Ignores errors from gsutil about paths not existing.
@@ -203,9 +203,9 @@ def try_gsutil_ls(paths: List[str]) -> List[str]:
 
 
 def find_size_diffable_cq_artifacts(
-    cq_build_ids: List[cros_cls.BuildID],
+    cq_build_ids: list[cros_cls.BuildID],
     artifact_name: str,
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     """Searches the cq-orchestrator builds for candidates for size comparison.
 
     Returns:
@@ -299,7 +299,7 @@ def inspect_gs_impl(
 
 def inspect_single_cl(
     cl: cros_cls.ChangeListURL, artifact: ComparableArtifact
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     """Inspects a single CL for artifacts.
 
     Returns:
@@ -318,8 +318,8 @@ def inspect_single_cl(
 
 
 def find_common_artifact(
-    a: List[Tuple[str, str]], b: List[Tuple[str, str]]
-) -> Optional[Tuple[str, str, str]]:
+    a: list[tuple[str, str]], b: list[tuple[str, str]]
+) -> Optional[tuple[str, str, str]]:
     """Finds an artifact that can be compared between the given artifact lists.
 
     The artifact lists should be in the form [(cq_builder_name, artifact_path)].
@@ -369,7 +369,7 @@ def inspect_gs(opts: argparse.Namespace, artifact: ComparableArtifact) -> None:
     inspect_gs_impl(opts.baseline, opts.new, artifact)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     cros_root = cros_paths.script_chromiumos_checkout_or_exit()
 
     parser = argparse.ArgumentParser(

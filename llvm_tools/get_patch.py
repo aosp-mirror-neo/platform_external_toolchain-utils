@@ -23,7 +23,7 @@ import re
 import subprocess
 import tempfile
 import textwrap
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
+from typing import Any, Iterable, Optional, Union
 from urllib import request
 
 from cros_utils import cros_paths
@@ -116,7 +116,7 @@ class PatchContext:
         new_patch_entries: Iterable[patch_utils.PatchEntry],
     ) -> None:
         """Add some PatchEntries to the appropriate PATCHES.json."""
-        workdir_mappings: Dict[Path, List[patch_utils.PatchEntry]] = {}
+        workdir_mappings: dict[Path, list[patch_utils.PatchEntry]] = {}
         for pe in new_patch_entries:
             workdir_mappings[pe.workdir] = workdir_mappings.get(
                 pe.workdir, []
@@ -142,7 +142,7 @@ class PatchContext:
 
     def make_patches(
         self, patch_source: Union[LLVMGitRef, LLVMPullRequest]
-    ) -> List[patch_utils.PatchEntry]:
+    ) -> list[patch_utils.PatchEntry]:
         """Create PatchEntries for a given LLVM change and returns them.
 
         Returns:
@@ -171,11 +171,11 @@ class PatchContext:
     def _make_patches_from_git_ref(
         self,
         patch_source: LLVMGitRef,
-    ) -> List[patch_utils.PatchEntry]:
+    ) -> list[patch_utils.PatchEntry]:
         packages = get_changed_packages(
             self.llvm_project_dir, patch_source.git_ref
         )
-        new_patch_entries: List[patch_utils.PatchEntry] = []
+        new_patch_entries: list[patch_utils.PatchEntry] = []
         for workdir in self._workdirs_for_packages(packages):
             rel_patch_path = f"cherry/{patch_source.git_ref}.patch"
             if (workdir / "cherry").is_dir():
@@ -222,7 +222,7 @@ class PatchContext:
 
     def _make_patches_from_pr(
         self, patch_source: LLVMPullRequest
-    ) -> List[patch_utils.PatchEntry]:
+    ) -> list[patch_utils.PatchEntry]:
         json_response = get_llvm_github_pull(patch_source.number)
         github_ctx = GitHubPRContext(json_response, self.llvm_project_dir)
         rel_patch_path = f"{github_ctx.full_title_cleaned}.patch"
@@ -255,7 +255,7 @@ class PatchContext:
             new_patch_entries.append(pe)
         return new_patch_entries
 
-    def _workdirs_for_packages(self, packages: Iterable[Path]) -> List[Path]:
+    def _workdirs_for_packages(self, packages: Iterable[Path]) -> list[Path]:
         return [self.chromiumos_root / pkg / "files" for pkg in packages]
 
     def is_patch_applied(self, to_check: patch_utils.PatchEntry) -> bool:
@@ -292,7 +292,7 @@ def get_commit_subj(git_root_dir: Path, ref: str) -> str:
     return subj
 
 
-def get_llvm_github_pull(pull_number: int) -> Dict[str, Any]:
+def get_llvm_github_pull(pull_number: int) -> dict[str, Any]:
     """Get information about an LLVM pull request.
 
     Returns:
@@ -328,7 +328,7 @@ class GitHubPRContext:
 
     def __init__(
         self,
-        response: Dict[str, Any],
+        response: dict[str, Any],
         llvm_project_dir: Path,
     ) -> None:
         """Create a GitHubPRContext from a GitHub pulls api call.
@@ -359,7 +359,7 @@ class GitHubPRContext:
     def full_title_cleaned(self) -> str:
         return re.sub(r"\W", "-", self.full_title)
 
-    def git_squash_chain_patch(self) -> Tuple[str, Set[Path]]:
+    def git_squash_chain_patch(self) -> tuple[str, set[Path]]:
         """Replicate a squashed merge commit as a patch file.
 
         Args:
@@ -459,7 +459,7 @@ class GitHubPRContext:
 
     @staticmethod
     def _run(
-        cmd: List[Union[str, Path]],
+        cmd: list[Union[str, Path]],
         cwd: Path,
         stdin: int = subprocess.DEVNULL,
     ) -> subprocess.CompletedProcess:
@@ -475,8 +475,8 @@ class GitHubPRContext:
 
 
 def get_changed_packages(
-    llvm_project_dir: Path, ref: Union[str, Tuple[str, str]]
-) -> Set[Path]:
+    llvm_project_dir: Path, ref: Union[str, tuple[str, str]]
+) -> set[Path]:
     """Returns package paths which changed over a given ref.
 
     Args:
@@ -565,9 +565,9 @@ def _git_format_patch(git_dir: Path, ref: str) -> str:
 
 
 def validate_patch_args(
-    positional_args: List[str],
+    positional_args: list[str],
     llvm_project: Path,
-) -> List[Union[LLVMGitRef, LLVMPullRequest]]:
+) -> list[Union[LLVMGitRef, LLVMPullRequest]]:
     """Checks that each ref_or_pr_num is in a valid format."""
     patch_sources = []
     for arg in positional_args:
@@ -698,7 +698,7 @@ def main() -> None:
 
     # For the vast majority of cases, we'll only want to set platform to
     # ["chromiumos"], so let's make that the default.
-    platforms: List[str] = args.platform if args.platform else ["chromiumos"]
+    platforms: list[str] = args.platform if args.platform else ["chromiumos"]
 
     ctx = PatchContext(
         chromiumos_root=args.chromiumos_root,

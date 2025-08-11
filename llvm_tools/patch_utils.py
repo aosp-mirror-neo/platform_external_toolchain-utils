@@ -12,17 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    IO,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, IO, Iterable, List, Optional, Union
 
 from llvm_tools import atomic_write_file
 
@@ -60,7 +50,7 @@ class Hunk:
     patch_hunk_lineno_end: Optional[int]
 
 
-def parse_patch_stream(patch_stream: IO[str]) -> Dict[str, List[Hunk]]:
+def parse_patch_stream(patch_stream: IO[str]) -> dict[str, list[Hunk]]:
     """Parse a patch file-like into Hunks.
 
     Args:
@@ -110,7 +100,7 @@ def parse_patch_stream(patch_stream: IO[str]) -> Dict[str, List[Hunk]]:
     return out
 
 
-def parse_failed_patch_output(text: str) -> Dict[str, List[int]]:
+def parse_failed_patch_output(text: str) -> dict[str, list[int]]:
     current_file = None
     failed_hunks = collections.defaultdict(list)
     for eline in text.split("\n"):
@@ -138,7 +128,7 @@ class PatchResult:
     """Result of a patch application."""
 
     succeeded: bool
-    failed_hunks: Dict[str, List[Hunk]] = dataclasses.field(
+    failed_hunks: dict[str, list[Hunk]] = dataclasses.field(
         default_factory=dict
     )
 
@@ -166,10 +156,10 @@ class PatchEntry:
 
     workdir: Path
     """Storage location for the patches."""
-    metadata: Optional[Dict[str, Any]]
-    platforms: Optional[List[str]]
+    metadata: Optional[dict[str, Any]]
+    platforms: Optional[list[str]]
     rel_patch_path: str
-    version_range: Optional[Dict[str, Optional[int]]]
+    version_range: Optional[dict[str, Optional[int]]]
     verify_workdir: bool = True
     """Don't verify the workdir exists. Used for testing."""
     _parsed_hunks = None
@@ -179,7 +169,7 @@ class PatchEntry:
             raise ValueError(f"workdir {self.workdir} is not a directory")
 
     @classmethod
-    def from_dict(cls, workdir: Path, data: Dict[str, Any]):
+    def from_dict(cls, workdir: Path, data: dict[str, Any]):
         """Instatiate from a dictionary.
 
         Dictionary must have at least the following key:
@@ -198,7 +188,7 @@ class PatchEntry:
             data.get("version_range"),
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         # We sort the metadata so that it doesn't matter
         # how it was passed to patch_utils.
         if self.metadata is None:
@@ -207,7 +197,7 @@ class PatchEntry:
             sorted_metadata = dict(
                 sorted(self.metadata.items(), key=lambda x: x[0])
             )
-        out: Dict[str, Any] = {
+        out: dict[str, Any] = {
             "metadata": sorted_metadata,
         }
         if self.platforms:
@@ -222,7 +212,7 @@ class PatchEntry:
         )
         return out
 
-    def parsed_hunks(self) -> Dict[str, List[Hunk]]:
+    def parsed_hunks(self) -> dict[str, list[Hunk]]:
         # Minor caching here because IO is slow.
         if not self._parsed_hunks:
             with self.patch_path().open(encoding="utf-8") as f:
@@ -247,7 +237,7 @@ class PatchEntry:
         self,
         root_dir: Path,
         patch_cmd: Optional[Callable] = None,
-        extra_args: Optional[List[Union[str, Path]]] = None,
+        extra_args: Optional[list[Union[str, Path]]] = None,
     ) -> PatchResult:
         """Apply a patch to a given directory."""
         # Cmd to apply a patch in the src unpack path.
@@ -298,10 +288,10 @@ def git_apply(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: List[Union[str, Path]],
+    extra_args: list[Union[str, Path]],
 ) -> PatchResult:
     """Patch a patch file using 'git apply'."""
-    cmd: List[Union[str, Path]] = ["git", "apply", patch_path]
+    cmd: list[Union[str, Path]] = ["git", "apply", patch_path]
     if extra_args:
         cmd += extra_args
     return _run_git_applylike(pe, root_dir, cmd)
@@ -311,10 +301,10 @@ def git_am(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[List[Union[str, Path]]],
+    extra_args: Optional[list[Union[str, Path]]],
 ) -> PatchResult:
     """Patch a patch file using 'git am'."""
-    cmd: List[Union[str, Path]] = ["git", "am", "--3way", patch_path]
+    cmd: list[Union[str, Path]] = ["git", "am", "--3way", patch_path]
     if extra_args:
         cmd += extra_args
     return _run_git_applylike(pe, root_dir, cmd, quiet=True)
@@ -324,7 +314,7 @@ def git_am_chromiumos(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[List[Union[str, Path]]],
+    extra_args: Optional[list[Union[str, Path]]],
 ) -> PatchResult:
     """Patch a patch file using 'git am', but include footer metadata."""
     return _git_am_chromiumos_internal(pe, root_dir, patch_path, extra_args)
@@ -334,7 +324,7 @@ def git_am_chromiumos_quiet(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[List[Union[str, Path]]],
+    extra_args: Optional[list[Union[str, Path]]],
 ) -> PatchResult:
     """Same as git_am_chromiumos, but no stdout."""
     return _git_am_chromiumos_internal(
@@ -346,10 +336,10 @@ def _git_am_chromiumos_internal(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[List[Union[str, Path]]],
+    extra_args: Optional[list[Union[str, Path]]],
     quiet: bool = False,
 ) -> PatchResult:
-    cmd: List[Union[str, Path]] = [
+    cmd: list[Union[str, Path]] = [
         "git",
         "am",
         "--3way",
@@ -405,10 +395,10 @@ def gnu_patch(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[List[Union[str, Path]]],
+    extra_args: Optional[list[Union[str, Path]]],
 ) -> PatchResult:
     """Patch a patch file using GNU 'patch'."""
-    cmd: List[Union[str, Path]] = [
+    cmd: list[Union[str, Path]] = [
         "patch",
         "-d",
         root_dir.absolute(),
@@ -447,7 +437,7 @@ def gnu_patch(
 def _run_git_applylike(
     pe: PatchEntry,
     root_dir: Path,
-    cmd: List[Union[Path, str]],
+    cmd: list[Union[Path, str]],
     quiet: bool = False,
 ):
     try:
@@ -472,7 +462,7 @@ def generate_chromiumos_llvm_footer(
     original_sha: Optional[str] = None,
     platforms: Iterable[str] = (),
     info: Optional[str] = None,
-) -> List[str]:
+) -> list[str]:
     """Generates a commit footer given patch metadata.
 
     Returns:
@@ -506,7 +496,7 @@ def generate_chromiumos_llvm_footer(
     )
 
 
-def _chromiumos_llvm_footer(pe: PatchEntry) -> List[str]:
+def _chromiumos_llvm_footer(pe: PatchEntry) -> list[str]:
     version_range = pe.version_range or {}
     metadata = pe.metadata or {}
     return generate_chromiumos_llvm_footer(
@@ -520,7 +510,7 @@ def _chromiumos_llvm_footer(pe: PatchEntry) -> List[str]:
 
 
 def patch_applies_after(
-    version_range: Optional[Dict[str, Optional[int]]], svn_version: int
+    version_range: Optional[dict[str, Optional[int]]], svn_version: int
 ) -> bool:
     """Does this patch apply after `svn_version`?"""
     if not version_range:
@@ -536,14 +526,14 @@ class PatchInfo:
 
     # str types are legacy. Patch lists should
     # probably be PatchEntries,
-    applied_patches: List[PatchEntry]
-    failed_patches: List[PatchEntry]
+    applied_patches: list[PatchEntry]
+    failed_patches: list[PatchEntry]
     # Can be deleted once legacy code is removed.
-    non_applicable_patches: List[PatchEntry]
+    non_applicable_patches: list[PatchEntry]
     # Can be deleted once legacy code is removed.
-    disabled_patches: List[str]
+    disabled_patches: list[str]
     # Can be deleted once legacy code is removed.
-    removed_patches: List[str]
+    removed_patches: list[str]
     # Can be deleted once legacy code is removed.
     modified_metadata: Optional[str]
 
@@ -551,7 +541,7 @@ class PatchInfo:
         return dataclasses.asdict(self)
 
 
-def json_to_patch_entries(workdir: Path, json_fd: IO[str]) -> List[PatchEntry]:
+def json_to_patch_entries(workdir: Path, json_fd: IO[str]) -> list[PatchEntry]:
     """Convert a json IO object to List[PatchEntry].
 
     Examples:
@@ -561,7 +551,7 @@ def json_to_patch_entries(workdir: Path, json_fd: IO[str]) -> List[PatchEntry]:
     return [PatchEntry.from_dict(workdir, d) for d in json.load(json_fd)]
 
 
-def json_str_to_patch_entries(workdir: Path, json_str: str) -> List[PatchEntry]:
+def json_str_to_patch_entries(workdir: Path, json_str: str) -> list[PatchEntry]:
     """Convert a json IO object to List[PatchEntry].
 
     Examples:
@@ -571,7 +561,7 @@ def json_str_to_patch_entries(workdir: Path, json_str: str) -> List[PatchEntry]:
     return [PatchEntry.from_dict(workdir, d) for d in json.loads(json_str)]
 
 
-def _print_failed_patch(pe: PatchEntry, failed_hunks: Dict[str, List[Hunk]]):
+def _print_failed_patch(pe: PatchEntry, failed_hunks: dict[str, list[Hunk]]):
     """Print information about a single failing PatchEntry.
 
     Args:
@@ -649,7 +639,7 @@ def apply_single_patch_entry(
     pe: PatchEntry,
     patch_cmd: Optional[Callable] = None,
     ignore_version_range: bool = False,
-) -> Tuple[bool, Optional[Dict[str, List[Hunk]]]]:
+) -> tuple[bool, Optional[dict[str, list[Hunk]]]]:
     """Try to apply a single PatchEntry object.
 
     Returns:
@@ -713,7 +703,7 @@ def git_clean_context(git_root_dir: Path):
 
 
 def _write_json_changes(
-    patches: List[Dict[str, Any]], file_io: IO[str], indent_len=2
+    patches: list[dict[str, Any]], file_io: IO[str], indent_len=2
 ):
     """Write JSON changes to file, does not acquire new file lock."""
     json.dump(patches, file_io, indent=indent_len, separators=(",", ": "))
@@ -721,7 +711,7 @@ def _write_json_changes(
     file_io.write("\n")
 
 
-def predict_indent(patches_lines: List[str]) -> int:
+def predict_indent(patches_lines: list[str]) -> int:
     """Given file lines, predict and return the max indentation unit."""
     indents = [len(x) - len(x.lstrip(" ")) for x in patches_lines]
     if all(x % 4 == 0 for x in indents):
@@ -789,7 +779,7 @@ def update_version_ranges_with_entries(
     llvm_src_dir: Path,
     patch_entries: Iterable[PatchEntry],
     patch_cmd: Optional[Callable] = None,
-) -> Tuple[List[PatchEntry], List[PatchEntry]]:
+) -> tuple[list[PatchEntry], List[PatchEntry]]:
     """Test-able helper for UpdateVersionRanges.
 
     Args:
@@ -799,13 +789,13 @@ def update_version_ranges_with_entries(
         patch_cmd: The function to use when actually applying the patch.
 
     Returns:
-        Tuple of (modified entries, applied patches)
+        tuple of (modified entries, applied patches)
 
     Post:
         Modifies patch_entries in place.
     """
-    modified_entries: List[PatchEntry] = []
-    applied_patches: List[PatchEntry] = []
+    modified_entries: list[PatchEntry] = []
+    applied_patches: list[PatchEntry] = []
     active_patches = (
         pe for pe in patch_entries if pe.can_patch_version(svn_version)
     )
@@ -829,7 +819,7 @@ def update_version_ranges_with_entries(
     return modified_entries, applied_patches
 
 
-def remove_old_patches(svn_version: int, patches_json: Path) -> List[Path]:
+def remove_old_patches(svn_version: int, patches_json: Path) -> list[Path]:
     """Remove patches that don't and will never apply for the future.
 
     Patches are determined to be "old" via the "is_old" method for

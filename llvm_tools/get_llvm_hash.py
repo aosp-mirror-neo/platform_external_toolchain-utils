@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Iterator, Optional, Tuple, Union
+from typing import Iterator, Optional, Union
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -374,7 +374,7 @@ def IsSvnOption(svn_option: str) -> Union[int, str]:
 
 def GetLLVMHashAndVersionFromSVNOption(
     svn_option: Union[int, str],
-) -> Tuple[str, int]:
+) -> tuple[str, int]:
     """Gets the LLVM hash and LLVM version based off of the svn option.
 
     Args:

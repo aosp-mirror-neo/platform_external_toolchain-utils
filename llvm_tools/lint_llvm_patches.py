@@ -13,13 +13,12 @@ import logging
 import os
 from pathlib import Path
 import sys
-from typing import List
 
 from cros_utils import cros_paths
 from llvm_tools import patch_utils
 
 
-def load_patches_json(llvm_patches: Path) -> List[patch_utils.PatchEntry]:
+def load_patches_json(llvm_patches: Path) -> list[patch_utils.PatchEntry]:
     patches_json = (
         llvm_patches / cros_paths.DEFAULT_PATCHES_PATH_IN_TOOLCHAIN_UTILS.name
     )
@@ -35,12 +34,12 @@ def load_patches_json(llvm_patches: Path) -> List[patch_utils.PatchEntry]:
 
 
 def extract_all_patch_paths_from_patches_json(
-    patches_json: List[patch_utils.PatchEntry],
-) -> List[Path]:
+    patches_json: list[patch_utils.PatchEntry],
+) -> list[Path]:
     return [x.workdir / x.rel_patch_path for x in patches_json]
 
 
-def find_all_patch_files_in(base_dir: Path) -> List[Path]:
+def find_all_patch_files_in(base_dir: Path) -> list[Path]:
     results = []
     for root, _, files in os.walk(base_dir):
         proot = Path(root)
@@ -50,7 +49,7 @@ def find_all_patch_files_in(base_dir: Path) -> List[Path]:
     return results
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     toolchain_utils = cros_paths.script_toolchain_utils_root()
 
     logging.basicConfig(

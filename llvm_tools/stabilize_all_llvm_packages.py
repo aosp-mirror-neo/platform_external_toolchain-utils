@@ -20,7 +20,6 @@ import contextlib
 import logging
 import subprocess
 import sys
-from typing import List
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -90,7 +89,7 @@ def resolve_llvm_sha(llvm_next: bool) -> str:
     return hash_obj.GetCrOSCurrentLLVMHash(cros_paths.CHROOT_SOURCE_ROOT)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     chroot.VerifyInsideChroot()
 
     logging.basicConfig(

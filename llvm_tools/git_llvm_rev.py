@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
-from typing import IO, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import IO, Iterable, NamedTuple, Optional, Union
 
 
 MAIN_BRANCH = "main"
@@ -96,7 +96,7 @@ def is_git_sha(xs: str) -> bool:
     )
 
 
-def check_output(command: List[str], cwd: Union[Path, str]) -> str:
+def check_output(command: list[str], cwd: Union[Path, str]) -> str:
     """Shorthand for subprocess.check_output. Auto-decodes any stdout."""
     result = subprocess.run(
         command,
@@ -222,7 +222,7 @@ def translate_sha_to_rev(llvm_config: LLVMConfig, sha_or_ref: str) -> Rev:
 
 def parse_git_commit_messages(
     stream: Union[Iterable[str], IO[str]], separator: str
-) -> Iterable[Tuple[str, str]]:
+) -> Iterable[tuple[str, str]]:
     """Parses a stream of git log messages.
 
     These are expected to be in the format:
@@ -443,7 +443,7 @@ def find_root_llvm_dir(root_dir: str = ".") -> str:
     return result.strip()
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--llvm_dir",

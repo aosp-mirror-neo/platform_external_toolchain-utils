@@ -12,13 +12,13 @@ import re
 import shlex
 import subprocess
 import time
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Iterable, Optional, Union
 
 
 BuildID = int
 
 
-def _run_bb_decoding_output(command: List[str], multiline: bool = False) -> Any:
+def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
     """Runs `bb` with the `json` flag, and decodes the command's output.
 
     Args:
@@ -235,7 +235,7 @@ def wait_for_bot_to_finish(
         time.sleep(check_frequency_secs)
 
 
-def fetch_builder_steps(build_id: BuildID) -> List[Any]:
+def fetch_builder_steps(build_id: BuildID) -> list[Any]:
     """Returns the JSON dict of the given builder's steps."""
     result = _run_bb_decoding_output(["get", "-steps", str(build_id)])
     # A build with no steps is functionally equivalent to a build with an empty
@@ -245,12 +245,12 @@ def fetch_builder_steps(build_id: BuildID) -> List[Any]:
 
 def fetch_cq_orchestrator_ids(
     cl: ChangeListURL,
-) -> List[BuildID]:
+) -> list[BuildID]:
     """Returns the BuildID of completed cq-orchestrator runs on a CL.
 
     Newer runs are sorted later in the list.
     """
-    results: List[Dict[str, Any]] = _run_bb_decoding_output(
+    results: list[dict[str, Any]] = _run_bb_decoding_output(
         [
             "ls",
             "-cl",
@@ -281,11 +281,11 @@ class CQOrchestratorOutput:
     # The status of the CQ builder.
     status: BuilderStatus
     # A dict of builders that this CQ builder spawned.
-    child_builders: Dict[str, BuildID]
+    child_builders: dict[str, BuildID]
 
     @classmethod
     def fetch(cls, bot_id: BuildID) -> "CQOrchestratorOutput":
-        decoded: Dict[str, Any] = _run_bb_decoding_output(
+        decoded: dict[str, Any] = _run_bb_decoding_output(
             ["get", "-steps", str(bot_id)]
         )
         results = {}
@@ -339,7 +339,7 @@ class CQBoardBuilderOutput:
     @classmethod
     def fetch_many(
         cls, bot_ids: Iterable[BuildID]
-    ) -> List["CQBoardBuilderOutput"]:
+    ) -> list["CQBoardBuilderOutput"]:
         """Fetches CQBoardBuilderOutput for the given bots."""
         bb_output = _run_bb_decoding_output(
             ["get", "-p"] + [str(x) for x in bot_ids], multiline=True
@@ -358,7 +358,7 @@ class CQBoardBuilderOutput:
 
 def fetch_cq_orchestrator_or_board_builder(
     bot_id: BuildID,
-) -> Tuple[str, Union[CQOrchestratorOutput, CQBoardBuilderOutput]]:
+) -> tuple[str, Union[CQOrchestratorOutput, CQBoardBuilderOutput]]:
     """Figures out the builder type of bot_id, then fetches it."""
     result = _run_bb_decoding_output(["get", str(bot_id)])
     builder_name = result["builder"]["builder"]

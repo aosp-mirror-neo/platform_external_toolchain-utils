@@ -24,7 +24,7 @@ import json
 import logging
 from pathlib import Path
 import re
-from typing import Dict, Iterable, List, Optional, Set
+from typing import Iterable, Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -82,7 +82,7 @@ class BranchContext:
     branch_ref: str
     merge_base: str
     llvm_rev: git_llvm_rev.Rev
-    patch_entry_combos: List[PatchCombo]
+    patch_entry_combos: list[PatchCombo]
 
     @property
     def patch_entries(self):
@@ -97,7 +97,7 @@ def _maybe_string_to_int(s: Optional[str]) -> Optional[int]:
     return int(s)
 
 
-def _get_platforms(commit_metadata: Dict[str, str]) -> List[str]:
+def _get_platforms(commit_metadata: dict[str, str]) -> list[str]:
     return sorted(
         p.strip()
         for p in commit_metadata.get("patch.platforms", "chromiumos").split(",")
@@ -105,7 +105,7 @@ def _get_platforms(commit_metadata: Dict[str, str]) -> List[str]:
     )
 
 
-def _get_metadata_info(commit_metadata: Dict[str, str]) -> List[str]:
+def _get_metadata_info(commit_metadata: dict[str, str]) -> list[str]:
     return [
         p.strip()
         for p in commit_metadata.get("patch.metadata.info", "").split(",")
@@ -114,7 +114,7 @@ def _get_metadata_info(commit_metadata: Dict[str, str]) -> List[str]:
 
 
 def _get_metadata_original_sha(
-    commit_metadata: Dict[str, str],
+    commit_metadata: dict[str, str],
 ) -> Optional[str]:
     return commit_metadata.get("patch.metadata.original_sha")
 
@@ -142,12 +142,12 @@ def filter_change_id(patch_contents: str) -> str:
 
 def create_branch_contexts(
     patch_context: LLVMPatchContext,
-) -> List[BranchContext]:
+) -> list[BranchContext]:
     """Package all LLVM branch data into an easily usable BranchContext."""
 
     # Compile this regex outside of the O(nm) loop.
     replace_regex = re.compile(r"\W+")
-    entries: List[BranchContext] = []
+    entries: list[BranchContext] = []
     for branch_ref in patch_context.branch_refs:
         merge_base = git_utils.merge_base(
             patch_context.llvm_dir, [patch_context.main_branch_ref, branch_ref]
@@ -170,7 +170,7 @@ def create_branch_contexts(
                 patch_context.llvm_dir, merge_base, branch_ref
             )
         )
-        this_branch_combos: List[PatchCombo] = []
+        this_branch_combos: list[PatchCombo] = []
         for commit_sha in commit_shas:
             # Skip any commits made by the LUCI infrastructure. These should
             # not exist, but if they do, ignore them.
@@ -248,8 +248,8 @@ def create_branch_contexts(
 
 def find_new_patches(
     branch_context: BranchContext,
-    existing_patches: List[patch_utils.PatchEntry],
-) -> List[PatchCombo]:
+    existing_patches: list[patch_utils.PatchEntry],
+) -> list[PatchCombo]:
     """Find unseen patches committed along a given branch."""
 
     if not branch_context.patch_entry_combos:
@@ -303,8 +303,8 @@ def find_new_patches(
 
 
 def _find_branch_refs(
-    llvm_dir: Path, branch_patterns: Optional[List[str]] = None
-) -> Set[str]:
+    llvm_dir: Path, branch_patterns: Optional[list[str]] = None
+) -> set[str]:
     """Return git branch refs which match the given patterns.
 
     If 'branch_patterns' is not specified or is empty, use a default glob
@@ -313,7 +313,7 @@ def _find_branch_refs(
     branch_patterns = (
         branch_patterns if branch_patterns else [_DEFAULT_BRANCH_PATTERN]
     )
-    branch_refs: Set[str] = set()
+    branch_refs: set[str] = set()
     for branch_pattern in branch_patterns:
         branch_refs.update(git_utils.branch_list(llvm_dir, branch_pattern))
     return branch_refs
@@ -322,16 +322,16 @@ def _find_branch_refs(
 def _find_new_patch_combos(
     chromiumos_root: Path,
     patch_context: LLVMPatchContext,
-    existing_patches: List[patch_utils.PatchEntry],
+    existing_patches: list[patch_utils.PatchEntry],
     check_all_branches: bool = False,
-) -> List[PatchCombo]:
+) -> list[PatchCombo]:
     """Find applicable patches for each branch that need to be added."""
     # Go through each branch, check if that branch is within the
     # given bounds, then check if there's any new patches on each branch.
     # If so, add them to the PATCHES.json and write their contents to
     # the patch directory.
     patches_for_each_branch = create_branch_contexts(patch_context)
-    new_patch_combos: List[PatchCombo] = []
+    new_patch_combos: list[PatchCombo] = []
     if check_all_branches:
         llvm_current_rev = 0
         llvm_next_rev = float("inf")
@@ -359,7 +359,7 @@ def _find_new_patch_combos(
     return new_patch_combos
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse passed in argv list."""
 
     parser = argparse.ArgumentParser(
@@ -429,7 +429,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return args
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     """Entry point for the program."""
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "

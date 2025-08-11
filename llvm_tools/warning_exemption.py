@@ -9,7 +9,7 @@ necessary.
 """
 
 import dataclasses
-from typing import Any, Dict, List
+from typing import Any
 
 import yaml  # pylint: disable=import-error
 
@@ -73,7 +73,7 @@ class Builder:
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_yaml(cls, s: Dict[str, str]) -> "Builder":
+    def from_yaml(cls, s: dict[str, str]) -> "Builder":
         """Create an instance of this class from an `as_yaml()`."""
         return cls(**s)
 
@@ -106,9 +106,9 @@ class YamlPackageWarnings:
     """Warnings for a package, formattable as YAML."""
 
     package: Package
-    warning_lines: List[str]
-    warning_names: List[str]
-    observed_on: List[Builder]
+    warning_lines: list[str]
+    warning_names: list[str]
+    observed_on: list[Builder]
 
     def as_yaml(self) -> Any:
         """Convert to a YAML-compatible structure."""
@@ -120,7 +120,7 @@ class YamlPackageWarnings:
         }
 
     @classmethod
-    def from_yaml(cls, s: Dict[str, Any]) -> "YamlPackageWarnings":
+    def from_yaml(cls, s: dict[str, Any]) -> "YamlPackageWarnings":
         """Create an instance of this class from an `as_yaml()`."""
         package = Package.from_yaml(s["package"])
         observed_on = [Builder.from_yaml(x) for x in s.get("observed_on", ())]
@@ -146,16 +146,16 @@ class YamlFile:
 
     # A list of bugs that should be considered 'severe' enough to file a
     # high-priority bug about.
-    severe_warnings: List[str]
+    severe_warnings: list[str]
 
     # Entries that the Mage is meant to modify.
-    per_package_warnings: List[YamlPackageWarnings]
+    per_package_warnings: list[YamlPackageWarnings]
 
     # What the `per_package_warnings` were on the initial write of the file.
     # When setting this up, this should be set to `per_package_warnings`; when
     # _reading_, this information is used to figure out where the Mage made
     # changes & file bugs appropriately.
-    frozen_per_package_warnings: List[YamlPackageWarnings]
+    frozen_per_package_warnings: list[YamlPackageWarnings]
 
     # NOTE: No `as_yaml` is provided, since this is the top-level structure. Use
     # `as_raw_yaml()`, which is the serialized form of YAML.
@@ -193,7 +193,7 @@ class YamlFile:
         return "".join(yaml_file_parts)
 
     @classmethod
-    def from_yaml(cls, s: Dict[str, Any]) -> "YamlFile":
+    def from_yaml(cls, s: dict[str, Any]) -> "YamlFile":
         """Create an instance of this class from an `as_raw_yaml()`."""
         s = s.copy()
         for k in ("per_package_warnings", "frozen_per_package_warnings"):

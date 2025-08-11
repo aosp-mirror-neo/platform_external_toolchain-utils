@@ -9,7 +9,7 @@ import dataclasses
 import json
 import subprocess
 import textwrap
-from typing import Dict, Iterable
+from typing import Iterable
 from unittest import mock
 
 from llvm_tools import cros_cls
@@ -183,7 +183,7 @@ class Test(test_helpers.TempDirTestCase):
     @contextlib.contextmanager
     def mock_fetch_cl_info(
         self,
-        mock_cl_info: Dict[
+        mock_cl_info: dict[
             cros_cls.ChangeListURL, llvm_next_py_autoupdate.GerritCLInfo
         ],
     ):

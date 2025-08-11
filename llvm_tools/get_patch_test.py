@@ -7,7 +7,7 @@
 import json
 from pathlib import Path
 import tempfile
-from typing import Any, Dict, Generator, List, Set
+from typing import Any, Generator
 import unittest
 from unittest import mock
 
@@ -15,12 +15,12 @@ from llvm_tools import get_patch
 from llvm_tools import git_llvm_rev
 
 
-COMMIT_FIXTURES: List[Dict[str, Any]] = [
+COMMIT_FIXTURES: list[dict[str, Any]] = [
     {"subject": "A commit subject", "sha": "abcdef1234567890", "rev": 5},
     {"subject": "Another commit subject", "sha": "feed9999", "rev": 9},
 ]
 
-JSON_FIXTURE: List[Dict[str, Any]] = [
+JSON_FIXTURE: list[dict[str, Any]] = [
     {
         "metadata": {"title": "An existing patch"},
         "platforms": ["another platform"],
@@ -31,21 +31,21 @@ JSON_FIXTURE: List[Dict[str, Any]] = [
 
 
 def _mock_get_commit_subj(_, sha: str) -> str:
-    gen: Generator[Dict[str, Any], None, None] = (
+    gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha
     )
     return next(gen)["subject"]
 
 
 def _mock_to_rev(sha: get_patch.LLVMGitRef, _) -> git_llvm_rev.Rev:
-    gen: Generator[Dict[str, Any], None, None] = (
+    gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha.git_ref
     )
     return git_llvm_rev.Rev("main", next(gen)["rev"])
 
 
 def _mock_from_rev(_, rev: git_llvm_rev.Rev) -> get_patch.LLVMGitRef:
-    gen: Generator[Dict[str, Any], None, None] = (
+    gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["rev"] == rev.number
     )
     return get_patch.LLVMGitRef(next(gen)["sha"])
@@ -59,7 +59,7 @@ def _mock_write_patch(*_) -> None:
     return
 
 
-def _mock_get_changed_packages(*_) -> Set[Path]:
+def _mock_get_changed_packages(*_) -> set[Path]:
     return {get_patch.LLVM_PKG_PATH}
 
 

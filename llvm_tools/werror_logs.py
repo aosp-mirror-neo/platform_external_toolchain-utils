@@ -38,7 +38,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from typing import Any, Counter, DefaultDict, Dict, IO, Iterable, List, Optional
+from typing import Any, Counter, DefaultDict, IO, Iterable, Optional
 
 from llvm_tools import cros_cls
 
@@ -67,7 +67,9 @@ class ClangWarningLocation:
 
     @classmethod
     def parse(
-        cls, location: str, canonicalize_board_root: bool = False
+        cls,
+        location: str,
+        canonicalize_board_root: bool = False,
     ) -> "ClangWarningLocation":
         split = location.rsplit(":", 2)
         if len(split) == 3:
@@ -91,7 +93,7 @@ class ClangWarning:
 
     # This parses two kinds of errors:
     # 1. `clang-17: error: foo [-W...]`
-    # 2. `/file/path:123:45: error: foo [-W...]"
+    # 2. `/file/path:123:45: error: foo [-W...]`
     _WARNING_RE = re.compile(
         # Capture the location on its own, since `clang-\d+` is unused below.
         r"^(?:([^:]*:\d+:\d+)|clang-\d+)"
@@ -103,7 +105,9 @@ class ClangWarning:
 
     @classmethod
     def try_parse_line(
-        cls, line: str, canonicalize_board_root: bool = False
+        cls,
+        line: str,
+        canonicalize_board_root: bool = False,
     ) -> Optional["ClangWarning"]:
         # Fast path: we can expect "error: " in interesting lines. Break early
         # if that's not present.
@@ -169,7 +173,7 @@ class AggregatedWarnings:
     )
 
     @classmethod
-    def _guess_package_name(cls, report: Dict[str, Any]) -> str:
+    def _guess_package_name(cls, report: dict[str, Any]) -> str:
         """Tries to guess what package `report` is from.
 
         Raises:
@@ -182,7 +186,9 @@ class AggregatedWarnings:
         return m.group(1)
 
     def add_report_json(
-        self, report_json: Dict[str, Any], canonicalize_board_root: bool = False
+        self,
+        report_json: dict[str, Any],
+        canonicalize_board_root: bool = False,
     ) -> int:
         """Adds the given report, returning the number of warnings parsed.
 
@@ -204,7 +210,9 @@ class AggregatedWarnings:
         return num_warnings
 
     def add_report(
-        self, report_file: Path, canonicalize_board_root: bool = False
+        self,
+        report_file: Path,
+        canonicalize_board_root: bool = False,
     ) -> None:
         with report_file.open(encoding="utf-8") as f:
             report = json.load(f)
@@ -225,7 +233,7 @@ class AggregatedWarnings:
 
 
 def print_aligned_counts(
-    name_count_map: Dict[str, int], file: Optional[IO[str]] = None
+    name_count_map: dict[str, int], file: Optional[IO[str]] = None
 ) -> None:
     assert name_count_map
     # Sort on value, highest first. Name breaks ties.
@@ -255,7 +263,7 @@ def summarize_per_package_warnings(
 
 
 def summarize_warnings_by_flag(
-    warnings: Dict[ClangWarning, WarningInfo],
+    warnings: dict[ClangWarning, WarningInfo],
     file: Optional[IO[str]] = None,
 ) -> None:
     if not warnings:
@@ -285,8 +293,8 @@ def aggregate_reports(opts: argparse.Namespace) -> None:
 
 
 def fetch_werror_tarball_links(
-    child_builders: Dict[str, cros_cls.BuildID]
-) -> List[str]:
+    child_builders: dict[str, cros_cls.BuildID],
+) -> list[str]:
     outputs = cros_cls.CQBoardBuilderOutput.fetch_many(child_builders.values())
     artifacts_links = []
     for builder_name, out in zip(child_builders, outputs):
@@ -324,7 +332,7 @@ def cq_builder_name_from_werror_logs_path(werror_logs: str) -> str:
 
 
 def download_and_unpack_werror_tarballs(
-    unpack_dir: Path, download_dir: Path, gs_urls: List[str]
+    unpack_dir: Path, download_dir: Path, gs_urls: list[str]
 ):
     # This is necessary below when we're untarring files. It should trivially
     # always be the case, and assuming it makes testing easier.
@@ -493,7 +501,7 @@ def fetch_cq_reports(opts: argparse.Namespace) -> None:
         )
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

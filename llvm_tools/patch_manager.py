@@ -9,7 +9,7 @@ import enum
 import os
 from pathlib import Path
 import sys
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable, Optional
 
 from llvm_tools import failure_modes
 from llvm_tools import get_llvm_hash
@@ -32,7 +32,7 @@ class GitBisectionCode(enum.IntEnum):
     SKIP = 125
 
 
-def GetCommandLineArgs(sys_argv: Optional[List[str]]):
+def GetCommandLineArgs(sys_argv: Optional[list[str]]):
     """Get the required arguments from the command line."""
 
     # Create parser and add optional command-line arguments.
@@ -172,7 +172,7 @@ def ApplyPatchAndPrior(
     patch_entries: Iterable[patch_utils.PatchEntry],
     rel_patch_path: str,
     patch_cmd: Optional[Callable] = None,
-) -> Tuple[bool, List[patch_utils.PatchEntry], List[patch_utils.PatchEntry]]:
+) -> tuple[bool, list[patch_utils.PatchEntry], list[patch_utils.PatchEntry]]:
     """Apply a patch, and all patches that apply before it in the patch stack.
 
     Patches which did not attempt to apply (because their version range didn't
@@ -189,7 +189,7 @@ def ApplyPatchAndPrior(
             [2]: List of failing patches, potentially containing the patch of
             interest.
     """
-    failed_patches: List[patch_utils.PatchEntry] = []
+    failed_patches: list[patch_utils.PatchEntry] = []
     applied_patches = []
     # We have to apply every patch up to the one we care about,
     # as patches can stack.
@@ -219,7 +219,7 @@ def ApplyPatchAndPrior(
                 # Broke before we reached the patch we cared about. Stop.
                 failed_patches.append(pe)
                 return False, applied_patches, failed_patches
-    raise ValueError(f"Did not find patch {rel_patch_path}. " "Does it exist?")
+    raise ValueError(f"Did not find patch {rel_patch_path}. Does it exist?")
 
 
 def PrintPatchResults(patch_info: patch_utils.PatchInfo):
@@ -262,7 +262,7 @@ def PrintPatchResults(patch_info: patch_utils.PatchInfo):
             print("%s" % os.path.basename(cur_patch_path))
 
 
-def main(sys_argv: List[str]):
+def main(sys_argv: list[str]):
     """Applies patches to the source tree and takes action on a failed patch."""
 
     args_output = GetCommandLineArgs(sys_argv)
@@ -304,7 +304,7 @@ def main(sys_argv: List[str]):
     def _test_single(args):
         if not args.test_patch:
             raise ValueError(
-                "Running with bisect_patches requires the " "--test_patch flag."
+                "Running with bisect_patches requires the --test_patch flag."
             )
         svn_version = GetHEADSVNVersion(llvm_src_dir)
         error_code = CheckPatchApplies(

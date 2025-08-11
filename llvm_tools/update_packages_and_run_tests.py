@@ -17,7 +17,7 @@ import logging
 from pathlib import Path
 import subprocess
 import textwrap
-from typing import List, Optional
+from typing import Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -65,8 +65,8 @@ def write_last_tried_sha(retry_state: Path, sha: str):
 class UploadedCLs:
     """Listing of CL numbers uploaded by a function."""
 
-    internal: List[int]
-    external: List[int]
+    internal: list[int]
+    external: list[int]
 
 
 def upload_one_cl_to_main(
@@ -246,7 +246,7 @@ def create_and_upload_cls(
     )
 
 
-def make_gerrit_cq_dry_run_command(cls: List[int], internal: bool) -> List[str]:
+def make_gerrit_cq_dry_run_command(cls: list[int], internal: bool) -> list[str]:
     assert cls, "Can't make a dry-run command with no CLs to dry-run."
     cmd = ["gerrit"]
     if internal:
@@ -279,7 +279,7 @@ def cq_dry_run_cls(chromeos_tree: Path, cls: UploadedCLs):
         )
 
 
-def parse_opts(argv: List[str]) -> argparse.Namespace:
+def parse_opts(argv: list[str]) -> argparse.Namespace:
     """Parse command-line options."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -348,7 +348,7 @@ def parse_opts(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

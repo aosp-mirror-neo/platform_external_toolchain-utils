@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import List, Set, TextIO
+from typing import TextIO
 
 from cros_utils import cros_paths
 from llvm_tools import get_llvm_hash
@@ -34,7 +34,7 @@ class RevertInfo:
     subject: str
 
 
-def list_upstream_cherrypicks(patches_json: Path) -> Set[str]:
+def list_upstream_cherrypicks(patches_json: Path) -> set[str]:
     with patches_json.open(encoding="utf-8") as f:
         applicable_patches = [
             x
@@ -71,7 +71,7 @@ def fetch_commit_subject(llvm_git_dir: Path, sha: str) -> str:
     return result.stdout.strip()
 
 
-def write_reverts_as_csv(write_to: TextIO, reverts: List[RevertInfo]):
+def write_reverts_as_csv(write_to: TextIO, reverts: list[RevertInfo]):
     writer = csv.writer(write_to, quoting=csv.QUOTE_ALL)
     # Write the header.
     writer.writerow(("SHA", "Reverted SHA", "Has Revert", "Subject"))
@@ -81,7 +81,7 @@ def write_reverts_as_csv(write_to: TextIO, reverts: List[RevertInfo]):
     )
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     # `cros_root` is hardcoded here, since:
     # - this one only reads tree state, and
     # - the person/automation invoking it is almost definitely invoking it _in

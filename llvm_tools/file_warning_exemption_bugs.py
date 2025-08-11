@@ -22,7 +22,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Dict, Generator, List, Optional, Set, Tuple
+from typing import Generator, Optional
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -78,7 +78,7 @@ class RepoList:
           "src/third_party/llvm-project"
     """
 
-    def __init__(self, cros_root: Path, remote_to_local_map: Dict[str, str]):
+    def __init__(self, cros_root: Path, remote_to_local_map: dict[str, str]):
         self._cros_root = cros_root
         self._remote_to_local = remote_to_local_map
 
@@ -125,11 +125,11 @@ def format_warning_bug_body(
     exemption_file_name: str,
     crostc_contact: str,
     package: warning_exemption.Package,
-    warnings: List[str],
-    builders: List[warning_exemption.Builder],
+    warnings: list[str],
+    builders: list[warning_exemption.Builder],
 ) -> str:
     """Returns a suitable body for the given bug."""
-    pieces: List[str] = []
+    pieces: list[str] = []
 
     if len(warnings) == 1:
         pieces += (
@@ -390,8 +390,8 @@ def resolve_package_component(
 def resolve_all_package_components(
     cros_root: Path,
     repo_list: RepoList,
-    packages: List[warning_exemption.Package],
-) -> List[Optional[int]]:
+    packages: list[warning_exemption.Package],
+) -> list[Optional[int]]:
     """Resolves buganizer components for all given packages."""
     # resolve_package_component takes multiple seconds, mostly in subprocesses.
     # Threads cheaply allow for massive speedups.
@@ -404,7 +404,7 @@ def format_bug_from_package_warnings(
     exemption_file_name: str,
     parent_bug: int,
     crostc_contact: str,
-    severe_warnings: Set[str],
+    severe_warnings: set[str],
     package_warnings: warning_exemption.YamlPackageWarnings,
     component: Optional[int],
 ) -> str:
@@ -440,13 +440,13 @@ def format_bug_from_package_warnings(
 def format_bug_for_mage_followup(
     parent_bug: int,
     crostc_contact: str,
-    per_package_warnings: List[warning_exemption.YamlPackageWarnings],
-    frozen_per_package_warnings: List[warning_exemption.YamlPackageWarnings],
+    per_package_warnings: list[warning_exemption.YamlPackageWarnings],
+    frozen_per_package_warnings: list[warning_exemption.YamlPackageWarnings],
 ) -> Optional[str]:
     def extract_warning_set(
-        warning_list: List[warning_exemption.YamlPackageWarnings],
-    ) -> Set[Tuple[warning_exemption.Package, str]]:
-        result: Set[Tuple[warning_exemption.Package, str]] = set()
+        warning_list: list[warning_exemption.YamlPackageWarnings],
+    ) -> set[tuple[warning_exemption.Package, str]]:
+        result: set[tuple[warning_exemption.Package, str]] = set()
         for package_warnings in warning_list:
             result.update(
                 (package_warnings.package, x)
@@ -490,7 +490,7 @@ def format_bug_for_mage_followup(
     )
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -558,7 +558,7 @@ def verify_chroot_exists(chromeos_root: Path):
     logging.info("OK")
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     # This script uses repo, which is not supported within the chroot.
     chroot.VerifyOutsideChroot()
     cros_root = cros_paths.script_chromiumos_checkout_or_exit()

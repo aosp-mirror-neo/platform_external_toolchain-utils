@@ -9,7 +9,7 @@ import logging
 import os
 from pathlib import Path
 import shlex
-from typing import Iterable, List
+from typing import Iterable
 
 from llvm_tools import chroot
 from llvm_tools import cros_cls
@@ -25,7 +25,7 @@ def generate_bb_add_command(
     extra_cls: Iterable[cros_cls.ChangeListURL],
     bots: Iterable[str],
     tags: Iterable[str],
-) -> List[str]:
+) -> list[str]:
     """Generates a `bb add` command.
 
     Args:
@@ -41,7 +41,7 @@ def generate_bb_add_command(
         A command that would spawn the requested builders in the requested
         configuration.
     """
-    cls: List[cros_cls.ChangeListURL] = []
+    cls: list[cros_cls.ChangeListURL] = []
     if use_llvm_next:
         if not llvm_next.LLVM_NEXT_TESTING_CLS:
             raise ValueError(
@@ -86,7 +86,7 @@ def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
     return False
 
 
-def parse_opts(argv: List[str]) -> argparse.Namespace:
+def parse_opts(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -162,7 +162,7 @@ def parse_opts(argv: List[str]) -> argparse.Namespace:
     return opts
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
