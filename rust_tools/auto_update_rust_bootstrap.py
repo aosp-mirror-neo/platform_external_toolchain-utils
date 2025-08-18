@@ -829,6 +829,9 @@ def main(argv: list[str]):
     had_recoverable_error = False
     # Ensure prebuilts are up to date first, since it allows
     # `ensure_newest_rust_bootstrap_ebuild_exists` to succeed in edge cases.
+    logging.info(
+        "Trying to add new prebuilts to existing rust-bootstrap versions..."
+    )
     made_changes = maybe_add_newest_prebuilts(
         copy_rust_bootstrap_script=copy_rust_bootstrap_script,
         chromiumos_checkout=cros_checkout,
@@ -837,6 +840,10 @@ def main(argv: list[str]):
         dry_run=dry_run,
     )
 
+    logging.info(
+        "Trying to add new rust-bootstrap versions based on available "
+        "src tarballs..."
+    )
     made_changes |= maybe_add_new_rust_bootstrap_version(
         chromiumos_overlay=opts.chromiumos_overlay,
         chromiumos_checkout=cros_checkout,
@@ -845,6 +852,7 @@ def main(argv: list[str]):
     )
 
     try:
+        logging.info("Trying to delete old rust-bootstrap versions...")
         made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
             chromiumos_overlay=opts.chromiumos_overlay,
             chromiumos_checkout=cros_checkout,
