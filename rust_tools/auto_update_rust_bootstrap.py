@@ -41,8 +41,8 @@ from rust_tools import copy_rust_bootstrap
 TRACKING_BUG = "b:315473495"
 
 # These match variable assignments in the rust-bootstrap ebuilds.
-RUST_BOOTSTRAP_USE_PREBUILTS_REGEX = re.compile(
-    r"^(THIS_VERSION_HAS_PREBUILT=)(.*)$", re.MULTILINE
+RUST_BOOTSTRAP_THIS_VERSION_PREBUILT_NAME_REGEX = re.compile(
+    r"^(THIS_VERSION_PREBUILT_NAME=)(.*)$", re.MULTILINE
 )
 RUST_BOOTSTRAP_PRIOR_VERSION_REGEX = re.compile(
     r'^(PRIOR_RUST_BOOTSTRAP_VERSION=")([^"]*)(")', re.MULTILINE
@@ -338,13 +338,15 @@ def upload_changes(git_dir: Path):
 def is_rust_bootstrap_using_prebuilts(rust_bootstrap_contents: str) -> bool:
     """Returns whether the given rust-bootstrap ebuild installs a prebuilt."""
     matches = list(
-        RUST_BOOTSTRAP_USE_PREBUILTS_REGEX.finditer(rust_bootstrap_contents)
+        RUST_BOOTSTRAP_THIS_VERSION_PREBUILT_NAME_REGEX.finditer(
+            rust_bootstrap_contents
+        )
     )
     if len(matches) != 1:
         raise ValueError(
             "Expected precisely one match for "
-            "{RUST_BOOTSTRAP_USE_PREBUILTS_REGEX} in ebuild contents; got "
-            f"{len(matches)}."
+            f"{RUST_BOOTSTRAP_THIS_VERSION_PREBUILT_NAME_REGEX} in ebuild "
+            f"contents; got {len(matches)}."
         )
     var_value = matches[0].group(2)
     return bool(var_value.split("#", 1)[0].strip())
@@ -368,26 +370,32 @@ def substitute_exactly_once(
 
 
 def set_rust_bootstrap_prebuilt_use(
-    rust_bootstrap_contents: str, use_prebuilts: bool
+    rust_bootstrap_contents: str,
+    prebuilt_name: Optional[str],
 ) -> str:
-    """Sets the use-prebuilts flag to `use_prebuilts`. in the given ebuild."""
+    """Sets the use-prebuilts flag to `use_prebuilts`. in the given ebuild.
 
-    def replace_instance(match: re.Match) -> str:
-        new_assignment = "1" if use_prebuilts else ""
+    Args:
+        rust_bootstrap_contents: Contents of rust-bootstrap's ebuild to modify.
+        prebuilt_name: the name of the prebuilt to use. If None, prebuilt usage
+          will be disabled. Otherwise, this is the name of the prebuilt file in
+          localmirror.
+    """
+
+    def replace_prebuilts_name_instance(match: re.Match) -> str:
+        new_assignment = prebuilt_name if prebuilt_name else ""
         result = match.group(1) + new_assignment
-
         # If there's a comment at the end (w/ potential leading spaces),
-        # preserve it. This is done independently of
-        # RUST_BOOTSTRAP_USE_PREBUILTS_REGEX, since multiline regex matching is
-        # harder to reason about.
+        # preserve it. This is done independently of the regexes, since
+        # multiline regex matching is harder to reason about.
         if current_assignment := match.group(2):
             if m := re.search(r"(\s*#.*)$", current_assignment):
                 result += m.group(1)
         return result
 
     return substitute_exactly_once(
-        RUST_BOOTSTRAP_USE_PREBUILTS_REGEX,
-        replace_instance,
+        RUST_BOOTSTRAP_THIS_VERSION_PREBUILT_NAME_REGEX,
+        replace_prebuilts_name_instance,
         rust_bootstrap_contents,
     )
 
@@ -463,7 +471,8 @@ def maybe_add_newest_prebuilts(
             copy_rust_bootstrap_script, prebuilt, dry_run
         )
         new_ebuild_text = set_rust_bootstrap_prebuilt_use(
-            current_ebuild_text, use_prebuilts=True
+            current_ebuild_text,
+            prebuilt_name=os.path.basename(prebuilt),
         )
         if dry_run:
             # N.B., the new ebuild's contents are still generated, so --dry-run
@@ -584,7 +593,7 @@ def maybe_add_new_rust_bootstrap_version(
     new_ebuild_contents = set_rust_bootstrap_prior_version(
         set_rust_bootstrap_prebuilt_use(
             prior_ebuild_contents,
-            use_prebuilts=False,
+            prebuilt_name=None,
         ),
         new_version=newest_bootstrap_version,
     )
