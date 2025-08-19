@@ -6,25 +6,14 @@
 
 
 import base64
-import contextlib
 import datetime
 import json
 import os
 
+from cros_utils import gs
 
-X20_PATH = "/google/data/rw/teams/c-compiler-chrome/prod_emails"
 
-
-@contextlib.contextmanager
-def AtomicallyWriteFile(file_path):
-    temp_path = file_path + ".in_progress"
-    try:
-        with open(temp_path, "w", encoding="utf-8") as f:
-            yield f
-        os.rename(temp_path, file_path)
-    except:
-        os.remove(temp_path)
-        raise
+GS_PATH = "gs://crostc-chrotomation-dev-artifacts/prod_emails"
 
 
 class EmailSender:
@@ -37,7 +26,7 @@ class EmailSender:
             self.name = name
             self.content = content
 
-    def SendX20Email(
+    def SendGSEmail(
         self,
         subject,
         identifier,
@@ -46,13 +35,10 @@ class EmailSender:
         text_body=None,
         html_body=None,
     ):
-        """Enqueues an email in our x20 outbox.
+        """Enqueues an email in our gs outbox.
 
         These emails ultimately get sent by the machinery in
         //depot/google3/googleclient/chrome/chromeos_toolchain/mailer/mail.go.
-        This kind of sending is intended for accounts that don't have smtp or
-        gmr access (e.g., role accounts), but can be used by anyone with x20
-        access.
 
         All emails are sent from
         `mdb.c-compiler-chrome+${identifier}@google.com`.
@@ -131,7 +117,9 @@ class EmailSender:
         now = datetime.datetime.utcnow().isoformat("T", "seconds") + "Z"
         entropy = base64.urlsafe_b64encode(os.getrandom(8))
         entropy_str = entropy.rstrip(b"=").decode("utf-8")
-        result_path = os.path.join(X20_PATH, now + "_" + entropy_str + ".json")
+        result_path = os.path.join(GS_PATH, now + "_" + entropy_str + ".json")
 
-        with AtomicallyWriteFile(result_path) as f:
-            json.dump(email_json, f)
+        # Note that gs writes are all-or-nothing and atomic; no need for
+        # tempfiles.
+        with gs.streaming_encoded_upload_to(result_path) as sink:
+            json.dump(email_json, sink)

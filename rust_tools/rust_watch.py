@@ -30,7 +30,7 @@ def gentoo_sha_to_link(sha: str) -> str:
 
 def send_email(subject: str, body: list[tiny_render.Piece]) -> None:
     """Sends an email with the given title and body to... whoever cares."""
-    email_sender.EmailSender().SendX20Email(
+    email_sender.EmailSender().SendGSEmail(
         subject=subject,
         identifier="rust-watch",
         well_known_recipients=["cros-team"],

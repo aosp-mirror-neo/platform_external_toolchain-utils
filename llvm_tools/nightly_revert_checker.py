@@ -193,7 +193,7 @@ _EmailRecipients = NamedTuple(
 
 
 def _send_revert_email(recipients: _EmailRecipients, email: _Email) -> None:
-    email_sender.EmailSender().SendX20Email(
+    email_sender.EmailSender().SendGSEmail(
         subject=email.subject,
         identifier="revert-checker",
         well_known_recipients=recipients.well_known,

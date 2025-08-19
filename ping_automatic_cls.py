@@ -84,7 +84,7 @@ def main(argv: List[str]) -> None:
         logging.info("Body: %s", body)
         return
 
-    email_sender.EmailSender().SendX20Email(
+    email_sender.EmailSender().SendGSEmail(
         subject=subject,
         identifier="cl-pings",
         text_body=body,
