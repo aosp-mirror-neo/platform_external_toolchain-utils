@@ -11,11 +11,13 @@ import os
 import threading
 from typing import Any, Optional, Union
 
+from cros_utils import gs
+
 
 # ChromeOS > Infra > Toolchain
 INTERNAL_CROSTC_COMPONENT = 1034879
 
-X20_PATH = "/google/data/rw/teams/c-compiler-chrome/prod_bugs"
+GS_PATH = "gs://crostc-chrotomation-dev-artifacts/prod_bugs/requests"
 
 # List of 'well-known' bug numbers to tag as parents.
 RUST_MAINTENANCE_METABUG = 322195383
@@ -76,28 +78,34 @@ _GLOBAL_NAME_GENERATOR = _FileNameGenerator()
 def _WriteBugJSONFile(
     object_type: str,
     json_object: dict[str, Any],
-    directory: Optional[Union[os.PathLike, str]],
+    local_directory: Optional[Union[os.PathLike, str]],
 ):
     """Writes a JSON file to `directory` with the given bug-ish object.
 
     Args:
         object_type: name of the object we're writing.
         json_object: object to write.
-        directory: the directory to write to. Uses X20_PATH if None.
+        local_directory: the directory to write to. Uploads to gs if None.
     """
     final_object = {
         "type": object_type,
         "value": json_object,
     }
 
-    if directory is None:
-        directory = X20_PATH
-
     now = datetime.datetime.now(tz=datetime.timezone.utc)
-    file_path = os.path.join(
-        directory, _GLOBAL_NAME_GENERATOR.generate_json_file_name(now)
-    )
+    file_name = _GLOBAL_NAME_GENERATOR.generate_json_file_name(now)
+
+    if local_directory is None:
+        file_path = os.path.join(GS_PATH, file_name)
+        with gs.streaming_encoded_upload_to(file_path) as sink:
+            json.dump(final_object, sink)
+        return file_path
+
+    file_path = os.path.join(local_directory, file_name)
     temp_path = file_path + ".in_progress"
+    # N.B., the atomicity guarantees here are important; tools like `runcron.py`
+    # - which may be running concurrently with this process - assume that all
+    # files ending in `*.json` are ready to be uploaded.
     try:
         with open(temp_path, "w", encoding="utf-8") as f:
             json.dump(final_object, f)
@@ -105,11 +113,12 @@ def _WriteBugJSONFile(
     except:
         os.remove(temp_path)
         raise
+
     return file_path
 
 
 def AppendToExistingBug(
-    bug_id: int, body: str, directory: Optional[os.PathLike] = None
+    bug_id: int, body: str, local_directory: Optional[os.PathLike] = None
 ):
     """Sends a reply to an existing bug."""
     _WriteBugJSONFile(
@@ -118,7 +127,7 @@ def AppendToExistingBug(
             "body": body,
             "bug_id": bug_id,
         },
-        directory,
+        local_directory,
     )
 
 
@@ -128,7 +137,7 @@ def CreateNewBug(
     body: str,
     assignee: Optional[str] = None,
     cc: Optional[list[str]] = None,
-    directory: Optional[os.PathLike] = None,
+    local_directory: Optional[os.PathLike] = None,
     parent_bug: int = 0,
 ):
     """Sends a request to create a new bug.
@@ -142,8 +151,8 @@ def CreateNewBug(
             "well-known" assignee (detective, mage).
         cc: A list of emails to add to the CC list. Must either be an email
             address, or a "well-known" individual (detective, mage).
-        directory: The directory to write the report to. Defaults to our x20
-            bugs directory.
+        local_directory: The directory to write the report to. If None, it
+            uploads to gs instead.
         parent_bug: The parent bug number for this bug. If none should be
             specified, pass the value 0.
     """
@@ -162,7 +171,7 @@ def CreateNewBug(
     if parent_bug:
         obj["parent_bug"] = parent_bug
 
-    _WriteBugJSONFile("FileNewBugRequest", obj, directory)
+    _WriteBugJSONFile("FileNewBugRequest", obj, local_directory)
 
 
 def SendCronjobLog(
@@ -170,7 +179,7 @@ def SendCronjobLog(
     failed: bool,
     message: str,
     turndown_time_hours: int = 0,
-    directory: Optional[os.PathLike] = None,
+    local_directory: Optional[os.PathLike] = None,
     parent_bug: int = 0,
 ):
     """Sends the record of a cronjob to our bug infra.
@@ -185,8 +194,8 @@ def SendCronjobLog(
             down if more than `turndown_time_hours` pass without a report of
             success or failure. If zero, this job will not automatically be
             turned down.
-        directory: The directory to write the report to. Defaults to our x20
-            bugs directory.
+        local_directory: The directory to write the report to. If None, it
+            uploads to gs instead.
         parent_bug: The parent bug number for the bug filed for this cronjob,
             if any. If none should be specified, pass the value 0.
     """
@@ -202,4 +211,4 @@ def SendCronjobLog(
     if parent_bug:
         json_object["parent_bug"] = parent_bug
 
-    _WriteBugJSONFile("CronjobUpdate", json_object, directory)
+    _WriteBugJSONFile("CronjobUpdate", json_object, local_directory)
