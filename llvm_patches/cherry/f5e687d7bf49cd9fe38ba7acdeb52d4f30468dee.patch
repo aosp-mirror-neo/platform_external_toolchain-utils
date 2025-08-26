@@ -1,0 +1,635 @@
+From f5e687d7bf49cd9fe38ba7acdeb52d4f30468dee Mon Sep 17 00:00:00 2001
+From: Nikolas Klauser <nikolasklauser@berlin.de>
+Date: Sat, 23 Aug 2025 07:58:37 +0200
+Subject: [PATCH] [libc++] Fix ABI break introduced by switching to
+ _LIBCPP_COMPRESSED_PAIR (#154686)
+
+LLVM 20 contained an ABI break that can result in the size of
+`std::unordered_{map,set,multimap,multiset}` and `std::deque` changing
+when used with an allocator type that is empty and contains a base class
+that is the same across rebound allocator instantiations (e.g.
+``Allocator<int>`` and ``Allocator<char>`` are both empty and contain
+the same base class).
+
+In addition, the layout of a user-defined type that:
+- contains one of the following containers:
+`std::unordered_{map,set,multimap,multiset}`, `std::deque`, `std::map`,
+`std::set`, `std::multimap`, `std::multiset`, `std::list` or
+`std::vector`, and
+- passes an empty allocator, comparator or hasher type to that
+container, and
+- has a member of that same empty allocator, comparator or hasher type
+inside the enclosing struct, and
+- that member is either marked with `[[no_unique_address]]` or optimized
+out via the EBO (empty base optimization) technique
+saw its size increase from LLVM 19 to LLVM 20. This was caused by the
+usage of `[[no_unique_address]]` within some of libc++'s containers in a
+way that allowed subtle interactions with enclosing objects. This is
+fixed in LLVM 21 on Clang (returning to the LLVM 19 ABI), however that
+implies an ABI break from LLVM 20 to LLVM 21.
+Furthermore, fixing this causes a slight regression to constant
+evaluation support in `std::unique_ptr`. Specifically, constant
+evaluation will now fail when the deleter relies on being
+value-initialized for constant-evaluation admissibility. If a
+default-initialized deleter can be used during constant evaluation, or
+if the default constructor is non-trivial, the `unique_ptr` is not
+affected by this regression. In particular, this regression does not
+impact any `unique_ptr` using the default deleter.
+
+Note that there is currently no way to realistically fix this ABI break
+on GCC, therefore GCC will remain on the ABI introduced in LLVM 19. That
+also means that Clang and GCC will have a slightly different ABI for the
+small subset of types listed above until we are able to apply the same
+fix we did with Clang on GCC.
+
+We fix this regression by surrounding the members of the
+`_LIBCPP_COMPRESSED_PAIR` with an anonymous struct. This restricts the
+shifting of empty types to the front of the `_LIBCPP_COMPRESSED_PAIR`
+instead of throughout the surrounding object. This "frees up" the zero
+offset to contain another object of the same type, restoring the ability
+to perform EBO or to elide the storage for a type with
+`[[no_unique_address]]` in the enclosing (user-defined) struct.
+
+Fixes #154146
+
+Co-authored-by: Louis Dionne <ldionne.2@gmail.com>
+---
+ libcxx/docs/ReleaseNotes/21.rst               | 15 ++++++
+ libcxx/include/__memory/compressed_pair.h     | 54 +++++++++++++------
+ libcxx/include/string                         | 14 ++++-
+ .../associative/map/abi.compile.pass.cpp      | 13 +++--
+ .../associative/set/abi.compile.pass.cpp      | 13 +++--
+ .../unord.map/abi.compile.pass.cpp            | 24 +++++++--
+ .../unord.set/abi.compile.pass.cpp            | 23 ++++++--
+ .../sequences/deque/abi.compile.pass.cpp      | 22 +++++++-
+ .../sequences/list/abi.compile.pass.cpp       | 12 ++++-
+ .../vector.bool/abi.compile.pass.cpp          | 11 +++-
+ .../sequences/vector/abi.compile.pass.cpp     | 12 ++++-
+ .../unique.ptr.ctor/default.pass.cpp          |  4 ++
+ .../unique.ptr.ctor/nullptr.pass.cpp          |  4 ++
+ .../unique.ptr.ctor/pointer.pass.cpp          |  4 ++
+ 14 files changed, 189 insertions(+), 36 deletions(-)
+
+diff --git a/libcxx/docs/ReleaseNotes/21.rst b/libcxx/docs/ReleaseNotes/21.rst
+index 91123ffa3e34..642bf7dc1bc8 100644
+--- a/libcxx/docs/ReleaseNotes/21.rst
++++ b/libcxx/docs/ReleaseNotes/21.rst
+@@ -148,6 +148,21 @@ ABI Affecting Changes
+   comparison between shared libraries, since all RTTI has the correct visibility now. There is no behaviour change on
+   Clang.
+ 
++- LLVM 20 contained an ABI break that can result in the size of ``std::unordered_{map,set,multimap,multiset}`` and ``std::deque`` changing when used with an allocator type that is empty and contains a base class that is the same across rebound allocator instantiations (e.g. ``Allocator<int>`` and ``Allocator<char>`` are both empty and contain the same base class).
++  In addition, the layout of a user-defined type that:
++
++    - contains one of the following containers: ``std::unordered_{map,set,multimap,multiset}``, ``std::deque``, ``std::map``, ``std::set``, ``std::multimap``, ``std::multiset``, ``std::list`` or ``std::vector``, and
++    - passes an empty allocator, comparator or hasher type to that container, and
++    - has a member of that same empty allocator, comparator or hasher type inside the enclosing struct, and
++    - that member is either marked with ``[[no_unique_address]]`` or optimized out via the EBO (empty base optimization) technique
++
++  saw its size increase from LLVM 19 to LLVM 20. This was caused by the usage of ``[[no_unique_address]]`` within some of libc++'s containers in a way that allowed subtle interactions with enclosing objects. This is fixed in LLVM 21 when using the Clang compiler (returning to the LLVM 19 ABI), however that implies an ABI break from LLVM 20 to LLVM 21.
++
++  Furthermore, fixing this causes a slight regression to constant evaluation support in ``std::unique_ptr``. Specifically, constant evaluation will now fail when the deleter relies on being value-initialized for constant-evaluation admissibility. If a default-initialized deleter can be used during constant evaluation, or if the default constructor is non-trivial, the ``unique_ptr`` is not affected by this regression. In particular, this regression does not impact any ``unique_ptr`` using the default deleter.
++
++  Note that there is currently no way to realistically fix this ABI break on GCC, therefore GCC will remain on the ABI introduced in LLVM 19. That also means that Clang and GCC will have a slightly different ABI for the small subset of types listed above until we are able to apply the same fix we did with Clang on GCC.
++
++  For more details see https://llvm.org/PR154146.
+ 
+ Build System Changes
+ --------------------
+diff --git a/libcxx/include/__memory/compressed_pair.h b/libcxx/include/__memory/compressed_pair.h
+index fb7b7b7afcc8..29e503931b0b 100644
+--- a/libcxx/include/__memory/compressed_pair.h
++++ b/libcxx/include/__memory/compressed_pair.h
+@@ -80,21 +80,45 @@ class __compressed_pair_padding {
+ template <class _ToPad>
+ class __compressed_pair_padding<_ToPad, true> {};
+ 
+-#  define _LIBCPP_COMPRESSED_PAIR(T1, Initializer1, T2, Initializer2)                                                  \
+-    _LIBCPP_NO_UNIQUE_ADDRESS __attribute__((__aligned__(::std::__compressed_pair_alignment<T2>))) T1 Initializer1;    \
+-    _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T1> _LIBCPP_CONCAT3(__padding1_, __LINE__, _);          \
+-    _LIBCPP_NO_UNIQUE_ADDRESS T2 Initializer2;                                                                         \
+-    _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T2> _LIBCPP_CONCAT3(__padding2_, __LINE__, _)
+-
+-#  define _LIBCPP_COMPRESSED_TRIPLE(T1, Initializer1, T2, Initializer2, T3, Initializer3)                              \
+-    _LIBCPP_NO_UNIQUE_ADDRESS                                                                                          \
+-    __attribute__((__aligned__(::std::__compressed_pair_alignment<T2>),                                                \
+-                   __aligned__(::std::__compressed_pair_alignment<T3>))) T1 Initializer1;                              \
+-    _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T1> _LIBCPP_CONCAT3(__padding1_, __LINE__, _);          \
+-    _LIBCPP_NO_UNIQUE_ADDRESS T2 Initializer2;                                                                         \
+-    _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T2> _LIBCPP_CONCAT3(__padding2_, __LINE__, _);          \
+-    _LIBCPP_NO_UNIQUE_ADDRESS T3 Initializer3;                                                                         \
+-    _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T3> _LIBCPP_CONCAT3(__padding3_, __LINE__, _)
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef _LIBCPP_COMPILER_GCC
++#    define _LIBCPP_COMPRESSED_PAIR(T1, Initializer1, T2, Initializer2)                                                \
++      _LIBCPP_NO_UNIQUE_ADDRESS __attribute__((__aligned__(::std::__compressed_pair_alignment<T2>))) T1 Initializer1;  \
++      _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T1> _LIBCPP_CONCAT3(__padding1_, __LINE__, _);        \
++      _LIBCPP_NO_UNIQUE_ADDRESS T2 Initializer2;                                                                       \
++      _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T2> _LIBCPP_CONCAT3(__padding2_, __LINE__, _)
++
++#    define _LIBCPP_COMPRESSED_TRIPLE(T1, Initializer1, T2, Initializer2, T3, Initializer3)                            \
++      _LIBCPP_NO_UNIQUE_ADDRESS                                                                                        \
++      __attribute__((__aligned__(::std::__compressed_pair_alignment<T2>),                                              \
++                     __aligned__(::std::__compressed_pair_alignment<T3>))) T1 Initializer1;                            \
++      _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T1> _LIBCPP_CONCAT3(__padding1_, __LINE__, _);        \
++      _LIBCPP_NO_UNIQUE_ADDRESS T2 Initializer2;                                                                       \
++      _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T2> _LIBCPP_CONCAT3(__padding2_, __LINE__, _);        \
++      _LIBCPP_NO_UNIQUE_ADDRESS T3 Initializer3;                                                                       \
++      _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T3> _LIBCPP_CONCAT3(__padding3_, __LINE__, _)
++#  else
++#    define _LIBCPP_COMPRESSED_PAIR(T1, Initializer1, T2, Initializer2)                                                \
++      struct {                                                                                                         \
++        _LIBCPP_NO_UNIQUE_ADDRESS                                                                                      \
++        __attribute__((__aligned__(::std::__compressed_pair_alignment<T2>))) T1 Initializer1;                          \
++        _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T1> _LIBCPP_CONCAT3(__padding1_, __LINE__, _);      \
++        _LIBCPP_NO_UNIQUE_ADDRESS T2 Initializer2;                                                                     \
++        _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T2> _LIBCPP_CONCAT3(__padding2_, __LINE__, _);      \
++      }
++
++#    define _LIBCPP_COMPRESSED_TRIPLE(T1, Initializer1, T2, Initializer2, T3, Initializer3)                            \
++      struct {                                                                                                         \
++        _LIBCPP_NO_UNIQUE_ADDRESS                                                                                      \
++        __attribute__((__aligned__(::std::__compressed_pair_alignment<T2>),                                            \
++                       __aligned__(::std::__compressed_pair_alignment<T3>))) T1 Initializer1;                          \
++        _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T1> _LIBCPP_CONCAT3(__padding1_, __LINE__, _);      \
++        _LIBCPP_NO_UNIQUE_ADDRESS T2 Initializer2;                                                                     \
++        _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T2> _LIBCPP_CONCAT3(__padding2_, __LINE__, _);      \
++        _LIBCPP_NO_UNIQUE_ADDRESS T3 Initializer3;                                                                     \
++        _LIBCPP_NO_UNIQUE_ADDRESS ::std::__compressed_pair_padding<T3> _LIBCPP_CONCAT3(__padding3_, __LINE__, _);      \
++      }
++#  endif
+ 
+ #else
+ #  define _LIBCPP_COMPRESSED_PAIR(T1, Name1, T2, Name2)                                                                \
+diff --git a/libcxx/include/string b/libcxx/include/string
+index 3c1523eb5de3..1d197654b9fe 100644
+--- a/libcxx/include/string
++++ b/libcxx/include/string
+@@ -974,7 +974,12 @@ public:
+ 
+   _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 basic_string()
+       _NOEXCEPT_(is_nothrow_default_constructible<allocator_type>::value)
+-      : __rep_() {
++#  if _LIBCPP_STD_VER >= 20 // TODO(LLVM 23): Remove this condition; this is a workaround for https://llvm.org/PR154567
++      : __rep_(__short())
++#  else
++      : __rep_()
++#  endif
++  {
+     __annotate_new(0);
+   }
+ 
+@@ -984,7 +989,12 @@ public:
+ #  else
+       _NOEXCEPT
+ #  endif
+-      : __rep_(), __alloc_(__a) {
++#  if _LIBCPP_STD_VER >= 20 // TODO(LLVM 23): Remove this condition; this is a workaround for https://llvm.org/PR154567
++      : __rep_(__short()),
++#  else
++      : __rep_(),
++#  endif
++        __alloc_(__a) {
+     __annotate_new(0);
+   }
+ 
+diff --git a/libcxx/test/libcxx/containers/associative/map/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/associative/map/abi.compile.pass.cpp
+index 04c1802bc84f..e0598b4ff174 100644
+--- a/libcxx/test/libcxx/containers/associative/map/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/associative/map/abi.compile.pass.cpp
+@@ -8,8 +8,6 @@
+ 
+ // UNSUPPORTED: libcpp-abi-no-compressed-pair-padding
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+-
+ #include <cstdint>
+ #include <map>
+ 
+@@ -90,7 +88,12 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 32, "");
++#  else
++static_assert(sizeof(user_struct) == 24, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(map_alloc<int, std::allocator<std::pair<const int, int> > >) == 24, "");
+@@ -119,12 +122,16 @@ static_assert(TEST_ALIGNOF(map_alloc<char, final_small_iter_allocator<std::pair<
+ 
+ struct TEST_ALIGNAS(32) AlignedLess {};
+ 
+-// This part of the ABI has been broken between LLVM 19 and LLVM 20.
+ static_assert(sizeof(std::map<int, int, AlignedLess>) == 64, "");
+ static_assert(TEST_ALIGNOF(std::map<int, int, AlignedLess>) == 32, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 16, "");
++#  else
++static_assert(sizeof(user_struct) == 12, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(map_alloc<int, std::allocator<std::pair<const int, int> > >) == 12, "");
+diff --git a/libcxx/test/libcxx/containers/associative/set/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/associative/set/abi.compile.pass.cpp
+index 1b85bb7c9377..14f89b6c9dea 100644
+--- a/libcxx/test/libcxx/containers/associative/set/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/associative/set/abi.compile.pass.cpp
+@@ -8,8 +8,6 @@
+ 
+ // UNSUPPORTED: libcpp-abi-no-compressed-pair-padding
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+-
+ #include <cstdint>
+ #include <set>
+ 
+@@ -90,7 +88,12 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 32, "");
++#  else
++static_assert(sizeof(user_struct) == 24, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(set_alloc<int, std::allocator<int> >) == 24, "");
+@@ -119,12 +122,16 @@ static_assert(TEST_ALIGNOF(set_alloc<char, final_small_iter_allocator<char> >) =
+ 
+ struct TEST_ALIGNAS(32) AlignedLess {};
+ 
+-// This part of the ABI has been broken between LLVM 19 and LLVM 20.
+ static_assert(sizeof(std::set<int, AlignedLess>) == 64, "");
+ static_assert(TEST_ALIGNOF(std::set<int, AlignedLess>) == 32, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 16, "");
++#  else
++static_assert(sizeof(user_struct) == 12, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(set_alloc<int, std::allocator<int> >) == 12, "");
+diff --git a/libcxx/test/libcxx/containers/associative/unord.map/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/associative/unord.map/abi.compile.pass.cpp
+index 047687248703..60c3e5bf31b0 100644
+--- a/libcxx/test/libcxx/containers/associative/unord.map/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/associative/unord.map/abi.compile.pass.cpp
+@@ -12,8 +12,6 @@
+ // unordered containers changes when bounded unique_ptr is enabled.
+ // UNSUPPORTED: libcpp-has-abi-bounded-unique_ptr
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+-
+ #include <cstdint>
+ #include <unordered_map>
+ 
+@@ -94,7 +92,12 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 48, "");
++#  else
++static_assert(sizeof(user_struct) == 40, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(unordered_map_alloc<int, std::allocator<std::pair<const int, int> > >) == 40, "");
+@@ -124,13 +127,21 @@ static_assert(TEST_ALIGNOF(unordered_map_alloc<char, final_small_iter_allocator<
+ 
+ struct TEST_ALIGNAS(32) AlignedHash {};
+ struct UnalignedEqualTo {};
+-
+-// This part of the ABI has been broken between LLVM 19 and LLVM 20.
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::unordered_map<int, int, AlignedHash, UnalignedEqualTo>) == 64, "");
++#  else
++static_assert(sizeof(std::unordered_map<int, int, AlignedHash, UnalignedEqualTo>) == 96, "");
++#  endif
+ static_assert(TEST_ALIGNOF(std::unordered_map<int, int, AlignedHash, UnalignedEqualTo>) == 32, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 24, "");
++#  else
++static_assert(sizeof(user_struct) == 20, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(unordered_map_alloc<int, std::allocator<std::pair<const int, int> > >) == 20, "");
+@@ -161,7 +172,12 @@ static_assert(TEST_ALIGNOF(unordered_map_alloc<char, final_small_iter_allocator<
+ struct TEST_ALIGNAS(32) AlignedHash {};
+ struct UnalignedEqualTo {};
+ 
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::unordered_map<int, int, AlignedHash, UnalignedEqualTo>) == 64);
++#  else
++static_assert(sizeof(std::unordered_map<int, int, AlignedHash, UnalignedEqualTo>) == 96);
++#  endif
+ static_assert(TEST_ALIGNOF(std::unordered_map<int, int, AlignedHash, UnalignedEqualTo>) == 32);
+ 
+ #else
+diff --git a/libcxx/test/libcxx/containers/associative/unord.set/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/associative/unord.set/abi.compile.pass.cpp
+index e9d88a126de6..0216cb1213ed 100644
+--- a/libcxx/test/libcxx/containers/associative/unord.set/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/associative/unord.set/abi.compile.pass.cpp
+@@ -12,8 +12,6 @@
+ // unordered containers changes when bounded unique_ptr is enabled.
+ // UNSUPPORTED: libcpp-has-abi-bounded-unique_ptr
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+-
+ #include <cstdint>
+ #include <unordered_set>
+ 
+@@ -94,7 +92,12 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 48, "");
++#  else
++static_assert(sizeof(user_struct) == 40, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(unordered_set_alloc<int, std::allocator<int> >) == 40, "");
+@@ -124,12 +127,21 @@ static_assert(TEST_ALIGNOF(unordered_set_alloc<char, final_small_iter_allocator<
+ struct TEST_ALIGNAS(32) AlignedHash {};
+ struct UnalignedEqualTo {};
+ 
+-// This part of the ABI has been broken between LLVM 19 and LLVM 20.
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::unordered_set<int, AlignedHash, UnalignedEqualTo>) == 64, "");
++#  else
++static_assert(sizeof(std::unordered_set<int, AlignedHash, UnalignedEqualTo>) == 96, "");
++#  endif
+ static_assert(TEST_ALIGNOF(std::unordered_set<int, AlignedHash, UnalignedEqualTo>) == 32, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 24, "");
++#  else
++static_assert(sizeof(user_struct) == 20, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(unordered_set_alloc<int, std::allocator<int> >) == 20, "");
+@@ -159,7 +171,12 @@ static_assert(TEST_ALIGNOF(unordered_set_alloc<char, final_small_iter_allocator<
+ struct TEST_ALIGNAS(32) AlignedHash {};
+ struct UnalignedEqualTo {};
+ 
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::unordered_set<int, AlignedHash, UnalignedEqualTo>) == 64);
++#  else
++static_assert(sizeof(std::unordered_set<int, AlignedHash, UnalignedEqualTo>) == 96);
++#  endif
+ static_assert(TEST_ALIGNOF(std::unordered_set<int, AlignedHash, UnalignedEqualTo>) == 32);
+ 
+ #else
+diff --git a/libcxx/test/libcxx/containers/sequences/deque/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/sequences/deque/abi.compile.pass.cpp
+index 38f957f416c8..7eaf64ea09d1 100644
+--- a/libcxx/test/libcxx/containers/sequences/deque/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/sequences/deque/abi.compile.pass.cpp
+@@ -8,8 +8,6 @@
+ 
+ // UNSUPPORTED: libcpp-abi-no-compressed-pair-padding
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+-
+ #include <cstdint>
+ #include <deque>
+ 
+@@ -88,14 +86,24 @@ static_assert(sizeof(std::deque<int, min_allocator<int> >) == 48, "");
+ static_assert(sizeof(std::deque<int, test_allocator<int> >) == 80, "");
+ static_assert(sizeof(std::deque<int, small_iter_allocator<int> >) == 12, "");
+ static_assert(sizeof(std::deque<int, final_small_iter_allocator<int> >) == 16, "");
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::deque<int, common_base_allocator<int> >) == 56, "");
++#  else
++static_assert(sizeof(std::deque<int, common_base_allocator<int> >) == 48, "");
++#  endif
+ 
+ static_assert(sizeof(std::deque<char>) == 48, "");
+ static_assert(sizeof(std::deque<char, min_allocator<char> >) == 48, "");
+ static_assert(sizeof(std::deque<char, test_allocator<char> >) == 80, "");
+ static_assert(sizeof(std::deque<char, small_iter_allocator<char> >) == 12, "");
+ static_assert(sizeof(std::deque<char, final_small_iter_allocator<char> >) == 16, "");
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::deque<char, common_base_allocator<char> >) == 56, "");
++#  else
++static_assert(sizeof(std::deque<char, common_base_allocator<char> >) == 48, "");
++#  endif
+ 
+ static_assert(TEST_ALIGNOF(std::deque<int>) == 8, "");
+ static_assert(TEST_ALIGNOF(std::deque<int, min_allocator<int> >) == 8, "");
+@@ -118,14 +126,24 @@ static_assert(sizeof(std::deque<int, min_allocator<int> >) == 24, "");
+ static_assert(sizeof(std::deque<int, test_allocator<int> >) == 48, "");
+ static_assert(sizeof(std::deque<int, small_iter_allocator<int> >) == 12, "");
+ static_assert(sizeof(std::deque<int, final_small_iter_allocator<int> >) == 16, "");
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::deque<int, common_base_allocator<int> >) == 28, "");
++#  else
++static_assert(sizeof(std::deque<int, common_base_allocator<int> >) == 24, "");
++#  endif
+ 
+ static_assert(sizeof(std::deque<char>) == 24, "");
+ static_assert(sizeof(std::deque<char, min_allocator<char> >) == 24, "");
+ static_assert(sizeof(std::deque<char, test_allocator<char> >) == 48, "");
+ static_assert(sizeof(std::deque<char, small_iter_allocator<char> >) == 12, "");
+ static_assert(sizeof(std::deque<char, final_small_iter_allocator<char> >) == 16, "");
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(std::deque<char, common_base_allocator<char> >) == 28, "");
++#  else
++static_assert(sizeof(std::deque<char, common_base_allocator<char> >) == 24, "");
++#  endif
+ 
+ static_assert(TEST_ALIGNOF(std::deque<int>) == 4, "");
+ static_assert(TEST_ALIGNOF(std::deque<int, min_allocator<int> >) == 4, "");
+diff --git a/libcxx/test/libcxx/containers/sequences/list/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/sequences/list/abi.compile.pass.cpp
+index 1737497ab159..4b9c295c46f2 100644
+--- a/libcxx/test/libcxx/containers/sequences/list/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/sequences/list/abi.compile.pass.cpp
+@@ -6,7 +6,7 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
++// UNSUPPORTED: libcpp-abi-no-compressed-pair-padding
+ 
+ #include <cstdint>
+ #include <list>
+@@ -65,7 +65,12 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 32, "");
++#  else
++static_assert(sizeof(user_struct) == 24, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(std::list<int>) == 24, "");
+@@ -89,7 +94,12 @@ static_assert(TEST_ALIGNOF(std::list<char, test_allocator<char> >) == 8, "");
+ static_assert(TEST_ALIGNOF(std::list<char, small_iter_allocator<char> >) == 2, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 16, "");
++#  else
++static_assert(sizeof(user_struct) == 12, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(std::list<int>) == 12, "");
+diff --git a/libcxx/test/libcxx/containers/sequences/vector.bool/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/sequences/vector.bool/abi.compile.pass.cpp
+index 97e09ab4ca86..598d54ffb91a 100644
+--- a/libcxx/test/libcxx/containers/sequences/vector.bool/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/sequences/vector.bool/abi.compile.pass.cpp
+@@ -8,8 +8,6 @@
+ 
+ // UNSUPPORTED: libcpp-abi-no-compressed-pair-padding
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
+-
+ #include <cstdint>
+ #include <vector>
+ 
+@@ -67,7 +65,11 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 32, "");
++#  else
++static_assert(sizeof(user_struct) == 24, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(std::vector<bool>) == 24, "");
+@@ -81,7 +83,12 @@ static_assert(TEST_ALIGNOF(std::vector<bool, test_allocator<bool> >) == 8, "");
+ static_assert(TEST_ALIGNOF(std::vector<bool, small_iter_allocator<bool> >) == 2, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 16, "");
++#  else
++static_assert(sizeof(user_struct) == 12, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(std::vector<bool>) == 12, "");
+diff --git a/libcxx/test/libcxx/containers/sequences/vector/abi.compile.pass.cpp b/libcxx/test/libcxx/containers/sequences/vector/abi.compile.pass.cpp
+index 879e14351075..6dc0504991b3 100644
+--- a/libcxx/test/libcxx/containers/sequences/vector/abi.compile.pass.cpp
++++ b/libcxx/test/libcxx/containers/sequences/vector/abi.compile.pass.cpp
+@@ -6,7 +6,7 @@
+ //
+ //===----------------------------------------------------------------------===//
+ 
+-// XFAIL: FROZEN-CXX03-HEADERS-FIXME
++// UNSUPPORTED: libcpp-abi-no-compressed-pair-padding
+ 
+ #include <cstdint>
+ #include <vector>
+@@ -73,7 +73,12 @@ struct user_struct {
+ };
+ 
+ #if __SIZE_WIDTH__ == 64
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 32, "");
++#  else
++static_assert(sizeof(user_struct) == 24, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 8, "");
+ 
+ static_assert(sizeof(std::vector<int>) == 24, "");
+@@ -97,7 +102,12 @@ static_assert(TEST_ALIGNOF(std::vector<char, test_allocator<char> >) == 8, "");
+ static_assert(TEST_ALIGNOF(std::vector<char, small_iter_allocator<char> >) == 2, "");
+ 
+ #elif __SIZE_WIDTH__ == 32
++// TODO: Fix the ABI for GCC as well once https://gcc.gnu.org/bugzilla/show_bug.cgi?id=121637 is fixed
++#  ifdef TEST_COMPILER_GCC
+ static_assert(sizeof(user_struct) == 16, "");
++#  else
++static_assert(sizeof(user_struct) == 12, "");
++#  endif
+ static_assert(TEST_ALIGNOF(user_struct) == 4, "");
+ 
+ static_assert(sizeof(std::vector<int>) == 12, "");
+diff --git a/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/default.pass.cpp b/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/default.pass.cpp
+index 7f4c90922d6c..e2abfd17d27c 100644
+--- a/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/default.pass.cpp
++++ b/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/default.pass.cpp
+@@ -82,6 +82,10 @@ TEST_CONSTEXPR_CXX23 bool test_basic() {
+     p.get_deleter().set_state(5);
+     assert(p.get_deleter().state() == 5);
+   }
++// TODO: Remove this check once https://llvm.org/PR154567 is fixed
++#if TEST_STD_VER >= 23 && defined(TEST_COMPILER_CLANG)
++  if (!TEST_IS_CONSTANT_EVALUATED)
++#endif
+   {
+     std::unique_ptr<ElemType, DefaultCtorDeleter<ElemType> > p;
+     assert(p.get() == 0);
+diff --git a/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/nullptr.pass.cpp b/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/nullptr.pass.cpp
+index 45017a03b95d..f5e0541684d1 100644
+--- a/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/nullptr.pass.cpp
++++ b/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/nullptr.pass.cpp
+@@ -47,6 +47,10 @@ TEST_CONSTEXPR_CXX23 void test_basic() {
+     assert(p.get() == 0);
+     assert(p.get_deleter().state() == 0);
+   }
++// TODO: Remove this check once https://llvm.org/PR154567 is fixed
++#if TEST_STD_VER >= 23 && defined(TEST_COMPILER_CLANG)
++  if (!TEST_IS_CONSTANT_EVALUATED)
++#endif
+   {
+     std::unique_ptr<VT, DefaultCtorDeleter<VT> > p(nullptr);
+     assert(p.get() == 0);
+diff --git a/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/pointer.pass.cpp b/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/pointer.pass.cpp
+index cbce5c9c74c5..e9912d4574af 100644
+--- a/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/pointer.pass.cpp
++++ b/libcxx/test/std/utilities/smartptr/unique.ptr/unique.ptr.class/unique.ptr.ctor/pointer.pass.cpp
+@@ -75,6 +75,10 @@ TEST_CONSTEXPR_CXX23 void test_pointer() {
+   }
+   if (!TEST_IS_CONSTANT_EVALUATED)
+     assert(A::count == 0);
++// TODO: Remove this check once https://llvm.org/PR154567 is fixed
++#if TEST_STD_VER >= 23 && defined(TEST_COMPILER_CLANG)
++  if (!TEST_IS_CONSTANT_EVALUATED)
++#endif
+   {
+     A* p = newValue<ValueT>(expect_alive);
+     if (!TEST_IS_CONSTANT_EVALUATED)
+-- 
+2.51.0.rc2.233.g662b1ed5c5-goog
+

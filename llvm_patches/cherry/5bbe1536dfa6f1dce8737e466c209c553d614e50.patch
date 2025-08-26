@@ -1,0 +1,68 @@
+From 5bbe1536dfa6f1dce8737e466c209c553d614e50 Mon Sep 17 00:00:00 2001
+From: Akira Hatanaka <ahatanak@gmail.com>
+Date: Thu, 26 Jun 2025 08:03:32 -0700
+Subject: [PATCH] Cap IntRange::Width to MaxWidth (#145356)
+
+This commit addresses a fallout introduced by #126846.
+
+Previously, TryGetExprRange would return an IntRange that has an active
+range exceeding the maximum representable range for the expression's
+underlying type. This led to clang erroneously issuing warnings about
+implicit conversions losing integer precision.
+
+This commit fixes the bug by capping IntRange::Width to MaxWidth.
+
+rdar://149444029
+---
+ clang/lib/Sema/SemaChecking.cpp                  | 11 ++++++-----
+ clang/test/Sema/implicit-int-conversion-on-int.c |  8 ++++++++
+ 2 files changed, 14 insertions(+), 5 deletions(-)
+
+diff --git a/clang/lib/Sema/SemaChecking.cpp b/clang/lib/Sema/SemaChecking.cpp
+index 3407fd2d57d3..048b0892f6a3 100644
+--- a/clang/lib/Sema/SemaChecking.cpp
++++ b/clang/lib/Sema/SemaChecking.cpp
+@@ -10805,10 +10805,9 @@ static std::optional<IntRange> TryGetExprRange(ASTContext &C, const Expr *E,
+         return std::nullopt;
+ 
+       // If the range was previously non-negative, we need an extra bit for the
+-      // sign bit. If the range was not non-negative, we need an extra bit
+-      // because the negation of the most-negative value is one bit wider than
+-      // that value.
+-      return IntRange(SubRange->Width + 1, false);
++      // sign bit. Otherwise, we need an extra bit because the negation of the
++      // most-negative value is one bit wider than that value.
++      return IntRange(std::min(SubRange->Width + 1, MaxWidth), false);
+     }
+ 
+     case UO_Not: {
+@@ -10825,7 +10824,9 @@ static std::optional<IntRange> TryGetExprRange(ASTContext &C, const Expr *E,
+ 
+       // The width increments by 1 if the sub-expression cannot be negative
+       // since it now can be.
+-      return IntRange(SubRange->Width + (int)SubRange->NonNegative, false);
++      return IntRange(
++          std::min(SubRange->Width + (int)SubRange->NonNegative, MaxWidth),
++          false);
+     }
+ 
+     default:
+diff --git a/clang/test/Sema/implicit-int-conversion-on-int.c b/clang/test/Sema/implicit-int-conversion-on-int.c
+index f555893d9e17..3b1d81cd6a9a 100644
+--- a/clang/test/Sema/implicit-int-conversion-on-int.c
++++ b/clang/test/Sema/implicit-int-conversion-on-int.c
+@@ -48,3 +48,11 @@ unsigned long long test_ull(unsigned long long x) {
+ unsigned _BitInt(16) test_unsigned_bit_int(unsigned _BitInt(16) x) {
+   return -x;
+ }
++
++unsigned test_shift_minus(int i) {
++  return -(1 << i);
++}
++
++unsigned test_shift_not(int i) {
++  return ~(1 << i);
++}
+-- 
+2.51.0.261.g7ce5a0a67e-goog
+

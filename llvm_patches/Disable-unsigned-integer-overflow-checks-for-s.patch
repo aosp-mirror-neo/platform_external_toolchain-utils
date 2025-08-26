@@ -1,0 +1,26 @@
+From b4956514362cae42537f9bcb8f804628d5d0ca9a Mon Sep 17 00:00:00 2001
+From: Sharjeel Khan <sharjeelkhan@google.com>
+Date: Mon, 25 Aug 2025 18:43:07 +0000
+Subject: [PATCH] Disable unsigned-integer-overflow checks for
+ std::sort
+
+Change-Id: Ie09d2557d78d2b0d1307e87a1b807a13e37a5fc5
+---
+ libcxx/include/__algorithm/sort.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/libcxx/include/__algorithm/sort.h b/libcxx/include/__algorithm/sort.h
+index 06cb5b8ce705..85362a6f5cc3 100644
+--- a/libcxx/include/__algorithm/sort.h
++++ b/libcxx/include/__algorithm/sort.h
+@@ -858,6 +858,7 @@ extern template _LIBCPP_EXPORTED_FROM_ABI void
+ __sort<__less<long double>&, long double*>(long double*, long double*, __less<long double>&);
+ 
+ template <class _AlgPolicy, class _RandomAccessIterator, class _Comp>
++__attribute__((no_sanitize("unsigned-integer-overflow")))
+ _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 void
+ __sort_dispatch(_RandomAccessIterator __first, _RandomAccessIterator __last, _Comp& __comp) {
+   typedef typename iterator_traits<_RandomAccessIterator>::difference_type difference_type;
+-- 
+2.51.0.261.g7ce5a0a67e-goog
+

@@ -1,0 +1,63 @@
+From 8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8 Mon Sep 17 00:00:00 2001
+From: Timm Baeder <tbaeder@redhat.com>
+Date: Sat, 23 Aug 2025 08:01:48 +0200
+Subject: [PATCH] [clang] Remove hasValue() check in
+ `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)
+
+When initializing an anonymous struct via an `IndirectFieldDecl`, we
+create an `APValue` for the struct, but we leave the fields
+uninitialized. This would later cause the `CXXConstructExpr` that
+initializes the anonymous struct member to not do anything since its
+`APValue` already had a value (but the member didn't). Just remove the
+check for an `APValue` that already has a value from
+`RecordExprEvaluator::VisitCXXConstructExpr()`.
+
+
+Fixes #154567
+---
+ clang/lib/AST/ExprConstant.cpp                   |  4 ----
+ clang/test/SemaCXX/constant-expression-cxx11.cpp | 16 ++++++++++++++++
+ 2 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/clang/lib/AST/ExprConstant.cpp b/clang/lib/AST/ExprConstant.cpp
+index 9b934753bcc3..a71cb8b0143b 100644
+--- a/clang/lib/AST/ExprConstant.cpp
++++ b/clang/lib/AST/ExprConstant.cpp
+@@ -11045,10 +11045,6 @@ bool RecordExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E,
+ 
+   bool ZeroInit = E->requiresZeroInitialization();
+   if (CheckTrivialDefaultConstructor(Info, E->getExprLoc(), FD, ZeroInit)) {
+-    // If we've already performed zero-initialization, we're already done.
+-    if (Result.hasValue())
+-      return true;
+-
+     if (ZeroInit)
+       return ZeroInitialization(E, T);
+ 
+diff --git a/clang/test/SemaCXX/constant-expression-cxx11.cpp b/clang/test/SemaCXX/constant-expression-cxx11.cpp
+index 2423a77e6e7d..91c4ff1cb520 100644
+--- a/clang/test/SemaCXX/constant-expression-cxx11.cpp
++++ b/clang/test/SemaCXX/constant-expression-cxx11.cpp
+@@ -2645,3 +2645,19 @@ namespace GH150709 {
+   static_assert((e2[0].*mp)() == 1, ""); // expected-error {{constant expression}}
+   static_assert((g.*mp)() == 1, ""); // expected-error {{constant expression}}
+ }
++
++namespace GH154567 {
++  struct T {
++    int i;
++  };
++
++  struct S {
++    struct { // expected-warning {{GNU extension}}
++      T val;
++    };
++    constexpr S() : val() {}
++  };
++
++  constexpr S s{};
++  static_assert(s.val.i == 0, "");
++}
+-- 
+2.51.0.rc2.233.g662b1ed5c5-goog
+

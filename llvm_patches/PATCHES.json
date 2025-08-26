@@ -1070,5 +1070,125 @@
       "from": 574158,
       "until": 580344
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 574158
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Fix padding calculation for function reference types (#142125)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/769c42f4a552a75c8c38870ddc1b50d2ea874e4e.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 577632
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Emit __cfi_check to full LTO part of bitcode file."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ff85dbdf6b399eac7bffa13e579f0f5e6edac3c0.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 587473
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Add tests for the ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154559)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/2a83cf5d0e592890f74c5d5ff4a30ae4cf54b61b.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 587558
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Fix ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154686)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f5e687d7bf49cd9fe38ba7acdeb52d4f30468dee.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 587656
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Cap IntRange::Width to MaxWidth (#145356)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/5bbe1536dfa6f1dce8737e466c209c553d614e50.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 580366
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8-v2.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 587658
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Disable unsigned-integer-overflow checks for std::sort"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Disable-unsigned-integer-overflow-checks-for-s.patch",
+    "version_range": {
+      "from": 574158,
+      "until": null
+    }
   }
 ]
