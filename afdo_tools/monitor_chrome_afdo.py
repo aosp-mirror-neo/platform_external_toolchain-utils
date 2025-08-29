@@ -128,7 +128,7 @@ class ChromeVersion:
     minor: int
     build: int
     patch: int
-    pre: Optional[int]
+    pre: int | None
     revision: int
 
     def as_upstream(self) -> UpstreamChromeVersion:
@@ -445,7 +445,7 @@ def maybe_diagnose_current_chrome_afdo_profile(
     afdo_profiles: dict[int, list[ChromeGsProfile]],
     current_profile_stamp: str,
     max_profile_age: datetime.timedelta,
-) -> Optional[Complaint]:
+) -> Complaint | None:
     """Potentially complains about the age of the given profile.
 
     Returns:

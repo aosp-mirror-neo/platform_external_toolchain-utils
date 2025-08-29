@@ -14,7 +14,7 @@ import shlex
 import shutil
 import subprocess
 import tempfile
-from typing import Generator, IO, Optional
+from typing import Generator, IO
 
 
 # Determine which gsutil to use.
@@ -29,7 +29,7 @@ class GsEntry:
 
     # When this was last modified (or created). `None` if the entry is a
     # directory.
-    last_modified: Optional[datetime.datetime]
+    last_modified: datetime.datetime | None
     # The full gs:// path to the artifact.
     gs_path: str
 

@@ -156,7 +156,7 @@ def generate_upload_to_gerrit_cmd(
     reviewers: Iterable[str] = (),
     cc: Iterable[str] = (),
     ref: str = "HEAD",
-    topic: Optional[str] = None,
+    topic: str | None = None,
 ) -> list[str]:
     """Create a git push CLI command to upload to Gerrit.
 
@@ -203,7 +203,7 @@ def upload_to_gerrit(
     reviewers: Iterable[str] = (),
     cc: Iterable[str] = (),
     ref: str = "HEAD",
-    topic: Optional[str] = None,
+    topic: str | None = None,
 ) -> list[int]:
     """Uploads `ref` to gerrit, optionally adding reviewers/CCs.
 
@@ -319,8 +319,8 @@ def set_autoreview_topic_and_labels(cwd: Path, cl_id: int) -> None:
 @contextlib.contextmanager
 def create_worktree(
     git_directory: Path,
-    in_dir: Optional[Path] = None,
-    commitish: Optional[str] = None,
+    in_dir: Path | None = None,
+    commitish: str | None = None,
 ) -> Generator[Path, None, None]:
     """Creates a temp worktree of `git_directory`, yielding the result.
 
@@ -426,7 +426,7 @@ def commit_all_changes(git_dir: Path, message: str) -> str:
 
 
 def fetch(
-    git_dir: Path, remote: Optional[str] = None, branch: Optional[str] = None
+    git_dir: Path, remote: str | None = None, branch: str | None = None
 ) -> None:
     """Runs `git fetch`.
 
@@ -505,7 +505,7 @@ def discard_changes_and_checkout(git_dir: Path, ref: str):
 
 def maybe_show_file_at_commit(
     git_dir: Path, ref: str, path_from_git_root: str
-) -> Optional[str]:
+) -> str | None:
     """Returns the given file's contents at `ref`.
 
     Args:
@@ -678,7 +678,7 @@ def parse_message_metadata(message_lines: Iterable[str]) -> dict[str, str]:
     return result
 
 
-def merge_base(git_dir: Path, refs: list[str]) -> Optional[str]:
+def merge_base(git_dir: Path, refs: list[str]) -> str | None:
     """Return the git merge-base --octopus between branches.
 
     Args:
@@ -702,7 +702,7 @@ def merge_base(git_dir: Path, refs: list[str]) -> Optional[str]:
     return None
 
 
-def branch_list(git_dir: Path, glob: Optional[str] = None) -> list[str]:
+def branch_list(git_dir: Path, glob: str | None = None) -> list[str]:
     """List branches, optionally matching a given glob."""
     addendum = [glob] if glob else []
     return (
@@ -734,8 +734,8 @@ def commit_author_email(git_dir: Path, ref: str) -> str:
 def log(
     git_dir: Path,
     head: str,
-    stop_at: Optional[str] = None,
-    log_format: Optional[str] = None,
+    stop_at: str | None = None,
+    log_format: str | None = None,
 ) -> str:
     """Runs `git log` between `head` and `stop_at`.
 

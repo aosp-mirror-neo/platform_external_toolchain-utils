@@ -13,14 +13,14 @@ import logging
 import os
 from pathlib import Path
 import tempfile
-from typing import Iterator, Literal, Optional, Union
+from typing import Iterator, Literal, Union
 
 
 @contextlib.contextmanager
 def atomic_write(
     fp: Union[Path, str],
     mode: Literal["w", "wb"] = "w",
-    encoding: Optional[str] = None,
+    encoding: str | None = None,
 ) -> Iterator:
     """Write to a filepath atomically.
 

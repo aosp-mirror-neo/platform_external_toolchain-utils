@@ -118,7 +118,7 @@ def _WriteBugJSONFile(
 
 
 def AppendToExistingBug(
-    bug_id: int, body: str, local_directory: Optional[os.PathLike] = None
+    bug_id: int, body: str, local_directory: os.PathLike | None = None
 ):
     """Sends a reply to an existing bug."""
     _WriteBugJSONFile(
@@ -135,9 +135,9 @@ def CreateNewBug(
     component_id: int,
     title: str,
     body: str,
-    assignee: Optional[str] = None,
+    assignee: str | None = None,
     cc: Optional[list[str]] = None,
-    local_directory: Optional[os.PathLike] = None,
+    local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
 ):
     """Sends a request to create a new bug.
@@ -179,7 +179,7 @@ def SendCronjobLog(
     failed: bool,
     message: str,
     turndown_time_hours: int = 0,
-    local_directory: Optional[os.PathLike] = None,
+    local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
 ):
     """Sends the record of a cronjob to our bug infra.

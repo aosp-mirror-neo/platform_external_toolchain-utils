@@ -89,7 +89,7 @@ class BranchContext:
         return [p.entry for p in self.patch_entry_combos]
 
 
-def _maybe_string_to_int(s: Optional[str]) -> Optional[int]:
+def _maybe_string_to_int(s: str | None) -> int | None:
     if s is None:
         return None
     if s.lower() in {"null", "none"}:
@@ -115,7 +115,7 @@ def _get_metadata_info(commit_metadata: dict[str, str]) -> list[str]:
 
 def _get_metadata_original_sha(
     commit_metadata: dict[str, str],
-) -> Optional[str]:
+) -> str | None:
     return commit_metadata.get("patch.metadata.original_sha")
 
 

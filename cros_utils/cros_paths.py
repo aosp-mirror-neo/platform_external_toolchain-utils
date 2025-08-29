@@ -7,7 +7,6 @@
 import functools
 from pathlib import Path
 import sys
-from typing import Optional
 
 
 # Paths to often-used directories from a CrOS root.
@@ -46,7 +45,7 @@ def script_toolchain_utils_root() -> Path:
 
 
 @functools.lru_cache(1)
-def script_chromiumos_checkout() -> Optional[Path]:
+def script_chromiumos_checkout() -> Path | None:
     """Returns the absolute path to the CrOS checkout this script resides in.
 
     Returns None if this toolchain-utils checkout isn't part of a CrOS repo.

@@ -188,7 +188,7 @@ def main(argv: list[str]) -> None:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
-    build_id: Optional[int] = opts.build_id
+    build_id: int | None = opts.build_id
     if build_id:
         logging.info("Fetching lints from %s", cros_cls.builder_url(build_id))
         got_lints = bot_lints.fetch_bot_info(build_id).findings

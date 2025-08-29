@@ -301,7 +301,7 @@ def find_newest_afdo_artifact(
     arch: Arch,
     kernel_version: KernelVersion,
     release_number: int,
-) -> Optional[KernelGsProfile]:
+) -> KernelGsProfile | None:
     """Returns info about the latest AFDO artifact for the given parameters."""
     gs_base_location = arch.cwp_gs_location
     kernel_profile_dir = os.path.join(gs_base_location, str(kernel_version))
@@ -595,7 +595,7 @@ def commit_new_profiles(
 
 def upload_head_to_gerrit(
     toolchain_utils: Path,
-    chromeos_tree: Optional[Path],
+    chromeos_tree: Path | None,
     branch: git_utils.ChannelBranch,
 ):
     """Uploads HEAD to gerrit as a CL, and sets reviewers/CCs."""

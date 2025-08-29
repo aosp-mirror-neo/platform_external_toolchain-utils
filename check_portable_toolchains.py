@@ -16,7 +16,6 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Optional
 
 
 ABIS = (
@@ -78,7 +77,7 @@ def main() -> int:
 
 def check_abi(
     bucket_prefix: str, abi: str, version: Version
-) -> Optional[Exception]:
+) -> Exception | None:
     """Verify that a given ABI target triplet is okay."""
     year, month, _ = _split_version(version)
     toolchain_name = f"{abi}-{version}.tar.xz"
