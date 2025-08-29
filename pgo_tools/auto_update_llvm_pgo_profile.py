@@ -21,7 +21,6 @@ import re
 import shlex
 import subprocess
 import textwrap
-from typing import Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -307,7 +306,7 @@ def create_llvm_pgo_ebuild_update(
     chromiumos_overlay: Path,
     profile_cache: GsProfileCache,
     dry_run: bool,
-) -> Optional[str]:
+) -> str | None:
     current_llvm_sha = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(
         chromeos_root
     )

@@ -171,7 +171,7 @@ def ApplyPatchAndPrior(
     src_dir: Path,
     patch_entries: Iterable[patch_utils.PatchEntry],
     rel_patch_path: str,
-    patch_cmd: Optional[Callable] = None,
+    patch_cmd: Callable | None = None,
 ) -> tuple[bool, list[patch_utils.PatchEntry], list[patch_utils.PatchEntry]]:
     """Apply a patch, and all patches that apply before it in the patch stack.
 

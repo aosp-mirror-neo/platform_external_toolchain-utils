@@ -21,7 +21,7 @@ Command = list[Union[str, Path]]
 
 def run(
     command: Command,
-    cwd: Optional[Path] = None,
+    cwd: Path | None = None,
     check: bool = True,
     extra_env: Optional[dict[str, str]] = None,
     stdout: Union[IO[Any], int, None] = None,
@@ -142,7 +142,7 @@ def exit_if_in_chroot():
 
 
 @contextlib.contextmanager
-def temporary_file(prefix: Optional[str] = None) -> Generator[Path, None, None]:
+def temporary_file(prefix: str | None = None) -> Generator[Path, None, None]:
     """Yields a temporary file name, and cleans it up on exit.
 
     This differs from NamedTemporaryFile in that it doesn't keep a handle to

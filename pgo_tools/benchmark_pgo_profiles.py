@@ -21,7 +21,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
-from typing import IO, Optional, Union
+from typing import IO, Union
 
 from cros_utils import cros_paths
 from pgo_tools import pgo_utils
@@ -105,7 +105,7 @@ def construct_hyperfine_cmd(
     profile: ProfilePath,
     llvm_binpkg: Path,
     use_thinlto: bool,
-    export_json: Optional[Path] = None,
+    export_json: Path | None = None,
 ) -> pgo_utils.Command:
     if isinstance(profile, Path):
         if profile != LOCAL_PROFILE_LOCATION:

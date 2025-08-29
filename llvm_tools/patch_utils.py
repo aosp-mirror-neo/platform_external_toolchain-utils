@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, IO, Iterable, Optional, Union
+from typing import Any, Callable, IO, Iterable, Union
 
 from llvm_tools import atomic_write_file
 
@@ -47,7 +47,7 @@ class Hunk:
     patch_start: int
     patch_hunk_len: int
     patch_hunk_lineno_begin: int
-    patch_hunk_lineno_end: Optional[int]
+    patch_hunk_lineno_end: int | None
 
 
 def parse_patch_stream(patch_stream: IO[str]) -> dict[str, list[Hunk]]:
@@ -156,10 +156,10 @@ class PatchEntry:
 
     workdir: Path
     """Storage location for the patches."""
-    metadata: Optional[dict[str, Any]]
-    platforms: Optional[list[str]]
+    metadata: dict[str, Any] | None
+    platforms: list[str] | None
     rel_patch_path: str
-    version_range: Optional[dict[str, Optional[int]]]
+    version_range: dict[str, int | None] | None
     verify_workdir: bool = True
     """Don't verify the workdir exists. Used for testing."""
     _parsed_hunks = None
@@ -236,8 +236,8 @@ class PatchEntry:
     def apply(
         self,
         root_dir: Path,
-        patch_cmd: Optional[Callable] = None,
-        extra_args: Optional[list[Union[str, Path]]] = None,
+        patch_cmd: Callable | None = None,
+        extra_args: list[Union[str, Path]] | None = None,
     ) -> PatchResult:
         """Apply a patch to a given directory."""
         # Cmd to apply a patch in the src unpack path.
@@ -254,7 +254,7 @@ class PatchEntry:
         return patch_cmd(self, root_dir, abs_patch_path, extra_args)
 
     def test_apply(
-        self, root_dir: Path, patch_cmd: Optional[Callable] = None
+        self, root_dir: Path, patch_cmd: Callable | None = None
     ) -> PatchResult:
         """Dry run applying a patch to a given directory.
 
@@ -301,7 +301,7 @@ def git_am(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[list[Union[str, Path]]],
+    extra_args: list[Union[str, Path]] | None,
 ) -> PatchResult:
     """Patch a patch file using 'git am'."""
     cmd: list[Union[str, Path]] = ["git", "am", "--3way", patch_path]
@@ -314,7 +314,7 @@ def git_am_chromiumos(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[list[Union[str, Path]]],
+    extra_args: list[Union[str, Path]] | None,
 ) -> PatchResult:
     """Patch a patch file using 'git am', but include footer metadata."""
     return _git_am_chromiumos_internal(pe, root_dir, patch_path, extra_args)
@@ -324,7 +324,7 @@ def git_am_chromiumos_quiet(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[list[Union[str, Path]]],
+    extra_args: list[Union[str, Path]] | None,
 ) -> PatchResult:
     """Same as git_am_chromiumos, but no stdout."""
     return _git_am_chromiumos_internal(
@@ -336,7 +336,7 @@ def _git_am_chromiumos_internal(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[list[Union[str, Path]]],
+    extra_args: list[Union[str, Path]] | None,
     quiet: bool = False,
 ) -> PatchResult:
     cmd: list[Union[str, Path]] = [
@@ -395,7 +395,7 @@ def gnu_patch(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: Optional[list[Union[str, Path]]],
+    extra_args: list[Union[str, Path]] | None,
 ) -> PatchResult:
     """Patch a patch file using GNU 'patch'."""
     cmd: list[Union[str, Path]] = [
@@ -457,11 +457,11 @@ def _run_git_applylike(
 
 def generate_chromiumos_llvm_footer(
     is_cherry: bool,
-    apply_from: Optional[int] = None,
-    apply_until: Optional[int] = None,
-    original_sha: Optional[str] = None,
+    apply_from: int | None = None,
+    apply_until: int | None = None,
+    original_sha: str | None = None,
     platforms: Iterable[str] = (),
-    info: Optional[str] = None,
+    info: str | None = None,
 ) -> list[str]:
     """Generates a commit footer given patch metadata.
 
@@ -510,7 +510,7 @@ def _chromiumos_llvm_footer(pe: PatchEntry) -> list[str]:
 
 
 def patch_applies_after(
-    version_range: Optional[dict[str, Optional[int]]], svn_version: int
+    version_range: dict[str, int | None] | None, svn_version: int
 ) -> bool:
     """Does this patch apply after `svn_version`?"""
     if not version_range:
@@ -535,7 +535,7 @@ class PatchInfo:
     # Can be deleted once legacy code is removed.
     removed_patches: list[str]
     # Can be deleted once legacy code is removed.
-    modified_metadata: Optional[str]
+    modified_metadata: str | None
 
     def _asdict(self):
         return dataclasses.asdict(self)
@@ -584,7 +584,7 @@ def apply_all_from_json(
     svn_version: int,
     llvm_src_dir: Path,
     patches_json_fp: Path,
-    patch_cmd: Optional[Callable] = None,
+    patch_cmd: Callable | None = None,
     continue_on_failure: bool = False,
 ) -> PatchInfo:
     """Attempt to apply some patches to a given LLVM source tree.
@@ -637,9 +637,9 @@ def apply_single_patch_entry(
     svn_version: int,
     llvm_src_dir: Path,
     pe: PatchEntry,
-    patch_cmd: Optional[Callable] = None,
+    patch_cmd: Callable | None = None,
     ignore_version_range: bool = False,
-) -> tuple[bool, Optional[dict[str, list[Hunk]]]]:
+) -> tuple[bool, dict[str, list[Hunk]] | None]:
     """Try to apply a single PatchEntry object.
 
     Returns:
@@ -727,7 +727,7 @@ def update_version_ranges(
     svn_version: int,
     llvm_src_dir: Path,
     patches_json_fp: Path,
-    patch_cmd: Optional[Callable] = None,
+    patch_cmd: Callable | None = None,
 ) -> PatchInfo:
     """Reduce the version ranges of failing patches.
 
@@ -778,7 +778,7 @@ def update_version_ranges_with_entries(
     svn_version: int,
     llvm_src_dir: Path,
     patch_entries: Iterable[PatchEntry],
-    patch_cmd: Optional[Callable] = None,
+    patch_cmd: Callable | None = None,
 ) -> tuple[list[PatchEntry], list[PatchEntry]]:
     """Test-able helper for UpdateVersionRanges.
 

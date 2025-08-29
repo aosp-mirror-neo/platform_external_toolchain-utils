@@ -17,7 +17,6 @@ import logging
 from pathlib import Path
 import subprocess
 import textwrap
-from typing import Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -46,7 +45,7 @@ def resolve_llvm_sha(sha_or_special: str) -> str:
     )
 
 
-def read_last_tried_sha(retry_state: Path) -> Optional[str]:
+def read_last_tried_sha(retry_state: Path) -> str | None:
     """Reads the last tried SHA from the state file."""
     try:
         with retry_state.open(encoding="utf-8") as f:
@@ -70,7 +69,7 @@ class UploadedCLs:
 
 
 def upload_one_cl_to_main(
-    git_dir: Path, sha: str, remote: str, topic: Optional[str] = None
+    git_dir: Path, sha: str, remote: str, topic: str | None = None
 ) -> int:
     """Uploads exactly one SHA from `git_dir`. Returns the CL number.
 
@@ -116,7 +115,7 @@ def create_and_upload_test_helpers_cl(
 def build_manifest_commit_message(
     llvm_sha: str,
     llvm_rev: int,
-    cq_depend_external: Optional[int],
+    cq_depend_external: int | None,
 ) -> str:
     msg = textwrap.dedent(
         f"""\
@@ -136,9 +135,9 @@ def create_and_upload_manifest_cl(
     chromeos_tree: Path,
     llvm_sha: str,
     llvm_rev: int,
-    cq_depend_external: Optional[int],
+    cq_depend_external: int | None,
     dry_run: bool,
-    topic: Optional[str],
+    topic: str | None,
     tot: bool,
 ) -> int:
     """Creates & uploads the LLVM update manifest CL.
@@ -209,7 +208,7 @@ def create_and_upload_cls(
     llvm_rev: int,
     include_test_helpers: bool,
     dry_run: bool,
-    manifest_gerrit_topic: Optional[str],
+    manifest_gerrit_topic: str | None,
     tot: bool,
 ) -> UploadedCLs:
     external_cls = []

@@ -26,7 +26,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from typing import Generator, Optional
+from typing import Generator
 
 from pgo_tools import pgo_utils
 
@@ -324,8 +324,8 @@ class WorkloadRunner:
     def run(
         self,
         triple: str,
-        extra_cflags: Optional[str] = None,
-        sysroot: Optional[str] = None,
+        extra_cflags: str | None = None,
+        sysroot: str | None = None,
     ):
         logging.info(
             "Running workload for triple %s, extra cflags %r",

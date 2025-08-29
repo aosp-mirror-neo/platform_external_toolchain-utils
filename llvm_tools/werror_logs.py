@@ -89,7 +89,7 @@ class ClangWarning:
     # The message of the warning, e.g., "'allocate' is deprecated."
     message: str
     # The location of this warning. Not present for frontend diagnostics.
-    location: Optional[ClangWarningLocation]
+    location: ClangWarningLocation | None
 
     # This parses two kinds of errors:
     # 1. `clang-17: error: foo [-W...]`
@@ -353,7 +353,7 @@ def download_and_unpack_werror_tarballs(
 
     def download_one_url(
         unpack_dir: Path, download_dir: Path, gs_url: str
-    ) -> Optional[subprocess.CalledProcessError]:
+    ) -> subprocess.CalledProcessError | None:
         """Downloads and unpacks -Werror logs from the given gs_url.
 
         Leaves the tarball in `download_dir`, and the unpacked version in
