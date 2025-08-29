@@ -19,7 +19,7 @@ import json
 import logging
 from pathlib import Path
 import subprocess
-from typing import Iterable, Optional, Set
+from typing import Iterable, Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -64,7 +64,7 @@ class LazyToolchainOwners:
                 f"Handed path to nonexistent OWNERS file: {owners_file}"
             )
         self._owners_file = owners_file
-        self._owners: Optional[Set[str]] = None
+        self._owners: Optional[set[str]] = None
 
     def contains(self, email: str) -> bool:
         """Loads OWNERS, and returns if `email` is directly mentioned in it.

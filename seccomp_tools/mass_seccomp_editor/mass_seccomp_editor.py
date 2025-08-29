@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, Iterable, Optional, Set, Tuple
+from typing import Any, Dict, Iterable, Optional
 
 
 # Pre-compiled regexes.
@@ -145,7 +145,7 @@ def _confirm_add(fp: str, syscalls: Iterable[str], noninteractive=None):
         print(f"Skipping {fp}")
 
 
-def check_missing_syscalls(syscalls: list[str], fp: str) -> Optional[Set[str]]:
+def check_missing_syscalls(syscalls: list[str], fp: str) -> Optional[set[str]]:
     """Return which specified syscalls are missing in the given file."""
     missing_syscalls = set(syscalls)
     with open(fp, encoding="utf-8") as f:
@@ -187,7 +187,7 @@ def _search_cmd(query: str, use_fd=True) -> list[str]:
     ]
 
 
-def find_potential_policy_files(packages: list[str]) -> Tuple[list[str], bool]:
+def find_potential_policy_files(packages: list[str]) -> tuple[list[str], bool]:
     """Find potentially related policy files to the given packages.
 
     Returns:

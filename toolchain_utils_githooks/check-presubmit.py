@@ -29,7 +29,6 @@ from typing import (
     NamedTuple,
     Optional,
     Sequence,
-    Tuple,
     Union,
 )
 
@@ -56,7 +55,7 @@ CheckResult = NamedTuple(
 
 
 Command = Sequence[Union[str, os.PathLike]]
-CheckResults = Union[list[Tuple[str, CheckResult]], CheckResult]
+CheckResults = Union[list[tuple[str, CheckResult]], CheckResult]
 
 # Environment variable that's set to a nonempty value on bots. Used for
 # skipping some tasks on CI. Other presubmit checks detect whether a bot is
@@ -80,7 +79,7 @@ def run_command_unchecked(
     command: Command,
     cwd: Optional[str] = None,
     env: Optional[Dict[str, str]] = None,
-) -> Tuple[int, str]:
+) -> tuple[int, str]:
     """Runs a command in the given dir, returning its exit code and stdio."""
     p = subprocess.run(
         command,
@@ -777,7 +776,7 @@ def process_check_result(
     check_name: str,
     check_results: CheckResults,
     start_time: datetime.datetime,
-) -> Tuple[bool, list[list[str]]]:
+) -> tuple[bool, list[list[str]]]:
     """Prints human-readable output for the given check_results."""
     indent = "  "
 
@@ -1142,7 +1141,7 @@ def main(argv: list[str]) -> int:
         else:
             style_checked_files.append(f)
 
-    checks: list[Tuple[str, CheckFn, list[str]]] = [
+    checks: list[tuple[str, CheckFn, list[str]]] = [
         ("check_cros_lint", check_cros_lint, style_checked_files),
         ("check_py_format", check_py_format, style_checked_files),
         (
@@ -1172,8 +1171,8 @@ def main(argv: list[str]) -> int:
     spawn_print_lock = threading.RLock()
 
     def run_check(
-        arg: Tuple[str, CheckFn, Iterable[str]],
-    ) -> Optional[Tuple[str, CheckResults]]:
+        arg: tuple[str, CheckFn, Iterable[str]],
+    ) -> Optional[tuple[str, CheckResults]]:
         name, check_fn, files = arg
         with spawn_print_lock:
             if not files:

@@ -28,7 +28,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional
 
 
 @dataclasses.dataclass(frozen=True)
@@ -68,7 +68,7 @@ def save_state(state_file_path: Path, state: WeeklyJobState) -> None:
         json.dump(state.to_json(), f)
 
 
-def get_iso_week_info(timestamp: float) -> Tuple[int, int]:
+def get_iso_week_info(timestamp: float) -> tuple[int, int]:
     """Converts a Unix timestamp to (ISO year, ISO week number)."""
     # `isocalendar` note: weeks are uniquely identified by (iso_year, iso_week),
     # and all weeks are 7 days. The year that an ISO week belongs to is the
