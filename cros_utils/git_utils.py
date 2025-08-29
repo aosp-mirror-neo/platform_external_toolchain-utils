@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Generator, Iterable, Optional, Union
+from typing import Generator, Iterable, Union
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -546,7 +546,7 @@ def maybe_show_file_at_commit(
 
 def maybe_list_dir_contents_at_commit(
     git_dir: Path, ref: str, path_from_git_root: str
-) -> Optional[list[str]]:
+) -> list[str] | None:
     """Returns files contained in the given directory at the given commit.
 
     Args:

@@ -22,7 +22,6 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
-from typing import Optional
 
 from cros_utils import cros_image_tools
 from cros_utils import cros_paths
@@ -319,7 +318,7 @@ def inspect_single_cl(
 
 def find_common_artifact(
     a: list[tuple[str, str]], b: list[tuple[str, str]]
-) -> Optional[tuple[str, str, str]]:
+) -> tuple[str, str, str] | None:
     """Finds an artifact that can be compared between the given artifact lists.
 
     The artifact lists should be in the form [(cq_builder_name, artifact_path)].

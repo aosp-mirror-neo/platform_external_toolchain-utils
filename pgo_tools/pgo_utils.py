@@ -13,7 +13,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from typing import Any, Generator, IO, Optional, Union
+from typing import Any, Generator, IO, Union
 
 
 Command = list[Union[str, Path]]
@@ -23,7 +23,7 @@ def run(
     command: Command,
     cwd: Path | None = None,
     check: bool = True,
-    extra_env: Optional[dict[str, str]] = None,
+    extra_env: dict[str, str] | None = None,
     stdout: Union[IO[Any], int, None] = None,
     stderr: Union[IO[Any], int, None] = None,
 ) -> subprocess.CompletedProcess:

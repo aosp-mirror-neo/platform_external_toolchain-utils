@@ -233,7 +233,7 @@ class AggregatedWarnings:
 
 
 def print_aligned_counts(
-    name_count_map: dict[str, int], file: Optional[IO[str]] = None
+    name_count_map: dict[str, int], file: IO[str] | None = None
 ) -> None:
     assert name_count_map
     # Sort on value, highest first. Name breaks ties.
@@ -248,7 +248,7 @@ def print_aligned_counts(
 
 def summarize_per_package_warnings(
     warning_infos: Iterable[WarningInfo],
-    file: Optional[IO[str]] = None,
+    file: IO[str] | None = None,
 ) -> None:
     warnings_per_package: DefaultDict[str, int] = collections.defaultdict(int)
     for info in warning_infos:
@@ -264,7 +264,7 @@ def summarize_per_package_warnings(
 
 def summarize_warnings_by_flag(
     warnings: dict[ClangWarning, WarningInfo],
-    file: Optional[IO[str]] = None,
+    file: IO[str] | None = None,
 ) -> None:
     if not warnings:
         return

@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 
 # Pre-compiled regexes.
@@ -145,7 +145,7 @@ def _confirm_add(fp: str, syscalls: Iterable[str], noninteractive=None):
         print(f"Skipping {fp}")
 
 
-def check_missing_syscalls(syscalls: list[str], fp: str) -> Optional[set[str]]:
+def check_missing_syscalls(syscalls: list[str], fp: str) -> set[str] | None:
     """Return which specified syscalls are missing in the given file."""
     missing_syscalls = set(syscalls)
     with open(fp, encoding="utf-8") as f:

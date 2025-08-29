@@ -113,7 +113,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import cast, List, Mapping, Optional
+from typing import cast, List, Mapping
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -152,7 +152,7 @@ def run(
     args: List,
     *,
     indent: int = 4,
-    env: Optional[Mapping[str, str]] = None,
+    env: Mapping[str, str] | None = None,
     capture_stdout: bool = False,
     message: bool = True,
 ) -> str | None:

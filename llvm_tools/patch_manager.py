@@ -9,7 +9,7 @@ import enum
 import os
 from pathlib import Path
 import sys
-from typing import Callable, Iterable, Optional
+from typing import Callable, Iterable
 
 from llvm_tools import failure_modes
 from llvm_tools import get_llvm_hash
@@ -32,7 +32,7 @@ class GitBisectionCode(enum.IntEnum):
     SKIP = 125
 
 
-def GetCommandLineArgs(sys_argv: Optional[list[str]]):
+def GetCommandLineArgs(sys_argv: list[str] | None):
     """Get the required arguments from the command line."""
 
     # Create parser and add optional command-line arguments.

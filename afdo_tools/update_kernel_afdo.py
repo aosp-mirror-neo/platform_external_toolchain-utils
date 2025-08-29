@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Iterable, Optional
+from typing import Iterable
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -412,7 +412,7 @@ def fetch_and_validate_newest_afdo_artifact(
     kernel_version: KernelVersion,
     branch: git_utils.ChannelBranch,
     channel: git_utils.Channel,
-) -> Optional[tuple[str, bool]]:
+) -> tuple[str, bool] | None:
     """Tries to update one AFDO profile on a branch.
 
     Returns:

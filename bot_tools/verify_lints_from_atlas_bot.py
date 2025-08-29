@@ -10,7 +10,7 @@ import dataclasses
 import logging
 import re
 import sys
-from typing import Iterable, Optional
+from typing import Iterable
 
 from bot_tools import bot_lints
 from llvm_tools import cros_cls
@@ -97,7 +97,7 @@ def spawn_bot_and_collect_lints(
 
 def log_errors_with_lints(
     lints: list[bot_lints.Finding],
-    finding_expectations: Optional[Iterable[FindingExpectations]] = None,
+    finding_expectations: Iterable[FindingExpectations] | None = None,
 ) -> bool:
     """Logs mismatches between the given lints and expectations.
 

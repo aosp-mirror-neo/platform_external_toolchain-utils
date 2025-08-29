@@ -22,7 +22,7 @@ import sys
 import textwrap
 import threading
 import traceback
-from typing import Callable, Iterable, NamedTuple, Optional, Sequence, Union
+from typing import Callable, Iterable, NamedTuple, Sequence, Union
 
 
 # Each checker represents an independent check that's done on our sources.
@@ -70,7 +70,7 @@ LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
 def run_command_unchecked(
     command: Command,
     cwd: str | None = None,
-    env: Optional[dict[str, str]] = None,
+    env: dict[str, str] | None = None,
 ) -> tuple[int, str]:
     """Runs a command in the given dir, returning its exit code and stdio."""
     p = subprocess.run(
@@ -178,7 +178,7 @@ def maybe_get_or_install_mypy() -> MyPyInvocation | None:
     return pip_mypy_invocation
 
 
-def get_pip() -> Optional[list[str]]:
+def get_pip() -> list[str] | None:
     """Finds pip and returns a command to invoke it.
 
     If pip cannot be found, this function attempts to install
@@ -1164,7 +1164,7 @@ def main(argv: list[str]) -> int:
 
     def run_check(
         arg: tuple[str, CheckFn, Iterable[str]],
-    ) -> Optional[tuple[str, CheckResults]]:
+    ) -> tuple[str, CheckResults] | None:
         name, check_fn, files = arg
         with spawn_print_lock:
             if not files:

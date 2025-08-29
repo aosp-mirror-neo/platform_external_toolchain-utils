@@ -24,7 +24,7 @@ import json
 import logging
 from pathlib import Path
 import re
-from typing import Iterable, Optional
+from typing import Iterable
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -303,7 +303,7 @@ def find_new_patches(
 
 
 def _find_branch_refs(
-    llvm_dir: Path, branch_patterns: Optional[list[str]] = None
+    llvm_dir: Path, branch_patterns: list[str] | None = None
 ) -> set[str]:
     """Return git branch refs which match the given patterns.
 

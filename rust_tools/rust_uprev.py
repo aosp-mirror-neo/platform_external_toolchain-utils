@@ -33,16 +33,7 @@ import subprocess
 import textwrap
 import threading
 import time
-from typing import (
-    Any,
-    Callable,
-    NamedTuple,
-    Optional,
-    Protocol,
-    Sequence,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, NamedTuple, Protocol, Sequence, TypeVar, Union
 import urllib.request
 
 from cros_utils import cros_paths
@@ -67,8 +58,8 @@ class RunStepFn(Protocol):
         self,
         step_name: str,
         step_fn: Callable[[], T],
-        result_from_json: Optional[Callable[[Any], T]] = None,
-        result_to_json: Optional[Callable[[T], Any]] = None,
+        result_from_json: Callable[[Any], T] | None = None,
+        result_to_json: Callable[[T], Any] | None = None,
     ) -> T: ...
 
 
@@ -608,8 +599,8 @@ def perform_step(
     completed_steps: dict[str, Any],
     step_name: str,
     step_fn: Callable[[], T],
-    result_from_json: Optional[Callable[[Any], T]] = None,
-    result_to_json: Optional[Callable[[T], Any]] = None,
+    result_from_json: Callable[[Any], T] | None = None,
+    result_to_json: Callable[[T], Any] | None = None,
 ) -> T:
     if step_name in completed_steps:
         logging.info("Skipping previously completed step %s", step_name)
@@ -973,8 +964,8 @@ def main() -> None:
     def run_step(
         step_name: str,
         step_fn: Callable[[], T],
-        result_from_json: Optional[Callable[[Any], T]] = None,
-        result_to_json: Optional[Callable[[T], Any]] = None,
+        result_from_json: Callable[[Any], T] | None = None,
+        result_to_json: Callable[[T], Any] | None = None,
     ) -> T:
         return perform_step(
             state_file,

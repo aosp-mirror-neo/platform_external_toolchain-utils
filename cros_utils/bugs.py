@@ -9,7 +9,7 @@ import enum
 import json
 import os
 import threading
-from typing import Any, Optional, Union
+from typing import Any
 
 from cros_utils import gs
 
@@ -78,7 +78,7 @@ _GLOBAL_NAME_GENERATOR = _FileNameGenerator()
 def _WriteBugJSONFile(
     object_type: str,
     json_object: dict[str, Any],
-    local_directory: Optional[Union[os.PathLike, str]],
+    local_directory: os.PathLike | str | None,
 ):
     """Writes a JSON file to `directory` with the given bug-ish object.
 
@@ -136,7 +136,7 @@ def CreateNewBug(
     title: str,
     body: str,
     assignee: str | None = None,
-    cc: Optional[list[str]] = None,
+    cc: list[str] | None = None,
     local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
 ):

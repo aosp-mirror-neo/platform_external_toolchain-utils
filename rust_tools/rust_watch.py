@@ -256,7 +256,7 @@ def file_bug(title: str, body: str) -> None:
 def maybe_compose_bug(
     old_state: State,
     newest_release: RustReleaseVersion,
-) -> Optional[tuple[str, str]]:
+) -> tuple[str, str] | None:
     """Creates a bug to file about the new release, if doing is desired."""
     if newest_release == old_state.last_seen_release:
         return None

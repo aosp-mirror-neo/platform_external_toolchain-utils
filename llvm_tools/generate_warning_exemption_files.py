@@ -31,7 +31,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
-from typing import DefaultDict, Generator, Iterable, Optional
+from typing import DefaultDict, Generator, Iterable
 
 from cros_utils import gs
 from llvm_tools import cros_cls
@@ -170,7 +170,7 @@ class FatalWarningGroup:
 
 def parse_fatal_warnings_file(
     warnings_json_file: Path,
-) -> Optional[tuple[warning_exemption.Package, FatalWarningGroup]]:
+) -> tuple[warning_exemption.Package, FatalWarningGroup] | None:
     logging.debug("Parsing warnings report: %s", warnings_json_file)
     with warnings_json_file.open(encoding="utf-8") as f:
         warnings_json = json.load(f)
