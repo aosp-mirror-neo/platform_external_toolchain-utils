@@ -7,7 +7,6 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import List
 
 from cros_utils import cros_paths
 from cros_utils import email_sender
@@ -32,7 +31,7 @@ def count_outstanding_cls(chromeos_root: Path) -> int:
     return len(cls)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     # This is meant to be run from a ChromeOS tree for simplicity.
     chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
 

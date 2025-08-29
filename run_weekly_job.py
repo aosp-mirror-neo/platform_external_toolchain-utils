@@ -28,7 +28,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 
 @dataclasses.dataclass(frozen=True)
@@ -83,7 +83,7 @@ def get_iso_week_info(timestamp: float) -> Tuple[int, int]:
     return iso_year, iso_week
 
 
-def run_wrapped_command(command_to_run: List[str]) -> int:
+def run_wrapped_command(command_to_run: list[str]) -> int:
     """Runs the wrapped command and returns its exit code."""
     logging.info("Running command: %s", shlex.join(command_to_run))
     # Do not capture stdout/stderr unless necessary for debugging,
@@ -96,7 +96,7 @@ def run_wrapped_command(command_to_run: List[str]) -> int:
     return process.returncode
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parses command line arguments."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -137,7 +137,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return opts
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     """Main entry point for the script."""
     opts = parse_args(argv)
     logging.basicConfig(
@@ -146,7 +146,7 @@ def main(argv: List[str]) -> int:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
-    command_to_run: List[str] = opts.command_to_run
+    command_to_run: list[str] = opts.command_to_run
     state_file: Path = opts.state_file
     state = load_state(state_file)
 

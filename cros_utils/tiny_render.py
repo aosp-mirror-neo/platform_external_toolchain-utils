@@ -74,8 +74,8 @@ line_break = LineBreak()
 #   Bold,
 #   LineBreak,
 #   Link,
-#   List[Piece],
-#   Tuple[...Piece],
+#   list[Piece],
+#   tuple[...Piece],
 #   UnorderedList,
 #   str,
 # ]

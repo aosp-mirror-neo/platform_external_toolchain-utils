@@ -26,7 +26,6 @@ from typing import (
     Callable,
     Dict,
     Iterable,
-    List,
     NamedTuple,
     Optional,
     Sequence,
@@ -51,13 +50,13 @@ CheckResult = NamedTuple(
     (
         ("ok", bool),
         ("output", str),
-        ("autofix_commands", List[List[str]]),
+        ("autofix_commands", list[list[str]]),
     ),
 )
 
 
 Command = Sequence[Union[str, os.PathLike]]
-CheckResults = Union[List[Tuple[str, CheckResult]], CheckResult]
+CheckResults = Union[list[Tuple[str, CheckResult]], CheckResult]
 
 # Environment variable that's set to a nonempty value on bots. Used for
 # skipping some tasks on CI. Other presubmit checks detect whether a bot is
@@ -102,7 +101,7 @@ def has_executable_on_path(exe: str) -> bool:
     return shutil.which(exe) is not None
 
 
-def remove_deleted_files(files: Iterable[str]) -> List[str]:
+def remove_deleted_files(files: Iterable[str]) -> list[str]:
     return [f for f in files if os.path.exists(f)]
 
 
@@ -126,10 +125,10 @@ def env_with_pythonpath(toolchain_utils_root: str) -> Dict[str, str]:
 class MyPyInvocation:
     """An invocation of mypy."""
 
-    command: List[str]
+    command: list[str]
 
 
-def list_installed_pip_packages(pip: List[str]) -> List[str]:
+def list_installed_pip_packages(pip: list[str]) -> list[str]:
     list_output = subprocess.run(
         pip + ["list", "--format=json"],
         check=True,
@@ -188,7 +187,7 @@ def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
     return pip_mypy_invocation
 
 
-def get_pip() -> Optional[List[str]]:
+def get_pip() -> Optional[list[str]]:
     """Finds pip and returns a command to invoke it.
 
     If pip cannot be found, this function attempts to install
@@ -300,7 +299,7 @@ def check_black(
         )
 
     black_version = stdout_and_stderr.strip()
-    black_invocation: List[str] = [str(black), "--line-length=80"]
+    black_invocation: list[str] = [str(black), "--line-length=80"]
     command = black_invocation + ["--check"] + list(python_files)
     exit_code, stdout_and_stderr = run_command_unchecked(
         command, cwd=toolchain_utils_root
@@ -596,7 +595,7 @@ def check_cros_lint(
 
     tasks = []
 
-    def check_result_from_command(command: List[str]) -> CheckResult:
+    def check_result_from_command(command: list[str]) -> CheckResult:
         exit_code, output = run_command_unchecked(
             command, toolchain_utils_root, env=fixed_env
         )
@@ -778,7 +777,7 @@ def process_check_result(
     check_name: str,
     check_results: CheckResults,
     start_time: datetime.datetime,
-) -> Tuple[bool, List[List[str]]]:
+) -> Tuple[bool, list[list[str]]]:
     """Prints human-readable output for the given check_results."""
     indent = "  "
 
@@ -832,7 +831,7 @@ def process_check_result(
 
 
 def try_autofix(
-    all_autofix_commands: List[List[str]], toolchain_utils_root: str
+    all_autofix_commands: list[list[str]], toolchain_utils_root: str
 ) -> None:
     """Tries to run all given autofix commands, if appropriate."""
     if not all_autofix_commands:
@@ -888,7 +887,7 @@ def is_in_chroot() -> bool:
 
 
 def maybe_reexec_inside_chroot(
-    autofix: bool, install_deps_only: bool, infer_files: bool, files: List[str]
+    autofix: bool, install_deps_only: bool, infer_files: bool, files: list[str]
 ) -> None:
     if is_in_chroot():
         return
@@ -968,7 +967,7 @@ def can_import_py_module(module: str) -> bool:
     return exit_code == 0
 
 
-def infer_files_from_env_or_die(toolchain_utils_root: Path) -> List[str]:
+def infer_files_from_env_or_die(toolchain_utils_root: Path) -> list[str]:
     env = os.environ
 
     # If we have PRESUBMIT_FILES, use those. It's a newline-delimeted list.
@@ -1028,8 +1027,8 @@ def infer_files_from_env_or_die(toolchain_utils_root: Path) -> List[str]:
 
 
 def files_that_modify_patches_checks(
-    toolchain_utils_root: str, files: List[str]
-) -> List[str]:
+    toolchain_utils_root: str, files: list[str]
+) -> list[str]:
     llvm_patches = os.path.join(toolchain_utils_root, "llvm_patches/")
     return [
         x
@@ -1056,7 +1055,7 @@ def check_patches_subdir(
     )
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--no_autofix",
@@ -1143,7 +1142,7 @@ def main(argv: List[str]) -> int:
         else:
             style_checked_files.append(f)
 
-    checks: List[Tuple[str, CheckFn, List[str]]] = [
+    checks: list[Tuple[str, CheckFn, list[str]]] = [
         ("check_cros_lint", check_cros_lint, style_checked_files),
         ("check_py_format", check_py_format, style_checked_files),
         (

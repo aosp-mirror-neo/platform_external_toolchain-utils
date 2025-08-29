@@ -591,7 +591,7 @@ def upload_profdata(args):
     )
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     logging.basicConfig(
         stream=sys.stdout, level=logging.NOTSET, format="%(message)s"
     )

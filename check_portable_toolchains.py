@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 
 
 ABIS = (
@@ -55,7 +55,7 @@ def main() -> int:
     if not version:
         version = _autodetect_latest_llvm_next_sdk_version()
 
-    errors: List[Tuple[str, Exception]] = []
+    errors: list[Tuple[str, Exception]] = []
     for abi in ABIS:
         res = check_abi(args.bucket_prefix, abi, version)
         if res:

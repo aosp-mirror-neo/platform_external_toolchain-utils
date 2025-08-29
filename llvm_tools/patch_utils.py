@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, IO, Iterable, List, Optional, Union
+from typing import Any, Callable, IO, Iterable, Optional, Union
 
 from llvm_tools import atomic_write_file
 
@@ -542,7 +542,7 @@ class PatchInfo:
 
 
 def json_to_patch_entries(workdir: Path, json_fd: IO[str]) -> list[PatchEntry]:
-    """Convert a json IO object to List[PatchEntry].
+    """Convert a json IO object to list[PatchEntry].
 
     Examples:
         >>> f = open('PATCHES.json')
@@ -552,7 +552,7 @@ def json_to_patch_entries(workdir: Path, json_fd: IO[str]) -> list[PatchEntry]:
 
 
 def json_str_to_patch_entries(workdir: Path, json_str: str) -> list[PatchEntry]:
-    """Convert a json IO object to List[PatchEntry].
+    """Convert a json IO object to list[PatchEntry].
 
     Examples:
         >>> f = open('PATCHES.json').read()
@@ -779,7 +779,7 @@ def update_version_ranges_with_entries(
     llvm_src_dir: Path,
     patch_entries: Iterable[PatchEntry],
     patch_cmd: Optional[Callable] = None,
-) -> tuple[list[PatchEntry], List[PatchEntry]]:
+) -> tuple[list[PatchEntry], list[PatchEntry]]:
     """Test-able helper for UpdateVersionRanges.
 
     Args:
