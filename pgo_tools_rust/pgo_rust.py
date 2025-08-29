@@ -155,7 +155,7 @@ def run(
     env: Optional[Mapping[str, str]] = None,
     capture_stdout: bool = False,
     message: bool = True,
-) -> Optional[str]:
+) -> str | None:
     args = [str(arg) for arg in args]
 
     if env is None:
@@ -234,7 +234,7 @@ def build_crate(
     crate_name: str,
     crate_version: str,
     target_triple: str,
-    time_file: Optional[Path] = None,
+    time_file: Path | None = None,
 ):
     local_path = LOCAL_BASE / "crates" / f"{crate_name}-{crate_version}"
     with chdir(local_path):
@@ -540,8 +540,8 @@ def upload_profdata_impl(
     crate_name: str = CRATE_NAME,
     crate_version: str = CRATE_VERSION,
     suffix: str = "",
-    chroot_tmpdir_prefix: Optional[Path] = None,
-    force_rust_version: Optional[str] = None,
+    chroot_tmpdir_prefix: Path | None = None,
+    force_rust_version: str | None = None,
 ) -> None:
     # It's supported to run this single function from outside of the chroot; in
     # that case, the user _must_ specify both the tempdir prefix and forced Rust

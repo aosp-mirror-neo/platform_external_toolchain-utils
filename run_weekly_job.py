@@ -28,7 +28,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
-from typing import Any, Optional
+from typing import Any
 
 
 @dataclasses.dataclass(frozen=True)
@@ -36,7 +36,7 @@ class WeeklyJobState:
     """State for the weekly job runner."""
 
     # Timestamp per `time.time()`
-    last_success_timestamp: Optional[float] = None
+    last_success_timestamp: float | None = None
     consecutive_failures: int = 0
 
     @classmethod

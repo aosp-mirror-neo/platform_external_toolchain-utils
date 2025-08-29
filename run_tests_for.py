@@ -22,7 +22,6 @@ import shlex
 import signal
 import subprocess
 import sys
-from typing import Optional
 
 
 TestSpec = collections.namedtuple("TestSpec", ["directory", "command"])
@@ -42,7 +41,7 @@ def _make_relative_to_toolchain_utils(toolchain_utils, path):
     return result
 
 
-def _run_test(test_spec: TestSpec, timeout: int) -> tuple[Optional[int], str]:
+def _run_test(test_spec: TestSpec, timeout: int) -> tuple[int | None, str]:
     """Runs a test.
 
     Returns a tuple indicating the process' exit code, and the combined

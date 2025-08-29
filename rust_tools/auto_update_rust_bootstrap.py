@@ -29,7 +29,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Callable, Iterable, Optional, Union
+from typing import Callable, Iterable, Union
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -110,7 +110,7 @@ def fetch_most_recent_sdk_version() -> str:
     raise ValueError(f"Could not find LATEST_SDK in {latest_file_loc}")
 
 
-def find_rust_bootstrap_prebuilt(version: EbuildVersion) -> Optional[str]:
+def find_rust_bootstrap_prebuilt(version: EbuildVersion) -> str | None:
     """Returns a URL to a prebuilt for `version` of rust-bootstrap."""
     # Searching chroot-* is generally unsafe, because some uploads might
     # include SDK artifacts built by CQ+1 runs, so just use the most recent
@@ -371,7 +371,7 @@ def substitute_exactly_once(
 
 def set_rust_bootstrap_prebuilt_use(
     rust_bootstrap_contents: str,
-    prebuilt_name: Optional[str],
+    prebuilt_name: str | None,
 ) -> str:
     """Sets the use-prebuilts flag to `use_prebuilts`. in the given ebuild.
 
@@ -401,7 +401,7 @@ def set_rust_bootstrap_prebuilt_use(
 
 
 def build_commit_message_for_new_prebuilts(
-    versions_updated: list[tuple[EbuildVersion, Optional[str]]],
+    versions_updated: list[tuple[EbuildVersion, str | None]],
 ) -> str:
     """Builds a commit message for adding new prebuilts."""
     pretty_artifact_lines = []
@@ -450,7 +450,7 @@ def maybe_add_newest_prebuilts(
     """
     # A list of (version, maybe_prebuilt_location).
     uprevved_ebuild = None
-    versions_updated: list[tuple[EbuildVersion, Optional[str]]] = []
+    versions_updated: list[tuple[EbuildVersion, str | None]] = []
     for version, ebuild in collect_stable_ebuilds_by_version(
         rust_bootstrap_dir
     ):

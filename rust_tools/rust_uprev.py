@@ -203,7 +203,7 @@ def find_ebuild_for_package(name: str) -> str:
 
 
 def find_ebuild_path(
-    directory: Path, name: str, version: Optional[RustVersion] = None
+    directory: Path, name: str, version: RustVersion | None = None
 ) -> Path:
     """Finds an ebuild in a directory.
 

@@ -69,7 +69,7 @@ LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
 
 def run_command_unchecked(
     command: Command,
-    cwd: Optional[str] = None,
+    cwd: str | None = None,
     env: Optional[dict[str, str]] = None,
 ) -> tuple[int, str]:
     """Runs a command in the given dir, returning its exit code and stdio."""
@@ -131,7 +131,7 @@ def list_installed_pip_packages(pip: list[str]) -> list[str]:
     return [x["name"] for x in json.loads(list_output)]
 
 
-def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
+def maybe_get_or_install_mypy() -> MyPyInvocation | None:
     """Finds the mypy executable and returns a command to invoke it.
 
     If mypy cannot be found and we're inside the chroot, this
@@ -499,7 +499,7 @@ def check_py_format(
 
 
 def check_py_types(
-    mypy: Optional[MyPyInvocation],
+    mypy: MyPyInvocation | None,
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
     files: Iterable[str],
@@ -532,7 +532,7 @@ def check_py_types(
     return [(name, get_check_result_or_catch(task)) for name, task in tasks]
 
 
-def find_chromeos_root_directory() -> Optional[str]:
+def find_chromeos_root_directory() -> str | None:
     return os.getenv("CHROMEOS_ROOT_DIRECTORY")
 
 
@@ -554,7 +554,7 @@ def check_cros_lint(
     # We have to support users who don't have a chroot. So we either run `cros
     # lint` (if it's been made available to us), or we try a mix of
     # pylint+staticcheck.
-    def try_run_cros_lint(cros_binary: str) -> Optional[CheckResult]:
+    def try_run_cros_lint(cros_binary: str) -> CheckResult | None:
         exit_code, output = run_command_unchecked(
             [cros_binary, "lint", "--"] + fixed_files,
             toolchain_utils_root,
@@ -864,7 +864,7 @@ def try_autofix(
         )
 
 
-def find_repo_root(base_dir: str) -> Optional[str]:
+def find_repo_root(base_dir: str) -> str | None:
     current = base_dir
     while current != "/":
         if os.path.isdir(os.path.join(current, ".repo")):
