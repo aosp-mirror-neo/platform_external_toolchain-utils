@@ -28,7 +28,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 
 @dataclasses.dataclass(frozen=True)
@@ -40,13 +40,13 @@ class WeeklyJobState:
     consecutive_failures: int = 0
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "WeeklyJobState":
+    def from_json(cls, data: dict[str, Any]) -> "WeeklyJobState":
         return cls(
             last_success_timestamp=data.get("last_success_timestamp"),
             consecutive_failures=data.get("consecutive_failures", 0),
         )
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
 
 

@@ -22,15 +22,7 @@ import sys
 import textwrap
 import threading
 import traceback
-from typing import (
-    Callable,
-    Dict,
-    Iterable,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Union,
-)
+from typing import Callable, Iterable, NamedTuple, Optional, Sequence, Union
 
 
 # Each checker represents an independent check that's done on our sources.
@@ -78,7 +70,7 @@ LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
 def run_command_unchecked(
     command: Command,
     cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
+    env: Optional[dict[str, str]] = None,
 ) -> tuple[int, str]:
     """Runs a command in the given dir, returning its exit code and stdio."""
     p = subprocess.run(
@@ -111,7 +103,7 @@ def is_file_executable(file_path: str) -> bool:
 # As noted in our docs, some of our Python code depends on modules that sit in
 # toolchain-utils/. Add that to PYTHONPATH to ensure that things like `cros
 # lint` are kept happy.
-def env_with_pythonpath(toolchain_utils_root: str) -> Dict[str, str]:
+def env_with_pythonpath(toolchain_utils_root: str) -> dict[str, str]:
     env = dict(os.environ)
     if "PYTHONPATH" in env:
         env["PYTHONPATH"] += ":" + toolchain_utils_root

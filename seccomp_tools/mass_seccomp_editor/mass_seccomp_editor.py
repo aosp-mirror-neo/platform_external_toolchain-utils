@@ -10,7 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Iterable, Optional
 
 
 # Pre-compiled regexes.
@@ -30,7 +30,7 @@ class Policies:
     arm64: list[str] = dataclasses.field(default_factory=list)
     none: list[str] = dataclasses.field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, list[str]]:
+    def to_dict(self) -> dict[str, list[str]]:
         """Convert this class to a dictionary."""
         return {**self.__dict__}
 
@@ -95,7 +95,7 @@ def main():
     sys.exit(0 if success else 2)
 
 
-def _make_syscall_lookup_table(args: Any) -> Dict[str, list[str]]:
+def _make_syscall_lookup_table(args: Any) -> dict[str, list[str]]:
     """Make lookup table, segmented by all/b32/b64/none policies.
 
     Args:
