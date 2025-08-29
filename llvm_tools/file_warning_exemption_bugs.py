@@ -22,7 +22,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Generator, Optional
+from typing import Generator
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -104,7 +104,7 @@ class RepoList:
 
         return cls(cros_root, remote_to_local)
 
-    def lookup_local_path(self, lookup_path: str) -> Optional[Path]:
+    def lookup_local_path(self, lookup_path: str) -> Path | None:
         longest_match = None
         for remote_path in self._remote_to_local:
             if not lookup_path.startswith(remote_path):
@@ -182,7 +182,7 @@ def format_bug(
     title: str,
     body: str,
     component: int,
-    assignee: Optional[str],
+    assignee: str | None,
     parent: int,
     priority: int = 2,
 ) -> str:
@@ -211,7 +211,7 @@ def parse_input_yaml(input_yaml: Path) -> warning_exemption.YamlFile:
 
 def scrape_component_from_dir_metadata_file(
     file_contents: str,
-) -> Optional[int]:
+) -> int | None:
     # dirmd is a tool offered by `depot_tools`, and should be available inside
     # of the chroot. It helpfully converts these files to JSON.
     raw_metadata = json.loads(
@@ -333,7 +333,7 @@ def find_ebuild_dir_metadata_candidates(
 def try_read_dir_metadata_component_for_ebuild(
     repo_list: RepoList,
     ebuild_path: Path,
-) -> Optional[int]:
+) -> int | None:
     for try_dir in find_ebuild_dir_metadata_candidates(repo_list, ebuild_path):
         logging.debug("dirmd: trying %s for %s", try_dir, ebuild_path)
         try:
@@ -350,7 +350,7 @@ def resolve_package_component(
     cros_root: Path,
     repo_list: RepoList,
     package: warning_exemption.Package,
-) -> Optional[int]:
+) -> int | None:
     """Resolves a buganizer component for a package."""
     logging.info("Resolving %s to a specific ebuild...", package)
     equery = subprocess.run(
@@ -391,7 +391,7 @@ def resolve_all_package_components(
     cros_root: Path,
     repo_list: RepoList,
     packages: list[warning_exemption.Package],
-) -> list[Optional[int]]:
+) -> list[int | None]:
     """Resolves buganizer components for all given packages."""
     # resolve_package_component takes multiple seconds, mostly in subprocesses.
     # Threads cheaply allow for massive speedups.
@@ -406,7 +406,7 @@ def format_bug_from_package_warnings(
     crostc_contact: str,
     severe_warnings: set[str],
     package_warnings: warning_exemption.YamlPackageWarnings,
-    component: Optional[int],
+    component: int | None,
 ) -> str:
     warnings = package_warnings.warning_names
     package = package_warnings.package
@@ -442,7 +442,7 @@ def format_bug_for_mage_followup(
     crostc_contact: str,
     per_package_warnings: list[warning_exemption.YamlPackageWarnings],
     frozen_per_package_warnings: list[warning_exemption.YamlPackageWarnings],
-) -> Optional[str]:
+) -> str | None:
     def extract_warning_set(
         warning_list: list[warning_exemption.YamlPackageWarnings],
     ) -> set[tuple[warning_exemption.Package, str]]:

@@ -12,7 +12,7 @@ import re
 import shlex
 import subprocess
 import time
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable, Union
 
 
 BuildID = int
@@ -67,7 +67,7 @@ class ChangeListURL:
     """
 
     cl_id: int
-    patch_set: Optional[int] = None
+    patch_set: int | None = None
     internal: bool = False
 
     _URL_PARSE_RE = re.compile(
@@ -334,7 +334,7 @@ class CQBoardBuilderOutput:
     # Link to artifacts produced by this builder. Not available if the builder
     # isn't yet finished, and not available if the builder failed in a weird
     # way (e.g., INFRA_ERROR)
-    artifacts_link: Optional[str]
+    artifacts_link: str | None
 
     @classmethod
     def fetch_many(
