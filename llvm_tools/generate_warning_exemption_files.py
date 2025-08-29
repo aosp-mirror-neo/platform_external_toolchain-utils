@@ -98,7 +98,7 @@ def remove_bash_style_sequences(s: str) -> str:
 
 
 def scrape_fatal_warnings_from_stdout(
-    stdout: str, absolutize_with_cwd: Optional[str] = None
+    stdout: str, absolutize_with_cwd: str | None = None
 ) -> list[tuple[str, str]]:
     """Returns a list of fatal warnings scraped from `stdout`.
 
@@ -279,7 +279,7 @@ def create_exemption_comment_for_package(
 
 def group_warnings_per_package(
     fatal_warnings: dict[
-        Optional[warning_exemption.Builder],
+        warning_exemption.Builder | None,
         dict[warning_exemption.Package, FatalWarningGroup],
     ],
 ) -> dict[
@@ -415,7 +415,7 @@ def create_yaml_file(
 def cmd_local(
     opts: argparse.Namespace,
 ) -> dict[
-    Optional[warning_exemption.Builder],
+    warning_exemption.Builder | None,
     dict[warning_exemption.Package, FatalWarningGroup],
 ]:
     """Implements the `local` subcommand."""
@@ -524,7 +524,7 @@ def fetch_and_unpack_fatal_warnings_tarballs(
 def cmd_builders(
     opts: argparse.Namespace,
 ) -> dict[
-    Optional[warning_exemption.Builder],
+    warning_exemption.Builder | None,
     dict[warning_exemption.Package, FatalWarningGroup],
 ]:
     """Implements the `builders` subcommand."""
@@ -560,7 +560,7 @@ def cmd_builders(
                 unpack_actions.append((builder, artifacts_url, unpack_dirs))
 
         results: dict[
-            Optional[warning_exemption.Builder],
+            warning_exemption.Builder | None,
             dict[warning_exemption.Package, FatalWarningGroup],
         ] = {}
         for builder, artifacts_url, unpack_dir_list in unpack_actions:
@@ -721,7 +721,7 @@ def main(argv: list[str]) -> None:
     output.write_text(formatted_go_file, encoding="utf-8")
     logging.info("Generated Go file to %s.", output)
 
-    yaml_output: Optional[Path] = opts.yaml_output
+    yaml_output: Path | None = opts.yaml_output
     if not yaml_output:
         return
 

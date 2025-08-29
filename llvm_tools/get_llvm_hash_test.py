@@ -7,7 +7,6 @@
 from pathlib import Path
 import subprocess
 import textwrap
-from typing import Optional
 from unittest import mock
 
 from cros_utils import git_utils
@@ -130,9 +129,7 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
             upstream_main="main",
         )
 
-        def show_file_at_commit(
-            repo: Path, ref: str, path: str
-        ) -> Optional[str]:
+        def show_file_at_commit(repo: Path, ref: str, path: str) -> str | None:
             self.assertEqual(repo, src_dir)
             self.assertEqual(ref, "HEAD")
             self.assertEqual(path, "llvm/CMakeLists.txt")
@@ -161,9 +158,7 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
             upstream_main="main",
         )
 
-        def show_file_at_commit(
-            repo: Path, ref: str, path: str
-        ) -> Optional[str]:
+        def show_file_at_commit(repo: Path, ref: str, path: str) -> str | None:
             self.assertEqual(repo, src_dir)
             self.assertEqual(ref, "HEAD")
             if path == "llvm/CMakeLists.txt":

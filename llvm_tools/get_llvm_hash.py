@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Iterator, Optional, Union
+from typing import Iterator, Union
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -81,7 +81,7 @@ def GetGitHashFrom(src_dir: Union[Path, str], version: int) -> str:
     )
 
 
-def ParseLLVMMajorVersion(cmakelist: str) -> Optional[str]:
+def ParseLLVMMajorVersion(cmakelist: str) -> str | None:
     """Reads CMakeList.txt file contents for LLVMMajor Version.
 
     Args:
@@ -99,7 +99,7 @@ def ParseLLVMMajorVersion(cmakelist: str) -> Optional[str]:
 
 
 @functools.lru_cache(maxsize=1)
-def GetLLVMMajorVersion(git_hash: Optional[str] = None) -> str:
+def GetLLVMMajorVersion(git_hash: str | None = None) -> str:
     """Reads llvm/CMakeList.txt file contents for LLVMMajor Version.
 
     Args:
@@ -519,7 +519,7 @@ class LLVMHash:
 def DetectLatestLLVMBranch(
     chromiumos_tree: Path,
     rev: int,
-) -> Optional[str]:
+) -> str | None:
     """Returns the latest llvm-next branch for `rev`.
 
     If no branches exist for `rev`, returns None.

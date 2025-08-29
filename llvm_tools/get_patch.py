@@ -23,7 +23,7 @@ import re
 import subprocess
 import tempfile
 import textwrap
-from typing import Any, Iterable, Optional, Union
+from typing import Any, Iterable, Union
 from urllib import request
 
 from cros_utils import cros_paths
@@ -56,7 +56,7 @@ class LLVMGitRef:
     """Represents an LLVM git ref."""
 
     git_ref: str
-    _rev: Optional[git_llvm_rev.Rev] = None  # Used for caching
+    _rev: git_llvm_rev.Rev | None = None  # Used for caching
 
     @classmethod
     def from_rev(cls, llvm_dir: Path, rev: git_llvm_rev.Rev) -> "LLVMGitRef":
@@ -534,8 +534,8 @@ def _has_repo_child(path: Path) -> bool:
 
 
 def _autodetect_chromiumos_root(
-    parent: Optional[Path] = None,
-) -> Optional[Path]:
+    parent: Path | None = None,
+) -> Path | None:
     """Find the root of the chromiumos source tree from the current workdir.
 
     Returns:

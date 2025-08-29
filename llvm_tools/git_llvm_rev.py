@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
-from typing import IO, Iterable, NamedTuple, Optional, Union
+from typing import IO, Iterable, NamedTuple, Union
 
 
 MAIN_BRANCH = "main"
@@ -303,7 +303,7 @@ def translate_rev_to_sha_from_baseline(
     parent_sha: str,
     parent_rev: int,
     child_sha: str,
-    child_rev: Optional[int],
+    child_rev: int | None,
     want_rev: int,
     branch_name: str,
 ) -> str:

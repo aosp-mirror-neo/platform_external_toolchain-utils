@@ -22,7 +22,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Optional
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -61,7 +60,7 @@ class CommandResult:
         self,
         error_string: str,
         llvm_hash: str,
-        log_dir: Optional[Path] = None,
+        log_dir: Path | None = None,
     ):
         """Exit program with error code based on result."""
         if self.success():
@@ -111,7 +110,7 @@ class LLVMRepo:
     REPO_PATH = cros_paths.CHROOT_SOURCE_ROOT / cros_paths.LLVM_PROJECT
 
     def __init__(self):
-        self.workon: Optional[bool] = None
+        self.workon: bool | None = None
 
     def get_current_hash(self) -> str:
         try:
