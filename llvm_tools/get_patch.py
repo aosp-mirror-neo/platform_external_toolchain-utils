@@ -23,7 +23,7 @@ import re
 import subprocess
 import tempfile
 import textwrap
-from typing import Any, Iterable, Union
+from typing import Any, Iterable
 from urllib import request
 
 from cros_utils import cros_paths
@@ -94,9 +94,7 @@ class PatchContext:
     platforms: Iterable[str]
     dry_run: bool = False
 
-    def apply_patches(
-        self, patch_source: Union[LLVMGitRef, LLVMPullRequest]
-    ) -> None:
+    def apply_patches(self, patch_source: LLVMGitRef | LLVMPullRequest) -> None:
         """Create .patch files and add them to PATCHES.json.
 
         Post:
@@ -141,7 +139,7 @@ class PatchContext:
                     f.write("\n")
 
     def make_patches(
-        self, patch_source: Union[LLVMGitRef, LLVMPullRequest]
+        self, patch_source: LLVMGitRef | LLVMPullRequest
     ) -> list[patch_utils.PatchEntry]:
         """Create PatchEntries for a given LLVM change and returns them.
 
@@ -459,7 +457,7 @@ class GitHubPRContext:
 
     @staticmethod
     def _run(
-        cmd: list[Union[str, Path]],
+        cmd: list[str | Path],
         cwd: Path,
         stdin: int = subprocess.DEVNULL,
     ) -> subprocess.CompletedProcess:
@@ -475,7 +473,7 @@ class GitHubPRContext:
 
 
 def get_changed_packages(
-    llvm_project_dir: Path, ref: Union[str, tuple[str, str]]
+    llvm_project_dir: Path, ref: str | tuple[str, str]
 ) -> set[Path]:
     """Returns package paths which changed over a given ref.
 
@@ -567,11 +565,11 @@ def _git_format_patch(git_dir: Path, ref: str) -> str:
 def validate_patch_args(
     positional_args: list[str],
     llvm_project: Path,
-) -> list[Union[LLVMGitRef, LLVMPullRequest]]:
+) -> list[LLVMGitRef | LLVMPullRequest]:
     """Checks that each ref_or_pr_num is in a valid format."""
     patch_sources = []
     for arg in positional_args:
-        patch_source: Union[LLVMGitRef, LLVMPullRequest]
+        patch_source: LLVMGitRef | LLVMPullRequest
         if arg.startswith("p:"):
             try:
                 pull_request_num = int(arg.lstrip("p:"))

@@ -17,7 +17,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
-from typing import Sequence, Union
+from typing import Sequence
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -26,8 +26,8 @@ from llvm_tools import chroot
 _LOCALMIRROR_ROOT = "gs://chromeos-localmirror/distfiles/"
 
 
-def _chroot_run(command: Sequence[Union[str, Path]], chromiumos_root: Path):
-    run_command: list[Union[str, Path]] = ["cros_sdk", "--"]
+def _chroot_run(command: Sequence[str | Path], chromiumos_root: Path):
+    run_command: list[str | Path] = ["cros_sdk", "--"]
     run_command += command
     subprocess.run(
         run_command,

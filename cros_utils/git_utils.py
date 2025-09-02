@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Generator, Iterable, Union
+from typing import Generator, Iterable
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -342,7 +342,7 @@ def create_worktree(
         logging.info(
             "Establishing worktree of %s in %s", git_directory, tempdir
         )
-        cmd: list[Union[str, os.PathLike]] = [
+        cmd: list[str | os.PathLike] = [
             "git",
             "worktree",
             "add",

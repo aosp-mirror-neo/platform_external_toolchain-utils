@@ -13,10 +13,10 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from typing import Any, Generator, IO, Union
+from typing import Any, Generator, IO
 
 
-Command = list[Union[str, Path]]
+Command = list[str | Path]
 
 
 def run(
@@ -24,8 +24,8 @@ def run(
     cwd: Path | None = None,
     check: bool = True,
     extra_env: dict[str, str] | None = None,
-    stdout: Union[IO[Any], int, None] = None,
-    stderr: Union[IO[Any], int, None] = None,
+    stdout: IO[Any] | int | None = None,
+    stderr: IO[Any] | int | None = None,
 ) -> subprocess.CompletedProcess:
     """Convenient wrapper around subprocess.run."""
     if extra_env:

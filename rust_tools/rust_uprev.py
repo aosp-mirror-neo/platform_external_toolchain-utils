@@ -33,7 +33,7 @@ import subprocess
 import textwrap
 import threading
 import time
-from typing import Any, Callable, NamedTuple, Protocol, Sequence, TypeVar, Union
+from typing import Any, Callable, NamedTuple, Protocol, Sequence, TypeVar
 import urllib.request
 
 from cros_utils import cros_paths
@@ -43,8 +43,8 @@ from pgo_tools_rust import pgo_rust
 
 
 T = TypeVar("T")
-Command = Sequence[Union[str, os.PathLike]]
-PathOrStr = Union[str, os.PathLike]
+Command = Sequence[str | os.PathLike]
+PathOrStr = str | os.PathLike
 
 
 class RunStepFn(Protocol):

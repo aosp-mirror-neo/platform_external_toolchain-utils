@@ -12,7 +12,7 @@ import re
 import shlex
 import subprocess
 import time
-from typing import Any, Iterable, Union
+from typing import Any, Iterable
 
 
 BuildID = int
@@ -358,7 +358,7 @@ class CQBoardBuilderOutput:
 
 def fetch_cq_orchestrator_or_board_builder(
     bot_id: BuildID,
-) -> tuple[str, Union[CQOrchestratorOutput, CQBoardBuilderOutput]]:
+) -> tuple[str, CQOrchestratorOutput | CQBoardBuilderOutput]:
     """Figures out the builder type of bot_id, then fetches it."""
     result = _run_bb_decoding_output(["get", str(bot_id)])
     builder_name = result["builder"]["builder"]

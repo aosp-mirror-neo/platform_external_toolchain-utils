@@ -22,7 +22,7 @@ import sys
 import textwrap
 import threading
 import traceback
-from typing import Callable, Iterable, NamedTuple, Sequence, Union
+from typing import Callable, Iterable, NamedTuple, Sequence
 
 
 # Each checker represents an independent check that's done on our sources.
@@ -46,8 +46,8 @@ CheckResult = NamedTuple(
 )
 
 
-Command = Sequence[Union[str, os.PathLike]]
-CheckResults = Union[list[tuple[str, CheckResult]], CheckResult]
+Command = Sequence[str | os.PathLike]
+CheckResults = list[tuple[str, CheckResult]] | CheckResult
 
 # Environment variable that's set to a nonempty value on bots. Used for
 # skipping some tasks on CI. Other presubmit checks detect whether a bot is

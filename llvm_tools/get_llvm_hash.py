@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Iterator, Union
+from typing import Iterator
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -42,7 +42,7 @@ KNOWN_HASH_SOURCES = (
 )
 
 
-def GetVersionFrom(src_dir: Union[Path, str], git_hash: str) -> int:
+def GetVersionFrom(src_dir: Path | str, git_hash: str) -> int:
     """Obtain an SVN-style version number based on the LLVM git hash passed in.
 
     Args:
@@ -61,7 +61,7 @@ def GetVersionFrom(src_dir: Union[Path, str], git_hash: str) -> int:
     return version.number
 
 
-def GetGitHashFrom(src_dir: Union[Path, str], version: int) -> str:
+def GetGitHashFrom(src_dir: Path | str, version: int) -> str:
     """Finds the commit hash(es) of the LLVM version in the git log history.
 
     Args:
@@ -339,7 +339,7 @@ def GetGoogle3LLVMVersion(stable: bool) -> int:
     return GetCachedUpToDateReadOnlyLLVMRepo().GetRevisionFromHash(git_hash)
 
 
-def IsSvnOption(svn_option: str) -> Union[int, str]:
+def IsSvnOption(svn_option: str) -> int | str:
     """Validates whether the argument (string) is a git hash option.
 
     The argument is used to find the git hash of LLVM.
@@ -373,7 +373,7 @@ def IsSvnOption(svn_option: str) -> Union[int, str]:
 
 
 def GetLLVMHashAndVersionFromSVNOption(
-    svn_option: Union[int, str],
+    svn_option: int | str,
 ) -> tuple[str, int]:
     """Gets the LLVM hash and LLVM version based off of the svn option.
 

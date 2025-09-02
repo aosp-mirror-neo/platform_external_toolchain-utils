@@ -29,7 +29,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Callable, Iterable, Union
+from typing import Callable, Iterable
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -236,7 +236,7 @@ def maybe_copy_prebuilt_to_localmirror(
         logging.info("Artifact at %s already exists", upload_to)
         return False
 
-    cmd: list[Union[Path, str]] = [
+    cmd: list[Path | str] = [
         copy_rust_bootstrap_script,
         prebuilt_gs_path,
     ]

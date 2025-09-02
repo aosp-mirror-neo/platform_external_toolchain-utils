@@ -21,7 +21,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
-from typing import IO, Union
+from typing import IO
 
 from cros_utils import cros_paths
 from pgo_tools import pgo_utils
@@ -73,7 +73,7 @@ class RunData:
         )
 
 
-ProfilePath = Union[SpecialProfile, Path]
+ProfilePath = SpecialProfile | Path
 
 
 def parse_profile_path(path: str) -> ProfilePath:

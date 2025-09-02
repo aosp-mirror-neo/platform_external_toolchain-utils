@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, IO, Iterable, Union
+from typing import Any, Callable, IO, Iterable
 
 from llvm_tools import atomic_write_file
 
@@ -237,7 +237,7 @@ class PatchEntry:
         self,
         root_dir: Path,
         patch_cmd: Callable | None = None,
-        extra_args: list[Union[str, Path]] | None = None,
+        extra_args: list[str | Path] | None = None,
     ) -> PatchResult:
         """Apply a patch to a given directory."""
         # Cmd to apply a patch in the src unpack path.
@@ -288,10 +288,10 @@ def git_apply(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: list[Union[str, Path]],
+    extra_args: list[str | Path],
 ) -> PatchResult:
     """Patch a patch file using 'git apply'."""
-    cmd: list[Union[str, Path]] = ["git", "apply", patch_path]
+    cmd: list[str | Path] = ["git", "apply", patch_path]
     if extra_args:
         cmd += extra_args
     return _run_git_applylike(pe, root_dir, cmd)
@@ -301,10 +301,10 @@ def git_am(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: list[Union[str, Path]] | None,
+    extra_args: list[str | Path] | None,
 ) -> PatchResult:
     """Patch a patch file using 'git am'."""
-    cmd: list[Union[str, Path]] = ["git", "am", "--3way", patch_path]
+    cmd: list[str | Path] = ["git", "am", "--3way", patch_path]
     if extra_args:
         cmd += extra_args
     return _run_git_applylike(pe, root_dir, cmd, quiet=True)
@@ -314,7 +314,7 @@ def git_am_chromiumos(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: list[Union[str, Path]] | None,
+    extra_args: list[str | Path] | None,
 ) -> PatchResult:
     """Patch a patch file using 'git am', but include footer metadata."""
     return _git_am_chromiumos_internal(pe, root_dir, patch_path, extra_args)
@@ -324,7 +324,7 @@ def git_am_chromiumos_quiet(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: list[Union[str, Path]] | None,
+    extra_args: list[str | Path] | None,
 ) -> PatchResult:
     """Same as git_am_chromiumos, but no stdout."""
     return _git_am_chromiumos_internal(
@@ -336,10 +336,10 @@ def _git_am_chromiumos_internal(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: list[Union[str, Path]] | None,
+    extra_args: list[str | Path] | None,
     quiet: bool = False,
 ) -> PatchResult:
-    cmd: list[Union[str, Path]] = [
+    cmd: list[str | Path] = [
         "git",
         "am",
         "--3way",
@@ -395,10 +395,10 @@ def gnu_patch(
     pe: PatchEntry,
     root_dir: Path,
     patch_path: Path,
-    extra_args: list[Union[str, Path]] | None,
+    extra_args: list[str | Path] | None,
 ) -> PatchResult:
     """Patch a patch file using GNU 'patch'."""
-    cmd: list[Union[str, Path]] = [
+    cmd: list[str | Path] = [
         "patch",
         "-d",
         root_dir.absolute(),
@@ -437,7 +437,7 @@ def gnu_patch(
 def _run_git_applylike(
     pe: PatchEntry,
     root_dir: Path,
-    cmd: list[Union[Path, str]],
+    cmd: list[Path | str],
     quiet: bool = False,
 ):
     try:
