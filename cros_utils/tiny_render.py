@@ -53,7 +53,6 @@ The rendering functions should never mutate your input.
 
 import collections
 import html
-from typing import Any
 
 
 Bold = collections.namedtuple("Bold", ["inner"])
@@ -69,19 +68,15 @@ line_break = LineBreak()
 # that ends up being fed to `''.join(into)`. This avoids quadratic string
 # concatenation behavior. Probably doesn't matter, but I care.
 
-# Pieces are really a recursive type:
-# Union[
-#   Bold,
-#   LineBreak,
-#   Link,
-#   list[Piece],
-#   tuple[...Piece],
-#   UnorderedList,
-#   str,
-# ]
-#
-# It doesn't seem possible to have recursive types, so just go with Any.
-Piece = Any  # pylint: disable=invalid-name
+Piece = (
+    Bold
+    | LineBreak
+    | Link
+    | list["Piece"]
+    | tuple["Piece", ...]
+    | UnorderedList
+    | str
+)
 
 
 def _render_text_pieces(
