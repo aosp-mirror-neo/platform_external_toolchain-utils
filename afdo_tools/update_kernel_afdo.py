@@ -260,7 +260,7 @@ class KernelGsProfile:
 class KernelProfileFetcher:
     """Fetches kernel profiles from gs://. Caches results."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._cached_results: dict[str, list[KernelGsProfile]] = {}
 
     @classmethod

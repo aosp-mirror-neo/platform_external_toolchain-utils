@@ -109,7 +109,7 @@ class LLVMRepo:
 
     REPO_PATH = cros_paths.CHROOT_SOURCE_ROOT / cros_paths.LLVM_PROJECT
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.workon: bool | None = None
 
     def get_current_hash(self) -> str:
