@@ -16,7 +16,13 @@ from cros_utils import git_utils
 def count_outstanding_cls(chromeos_root: Path) -> int:
     query = " ".join(
         (
+            "(",
+            # TODO(b/443708200): once the GCP migration is done, remove
+            # mobiletc-prebuild.
             "owner:mobiletc-prebuild@google.com",
+            "OR",
+            "owner:crostc-worker@crostc-chrotomation.iam.gserviceaccount.com",
+            ")",
             "topic:crostc-auto-cl",
             "status:open",
             "-is:wip",
