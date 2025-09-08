@@ -1190,5 +1190,35 @@
       "from": 574158,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Split modules with __cfi_check and no type metadata."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/43c85afce9c25141de79da6731b1d5f8bb2491b1.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 588422
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [LoopIdiomVectorize] Fix FindFirstByte successors (#156945)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/2873d9fac550a248a1c62cfc106ac31fef84fa7d.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 589350
+    }
   }
 ]
