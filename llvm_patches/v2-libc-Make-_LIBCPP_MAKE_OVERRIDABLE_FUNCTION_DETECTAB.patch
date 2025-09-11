@@ -1,5 +1,5 @@
 From 26ffe7961230850ccb403dac6e9da53972cf5fa8 Mon Sep 17 00:00:00 2001
-From: Tom Hughes <tomhughes@chromium.org>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 13 Sep 2024 16:47:06 -0700
 Subject: [PATCH] v2: Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on
  baremetal

@@ -1,5 +1,5 @@
 From b5cf03033251a642b184b2e0ea6bdac171c17702 Mon Sep 17 00:00:00 2001
-From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 2 Jun 2025 10:52:10 +0100
 Subject: [PATCH] [AArch64][SME] Fix accessing the emergency spill slot with
  hazard padding (#142190)

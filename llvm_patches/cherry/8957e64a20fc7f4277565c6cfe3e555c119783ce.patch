@@ -1,5 +1,5 @@
 From 8957e64a20fc7f4277565c6cfe3e555c119783ce Mon Sep 17 00:00:00 2001
-From: Fangrui Song <i@maskray.me>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 10 Jun 2025 09:28:39 -0700
 Subject: [PATCH] [ELF,RISCV] Fix oscillation due to call relaxation
 

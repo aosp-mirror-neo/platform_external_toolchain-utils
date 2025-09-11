@@ -1,5 +1,5 @@
 From 488eeb3ae508221f8e476bbc9d2e9f014542862e Mon Sep 17 00:00:00 2001
-From: Emre Kultursay <emrekultursay@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 25 Apr 2025 21:11:19 +0000
 Subject: [PATCH] Fix connecting via abstract socket (#136466)
 

@@ -1,5 +1,5 @@
 From 107260cc29368070bba815d94f9d5b7cec1df7d0 Mon Sep 17 00:00:00 2001
-From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 25 Mar 2025 10:09:25 +0000
 Subject: [PATCH] [AArch64][SME2] Don't preserve ZT0 around SME ABI routines
  (#132722)

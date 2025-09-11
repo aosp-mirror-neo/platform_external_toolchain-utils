@@ -1,5 +1,5 @@
 From 13fe07d670e8a115929c9e595c4490ef5c75f583 Mon Sep 17 00:00:00 2001
-From: tynasello-google <tynasello@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 12 Jun 2025 08:39:28 -0700
 Subject: [PATCH] [libc++] Expand Android libc++ test config files (#142846)
 

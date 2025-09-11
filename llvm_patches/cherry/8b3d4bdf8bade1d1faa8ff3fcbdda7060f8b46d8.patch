@@ -1,5 +1,5 @@
 From 8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8 Mon Sep 17 00:00:00 2001
-From: Timm Baeder <tbaeder@redhat.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Sat, 23 Aug 2025 08:01:48 +0200
 Subject: [PATCH] [clang] Remove hasValue() check in
  `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)

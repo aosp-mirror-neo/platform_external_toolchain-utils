@@ -1,5 +1,5 @@
 From 8dfdc65fd7be92ff84a59e71161f6a9b307baa3a Mon Sep 17 00:00:00 2001
-From: Han-Chung Wang <hanhan0912@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 6 Feb 2025 05:19:45 -0800
 Subject: [PATCH] Revert "[mlir][math]Update `convertPowfOp`
  `ExpandPatterns.cpp`" (#126063)

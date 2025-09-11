@@ -1,5 +1,5 @@
 From 1abcf35b275ee9d710632af0fc3605223dad5a6d Mon Sep 17 00:00:00 2001
-From: Nikita Popov <npopov@redhat.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 30 Jun 2025 14:48:37 +0200
 Subject: [PATCH] Revert global widening transform (#144652)
 

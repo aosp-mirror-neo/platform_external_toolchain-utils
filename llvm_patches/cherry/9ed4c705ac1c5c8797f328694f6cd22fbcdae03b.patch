@@ -1,5 +1,5 @@
 From 9ed4c705ac1c5c8797f328694f6cd22fbcdae03b Mon Sep 17 00:00:00 2001
-From: Florian Mayer <fmayer@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 17 Apr 2025 09:52:41 -0700
 Subject: [PATCH] [MTE] decide whether to tag global in AsmPrinter (#135891)
 

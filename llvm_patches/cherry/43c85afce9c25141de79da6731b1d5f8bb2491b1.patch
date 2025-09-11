@@ -1,5 +1,5 @@
 From 43c85afce9c25141de79da6731b1d5f8bb2491b1 Mon Sep 17 00:00:00 2001
-From: Peter Collingbourne <peter@pcc.me.uk>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 28 Aug 2025 19:13:53 -0700
 Subject: [PATCH] ThinLTOBitcodeWriter: Split modules with __cfi_check and no
  type metadata.

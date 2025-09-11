@@ -1,5 +1,5 @@
 From b59ab701e94cce455a53358cbe5082a3efb58fbf Mon Sep 17 00:00:00 2001
-From: Aaron Ballman <aaron@aaronballman.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 7 May 2025 10:05:00 -0400
 Subject: [PATCH] [C] Handle comma operator for implicit int->enum conversions
  (#138752)

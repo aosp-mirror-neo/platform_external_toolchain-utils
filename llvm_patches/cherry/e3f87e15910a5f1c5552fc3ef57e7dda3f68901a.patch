@@ -1,5 +1,5 @@
 From e3f87e15910a5f1c5552fc3ef57e7dda3f68901a Mon Sep 17 00:00:00 2001
-From: Aaron Ballman <aaron@aaronballman.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 13 May 2025 10:59:55 -0400
 Subject: [PATCH] [C] Fix a false-positive with tentative defn compat (#139738)
 

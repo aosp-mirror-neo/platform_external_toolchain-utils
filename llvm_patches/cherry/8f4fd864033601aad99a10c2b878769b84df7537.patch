@@ -1,5 +1,5 @@
 From 8f4fd864033601aad99a10c2b878769b84df7537 Mon Sep 17 00:00:00 2001
-From: Qiongsi Wu <qiongsiwu@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 29 May 2025 11:11:31 -0700
 Subject: [PATCH] Revert "[clang][Dependency Scanning] Report What a Module
  Exports during Scanning (#137421)" (#140820)

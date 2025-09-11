@@ -1,5 +1,5 @@
 From ff85dbdf6b399eac7bffa13e579f0f5e6edac3c0 Mon Sep 17 00:00:00 2001
-From: Peter Collingbourne <peter@pcc.me.uk>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 21 Aug 2025 16:31:32 -0700
 Subject: [PATCH] ThinLTOBitcodeWriter: Emit __cfi_check to full LTO part of
  bitcode file.

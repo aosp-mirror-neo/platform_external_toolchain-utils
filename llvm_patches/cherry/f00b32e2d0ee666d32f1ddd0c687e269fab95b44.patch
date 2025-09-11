@@ -1,5 +1,5 @@
 From f00b32e2d0ee666d32f1ddd0c687e269fab95b44 Mon Sep 17 00:00:00 2001
-From: Louis Dionne <ldionne.2@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 20 Feb 2025 08:38:42 -0500
 Subject: [PATCH] [libc++] Reduce the dependency of the locale base API on the
  base system from the headers (#117764)

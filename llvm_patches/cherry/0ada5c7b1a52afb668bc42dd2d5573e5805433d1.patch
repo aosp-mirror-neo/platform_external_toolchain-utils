@@ -1,5 +1,5 @@
 From 0ada5c7b1a52afb668bc42dd2d5573e5805433d1 Mon Sep 17 00:00:00 2001
-From: Yutong Zhu <115899167+YutongZhuu@users.noreply.github.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 2 Jun 2025 07:27:32 -0400
 Subject: [PATCH] [Clang] Separate implicit int conversion on negation sign to
  new diagnostic group (#139429)

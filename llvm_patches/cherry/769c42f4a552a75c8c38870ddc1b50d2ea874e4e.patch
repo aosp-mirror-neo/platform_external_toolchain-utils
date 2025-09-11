@@ -1,5 +1,5 @@
 From 769c42f4a552a75c8c38870ddc1b50d2ea874e4e Mon Sep 17 00:00:00 2001
-From: "A. Jiang" <de34@live.cn>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 3 Jun 2025 23:54:49 +0800
 Subject: [PATCH] [libc++] Fix padding calculation for function reference types
  (#142125)

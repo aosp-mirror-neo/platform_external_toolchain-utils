@@ -1,5 +1,5 @@
 From f5e687d7bf49cd9fe38ba7acdeb52d4f30468dee Mon Sep 17 00:00:00 2001
-From: Nikolas Klauser <nikolasklauser@berlin.de>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Sat, 23 Aug 2025 07:58:37 +0200
 Subject: [PATCH] [libc++] Fix ABI break introduced by switching to
  _LIBCPP_COMPRESSED_PAIR (#154686)

@@ -1,5 +1,5 @@
 From 6899bf76634f02f6a912f4c2d716d21f153a622e Mon Sep 17 00:00:00 2001
-From: Guillaume Chatelet <gchatelet@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Feb 2025 11:19:26 +0100
 Subject: [PATCH] Revert "[reland][libc][bazel] Enable software prefetching for
  memcpy" (#127189)

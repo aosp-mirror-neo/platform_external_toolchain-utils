@@ -1,5 +1,5 @@
 From af7166a3f126ce4e4d2a05eccc1358bd0427cf0f Mon Sep 17 00:00:00 2001
-From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 26 Jun 2025 13:26:33 +0100
 Subject: [PATCH] [AArch64] Ensure the LR is preserved if we must call
  __arm_get_current_vg (#145760)

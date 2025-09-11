@@ -1,5 +1,5 @@
 From 66708de7aa5d4f5d5dbd0dd98b11ade60c86c76f Mon Sep 17 00:00:00 2001
-From: Sharjeel Khan <sharjeelkhan@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 11 Jul 2025 01:52:59 +0000
 Subject: [PATCH] Fix for x86 ndk sysroot define being mixed with parameter for i686 lldb build
 

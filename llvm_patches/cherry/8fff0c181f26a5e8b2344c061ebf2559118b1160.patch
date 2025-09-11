@@ -1,5 +1,5 @@
 From b9ad28fbe9bfd7c1cdbeb773f70bf6abddc77271 Mon Sep 17 00:00:00 2001
-From: Jordan R AW <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Feb 2025 21:37:39 -0800
 Subject: [PATCH] [lldb] Add terminfo dependency for ncurses support (#126810)
 

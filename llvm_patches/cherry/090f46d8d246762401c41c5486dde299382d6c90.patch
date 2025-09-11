@@ -1,5 +1,5 @@
 From 090f46d8d246762401c41c5486dde299382d6c90 Mon Sep 17 00:00:00 2001
-From: cor3ntin <corentinjabot@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 15 May 2025 23:06:32 +0200
 Subject: [PATCH] [Clang] Fix an assertion in the resolution of perfect matches
  (#140073)

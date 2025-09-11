@@ -1,5 +1,5 @@
 From ac5ed85fd4cef222ed3fd4df00854cbb2b2abd75 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Sat, 15 Jun 2024 00:14:01 +0000
 Subject: [PATCH] disable querying git in benchmarking code
 

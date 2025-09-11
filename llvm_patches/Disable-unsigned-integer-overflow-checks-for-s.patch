@@ -1,5 +1,5 @@
 From b4956514362cae42537f9bcb8f804628d5d0ca9a Mon Sep 17 00:00:00 2001
-From: Sharjeel Khan <sharjeelkhan@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 25 Aug 2025 18:43:07 +0000
 Subject: [PATCH] Disable unsigned-integer-overflow checks for
  std::sort

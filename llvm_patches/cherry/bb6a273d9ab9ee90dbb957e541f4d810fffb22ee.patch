@@ -1,5 +1,5 @@
 From 7f7a97ac699a296d80dc54efb267187c2609dacb Mon Sep 17 00:00:00 2001
-From: Jordan R AW <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Sat, 22 Feb 2025 09:13:46 -0800
 Subject: [PATCH] [lldb] Fix manual CURSES_LIBRARIES tinfo finding (#128245)
 

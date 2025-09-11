@@ -1,5 +1,5 @@
 From efa28338d858e1ea2bf705d50a0404bc602c8fe1 Mon Sep 17 00:00:00 2001
-From: cor3ntin <corentinjabot@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 16 May 2025 21:04:08 +0200
 Subject: [PATCH] [Clang] Fix a regression introduced by #140073 (#140288)
 

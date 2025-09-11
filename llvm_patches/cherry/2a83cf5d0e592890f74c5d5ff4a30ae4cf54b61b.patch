@@ -1,5 +1,5 @@
 From 2a83cf5d0e592890f74c5d5ff4a30ae4cf54b61b Mon Sep 17 00:00:00 2001
-From: Nikolas Klauser <nikolasklauser@berlin.de>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 22 Aug 2025 15:25:50 +0200
 Subject: [PATCH] [libc++] Add tests for the ABI break introduced by switching
  to _LIBCPP_COMPRESSED_PAIR (#154559)

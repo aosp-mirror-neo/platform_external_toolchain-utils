@@ -1,5 +1,5 @@
 From fd3fecfc0936703f2715fe6fea890e81b0b3c2ac Mon Sep 17 00:00:00 2001
-From: Hans Wennborg <hans@chromium.org>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 13 May 2025 10:41:47 +0200
 Subject: [PATCH] Revert "[lld] Merge equivalent symbols found during ICF
  (#134342)"

@@ -1,5 +1,5 @@
 From 877d668ca557ee5d48d4c7321c8dfbda72712f7a Mon Sep 17 00:00:00 2001
-From: Nikolas Klauser <nikolasklauser@berlin.de>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 7 Feb 2025 15:40:16 +0100
 Subject: [PATCH] Revert "[libc++] Reduce std::conjunction overhead (#124259)"
 

@@ -1,5 +1,5 @@
 From 98d26b8f67e6abdac24591138f07dc34e7f0e36e Mon Sep 17 00:00:00 2001
-From: Alexey Samsonov <vonosmas@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 7 May 2025 22:14:21 -0700
 Subject: [PATCH] [libc][bazel] Re-enable memcpy prefetching on x86. (#138945)
 

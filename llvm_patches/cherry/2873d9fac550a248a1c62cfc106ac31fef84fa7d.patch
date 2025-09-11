@@ -1,5 +1,5 @@
 From 2873d9fac550a248a1c62cfc106ac31fef84fa7d Mon Sep 17 00:00:00 2001
-From: Sjoerd Meijer <smeijer@nvidia.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 5 Sep 2025 14:05:07 +0100
 Subject: [PATCH] [LoopIdiomVectorize] Fix FindFirstByte successors (#156945)
 

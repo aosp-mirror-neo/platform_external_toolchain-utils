@@ -1,5 +1,5 @@
 From 935bc84158e933239047de69b9edc77969b5c70c Mon Sep 17 00:00:00 2001
-From: Emre Kultursay <emrekultursay@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 25 Apr 2025 23:14:18 +0000
 Subject: [PATCH] Fix Windows build (#137414)
 

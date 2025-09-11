@@ -1,5 +1,5 @@
 From fefa022c8232afddfbca4db0b3366587c9905933 Mon Sep 17 00:00:00 2001
-From: George Burgess IV <gbiv@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 28 Apr 2025 12:42:26 -0600
 Subject: [PATCH] llvm: don't touch VCS files
 

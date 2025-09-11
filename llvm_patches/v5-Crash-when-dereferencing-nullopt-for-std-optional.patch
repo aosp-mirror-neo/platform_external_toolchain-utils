@@ -1,5 +1,5 @@
 From bfad7870167d3f3712c8a8af1cd294baae2f51ca Mon Sep 17 00:00:00 2001
-From: Grace Cham <hscham@chromium.org>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 16 Jul 2024 23:17:37 +0000
 Subject: [PATCH] v5: Crash when dereferencing nullopt for std::optional
 

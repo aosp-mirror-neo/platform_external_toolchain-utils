@@ -1,5 +1,5 @@
 From 6c78dedc14e7431aa0dd92b9dd8d35bed3e0ed7d Mon Sep 17 00:00:00 2001
-From: Emre Kultursay <emrekultursay@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 25 Apr 2025 23:16:53 +0000
 Subject: [PATCH] Skip tests if socket name is longer than 107 bytes (#137405)
 

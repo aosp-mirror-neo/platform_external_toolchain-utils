@@ -1,5 +1,5 @@
 From ba476d0b83dc8a4bbf066dc02a0f73ded27114f0 Mon Sep 17 00:00:00 2001
-From: Peter Smith <peter.smith@arm.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 5 Feb 2025 19:04:21 +0000
 Subject: [PATCH] [LLD][ELF][AArch64] Discard .ARM.attributes sections
  (#125838)

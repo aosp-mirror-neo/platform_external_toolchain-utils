@@ -1,5 +1,5 @@
 From bcfd9f81e1bc9954d616ffbb8625099916bebd5b Mon Sep 17 00:00:00 2001
-From: Louis Dionne <ldionne.2@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 5 Feb 2025 08:33:14 -0500
 Subject: [PATCH] [libc++] Fix stray usage of _LIBCPP_HAS_NO_WIDE_CHARACTERS on
  Windows

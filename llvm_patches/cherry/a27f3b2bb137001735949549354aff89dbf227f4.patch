@@ -1,5 +1,5 @@
 From a27f3b2bb137001735949549354aff89dbf227f4 Mon Sep 17 00:00:00 2001
-From: Mark de Wever <koraq@xs4all.nl>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 4 Feb 2025 17:36:31 +0100
 Subject: [PATCH] [libc++][TZDB] Fixes %z escaping. (#125399)
 

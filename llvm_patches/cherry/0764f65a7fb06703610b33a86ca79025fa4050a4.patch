@@ -1,5 +1,5 @@
 From 0764f65a7fb06703610b33a86ca79025fa4050a4 Mon Sep 17 00:00:00 2001
-From: Maksim Ivanov <emaxx@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 5 May 2025 17:10:32 +0200
 Subject: [PATCH] [clang] Fix nondeterminism in MemberPointerType (#137910)
 

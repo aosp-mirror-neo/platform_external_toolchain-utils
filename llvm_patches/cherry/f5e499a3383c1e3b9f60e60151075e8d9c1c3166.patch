@@ -1,5 +1,5 @@
 From f5e499a3383c1e3b9f60e60151075e8d9c1c3166 Mon Sep 17 00:00:00 2001
-From: Joseph Huber <huberjn@outlook.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 9 Jun 2025 17:18:49 -0500
 Subject: [PATCH] Revert "[HIP] use offload wrapper for non-device-only non-rdc
  (#132869)" (#143432)

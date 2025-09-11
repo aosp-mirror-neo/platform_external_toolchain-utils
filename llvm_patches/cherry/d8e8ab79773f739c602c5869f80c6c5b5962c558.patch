@@ -1,5 +1,5 @@
 From 7952f737e7cf23b0d2998838221af083e96ebd1b Mon Sep 17 00:00:00 2001
-From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 18 Jun 2025 12:58:17 +0100
 Subject: Fix restoring callee-saves from FP with hazard padding (#143371)
 

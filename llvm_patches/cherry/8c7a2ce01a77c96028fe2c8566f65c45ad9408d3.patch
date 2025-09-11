@@ -1,5 +1,5 @@
 From 8c7a2ce01a77c96028fe2c8566f65c45ad9408d3 Mon Sep 17 00:00:00 2001
-From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 25 Apr 2025 13:33:09 +0100
 Subject: [PATCH] [AArch64][SME] Allow spills of ZT0 around SME ABI routines
  again (#136726)

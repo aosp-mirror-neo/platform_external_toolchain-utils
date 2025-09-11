@@ -1,5 +1,5 @@
 From 06595f74b453cdb536d6c3161bac48ac355fb840 Mon Sep 17 00:00:00 2001
-From: Eli Friedman <efriedma@quicinc.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 27 Mar 2025 17:46:42 -0700
 Subject: [PATCH] Revert "[MC] Explicitly mark MCSymbol for MO_ExternalSymbol"
  (#133291)

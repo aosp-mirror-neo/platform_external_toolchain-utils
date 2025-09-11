@@ -1,5 +1,5 @@
 From fe87b4fa73552997d86d5323cb2a98790516643a Mon Sep 17 00:00:00 2001
-From: Yi Kong <yikong@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 24 Jun 2025 14:33:14 +0900
 Subject: [PATCH] Revert "[Clang][counted_by] Refactor
  __builtin_dynamic_object_size on FAMs (#122198)"

@@ -1,5 +1,5 @@
 From 234780ef33626acb37cd2e771d0839f36894c908 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 26 Feb 2025 19:25:38 +0000
 Subject: [PATCH] Revert "[lldb] Add terminfo dependency for ncurses support"
 

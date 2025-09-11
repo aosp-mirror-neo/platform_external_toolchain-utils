@@ -1,5 +1,5 @@
 From 943ac8bee8388f1319b30b854fe45f8c2d933a71 Mon Sep 17 00:00:00 2001
-From: Aaron Ballman <aaron@aaronballman.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 13 Jun 2025 06:45:40 -0400
 Subject: Remove delayed typo expressions (#143423)
 

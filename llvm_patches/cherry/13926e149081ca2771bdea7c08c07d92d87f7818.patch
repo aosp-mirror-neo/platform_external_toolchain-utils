@@ -1,5 +1,5 @@
 From 13926e149081ca2771bdea7c08c07d92d87f7818 Mon Sep 17 00:00:00 2001
-From: cor3ntin <corentinjabot@gmail.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 5 May 2025 18:46:40 +0200
 Subject: [PATCH] [Clang] Preserve CXXParenListInitExpr in TreeTransform.
  (#138518)

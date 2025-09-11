@@ -1,5 +1,5 @@
 From f53216793e15588d65601196b7a0625f73c12cea Mon Sep 17 00:00:00 2001
-From: Alexander Kornienko <alexfh@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 5 Jun 2025 20:57:12 +0200
 Subject: [PATCH] Fix an error introduced in #138518 (#142988)
 

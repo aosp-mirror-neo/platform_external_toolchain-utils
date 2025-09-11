@@ -1,5 +1,5 @@
 From 6bac20b391edce2bde348e59f5be2143157304b5 Mon Sep 17 00:00:00 2001
-From: Florian Mayer <fmayer@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 17 Apr 2025 09:55:41 -0700
 Subject: [PATCH] [MTE] do not tag zero sized globals (#136020)
 
