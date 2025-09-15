@@ -34,6 +34,21 @@ MIN_PROFILE_MAJOR_VERSION = 120
 # Default to around a week, since branches come and go 1x/mo.
 CRONJOB_TURNDOWN_TIME_HOURS = 7 * 24
 
+# How many days it generally takes for a branch to be released as ChromeOS'
+# stable branch, per https://chromiumdash.appspot.com/schedule, for suppressing
+# complaints about 'no Stable AFDO profiles'.
+#
+# For Chrome, stable promotion generally happens after 4wks + 1 day; for
+# ChromeOS, it's generally 6wks + 1 day.
+#
+# Add 4 days on top of that as a buffer for pipelines to filter through, since:
+# 1. Skia needs to observe the new branch.
+# 2. Skia needs to land the CL in Chromium.
+# 3. Chromium needs to tag a version with that CL.
+# 4. ChromeOS needs to roll that tag in.
+# 5. That needs to make its way to the current machine.
+DAYS_FOR_BRANCH_TO_REACH_STABLE = 6 * 7 + 1 + 4
+
 # Complaint is used below to make function signatures clearer. Semantically
 # each Complaint is a list of paragraphs that should be printed together as a
 # single diagnostic. Lines may be reflowed.
@@ -445,6 +460,7 @@ def maybe_diagnose_current_chrome_afdo_profile(
     afdo_profiles: dict[int, list[ChromeGsProfile]],
     current_profile_stamp: str,
     max_profile_age: datetime.timedelta,
+    branch_age_if_fudging: datetime.timedelta | None,
 ) -> Complaint | None:
     """Potentially complains about the age of the given profile.
 
@@ -468,6 +484,47 @@ def maybe_diagnose_current_chrome_afdo_profile(
     if age < max_profile_age:
         return None
 
+    # Opportunistically search to see if something newer could've landed, and
+    # log it if so.
+    most_recent_uploaded_profile = find_most_recent_branch_profile(
+        afdo_profiles, arch, subtype, branch.release_number
+    )
+    gs_profile_age = now - most_recent_uploaded_profile.last_modified
+
+    # If we're fudging the age alert bound on stable, determine if the age of
+    # the newest profile _available in gs_ would be new enough if it were rolled
+    # now. If not, that's a problem that isn't related to skia autorollers
+    # (which are why we do this fudging). If so, assume the skia autorollers
+    # are lagging behind a bit, and give them slack before filing a bug.
+    if branch_age_if_fudging:
+        if channel is not git_utils.Channel.STABLE:
+            raise ValueError(
+                f"Fudging is only supported on stable, not {channel}"
+            )
+
+        max_branch_age_for_suppression = datetime.timedelta(
+            days=DAYS_FOR_BRANCH_TO_REACH_STABLE
+        )
+        if (
+            gs_profile_age < max_profile_age
+            and branch_age_if_fudging < max_branch_age_for_suppression
+        ):
+            logging.warning(
+                "Profile for M%s is over limit, but forgiven due to fudging "
+                "because the stable branch is %s old. Forgiveness stops at %s.",
+                branch.release_number,
+                branch_age_if_fudging,
+                max_branch_age_for_suppression,
+            )
+            return None
+
+        logging.info(
+            "Fudging not applied for stable branch; branch is %s old, and the "
+            "limit is %s.",
+            branch_age_if_fudging,
+            max_branch_age_for_suppression,
+        )
+
     logging.error(
         "Profile is too old; maximum allowable age is %s.", max_profile_age
     )
@@ -481,11 +538,6 @@ def maybe_diagnose_current_chrome_afdo_profile(
         ),
     ]
 
-    # Opportunistically search to see if something newer could've landed, and
-    # log it if so.
-    most_recent_uploaded_profile = find_most_recent_branch_profile(
-        afdo_profiles, arch, subtype, branch.release_number
-    )
     if most_recent_uploaded_profile == current_profile:
         complaint.append(
             textwrap.dedent(
@@ -496,12 +548,11 @@ def maybe_diagnose_current_chrome_afdo_profile(
             ),
         )
     else:
-        new_age = now - most_recent_uploaded_profile.last_modified
         complaint += (
             textwrap.dedent(
                 f"""\
-                NOTE: A newer profile of this type, which is {new_age} old,
-                exists in gs://. It's
+                NOTE: A newer profile of this type, which is {gs_profile_age}
+                old, exists in gs://. It's
                 {most_recent_uploaded_profile.full_name()}.
                 """
             ),
@@ -553,6 +604,28 @@ def load_upstream_chrome_git_tags(
     return results
 
 
+def determine_branch_age(
+    git_dir: Path, branch_ref: str, main_ref: str, now: datetime.datetime
+) -> datetime.timedelta:
+    """Returns the approximate 'age' of `branch_ref`.
+
+    'Age' meaning "for how many calendar hours has `branch_ref` been independent
+    from `main_ref`.
+    """
+    merge_base = git_utils.merge_base(git_dir, (branch_ref, main_ref))
+    if not merge_base:
+        raise ValueError(
+            f"Couldn't compute merge-base between {branch_ref} "
+            f"and {main_ref}"
+        )
+
+    merge_base_committed_at = datetime.datetime.fromtimestamp(
+        git_utils.get_commit_timestamp(git_dir, merge_base),
+        tz=datetime.timezone.utc,
+    )
+    return now - merge_base_committed_at
+
+
 def check_afdo_profiles_are_new(
     *,
     chrome_src: Path,
@@ -561,6 +634,7 @@ def check_afdo_profiles_are_new(
     afdo_profiles: dict[int, list[ChromeGsProfile]],
     now: datetime.datetime,
     max_profile_age: datetime.timedelta,
+    stable_age_fudging: bool,
 ) -> dict[int, list[Complaint]]:
     """Checks to see if the AFDO profiles for the given channel look good.
 
@@ -582,9 +656,10 @@ def check_afdo_profiles_are_new(
             branch.release_number,
             channel,
         )
+        branch_ref = f"{branch.remote}/{branch.branch_name}"
         chromeos_chrome_contents = git_utils.maybe_list_dir_contents_at_commit(
             git_dir=chromiumos_overlay,
-            ref=f"{branch.remote}/{branch.branch_name}",
+            ref=branch_ref,
             path_from_git_root="chromeos-base/chromeos-chrome",
         )
         if chromeos_chrome_contents is None:
@@ -596,6 +671,19 @@ def check_afdo_profiles_are_new(
         newest_chromeos_chrome_version = find_newest_chrome_version(
             chromeos_chrome_contents
         )
+
+        if stable_age_fudging and channel is git_utils.Channel.STABLE:
+            branch_age = determine_branch_age(
+                chromiumos_overlay,
+                branch_ref,
+                main_ref=f"{branch.remote}/main",
+                now=now,
+            )
+            logging.info(
+                "Inferred branched-at Stable commit age to be %s", branch_age
+            )
+        else:
+            branch_age = None
 
         newest_chrome_version = newest_chromeos_chrome_version.as_upstream()
         # If there's a `_pre` in the chromeos-chrome version, then this tag
@@ -645,6 +733,7 @@ def check_afdo_profiles_are_new(
                 afdo_profiles=afdo_profiles,
                 current_profile_stamp=stamp_contents.strip(),
                 max_profile_age=max_profile_age,
+                branch_age_if_fudging=branch_age,
             )
             if maybe_complaint:
                 branch_complaints.append(maybe_complaint)
@@ -743,6 +832,20 @@ def main(argv: list[str]) -> None:
         """,
     )
     parser.add_argument(
+        "--no-stable-age-fudging",
+        action="store_false",
+        dest="stable_age_fudging",
+        help="""
+        Stable profiles can end up being more out-of-date than other branches,
+        since Skia autorollers don't start rolling stable profiles until
+        ChromeOS' stable branch releases. This has been the source of many, many
+        incorrect bug reports in the past (e.g., b/444823816). This flag
+        disables heuristics that try to determine if the Skia autorollers are
+        currently blocked from rolling by this gap between ChromeOS' and
+        Chrome's release cadences.
+        """,
+    )
+    parser.add_argument(
         "--max-cwp-age-days",
         type=int,
         default=10,
@@ -815,6 +918,7 @@ def main(argv: list[str]) -> None:
         afdo_profiles=afdo_profiles,
         now=now,
         max_profile_age=datetime.timedelta(days=opts.max_profile_age_days),
+        stable_age_fudging=opts.stable_age_fudging,
     )
 
     milestone_complaints = merge_milestone_complaints(

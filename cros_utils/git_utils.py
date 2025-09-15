@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Generator, Iterable
+from typing import Generator, Iterable, Sequence
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -639,13 +639,26 @@ def format_patch(git_dir: Path, ref: str) -> str:
 def get_message_subject(git_dir: Path, ref: str) -> str:
     """Return the commit message's subject line."""
     return subprocess.run(
-        ["git", "show", "--format=%s", "-s", ref],
+        ("git", "show", "--format=%s", "-s", ref),
         cwd=git_dir,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         check=True,
     ).stdout.strip()
+
+
+def get_commit_timestamp(git_dir: Path, ref: str) -> int:
+    """Return the commit message's commit-time as a UNIX timeestamp."""
+    stdout = subprocess.run(
+        ("git", "show", "--format=%ct", "-s", ref),
+        cwd=git_dir,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        check=True,
+    ).stdout.strip()
+    return int(stdout)
 
 
 def get_commit_message_metadata(git_dir: Path, ref: str) -> dict[str, str]:
@@ -678,19 +691,21 @@ def parse_message_metadata(message_lines: Iterable[str]) -> dict[str, str]:
     return result
 
 
-def merge_base(git_dir: Path, refs: list[str]) -> str | None:
+def merge_base(git_dir: Path, refs: Sequence[str]) -> str | None:
     """Return the git merge-base --octopus between branches.
 
     Args:
         git_dir: Root directory for a given local git repository.
-        refs: List of commit refs to find the merge base of.
+        refs: Sequence of commit refs to find the merge base of.
 
     Returns:
         An Optional string which is the git SHA of the merge base.
         If no merge-base exists or there was an error, return None.
     """
+    cmd = ["git", "merge-base", "--octopus"]
+    cmd += refs
     proc = subprocess.run(
-        ["git", "merge-base", "--octopus"] + refs,
+        cmd,
         check=False,
         cwd=git_dir,
         encoding="utf-8",
