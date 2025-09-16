@@ -17,7 +17,7 @@ LLVM_NEXT_REV = 574158
 # llvm_next_py_autoupdate.py.
 # pylint: disable=line-too-long
 LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
-    "https://crrev.com/i/8443637/4",
+    "https://crrev.com/i/8443637/5",
     "crrev.com/c/6771414/1",
 )
 
