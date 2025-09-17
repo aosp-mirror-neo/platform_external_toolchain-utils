@@ -268,12 +268,13 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
             ["subfile1"],
         )
 
+        contents = git_utils.maybe_list_dir_contents_at_commit(
+            temp_dir, "HEAD", "dir"
+        )
+        if not contents:
+            self.fail("'contents' was empty, but it should not have been")
         self.assertEqual(
-            sorted(
-                git_utils.maybe_list_dir_contents_at_commit(
-                    temp_dir, "HEAD", "dir"
-                )
-            ),
+            sorted(contents),
             ["subdir/", "subfile1", "subfile2"],
         )
 
@@ -281,6 +282,23 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
             git_utils.maybe_list_dir_contents_at_commit(
                 temp_dir, "HEAD", "file"
             )
+
+    def test_gerrit_cmd_wip(self):
+        cmd = git_utils.generate_upload_to_gerrit_cmd(
+            remote="cros",
+            branch="main",
+            reviewers=("some-reviewer@chromium.org",),
+            wip=True,
+        )
+        self.assertEqual(
+            tuple(cmd),
+            (
+                "git",
+                "push",
+                "cros",
+                "HEAD:refs/for/main%r=some-reviewer@chromium.org,wip",
+            ),
+        )
 
 
 class FormatPatchTest(test_helpers.TempDirTestCase):

@@ -157,6 +157,7 @@ def generate_upload_to_gerrit_cmd(
     cc: Iterable[str] = (),
     ref: str = "HEAD",
     topic: str | None = None,
+    wip: bool = False,
 ) -> list[str]:
     """Create a git push CLI command to upload to Gerrit.
 
@@ -172,6 +173,7 @@ def generate_upload_to_gerrit_cmd(
         ref: The ref (generally a SHA) to upload. Note that any parents of this
             that Gerrit does not recognize will be uploaded.
         topic: Gerrit topic to add the change to.
+        wip: Whether to upload the CL as WIP
 
     Returns:
         A list representing the command line args to push to the gerrit
@@ -181,6 +183,8 @@ def generate_upload_to_gerrit_cmd(
     # for more info on the `%` params.
     option_list = [f"r={x}" for x in reviewers]
     option_list += (f"cc={x}" for x in cc)
+    if wip:
+        option_list.append("wip")
     if topic is not None:
         option_list.append(f"topic={topic}")
     if option_list:
@@ -204,6 +208,7 @@ def upload_to_gerrit(
     cc: Iterable[str] = (),
     ref: str = "HEAD",
     topic: str | None = None,
+    wip: bool = False,
 ) -> list[int]:
     """Uploads `ref` to gerrit, optionally adding reviewers/CCs.
 
@@ -216,6 +221,7 @@ def upload_to_gerrit(
         ref: The ref (generally a SHA) to upload. Note that any parents of this
             that Gerrit does not recognize will be uploaded.
         topic: Gerrit topic to add the change to.
+        wip: Whether to upload the CL as WIP
 
     Returns:
         A list of CL numbers uploaded.
@@ -227,6 +233,7 @@ def upload_to_gerrit(
         cc,
         ref,
         topic,
+        wip,
     )
     run_result = subprocess.run(
         cmd,
