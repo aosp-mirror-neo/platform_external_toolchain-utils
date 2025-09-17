@@ -462,6 +462,7 @@ def generate_chromiumos_llvm_footer(
     original_sha: str | None = None,
     platforms: Iterable[str] = (),
     info: str | None = None,
+    author: str = "",
 ) -> list[str]:
     """Generates a commit footer given patch metadata.
 
@@ -471,6 +472,8 @@ def generate_chromiumos_llvm_footer(
     # We want to keep the order of these alphabetical,
     # so the creation of the footer looks a little weird.
     extra_metadata = []
+    if author:
+        extra_metadata.append(f"patch.metadata.author: {author}")
     if info:
         extra_metadata.append("patch.metadata.info: " + ", ".join(info))
     if original_sha:
@@ -506,6 +509,7 @@ def _chromiumos_llvm_footer(pe: PatchEntry) -> list[str]:
         original_sha=metadata.get("original_sha"),
         platforms=pe.platforms or (),
         info=metadata.get("info"),
+        author=metadata.get("author", ""),
     )
 
 

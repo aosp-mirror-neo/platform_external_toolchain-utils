@@ -39,6 +39,13 @@ HEAD_STALENESS_ALERT_INITIAL_SECS = 60 * ONE_DAY_SECS
 # an llvm-next roll has to be reverted.
 REVERT_LIST_GC_TIMEOUT = 14 * ONE_DAY_SECS
 
+REPLACEMENT_AUTHOR_NAME = "crostc-worker"
+REPLACEMENT_AUTHOR_EMAIL = (
+    "crostc-worker@crostc-chrotomation.iam.gserviceaccount.com"
+)
+# Author to replace the true author of a revert commit. This is to prevent them
+# from being spammed with emails every time we upload revert commits to Gerrit.
+
 
 # Not frozen, as `next_notification_timestamp` may be mutated.
 @dataclasses.dataclass(frozen=False, eq=True)
@@ -495,6 +502,23 @@ def _upload_revert_cherry_pick(
     else:
         is_cl_a_merge_conflict = False
 
+    commit_message = subprocess.run(
+        ["git", "log", "-n1", "--format=%B", sha],
+        check=True,
+        cwd=llvm_worktree,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ).stdout
+    author = subprocess.run(
+        ["git", "log", "-n1", "--format=%an <%ae>"],
+        check=True,
+        cwd=llvm_worktree,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
+
     footer_lines = patch_utils.generate_chromiumos_llvm_footer(
         is_cherry=True,
         apply_from=git_llvm_rev.translate_sha_to_rev(
@@ -504,16 +528,8 @@ def _upload_revert_cherry_pick(
         original_sha=sha,
         platforms=("chromiumos",),
         info=None,
+        author=author,
     )
-    commit_message = subprocess.run(
-        ["git", "log", "-n1", "--format=%B", sha],
-        check=True,
-        cwd=llvm_worktree,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    ).stdout
-
     new_commit_message = _append_footers_to_commit_message(
         commit_message, footer_lines
     )
@@ -521,7 +537,14 @@ def _upload_revert_cherry_pick(
         new_commit_message = f"MERGE CONFLICT: {new_commit_message}"
 
     subprocess.run(
-        ["git", "commit", "--amend", "-m", new_commit_message],
+        [
+            "git",
+            "commit",
+            "--amend",
+            "-m",
+            new_commit_message,
+            f"--author={REPLACEMENT_AUTHOR_NAME} <{REPLACEMENT_AUTHOR_EMAIL}>",
+        ],
         check=True,
         cwd=llvm_worktree,
         stdin=subprocess.DEVNULL,
@@ -535,6 +558,7 @@ def _upload_revert_cherry_pick(
         branch=branch_without_remote,
         reviewers=reviewers,
         cc=cc,
+        wip=True,  # TODO(ajordanr): Remove this once we verify this is correct.
     )
     if is_cl_a_merge_conflict:
         # Set V-1 for more visibility.
@@ -608,7 +632,7 @@ def maybe_email_about_stale_heads(
         )
 
     shas_are = "SHAs are" if len(stale_listings) > 1 else "SHA is"
-    email_body = [
+    email_body: list[tiny_render.Piece] = [
         "Hi! This is a friendly notification that the current upstream LLVM "
         f"{shas_are} being tracked by the LLVM revert checker:",
         tiny_render.UnorderedList(stale_listings),

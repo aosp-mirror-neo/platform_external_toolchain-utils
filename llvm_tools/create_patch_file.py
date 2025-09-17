@@ -113,6 +113,10 @@ def _get_metadata_info(commit_metadata: dict[str, str]) -> list[str]:
     ]
 
 
+def _get_metadata_author(commit_metadata: dict[str, str]) -> str:
+    return commit_metadata.get("patch.metadata.author", "").strip()
+
+
 def _get_metadata_original_sha(
     commit_metadata: dict[str, str],
 ) -> str | None:
@@ -215,6 +219,7 @@ def create_branch_contexts(
             metadata = {
                 "info": _get_metadata_info(commit_metadata),
                 "title": subject,
+                "author": _get_metadata_author(commit_metadata),
             }
             if original_sha:
                 metadata["original_sha"] = original_sha
