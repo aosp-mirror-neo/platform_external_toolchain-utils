@@ -16,8 +16,18 @@ from llvm_tools import git_llvm_rev
 
 
 COMMIT_FIXTURES: list[dict[str, Any]] = [
-    {"subject": "A commit subject", "sha": "abcdef1234567890", "rev": 5},
-    {"subject": "Another commit subject", "sha": "feed9999", "rev": 9},
+    {
+        "subject": "A commit subject",
+        "sha": "abcdef1234567890",
+        "rev": 5,
+        "author": "alice <alice@google.test>",
+    },
+    {
+        "subject": "Another commit subject",
+        "sha": "feed9999",
+        "rev": 9,
+        "author": "bob <bob@google.test>",
+    },
 ]
 
 JSON_FIXTURE: list[dict[str, Any]] = [
@@ -35,6 +45,13 @@ def _mock_get_commit_subj(_, sha: str) -> str:
         fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha
     )
     return next(gen)["subject"]
+
+
+def _mock_get_commit_author(_, sha: str) -> str:
+    gen: Generator[dict[str, Any], None, None] = (
+        fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha
+    )
+    return next(gen)["author"]
 
 
 def _mock_to_rev(sha: get_patch.LLVMGitRef, _) -> git_llvm_rev.Rev:
@@ -72,6 +89,7 @@ class TestGetPatch(unittest.TestCase):
         self.module_patcher = mock.patch.multiple(
             get_patch,
             get_commit_subj=_mock_get_commit_subj,
+            get_commit_author=_mock_get_commit_author,
             _git_format_patch=_mock_git_format_patch,
             get_changed_packages=_mock_get_changed_packages,
             _write_patch=_mock_write_patch,
@@ -165,6 +183,7 @@ class TestGetPatch(unittest.TestCase):
         fixture_sha = fixture["sha"]
         expected_json_entry = {
             "metadata": {
+                "author": fixture["author"],
                 "title": fixture["subject"],
                 "original_sha": fixture_sha,
                 "info": [],
@@ -188,6 +207,7 @@ class TestGetPatch(unittest.TestCase):
         fixture_sha = fixture["sha"]
         expected_json_entry = {
             "metadata": {
+                "author": fixture["author"],
                 "title": fixture["subject"],
                 "original_sha": fixture_sha,
                 "info": [],

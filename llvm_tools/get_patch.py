@@ -189,6 +189,9 @@ class PatchContext:
             pe = patch_utils.PatchEntry(
                 workdir=workdir,
                 metadata={
+                    "author": get_commit_author(
+                        self.llvm_project_dir, patch_source.git_ref
+                    ),
                     "info": [],
                     "original_sha": patch_source.git_ref,
                     "title": get_commit_subj(
@@ -230,6 +233,8 @@ class PatchContext:
             pe = patch_utils.PatchEntry(
                 workdir=workdir,
                 metadata={
+                    # No author here, because we squash the commits down
+                    # and they could differ.
                     "title": github_ctx.full_title,
                     "original_sha": None,
                     "info": [],
@@ -288,6 +293,20 @@ def get_commit_subj(git_root_dir: Path, ref: str) -> str:
     ).stdout.strip()
     logging.debug("  -> %s", subj)
     return subj
+
+
+def get_commit_author(git_root_dir: Path, ref: str) -> str:
+    """Return a given commit's author."""
+    logging.debug("Getting commit author for %s", ref)
+    author = subprocess.run(
+        ["git", "show", "-s", "--format=%an <%ae>", ref],
+        cwd=git_root_dir,
+        encoding="utf-8",
+        stdout=subprocess.PIPE,
+        check=True,
+    ).stdout.strip()
+    logging.debug("  -> %s", author)
+    return author
 
 
 def get_llvm_github_pull(pull_number: int) -> dict[str, Any]:
