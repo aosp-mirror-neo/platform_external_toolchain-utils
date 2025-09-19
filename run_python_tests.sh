@@ -38,3 +38,12 @@ PYTHONPATH="${PWD}:${PYTHONPATH:-}" pytest \
   --ignore=llvm_tools/git_llvm_rev_test.py \
   --ignore=py/ \
   "$@"
+
+# The gemini_api/ tests are explicitly written to not be picked up by pytest,
+# because they need a custom venv.
+#
+# If args were passed though, the user probably doesn't intend to test these.
+if [[ "$#" -eq 0 ]]; then
+  echo "Running gemini-specific tests"
+  llvm_tools/gemini_api/run_tests.sh
+fi
