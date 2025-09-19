@@ -16,7 +16,11 @@ $ echo -e 'abc123\ndef456' | check_reverts.py
 ```
 
 Note that the results are _not_ guaranteed to be in the same order as the input
-SHAs.
+SHAs. There's also no guarantee of the coherency of results (e.g., Gemini may
+hand back an object indicating that a SHA is not a revert, but list reverted
+SHAs). There is, however, a guarantee that results will be typed properly - you
+may assume that the "is_revert" field will always be present, and either `true`
+or `false`.
 """
 
 import argparse
@@ -29,6 +33,7 @@ from pathlib import Path
 import queue
 import subprocess
 import sys
+import typing
 from typing import Any, IO
 
 # TODO: These can't be resolved by our presubmits until we set up a venv
@@ -36,6 +41,67 @@ from typing import Any, IO
 # pylint:disable=import-error
 from google import genai  # type: ignore
 from google.genai import types  # type: ignore
+
+
+T = typing.TypeVar("T")
+
+
+def get_dict_elem_with_type(
+    obj: dict[str, Any], key: str, expect_type: type[T]
+) -> T:
+    """Extracts `key` from `obj`, verifying its type.
+
+    At present, this only supports what types GeminiRevertInference needs to
+    accept. That is, primitive types and lists thereof. Lists should always
+    be parameterized properly.
+
+    Raises:
+        ValueError if `key` isn't present in `obj`, or if it's not of the given
+        type.
+    """
+    if key not in obj:
+        raise ValueError(f"No {key} key in {obj}")
+
+    value = obj[key]
+    origin = typing.get_origin(expect_type)
+    if origin is None:
+        # Don't use `isinstance` here, since `bool` is a subclass of int; we
+        # don't want a `True` to pass when the user asks for `int`.
+        # pylint:disable=unidiomatic-typecheck
+        if type(value) is expect_type:
+            return typing.cast(T, value)
+        raise ValueError(
+            f"Key {key} is of type {type(value)}; wanted {expect_type} in {obj}"
+        )
+
+    # N.B., use `assert`s for errors with the form of `type[T]`, since a broken
+    # input type is a programmer error.
+
+    # Dict can be supported, but there're no users at present.
+    assert origin is list, f"Only list validation is supported, not {origin}."
+
+    args = typing.get_args(expect_type)
+    assert len(args) == 1, "Lists must always be parameterized with one elem."
+
+    arg_type = args[0]
+    assert (
+        typing.get_origin(arg_type) is None
+    ), "Only primitive list elements are supported."
+
+    if not isinstance(value, list):
+        raise ValueError(
+            f"Key {key} is of type {type(value)}, not {expect_type}"
+        )
+
+    for item in value:
+        # Don't use `isinstance` here, since `bool` is a subclass of int; we
+        # don't want a `True` to pass when the user asks for `int`.
+        # pylint:disable=unidiomatic-typecheck
+        if type(item) is not arg_type:
+            raise ValueError(
+                f"Element {item} of list is {type(item)}, not {arg_type}"
+            )
+    return typing.cast(T, value)
 
 
 # NOTE: The class docstring and per-field docstrings are sent to Gemini, so
@@ -69,15 +135,33 @@ class GeminiRevertInference:
     """
 
     @classmethod
-    def from_json(cls, json_object: Any) -> "GeminiRevertInference":
+    def from_json_checked(
+        cls, json_object: dict[str, Any]
+    ) -> "GeminiRevertInference":
+        """Parses 'untrusted' JSON into an instance of this class.
+
+        Gemini can generally be trusted to produce JSON that matches this type's
+        definition precisely, but this method double-checks that `json_object`
+        has all of the correct fields, and each field has the correct type.
+
+        Raises:
+            ValueError if the JSON is poorly-formed.
+        """
+        reverted_shas = get_dict_elem_with_type(
+            json_object, "reverted_shas", list[str]
+        )
+        reverted_prs = get_dict_elem_with_type(
+            json_object, "reverted_prs", list[int]
+        )
+
         # Sort these for consistency.
-        reverted_shas = sorted(json_object["reverted_shas"])
-        reverted_prs = sorted(json_object["reverted_prs"])
+        reverted_shas.sort()
+        reverted_prs.sort()
         return cls(
             reverted_shas=reverted_shas,
             reverted_prs=reverted_prs,
-            is_revert=json_object["is_revert"],
-            is_reland=json_object["is_reland"],
+            is_revert=get_dict_elem_with_type(json_object, "is_revert", bool),
+            is_reland=get_dict_elem_with_type(json_object, "is_reland", bool),
         )
 
     def to_json(self) -> Any:
@@ -154,7 +238,12 @@ def parse_gemini_response(
             f"Gemini produced invalid JSON for query on {sha}: {response}"
         )
 
-    return GeminiRevertInference.from_json(parsed_result)
+    try:
+        return GeminiRevertInference.from_json_checked(parsed_result)
+    except ValueError as e:
+        raise GeminiResponseIsBrokenError(
+            f"Gemini produced invalid JSON for query on {sha}: {e}"
+        )
 
 
 def process_one_sha(
@@ -353,7 +442,9 @@ def main(argv: list[str]) -> None:
         if f := opts.input:
             input_stream = exit_stack.enter_context(f.open(encoding="utf-8"))
 
-        output_stream = exit_stack.enter_context(f.open("w", encoding="utf-8"))
+        output_stream = exit_stack.enter_context(
+            opts.output.open("w", encoding="utf-8")
+        )
         pool = exit_stack.enter_context(
             multiprocessing.pool.ThreadPool(processes=jobs)
         )
