@@ -1,9 +1,9 @@
 [
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Adds a allowlist of packages that have known memory leaks",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Adds a allowlist of packages that have known memory leaks"
     },
     "platforms": [
       "chromiumos"
@@ -16,9 +16,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Sets the ASAN message to go to /va/log/asan${pid} by\ndefault",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Sets the ASAN message to go to /va/log/asan${pid} by\ndefault"
     },
     "platforms": [
       "chromiumos"
@@ -31,9 +31,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Fixes crbug/591436. Force fallback to traditional executable detection",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Fixes crbug/591436. Force fallback to traditional executable detection"
     },
     "platforms": [
       "chromiumos"
@@ -46,9 +46,9 @@
   },
   {
     "metadata": {
+      "author": "Caroline Tice <cmtice@google.com>",
       "info": [],
-      "title": "Temporary workaround. Breakpad cannot handle Dwarf\nVersion 4. Works around issue by forcing Debug Frames\nversion of Dwarf to be version 1, while leaving the rest of\nthe Dwarf data at version 4",
-      "author": "Caroline Tice <cmtice@google.com>"
+      "title": "Temporary workaround. Breakpad cannot handle Dwarf\nVersion 4. Works around issue by forcing Debug Frames\nversion of Dwarf to be version 1, while leaving the rest of\nthe Dwarf data at version 4"
     },
     "platforms": [
       "chromiumos"
@@ -61,9 +61,9 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
-      "title": "Uses argv[0] to get host system information. Created\na wrapper of LLD and real lld becomes lld.elf so the LLD\ncannot get the host system information and dies",
-      "author": "George Burgess IV <gbiv@google.com>"
+      "title": "Uses argv[0] to get host system information. Created\na wrapper of LLD and real lld becomes lld.elf so the LLD\ncannot get the host system information and dies"
     },
     "platforms": [
       "chromiumos"
@@ -76,9 +76,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Fixes clang.elf calling clang.elf because direct\ncalls to clang.elf misses all environment setup in clang\nwrapper. Calls to clang wrapper instead of clang.elf binary",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Fixes clang.elf calling clang.elf because direct\ncalls to clang.elf misses all environment setup in clang\nwrapper. Calls to clang wrapper instead of clang.elf binary"
     },
     "platforms": [
       "chromiumos"
@@ -91,9 +91,9 @@
   },
   {
     "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
       "info": [],
-      "title": "v5: Crash when dereferencing nullopt for std::optional",
-      "author": "Grace Cham <hscham@chromium.org>"
+      "title": "v5: Crash when dereferencing nullopt for std::optional"
     },
     "platforms": [
       "chromiumos"
@@ -106,9 +106,9 @@
   },
   {
     "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
       "info": [],
-      "title": "v6: Crash when dereferencing nullopt for std::optional",
-      "author": "Grace Cham <hscham@chromium.org>"
+      "title": "v6: Crash when dereferencing nullopt for std::optional"
     },
     "platforms": [
       "chromiumos"
@@ -121,9 +121,9 @@
   },
   {
     "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
       "info": [],
-      "title": "v7: Crash when dereferencing nullopt for std::optional",
-      "author": "Grace Cham <hscham@chromium.org>"
+      "title": "v7: Crash when dereferencing nullopt for std::optional"
     },
     "platforms": [
       "chromiumos"
@@ -136,9 +136,9 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
-      "title": "Increase max allocation size to allow BOLTing clang and rustc",
-      "author": "Yi Kong <yikong@google.com>"
+      "title": "Increase max allocation size to allow BOLTing clang and rustc"
     },
     "platforms": [
       "android",
@@ -152,9 +152,9 @@
   },
   {
     "metadata": {
+      "author": "Emre Kultursay <emrekultursay@google.com>",
       "info": [],
-      "title": "Disable vfork events v2",
-      "author": "Emre Kultursay <emrekultursay@google.com>"
+      "title": "Disable vfork events v2"
     },
     "platforms": [
       "android",
@@ -168,9 +168,9 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
-      "title": "v2: Revert [Driver] Allow target override containing . in executable name",
-      "author": "Yi Kong <yikong@google.com>"
+      "title": "v2: Revert [Driver] Allow target override containing . in executable name"
     },
     "platforms": [
       "android",
@@ -184,9 +184,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Disable Cast Assertion",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Disable Cast Assertion"
     },
     "platforms": [
       "chromiumos"
@@ -199,9 +199,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "inline-cost: skip threshold checks",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "inline-cost: skip threshold checks"
     },
     "platforms": [
       "chromiumos"
@@ -214,9 +214,9 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
-      "title": "[LoopUnroll] Ignore inlinable calls if unrolling is forced",
-      "author": "George Burgess IV <gbiv@google.com>"
+      "title": "[LoopUnroll] Ignore inlinable calls if unrolling is forced"
     },
     "platforms": [
       "chromiumos"
@@ -229,9 +229,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "[PATCH] [scudo] Add baseline Scudo config for ChromeOS",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "[PATCH] [scudo] Add baseline Scudo config for ChromeOS"
     },
     "platforms": [
       "chromiumos"
@@ -244,9 +244,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Disable querying git in benchmarking code",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Disable querying git in benchmarking code"
     },
     "platforms": [
       "chromiumos"
@@ -259,9 +259,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Revert \"add_tablegen: Quick fix to reflect LLVM_TABLEGEN to llvm-min-tblgen\"",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Revert \"add_tablegen: Quick fix to reflect LLVM_TABLEGEN to llvm-min-tblgen\""
     },
     "platforms": [
       "chromiumos"
@@ -274,9 +274,9 @@
   },
   {
     "metadata": {
+      "author": "Tom Hughes <tomhughes@chromium.org>",
       "info": [],
-      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal",
-      "author": "Tom Hughes <tomhughes@chromium.org>"
+      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
     },
     "platforms": [
       "chromiumos"
@@ -289,9 +289,9 @@
   },
   {
     "metadata": {
+      "author": "Tom Hughes <tomhughes@chromium.org>",
       "info": [],
-      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal",
-      "author": "Tom Hughes <tomhughes@chromium.org>"
+      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
     },
     "platforms": [
       "chromiumos"
@@ -304,9 +304,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "[lldb] Add terminfo dependency for ncurses support",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "[lldb] Add terminfo dependency for ncurses support"
     },
     "platforms": [
       "chromiumos"
@@ -319,9 +319,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\"",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\""
     },
     "platforms": [
       "chromiumos"
@@ -334,9 +334,9 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
-      "title": "cros: add llvm-rev file",
-      "author": "George Burgess IV <gbiv@google.com>"
+      "title": "cros: add llvm-rev file"
     },
     "platforms": [
       "chromiumos"
@@ -349,9 +349,9 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
-      "title": "Revert \"[lldb] Add terminfo dependency for ncurses support\"",
-      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>"
+      "title": "Revert \"[lldb] Add terminfo dependency for ncurses support\""
     },
     "platforms": [
       "chromiumos"
@@ -364,10 +364,10 @@
   },
   {
     "metadata": {
+      "author": "Jordan R AW <ajordanr@google.com>",
       "info": [],
       "original_sha": "8fff0c181f26a5e8b2344c061ebf2559118b1160",
-      "title": "[lldb] Add terminfo dependency for ncurses support (#126810)",
-      "author": "Jordan R AW <ajordanr@google.com>"
+      "title": "[lldb] Add terminfo dependency for ncurses support (#126810)"
     },
     "platforms": [
       "chromiumos"
@@ -380,10 +380,10 @@
   },
   {
     "metadata": {
+      "author": "Jordan R AW <ajordanr@google.com>",
       "info": [],
       "original_sha": "bb6a273d9ab9ee90dbb957e541f4d810fffb22ee",
-      "title": "[lldb] Fix manual CURSES_LIBRARIES tinfo finding (#128245)",
-      "author": "Jordan R AW <ajordanr@google.com>"
+      "title": "[lldb] Fix manual CURSES_LIBRARIES tinfo finding (#128245)"
     },
     "platforms": [
       "chromiumos"
@@ -396,10 +396,10 @@
   },
   {
     "metadata": {
+      "author": "Han-Chung Wang <hanhan0912@gmail.com>",
       "info": [],
       "original_sha": "c9d0a464c9f3a0a66f35d0ca28f36a96efc6961b",
-      "title": "Revert \"[mlir][math]Update `convertPowfOp` `ExpandPatterns.cpp`\" (#126063)",
-      "author": "Han-Chung Wang <hanhan0912@gmail.com>"
+      "title": "Revert \"[mlir][math]Update `convertPowfOp` `ExpandPatterns.cpp`\" (#126063)"
     },
     "platforms": [
       "chromiumos"
@@ -412,10 +412,10 @@
   },
   {
     "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
       "info": [],
       "original_sha": "0227396417d4625bc93affdd8957ff8d90c76299",
-      "title": "Revert \"[libc++] Reduce std::conjunction overhead (#124259)\"",
-      "author": "Nikolas Klauser <nikolasklauser@berlin.de>"
+      "title": "Revert \"[libc++] Reduce std::conjunction overhead (#124259)\""
     },
     "platforms": [
       "chromiumos"
@@ -428,10 +428,10 @@
   },
   {
     "metadata": {
+      "author": "Guillaume Chatelet <gchatelet@google.com>",
       "info": [],
       "original_sha": "c65ed964657c93d51f3e05de9e0609419768a143",
-      "title": "Revert \"[reland][libc][bazel] Enable software prefetching for memcpy\" (#127189)",
-      "author": "Guillaume Chatelet <gchatelet@google.com>"
+      "title": "Revert \"[reland][libc][bazel] Enable software prefetching for memcpy\" (#127189)"
     },
     "platforms": [
       "chromiumos"
@@ -444,10 +444,10 @@
   },
   {
     "metadata": {
+      "author": "Eli Friedman <efriedma@quicinc.com>",
       "info": [],
       "original_sha": "cd6e959102888279dc7e75a41ebd75a08ac3f7a5",
-      "title": "Revert \"[MC] Explicitly mark MCSymbol for MO_ExternalSymbol\" (#133291)",
-      "author": "Eli Friedman <efriedma@quicinc.com>"
+      "title": "Revert \"[MC] Explicitly mark MCSymbol for MO_ExternalSymbol\" (#133291)"
     },
     "platforms": [
       "chromiumos"
@@ -460,9 +460,9 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
-      "title": "cros: add user-enumeration patch",
-      "author": "George Burgess IV <gbiv@google.com>"
+      "title": "cros: add user-enumeration patch"
     },
     "platforms": [
       "chromiumos"
@@ -475,9 +475,9 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
-      "title": "llvm: don't touch VCS files",
-      "author": "George Burgess IV <gbiv@google.com>"
+      "title": "llvm: don't touch VCS files"
     },
     "platforms": [
       "chromiumos"
@@ -490,10 +490,10 @@
   },
   {
     "metadata": {
+      "author": "Peter Smith <peter.smith@arm.com>",
       "info": [],
       "original_sha": "ba476d0b83dc8a4bbf066dc02a0f73ded27114f0",
-      "title": "[LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)",
-      "author": "Peter Smith <peter.smith@arm.com>"
+      "title": "[LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
     },
     "platforms": [
       "chromiumos"
@@ -506,10 +506,10 @@
   },
   {
     "metadata": {
+      "author": "Pengxuan Zheng <pzheng@quicinc.com>",
       "info": [],
       "original_sha": "36acaa0be5cf6273200d4cc4c35042c4bfc3861b",
-      "title": "Revert \"[ARM][ConstantIslands] Correct MinNoSplitDisp calculation (#114590)\"",
-      "author": "Pengxuan Zheng <pzheng@quicinc.com>"
+      "title": "Revert \"[ARM][ConstantIslands] Correct MinNoSplitDisp calculation (#114590)\""
     },
     "platforms": [
       "chromiumos"
@@ -522,9 +522,9 @@
   },
   {
     "metadata": {
+      "author": "Mark de Wever <koraq@xs4all.nl>",
       "info": [],
-      "title": "[UPSTREAM] [libc++][TZDB] Fixes %z escaping. (#125399)",
-      "author": "Mark de Wever <koraq@xs4all.nl>"
+      "title": "[UPSTREAM] [libc++][TZDB] Fixes %z escaping. (#125399)"
     },
     "platforms": [
       "android",
@@ -538,9 +538,9 @@
   },
   {
     "metadata": {
+      "author": "Louis Dionne <ldionne.2@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] [libc++] Fix stray usage of _LIBCPP_HAS_NO_WIDE_CHARACTERS on Windows",
-      "author": "Louis Dionne <ldionne.2@gmail.com>"
+      "title": "[UPSTREAM] [libc++] Fix stray usage of _LIBCPP_HAS_NO_WIDE_CHARACTERS on Windows"
     },
     "platforms": [
       "android",
@@ -554,9 +554,9 @@
   },
   {
     "metadata": {
+      "author": "Peter Smith <peter.smith@arm.com>",
       "info": [],
-      "title": "[UPSTREAM] [LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)",
-      "author": "Peter Smith <peter.smith@arm.com>"
+      "title": "[UPSTREAM] [LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
     },
     "platforms": [
       "android",
@@ -570,9 +570,9 @@
   },
   {
     "metadata": {
+      "author": "Louis Dionne <ldionne.2@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] [libc++] Reduce the dependency of the locale base API on the base system from the headers (#117764)",
-      "author": "Louis Dionne <ldionne.2@gmail.com>"
+      "title": "[UPSTREAM] [libc++] Reduce the dependency of the locale base API on the base system from the headers (#117764)"
     },
     "platforms": [
       "android",
@@ -586,9 +586,9 @@
   },
   {
     "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
       "info": [],
-      "title": "[UPSTREAM] [AArch64][SME2] Don't preserve ZT0 around SME ABI routines (#132722)",
-      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>"
+      "title": "[UPSTREAM] [AArch64][SME2] Don't preserve ZT0 around SME ABI routines (#132722)"
     },
     "platforms": [
       "android",
@@ -602,9 +602,9 @@
   },
   {
     "metadata": {
+      "author": "Florian Mayer <fmayer@google.com>",
       "info": [],
-      "title": "[UPSTREAM] [MTE] decide whether to tag global in AsmPrinter (#135891)",
-      "author": "Florian Mayer <fmayer@google.com>"
+      "title": "[UPSTREAM] [MTE] decide whether to tag global in AsmPrinter (#135891)"
     },
     "platforms": [
       "android",
@@ -618,9 +618,9 @@
   },
   {
     "metadata": {
+      "author": "Florian Mayer <fmayer@google.com>",
       "info": [],
-      "title": "[UPSTREAM] [MTE] do not tag zero sized globals (#136020)",
-      "author": "Florian Mayer <fmayer@google.com>"
+      "title": "[UPSTREAM] [MTE] do not tag zero sized globals (#136020)"
     },
     "platforms": [
       "android",
@@ -634,9 +634,9 @@
   },
   {
     "metadata": {
+      "author": "Pranav Kant <prka@google.com>",
       "info": [],
-      "title": "[UPSTREAM] [lld] Merge equivalent symbols found during ICF (#134342)",
-      "author": "Pranav Kant <prka@google.com>"
+      "title": "[UPSTREAM] [lld] Merge equivalent symbols found during ICF (#134342)"
     },
     "platforms": [
       "android",
@@ -650,9 +650,9 @@
   },
   {
     "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
       "info": [],
-      "title": "[UPSTREAM] [AArch64][SME] Allow spills of ZT0 around SME ABI routines again (#136726)",
-      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>"
+      "title": "[UPSTREAM] [AArch64][SME] Allow spills of ZT0 around SME ABI routines again (#136726)"
     },
     "platforms": [
       "android",
@@ -666,9 +666,9 @@
   },
   {
     "metadata": {
+      "author": "Emre Kultursay <emrekultursay@google.com>",
       "info": [],
-      "title": "[UPSTREAM] Fix connecting via abstract socket (#136466)",
-      "author": "Emre Kultursay <emrekultursay@google.com>"
+      "title": "[UPSTREAM] Fix connecting via abstract socket (#136466)"
     },
     "platforms": [
       "android",
@@ -682,9 +682,9 @@
   },
   {
     "metadata": {
+      "author": "Emre Kultursay <emrekultursay@google.com>",
       "info": [],
-      "title": "[UPSTREAM] Fix Windows build (#137414)",
-      "author": "Emre Kultursay <emrekultursay@google.com>"
+      "title": "[UPSTREAM] Fix Windows build (#137414)"
     },
     "platforms": [
       "android",
@@ -698,9 +698,9 @@
   },
   {
     "metadata": {
+      "author": "Emre Kultursay <emrekultursay@google.com>",
       "info": [],
-      "title": "[UPSTREAM] Skip tests if socket name is longer than 107 bytes (#137405)",
-      "author": "Emre Kultursay <emrekultursay@google.com>"
+      "title": "[UPSTREAM] Skip tests if socket name is longer than 107 bytes (#137405)"
     },
     "platforms": [
       "android",
@@ -714,9 +714,9 @@
   },
   {
     "metadata": {
+      "author": "Florian Mayer <fmayer@google.com>",
       "info": [],
-      "title": "[UPSTREAM] [HWASan] fix missing BTI attribute on personality function thunks (#139138)",
-      "author": "Florian Mayer <fmayer@google.com>"
+      "title": "[UPSTREAM] [HWASan] fix missing BTI attribute on personality function thunks (#139138)"
     },
     "platforms": [
       "android",
@@ -730,9 +730,9 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
-      "title": "Add stubs and headers for nl_types APIs.",
-      "author": "Yi Kong <yikong@google.com>"
+      "title": "Add stubs and headers for nl_types APIs."
     },
     "platforms": [
       "android",
@@ -746,9 +746,9 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
-      "title": "Disable integer sanitizer for __libcxx_blsr",
-      "author": "Yi Kong <yikong@google.com>"
+      "title": "Disable integer sanitizer for __libcxx_blsr"
     },
     "platforms": [
       "android",
@@ -762,9 +762,9 @@
   },
   {
     "metadata": {
+      "author": "Fangrui Song <i@maskray.me>",
       "info": [],
-      "title": "[UPSTREAM] [ELF,RISCV] Fix oscillation due to call relaxation",
-      "author": "Fangrui Song <i@maskray.me>"
+      "title": "[UPSTREAM] [ELF,RISCV] Fix oscillation due to call relaxation"
     },
     "platforms": [
       "android",
@@ -778,9 +778,9 @@
   },
   {
     "metadata": {
+      "author": "tynasello-google <tynasello@google.com>",
       "info": [],
-      "title": "[UPSTREAM] [libc++] Expand Android libc++ test config files (#142846)",
-      "author": "tynasello-google <tynasello@google.com>"
+      "title": "[UPSTREAM] [libc++] Expand Android libc++ test config files (#142846)"
     },
     "platforms": [
       "android",
@@ -794,9 +794,9 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
-      "title": "Revert [Clang][counted_by] Refactor __builtin_dynamic_object_size on FAMs (#122198)",
-      "author": "Yi Kong <yikong@google.com>"
+      "title": "Revert [Clang][counted_by] Refactor __builtin_dynamic_object_size on FAMs (#122198)"
     },
     "platforms": [
       "android",
@@ -810,9 +810,9 @@
   },
   {
     "metadata": {
+      "author": "Nikita Popov <npopov@redhat.com>",
       "info": [],
-      "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)",
-      "author": "Nikita Popov <npopov@redhat.com>"
+      "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
     },
     "platforms": [
       "android",
@@ -826,9 +826,9 @@
   },
   {
     "metadata": {
+      "author": "Nikita Popov <npopov@redhat.com>",
       "info": [],
-      "title": "v2: [UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)",
-      "author": "Nikita Popov <npopov@redhat.com>"
+      "title": "v2: [UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
     },
     "platforms": [
       "android",
@@ -842,9 +842,9 @@
   },
   {
     "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
       "info": [],
-      "title": "[UPSTREAM] [AArch64][SME] Fix accessing the emergency spill slot with hazard padding (#142190)",
-      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>"
+      "title": "[UPSTREAM] [AArch64][SME] Fix accessing the emergency spill slot with hazard padding (#142190)"
     },
     "platforms": [
       "android",
@@ -858,9 +858,9 @@
   },
   {
     "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
       "info": [],
-      "title": "[UPSTREAM] [AArch64][SME] Fix restoring callee-saves from FP with hazard padding (#143371)",
-      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>"
+      "title": "[UPSTREAM] [AArch64][SME] Fix restoring callee-saves from FP with hazard padding (#143371)"
     },
     "platforms": [
       "android",
@@ -874,9 +874,9 @@
   },
   {
     "metadata": {
+      "author": "Maksim Ivanov <emaxx@google.com>",
       "info": [],
-      "title": "[UPSTREAM] [clang] Fix nondeterminism in MemberPointerType (#137910)",
-      "author": "Maksim Ivanov <emaxx@google.com>"
+      "title": "[UPSTREAM] [clang] Fix nondeterminism in MemberPointerType (#137910)"
     },
     "platforms": [
       "android",
@@ -890,9 +890,9 @@
   },
   {
     "metadata": {
+      "author": "cor3ntin <corentinjabot@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] [Clang] Preserve CXXParenListInitExpr in TreeTransform. (#138518)",
-      "author": "cor3ntin <corentinjabot@gmail.com>"
+      "title": "[UPSTREAM] [Clang] Preserve CXXParenListInitExpr in TreeTransform. (#138518)"
     },
     "platforms": [
       "android",
@@ -906,9 +906,9 @@
   },
   {
     "metadata": {
+      "author": "Aaron Ballman <aaron@aaronballman.com>",
       "info": [],
-      "title": "[UPSTREAM] [C] Handle comma operator for implicit int->enum conversions (#138752)",
-      "author": "Aaron Ballman <aaron@aaronballman.com>"
+      "title": "[UPSTREAM] [C] Handle comma operator for implicit int->enum conversions (#138752)"
     },
     "platforms": [
       "android",
@@ -922,9 +922,9 @@
   },
   {
     "metadata": {
+      "author": "Alexey Samsonov <vonosmas@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] [libc][bazel] Re-enable memcpy prefetching on x86. (#138945)",
-      "author": "Alexey Samsonov <vonosmas@gmail.com>"
+      "title": "[UPSTREAM] [libc][bazel] Re-enable memcpy prefetching on x86. (#138945)"
     },
     "platforms": [
       "android",
@@ -938,9 +938,9 @@
   },
   {
     "metadata": {
+      "author": "Hans Wennborg <hans@chromium.org>",
       "info": [],
-      "title": "[UPSTREAM] Revert \"[lld] Merge equivalent symbols found during ICF (#134342)\"",
-      "author": "Hans Wennborg <hans@chromium.org>"
+      "title": "[UPSTREAM] Revert \"[lld] Merge equivalent symbols found during ICF (#134342)\""
     },
     "platforms": [
       "android",
@@ -954,9 +954,9 @@
   },
   {
     "metadata": {
+      "author": "Aaron Ballman <aaron@aaronballman.com>",
       "info": [],
-      "title": "[UPSTREAM] [C] Fix a false-positive with tentative defn compat (#139738)",
-      "author": "Aaron Ballman <aaron@aaronballman.com>"
+      "title": "[UPSTREAM] [C] Fix a false-positive with tentative defn compat (#139738)"
     },
     "platforms": [
       "android",
@@ -970,9 +970,9 @@
   },
   {
     "metadata": {
+      "author": "weiguozhi <57237827+weiguozhi@users.noreply.github.com>",
       "info": [],
-      "title": "[UPSTREAM] [CodeGenPrepare] Make sure instruction get from SunkAddrs is before MemoryInst (#139303)",
-      "author": "weiguozhi <57237827+weiguozhi@users.noreply.github.com>"
+      "title": "[UPSTREAM] [CodeGenPrepare] Make sure instruction get from SunkAddrs is before MemoryInst (#139303)"
     },
     "platforms": [
       "android",
@@ -986,9 +986,9 @@
   },
   {
     "metadata": {
+      "author": "cor3ntin <corentinjabot@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] [Clang] Fix an assertion in the resolution of perfect matches (#140073)",
-      "author": "cor3ntin <corentinjabot@gmail.com>"
+      "title": "[UPSTREAM] [Clang] Fix an assertion in the resolution of perfect matches (#140073)"
     },
     "platforms": [
       "android",
@@ -1002,9 +1002,9 @@
   },
   {
     "metadata": {
+      "author": "cor3ntin <corentinjabot@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] [Clang] Fix a regression introduced by #140073 (#140288)",
-      "author": "cor3ntin <corentinjabot@gmail.com>"
+      "title": "[UPSTREAM] [Clang] Fix a regression introduced by #140073 (#140288)"
     },
     "platforms": [
       "android",
@@ -1018,9 +1018,9 @@
   },
   {
     "metadata": {
+      "author": "Qiongsi Wu <qiongsiwu@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] Revert \"[clang][Dependency Scanning] Report What a Module Exports during Scanning (#137421)\" (#140820)",
-      "author": "Qiongsi Wu <qiongsiwu@gmail.com>"
+      "title": "[UPSTREAM] Revert \"[clang][Dependency Scanning] Report What a Module Exports during Scanning (#137421)\" (#140820)"
     },
     "platforms": [
       "android",
@@ -1034,9 +1034,9 @@
   },
   {
     "metadata": {
+      "author": "Alexander Kornienko <alexfh@google.com>",
       "info": [],
-      "title": "[UPSTREAM] Fix an error introduced in #138518 (#142988)",
-      "author": "Alexander Kornienko <alexfh@google.com>"
+      "title": "[UPSTREAM] Fix an error introduced in #138518 (#142988)"
     },
     "platforms": [
       "android",
@@ -1050,9 +1050,9 @@
   },
   {
     "metadata": {
+      "author": "Joseph Huber <huberjn@outlook.com>",
       "info": [],
-      "title": "[UPSTREAM] Revert \"[HIP] use offload wrapper for non-device-only non-rdc (#132869)\" (#143432)",
-      "author": "Joseph Huber <huberjn@outlook.com>"
+      "title": "[UPSTREAM] Revert \"[HIP] use offload wrapper for non-device-only non-rdc (#132869)\" (#143432)"
     },
     "platforms": [
       "android",
@@ -1066,9 +1066,9 @@
   },
   {
     "metadata": {
+      "author": "Aaron Ballman <aaron@aaronballman.com>",
       "info": [],
-      "title": "[UPSTREAM] Remove delayed typo expressions (#143423)",
-      "author": "Aaron Ballman <aaron@aaronballman.com>"
+      "title": "[UPSTREAM] Remove delayed typo expressions (#143423)"
     },
     "platforms": [
       "android",
@@ -1082,9 +1082,9 @@
   },
   {
     "metadata": {
+      "author": "Nikita Popov <npopov@redhat.com>",
       "info": [],
-      "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)",
-      "author": "Nikita Popov <npopov@redhat.com>"
+      "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
     },
     "platforms": [
       "android",
@@ -1098,9 +1098,9 @@
   },
   {
     "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
       "info": [],
-      "title": "Fix for x86 ndk sysroot define being mixed with parameter for i686 lldb build",
-      "author": "Sharjeel Khan <sharjeelkhan@google.com>"
+      "title": "Fix for x86 ndk sysroot define being mixed with parameter for i686 lldb build"
     },
     "platforms": [
       "android",
@@ -1114,9 +1114,9 @@
   },
   {
     "metadata": {
+      "author": "Yutong Zhu <115899167+YutongZhuu@users.noreply.github.com>",
       "info": [],
-      "title": "[UPSTREAM] [Clang] Separate implicit int conversion on negation sign to new diagnostic group (#139429)",
-      "author": "Yutong Zhu <115899167+YutongZhuu@users.noreply.github.com>"
+      "title": "[UPSTREAM] [Clang] Separate implicit int conversion on negation sign to new diagnostic group (#139429)"
     },
     "platforms": [
       "android",
@@ -1130,9 +1130,9 @@
   },
   {
     "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
       "info": [],
-      "title": "[UPSTREAM] [AArch64] Ensure the LR is preserved if we must call __arm_get_current_vg (#145760)",
-      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>"
+      "title": "[UPSTREAM] [AArch64] Ensure the LR is preserved if we must call __arm_get_current_vg (#145760)"
     },
     "platforms": [
       "android",
@@ -1146,9 +1146,9 @@
   },
   {
     "metadata": {
+      "author": "Timm Baeder <tbaeder@redhat.com>",
       "info": [],
-      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)",
-      "author": "Timm Baeder <tbaeder@redhat.com>"
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
     },
     "platforms": [
       "android",
@@ -1162,9 +1162,9 @@
   },
   {
     "metadata": {
+      "author": "\"A. Jiang\" <de34@live.cn>",
       "info": [],
-      "title": "[UPSTREAM] [libc++] Fix padding calculation for function reference types (#142125)",
-      "author": "\"A. Jiang\" <de34@live.cn>"
+      "title": "[UPSTREAM] [libc++] Fix padding calculation for function reference types (#142125)"
     },
     "platforms": [
       "android",
@@ -1178,9 +1178,9 @@
   },
   {
     "metadata": {
+      "author": "Peter Collingbourne <peter@pcc.me.uk>",
       "info": [],
-      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Emit __cfi_check to full LTO part of bitcode file.",
-      "author": "Peter Collingbourne <peter@pcc.me.uk>"
+      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Emit __cfi_check to full LTO part of bitcode file."
     },
     "platforms": [
       "android",
@@ -1194,9 +1194,9 @@
   },
   {
     "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
       "info": [],
-      "title": "[UPSTREAM] [libc++] Add tests for the ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154559)",
-      "author": "Nikolas Klauser <nikolasklauser@berlin.de>"
+      "title": "[UPSTREAM] [libc++] Add tests for the ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154559)"
     },
     "platforms": [
       "android",
@@ -1210,9 +1210,9 @@
   },
   {
     "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
       "info": [],
-      "title": "[UPSTREAM] [libc++] Fix ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154686)",
-      "author": "Nikolas Klauser <nikolasklauser@berlin.de>"
+      "title": "[UPSTREAM] [libc++] Fix ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154686)"
     },
     "platforms": [
       "android",
@@ -1226,9 +1226,9 @@
   },
   {
     "metadata": {
+      "author": "Akira Hatanaka <ahatanak@gmail.com>",
       "info": [],
-      "title": "[UPSTREAM] Cap IntRange::Width to MaxWidth (#145356)",
-      "author": "Akira Hatanaka <ahatanak@gmail.com>"
+      "title": "[UPSTREAM] Cap IntRange::Width to MaxWidth (#145356)"
     },
     "platforms": [
       "android",
@@ -1242,9 +1242,9 @@
   },
   {
     "metadata": {
+      "author": "Timm Baeder <tbaeder@redhat.com>",
       "info": [],
-      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)",
-      "author": "Timm Baeder <tbaeder@redhat.com>"
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
     },
     "platforms": [
       "android",
@@ -1258,9 +1258,9 @@
   },
   {
     "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
       "info": [],
-      "title": "Disable unsigned-integer-overflow checks for std::sort",
-      "author": "Sharjeel Khan <sharjeelkhan@google.com>"
+      "title": "Disable unsigned-integer-overflow checks for std::sort"
     },
     "platforms": [
       "android",
@@ -1274,9 +1274,9 @@
   },
   {
     "metadata": {
+      "author": "Peter Collingbourne <peter@pcc.me.uk>",
       "info": [],
-      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Split modules with __cfi_check and no type metadata.",
-      "author": "Peter Collingbourne <peter@pcc.me.uk>"
+      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Split modules with __cfi_check and no type metadata."
     },
     "platforms": [
       "android",
@@ -1290,9 +1290,9 @@
   },
   {
     "metadata": {
+      "author": "Sjoerd Meijer <smeijer@nvidia.com>",
       "info": [],
-      "title": "[UPSTREAM] [LoopIdiomVectorize] Fix FindFirstByte successors (#156945)",
-      "author": "Sjoerd Meijer <smeijer@nvidia.com>"
+      "title": "[UPSTREAM] [LoopIdiomVectorize] Fix FindFirstByte successors (#156945)"
     },
     "platforms": [
       "android",
@@ -1302,6 +1302,21 @@
     "version_range": {
       "from": 574158,
       "until": 589350
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64] Restrict .variant_pcs directive to ELF targets (#138924)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/3aaf44f95de24339d73c0093576a4a3cc42404ad.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575668
     }
   }
 ]
