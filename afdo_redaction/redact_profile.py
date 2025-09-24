@@ -243,7 +243,7 @@ def run(profile_input_file, summary_output_file, profile_output_file):
         print("\n".join(samples), file=profile_output_file)
 
 
-def _main():
+def main():
     run(
         profile_input_file=sys.stdin,
         summary_output_file=sys.stderr,
