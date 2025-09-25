@@ -5,6 +5,7 @@
 """Tests for afdo_prof_analysis."""
 
 import io
+import random
 import unittest
 
 from afdo_tools.bisection import afdo_prof_analysis as analysis
@@ -86,7 +87,10 @@ class AfdoProfAnalysisTest(unittest.TestCase):
                 return analysis.StatusEnum.GOOD_STATUS
 
         results = analysis.bisect_profiles_wrapper(
-            DeciderClass(), self.good_items, self.bad_items
+            DeciderClass(),
+            self.good_items,
+            self.bad_items,
+            rng=random.Random(42),
         )
         self.assertEqual(results["individuals"], sorted(["func_a", "func_b"]))
         self.assertEqual(results["ranges"], [])
@@ -120,6 +124,7 @@ class AfdoProfAnalysisTest(unittest.TestCase):
             common_funcs,
             0,
             len(common_funcs),
+            rng=random.Random(42),
         )
 
         self.assertEqual(["func_a", "func_b"], problem_range)

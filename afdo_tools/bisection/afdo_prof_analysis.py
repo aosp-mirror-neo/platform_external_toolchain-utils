@@ -99,7 +99,7 @@ class DeciderState:
         self,
         state_file,
         external_decider,
-        seed,
+        seed: float | None,
         save_problem_decider: bool = True,
     ):
         # over this run of the script
@@ -194,7 +194,9 @@ class DeciderState:
         )
 
 
-def bisect_profiles(decider, good, bad, common_funcs, lo, hi):
+def bisect_profiles(
+    decider, good, bad, common_funcs, lo, hi, rng: random.Random
+):
     """Recursive function which bisects good and bad profiles.
 
     Args:
@@ -206,6 +208,7 @@ def bisect_profiles(decider, good, bad, common_funcs, lo, hi):
           both 'good' and 'bad'
         lo: lower bound of range being bisected on
         hi: upper bound of range being bisected on
+        rng: Random number generator to use
 
     Returns a dictionary with two keys: 'individuals' and 'ranges'.
     'individuals': a list of individual functions found to make the profile BAD
@@ -235,18 +238,20 @@ def bisect_profiles(decider, good, bad, common_funcs, lo, hi):
     mid_hi_verdict = decider.run(mid_hi_prof)
 
     if lo_mid_verdict == StatusEnum.BAD_STATUS:
-        result = bisect_profiles(decider, good, bad, common_funcs, lo, mid)
+        result = bisect_profiles(decider, good, bad, common_funcs, lo, mid, rng)
         results["individuals"].extend(result["individuals"])
         results["ranges"].extend(result["ranges"])
     if mid_hi_verdict == StatusEnum.BAD_STATUS:
-        result = bisect_profiles(decider, good, bad, common_funcs, mid, hi)
+        result = bisect_profiles(decider, good, bad, common_funcs, mid, hi, rng)
         results["individuals"].extend(result["individuals"])
         results["ranges"].extend(result["ranges"])
 
     # neither half is bad -> the issue is caused by several things occuring
     # in conjunction, and this combination crosses 'mid'
     if lo_mid_verdict == mid_hi_verdict == StatusEnum.GOOD_STATUS:
-        problem_range = range_search(decider, good, bad, common_funcs, lo, hi)
+        problem_range = range_search(
+            decider, good, bad, common_funcs, lo, hi, rng
+        )
         if problem_range:
             logging.info(
                 "Found %s as a problematic combination of profiles",
@@ -257,16 +262,15 @@ def bisect_profiles(decider, good, bad, common_funcs, lo, hi):
     return results
 
 
-def bisect_profiles_wrapper(decider, good, bad, perform_check=True):
+def bisect_profiles_wrapper(decider, good, bad, rng: random.Random):
     """Wrapper for recursive profile bisection."""
 
     # Validate good and bad profiles are such, otherwise bisection reports noise
     # Note that while decider is a random mock, these assertions may fail.
-    if perform_check:
-        if decider.run(good, save_run=False) != StatusEnum.GOOD_STATUS:
-            raise ValueError("Supplied good profile is not actually GOOD")
-        if decider.run(bad, save_run=False) != StatusEnum.BAD_STATUS:
-            raise ValueError("Supplied bad profile is not actually BAD")
+    if decider.run(good, save_run=False) != StatusEnum.GOOD_STATUS:
+        raise ValueError("Supplied good profile is not actually GOOD")
+    if decider.run(bad, save_run=False) != StatusEnum.BAD_STATUS:
+        raise ValueError("Supplied bad profile is not actually BAD")
 
     common_funcs = sorted(func for func in good if func in bad)
     if not common_funcs:
@@ -276,16 +280,16 @@ def bisect_profiles_wrapper(decider, good, bad, perform_check=True):
     # but this list has no inherent ordering. By shuffling each time, the
     # chances of finding new, potentially interesting results are increased each
     # time the program is run
-    random.shuffle(common_funcs)
+    rng.shuffle(common_funcs)
     results = bisect_profiles(
-        decider, good, bad, common_funcs, 0, len(common_funcs)
+        decider, good, bad, common_funcs, 0, len(common_funcs), rng
     )
     results["ranges"].sort()
     results["individuals"].sort()
     return results
 
 
-def range_search(decider, good, bad, common_funcs, lo, hi):
+def range_search(decider, good, bad, common_funcs, lo, hi, rng: random.Random):
     """Searches for problematic range crossing mid border.
 
     The main inner algorithm is the following, which looks for the smallest
@@ -298,7 +302,6 @@ def range_search(decider, good, bad, common_funcs, lo, hi):
     looked at uniquely each time to try and get the smallest possible range
     of functions in a reasonable timeframe.
     """
-
     average = lambda x, y: int(round((x + y) // 2.0))
 
     def find_upper_border(good_copy, funcs, lo, hi, last_bad_val=None):
@@ -342,8 +345,8 @@ def range_search(decider, good, bad, common_funcs, lo, hi):
     min_range_funcs: list[str] = []
     for _ in range(_NUM_RUNS_RANGE_SEARCH):
         if min_range_funcs:  # only examine range we've already narrowed to
-            random.shuffle(lo_mid_funcs)
-            random.shuffle(mid_hi_funcs)
+            rng.shuffle(lo_mid_funcs)
+            rng.shuffle(mid_hi_funcs)
         else:  # consider lo-mid and mid-hi separately bc must cross border
             mid = (lo + hi) // 2
             lo_mid_funcs = common_funcs[lo:mid]
@@ -476,14 +479,16 @@ def main_impl(flags):
     )
     if not flags.no_resume:
         decider.load_state()
-    random.seed(decider.seed)
 
     with open(flags.good_prof, encoding="utf-8") as good_f:
         good_items = text_to_json(good_f)
     with open(flags.bad_prof, encoding="utf-8") as bad_f:
         bad_items = text_to_json(bad_f)
 
-    bisect_results = bisect_profiles_wrapper(decider, good_items, bad_items)
+    rng = random.Random(decider.seed)
+    bisect_results = bisect_profiles_wrapper(
+        decider, good_items, bad_items, rng
+    )
     gnb_result = check_good_not_bad(decider, good_items, bad_items)
     bng_result = check_bad_not_good(decider, good_items, bad_items)
 
