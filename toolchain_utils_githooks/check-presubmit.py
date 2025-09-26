@@ -796,7 +796,7 @@ def is_in_chroot() -> bool:
 
 
 def maybe_reexec_inside_chroot(
-    autofix: bool, install_deps_only: bool, infer_files: bool, files: list[str]
+    autofix: bool, infer_files: bool, files: list[str]
 ) -> None:
     if is_in_chroot():
         return
@@ -858,8 +858,6 @@ def maybe_reexec_inside_chroot(
 
     if not autofix:
         args.append("--no_autofix")
-    if install_deps_only:
-        args.append("--install_deps_only")
     if infer_files:
         args.append("--infer_files")
     args.extend(rebase_path(x) for x in files)
@@ -985,14 +983,6 @@ def main(argv: list[str]) -> int:
         help="Prevent auto-entering the chroot if we're not already in it.",
     )
     parser.add_argument(
-        "--install_deps_only",
-        action="store_true",
-        help="""
-        Only install dependencies that would be required if presubmits were
-        being run, and quit. This skips all actual checking.
-        """,
-    )
-    parser.add_argument(
         "--infer_files",
         action="store_true",
         help="""
@@ -1003,40 +993,24 @@ def main(argv: list[str]) -> int:
     parser.add_argument("files", nargs="*")
     opts = parser.parse_args(argv)
 
-    install_deps_only = opts.install_deps_only
     infer_files = opts.infer_files
     files = opts.files
 
     toolchain_utils_root = detect_toolchain_utils_root()
     if opts.enter_chroot:
-        maybe_reexec_inside_chroot(
-            opts.autofix, install_deps_only, infer_files, files
+        maybe_reexec_inside_chroot(opts.autofix, infer_files, files)
+
+    if bool(files) == infer_files:
+        parser.error(
+            "Either `--infer_files` or a list of files must be passed, "
+            "not both."
         )
 
-    if not install_deps_only:
-        if bool(files) == infer_files:
-            parser.error(
-                "Either `--infer_files` or a list of files must be passed, "
-                "not both."
-            )
-        if infer_files:
-            files = infer_files_from_env_or_die(Path(toolchain_utils_root))
-            print(f"Inferred files to check: {files}")
+    if infer_files:
+        files = infer_files_from_env_or_die(Path(toolchain_utils_root))
+        print(f"Inferred files to check: {files}")
 
     mypy = get_mypy()
-    # If you ask for --no_enter_chroot, you're on your own for installing these
-    # things.
-    if is_in_chroot():
-        if install_deps_only:
-            print(
-                "Dependency installation complete & --install_deps_only "
-                "passed. Quit."
-            )
-            return 0
-    elif install_deps_only:
-        parser.error(
-            "--install_deps_only is meaningless if the chroot isn't entered"
-        )
 
     # Most checks shouldn't check symlinks - changes to the underlying file
     # should already be checked appropriately.
