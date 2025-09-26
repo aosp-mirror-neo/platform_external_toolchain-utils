@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,7 +8,6 @@ import argparse
 import dataclasses
 import datetime
 import functools
-import json
 import multiprocessing
 import multiprocessing.pool
 import os
@@ -57,11 +55,6 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # Environment variables to forward to the `cros_sdk` invocation, if we're
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
-
-# A list of types stubs to install alongside mypy. These are only autoinstalled
-# inside of the chroot. If mypy fails outside of the chroot due to lack of
-# these, it'll print a command to allow the user to install the missing stubs.
-MYPY_TYPES_PACKAGES = ("types-PyYAML",)
 
 # Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
 LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
@@ -119,82 +112,15 @@ class MyPyInvocation:
     command: list[str]
 
 
-def list_installed_pip_packages(pip: list[str]) -> list[str]:
-    list_output = subprocess.run(
-        pip + ["list", "--format=json"],
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    ).stdout
-    # This listing is just a list of {"name": x, "version": y} dicts.
-    return [x["name"] for x in json.loads(list_output)]
-
-
-def maybe_get_or_install_mypy() -> MyPyInvocation | None:
-    """Finds the mypy executable and returns a command to invoke it.
-
-    If mypy cannot be found and we're inside the chroot, this
-    function installs mypy and returns a command to invoke it.
-
-    If mypy cannot be found and we're outside the chroot, this
-    returns None.
-
-    Returns:
-        An optional tuple containing:
-            - the command to invoke mypy, and
-            - any environment variables to set when invoking mypy
-    """
-    if has_executable_on_path("mypy"):
-        return MyPyInvocation(command=["mypy"])
-
-    pip = get_pip()
-    if not pip:
-        assert not is_in_chroot()
-        return None
-
-    installed_packages = set(list_installed_pip_packages(pip))
-    pip_mypy_invocation = MyPyInvocation(
+def get_mypy() -> MyPyInvocation:
+    """Returns a MyPyInvocation that can be used to run mypy."""
+    return MyPyInvocation(
         command=[
-            "python3",
+            sys.executable,
             "-m",
             "mypy",
         ],
     )
-
-    # If we're not in the chroot, don't try to install packages into the user's
-    # pip environment. If they're missing mypy, they'll get warned about that.
-    # If they're missing relevant typing packages, mypy will error out & print
-    # commands that allow the user to install those on their own.
-    if not is_in_chroot():
-        if "mypy" in installed_packages:
-            return pip_mypy_invocation
-        return None
-
-    need_packages = ("mypy",) + MYPY_TYPES_PACKAGES
-    missing_packages = [x for x in need_packages if x not in installed_packages]
-    if missing_packages:
-        subprocess.check_call(pip + ["install", "--user"] + missing_packages)
-    return pip_mypy_invocation
-
-
-def get_pip() -> list[str] | None:
-    """Finds pip and returns a command to invoke it.
-
-    If pip cannot be found, this function attempts to install
-    pip and returns a command to invoke it.
-
-    If pip cannot be found, this function returns None.
-    """
-    have_pip = can_import_py_module("pip")
-    if not have_pip:
-        print("Autoinstalling `pip`...")
-        subprocess.check_call(["python", "-m", "ensurepip"])
-        have_pip = can_import_py_module("pip")
-
-    if have_pip:
-        return ["python", "-m", "pip"]
-    return None
 
 
 def get_check_result_or_catch(
@@ -499,20 +425,12 @@ def check_py_format(
 
 
 def check_py_types(
-    mypy: MyPyInvocation | None,
+    mypy: MyPyInvocation,
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
     files: Iterable[str],
 ) -> CheckResults:
     """Runs static type checking for Python files."""
-    if not mypy:
-        return CheckResult(
-            ok=False,
-            output="mypy not found. Please either enter a chroot "
-            "or install mypy",
-            autofix_commands=[],
-        )
-
     to_check = [x for x in files if x.endswith(".py")]
     if not to_check:
         return CheckResult(
@@ -929,7 +847,13 @@ def maybe_reexec_inside_chroot(
 
     args += [
         "--",
-        rebase_path(__file__),
+        os.path.join(
+            chroot_toolchain_utils,
+            "py",
+            "bin",
+            "toolchain_utils_githooks",
+            "check-presubmit.py",
+        ),
     ]
 
     if not autofix:
@@ -1099,7 +1023,7 @@ def main(argv: list[str]) -> int:
             files = infer_files_from_env_or_die(Path(toolchain_utils_root))
             print(f"Inferred files to check: {files}")
 
-    mypy = maybe_get_or_install_mypy()
+    mypy = get_mypy()
     # If you ask for --no_enter_chroot, you're on your own for installing these
     # things.
     if is_in_chroot():
@@ -1114,7 +1038,10 @@ def main(argv: list[str]) -> int:
             "--install_deps_only is meaningless if the chroot isn't entered"
         )
 
-    files = [os.path.abspath(f) for f in files]
+    # Most checks shouldn't check symlinks - changes to the underlying file
+    # should already be checked appropriately.
+    files_including_symlinks = [os.path.abspath(f) for f in files]
+    files = [x for x in files_including_symlinks if not os.path.islink(x)]
 
     CheckFn = Callable[
         [str, multiprocessing.pool.ThreadPool, Iterable[str]], CheckResults
@@ -1146,7 +1073,7 @@ def main(argv: list[str]) -> int:
         (
             "check_no_compiler_wrapper_changes",
             check_no_compiler_wrapper_changes,
-            files,
+            files_including_symlinks,
         ),
     ]
 

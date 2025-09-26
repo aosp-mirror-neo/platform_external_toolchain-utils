@@ -72,7 +72,7 @@ To execute a Python-based tool, use the symlinks in the `py/bin` directory. For 
     ./run_python_tests.sh llvm_tools/atomic_write_file_test.py
     ```
 
-3.   **When you are done with a series of changes**, you should run `./toolchain_utils_githooks/check-presubmit.py` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests. If your change is _committed_ prior to running `check-presubmit.py`, it will automatically run all formatting commands for you. This is the recommended flow.
+3.   **When you are done with a series of changes**, you should run `py/bin/toolchain_utils_githooks/check-presubmit.py` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests. If your change is _committed_ prior to running `check-presubmit.py`, it will automatically run all formatting commands for you. This is the recommended flow.
     ```bash
-    ./toolchain_utils_githooks/check-presubmit.py path/to/changed/file1.py path/to/changed/file2.sh [...]
+    py/bin/toolchain_utils_githooks/check-presubmit.py path/to/changed/file1.py path/to/changed/file2.sh [...]
     ```
