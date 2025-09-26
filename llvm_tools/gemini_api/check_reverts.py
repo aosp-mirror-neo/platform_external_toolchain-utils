@@ -36,11 +36,12 @@ import sys
 import typing
 from typing import Any, IO
 
-# TODO: These can't be resolved by our presubmits until we set up a venv
-# properly.
+# `pylint`, run by `cros lint`, is run in its own Python environment, which does
+# not contain `google.genai`. `mypy` can _see_ the module, but complains that it
+# doesn't have correct typing markers.
 # pylint:disable=import-error
-from google import genai  # type: ignore
-from google.genai import types  # type: ignore
+from google import genai  # type: ignore[import-untyped]
+from google.genai import types  # type: ignore[import-untyped]
 
 
 T = typing.TypeVar("T")
@@ -491,7 +492,3 @@ def main(argv: list[str]) -> None:
         input_shas = (x for x in input_lines if x)
         for sha, result in pool.imap_unordered(run_one_sha, input_shas):
             write_one_result(output_stream, sha, result)
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

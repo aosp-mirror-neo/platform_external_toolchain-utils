@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 
-from . import check_reverts
+from llvm_tools.gemini_api import check_reverts
 
 
 def run_gemini_on_goldens(
@@ -106,8 +106,10 @@ def run_gemini_on_goldens(
                     continue
                 single_result = json.loads(line)
                 sha = single_result["sha"]
-                gemini_result = check_reverts.GeminiRevertInference.from_json(
-                    single_result["result"]
+                gemini_result = (
+                    check_reverts.GeminiRevertInference.from_json_checked(
+                        single_result["result"]
+                    )
                 )
                 results[sha] = gemini_result
     maybe_shas_tested = None if tested_all_shas else shas_to_test
@@ -207,7 +209,8 @@ def main(argv: list[str]) -> None:
         with golden_json.open(encoding="utf-8") as f:
             compare_against = {
                 sha: [
-                    check_reverts.GeminiRevertInference.from_json(x) for x in v
+                    check_reverts.GeminiRevertInference.from_json_checked(x)
+                    for x in v
                 ]
                 for sha, v in json.load(f).items()
             }

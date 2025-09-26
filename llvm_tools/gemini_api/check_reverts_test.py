@@ -7,11 +7,7 @@
 import re
 import unittest
 
-# NOTE(b/446751737): `mypy` doesn't resolve this properly, and `from . import`
-# can't be used due to how this is packaged. Once this gets integrated properly
-# into the toolchain-utils codebase, this can be fixed.
-# pylint:disable=import-error
-import check_reverts  # type: ignore
+from llvm_tools.gemini_api import check_reverts
 
 
 class GetDictElemWithTypeTest(unittest.TestCase):
@@ -87,7 +83,3 @@ class GetDictElemWithTypeTest(unittest.TestCase):
             "Element True of list is <class 'bool'>, not <class 'int'>",
         ):
             check_reverts.get_dict_elem_with_type(d, "a", list[int])
-
-
-if __name__ == "__main__":
-    unittest.main()
