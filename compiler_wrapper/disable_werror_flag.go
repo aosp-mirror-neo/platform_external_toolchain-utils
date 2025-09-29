@@ -35,12 +35,13 @@ type forceDisableWerrorConfig struct {
 	enabled bool
 }
 
-func processForceDisableWerrorFlag(env env, cfg *config, builder *commandBuilder) forceDisableWerrorConfig {
-	if cfg.isAndroidWrapper {
+func processForceDisableWerrorFlag(env env, cfg *config, builder *commandBuilder) (forceDisableWerrorConfig, error) {
+	// TODO: It's unclear that this branch is still useful. If not, it should be removed.
+	if cfg.isAndroidWrapper && cfg.useLlvmNext {
 		return forceDisableWerrorConfig{
 			reportToStdout: true,
-			enabled:        cfg.useLlvmNext,
-		}
+			enabled:        true,
+		}, nil
 	}
 
 	// CrOS supports two modes for enabling this flag:
@@ -55,38 +56,66 @@ func processForceDisableWerrorFlag(env env, cfg *config, builder *commandBuilder
 	//
 	// Two modes are supported because some ebuilds filter the env, while others will filter
 	// CFLAGS. Vanishingly few (none?) filter both, though.
-	const cflagPrefix = "-D_CROSTC_FORCE_DISABLE_WERROR="
+	cflagPrefix := "-D_CROSTC_FORCE_DISABLE_WERROR="
 
-	argDir := ""
+	if cfg.isAndroidWrapper {
+		// Android supports one mode for this flag: -D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout. At
+		// present, writing to any other file or directory is almost certainly a bug, since most Android
+		// builds happen on RBE, so auxiliary files won't get sent back to the user. In the future, the
+		// same flow as CrOS might be possible.
+		cflagPrefix = "-D_ANDROID_FORCE_DISABLE_WERROR="
+	}
+
+	forceDisableArg := ""
 	sawArg := false
 	builder.transformArgs(func(arg builderArg) string {
 		value := arg.value
 		if !strings.HasPrefix(value, cflagPrefix) {
 			return value
 		}
-		argDir = value[len(cflagPrefix):]
+		forceDisableArg = value[len(cflagPrefix):]
 		sawArg = true
 		return ""
 	})
 
 	// CrOS only wants this functionality to apply to clang, though flags should also be removed
 	// for GCC.
-	if builder.target.compilerType != clangType {
-		return forceDisableWerrorConfig{enabled: false}
+	// Android is assumed to only use Clang.
+	if !cfg.isAndroidWrapper && builder.target.compilerType != clangType {
+		return forceDisableWerrorConfig{enabled: false}, nil
 	}
 
 	if sawArg {
+		if cfg.isAndroidWrapper {
+			// As mentioned above, only /dev/stdout is supported here, given the room for foot-guns with
+			// RBE. The hope is that RBE can be modified to treat this as a true 'reportDir' in the future.
+			if forceDisableArg != "/dev/stdout" {
+				err := fmt.Errorf("invalid value for FORCE_DISABLE_WERROR: %q; only /dev/stdout is valid", forceDisableArg)
+				return forceDisableWerrorConfig{}, err
+			}
+			return forceDisableWerrorConfig{
+				reportToStdout: true,
+				enabled:        true,
+			}, nil
+		}
+
 		return forceDisableWerrorConfig{
-			reportDir: argDir,
+			reportDir: forceDisableArg,
 			// Skip this when in src_configure: some build systems ignore CFLAGS
 			// modifications after configure, so this flag must be specified before
 			// src_configure, but we only want the flag to apply to actual builds.
 			enabled: !isInConfigureStage(env),
-		}
+		}, nil
 	}
 
-	envValue, _ := env.getenv("FORCE_DISABLE_WERROR")
-	return forceDisableWerrorConfig{enabled: envValue != ""}
+	// Env enablement is only supported on CrOS; Android's build system filters env at multiple
+	// points, so it's not an ergonomic way to interface with this feature.
+	if !cfg.isAndroidWrapper {
+		envValue, _ := env.getenv("FORCE_DISABLE_WERROR")
+		return forceDisableWerrorConfig{enabled: envValue != ""}, nil
+	}
+
+	return forceDisableWerrorConfig{enabled: false}, nil
 }
 
 func disableWerrorFlags(originalArgs, extraFlags []string) []string {

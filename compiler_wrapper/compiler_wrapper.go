@@ -136,9 +136,12 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	}
 	processPrintConfigFlag(mainBuilder)
 	processPrintCmdlineFlag(mainBuilder)
+	disableWerrorConfig, err := processForceDisableWerrorFlag(env, cfg, mainBuilder)
+	if err != nil {
+		return 0, err
+	}
 	env = mainBuilder.env
 	var compilerCmd *command
-	disableWerrorConfig := processForceDisableWerrorFlag(env, cfg, mainBuilder)
 
 	if err := processPerPackageFlags(cfg, mainBuilder); err != nil {
 		return 0, err
