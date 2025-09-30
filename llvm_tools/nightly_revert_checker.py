@@ -783,7 +783,8 @@ def _load_up_to_date_gemini_state(
     )
     main_ref = f"{llvm_config.remote}/{upstream_main_branch}"
     llvm_dir = Path(llvm_config.dir)
-    gemini_revert_checker.ensure_state_populated_for(
+
+    prepopulated_all = gemini_revert_checker.ensure_state_populated_for(
         gemini_endpoint=gemini_revert_checker.GeminiEndpoint(
             gemini_api_key=gemini_api_key
         ),
@@ -792,14 +793,25 @@ def _load_up_to_date_gemini_state(
         main_ref=main_ref,
         prepopulate_parent_shas=interesting_shas,
     )
-    gemini_revert_checker.discard_old_shas(
-        gemini_state,
-        interesting_shas,
-        now=datetime.datetime.now(),
-        llvm_dir=llvm_dir,
-        main_ref=main_ref,
-    )
+
+    # Only remove old SHAs if Gemini is properly functioning. If something went
+    # wrong, there's no harm in keeping older data around until that's fixed.
+    if prepopulated_all:
+        gemini_revert_checker.discard_old_shas(
+            gemini_state,
+            interesting_shas,
+            now=datetime.datetime.now(),
+            llvm_dir=llvm_dir,
+            main_ref=main_ref,
+        )
+
+    # Always write the updated state back. It's guaranteed to be well-formed,
+    # and we may incorrectly discard many inference results otherwise:
+    # b/436267619#comment23.
     gemini_revert_checker.write_gemini_state(gemini_state_file, gemini_state)
+
+    if not prepopulated_all:
+        raise ValueError("Gemini failed to fully prepopulate all state")
     return gemini_state
 
 

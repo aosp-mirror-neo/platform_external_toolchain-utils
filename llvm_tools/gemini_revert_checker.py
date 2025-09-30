@@ -289,11 +289,28 @@ def _normalize_gemini_result(
     )
 
 
+class PartialGeminiExecutionError(subprocess.CalledProcessError):
+    """Raised when check_reverts fails, but did produce some results."""
+
+    def __init__(
+        self, partial_results: dict[str, GeminiRevertInference], *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.partial_results = partial_results
+
+
 def _find_commits_reverted_by(
     gemini_endpoint: GeminiEndpoint,
     llvm_dir: Path,
     commit_shas: list[str],
 ) -> dict[str, GeminiRevertInference]:
+    """Find commits reverted by any of `commit_shas` using Gemini.
+
+    Raises:
+        PartialGeminiExecutionError if Gemini failed to run successfully. This
+        exception carries the partial results that could be parsed from Gemini's
+        execution, if any.
+    """
     if not commit_shas:
         return {}
 
@@ -346,20 +363,46 @@ def _find_commits_reverted_by(
             "Running gemini command: %s",
             shlex.join(str(x) for x in check_reverts_command),
         )
-        subprocess.run(
+
+        check_reverts_result = subprocess.run(
             check_reverts_command,
-            check=True,
+            check=False,
             input="\n".join(commit_shas),
             encoding="utf-8",
         )
+        check_reverts_ok = check_reverts_result.returncode == 0
 
+        # At times, Gemini fails consistently to generate messages, leading to
+        # the check_reverts logic exiting uncleanly. That doesn't _necessarily_
+        # mean that all of the results in the file are broken; salvage what can
+        # easily be salvaged.
         results = {}
         with gemini_revert_output.open(encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
                     continue
-                single_result = json.loads(line)
+                # Even in the case of the check_reverts script failing, it's
+                # reasonable to expect that all JSON _that got written_ is
+                # well-formed. Moreover, for each line, either the line is a
+                # valid result, or it got truncated and we'll get a
+                # `JSONDecodeError` from parsing it.
+                try:
+                    single_result = json.loads(line)
+                except json.JSONDecodeError as e:
+                    if check_reverts_ok:
+                        raise
+
+                    logging.warning(
+                        "Failed to parse line of Gemini output, but "
+                        "check_reverts failed. Forgiving: %s",
+                        e,
+                    )
+                    # `break` instead of continuing here, since a truncated line
+                    # indicates that the file is empty. If it's somehow not
+                    # empty, it's probably best to skip it anyway.
+                    break
+
                 sha = single_result["sha"]
                 gemini_result = GeminiRevertInference.from_json(
                     single_result["result"]
@@ -367,6 +410,13 @@ def _find_commits_reverted_by(
                 results[sha] = _normalize_gemini_result(
                     gemini_result, sha, llvm_dir
                 )
+
+    if not check_reverts_ok:
+        raise PartialGeminiExecutionError(
+            results,
+            returncode=check_reverts_result.returncode,
+            cmd=check_reverts_command,
+        )
 
     return results
 
@@ -394,7 +444,9 @@ def ensure_state_populated_for(
           state.
 
     Returns:
-        Nothing; mutates the GeminiState in place.
+        True if all state population is complete, False if populating the state
+        fully failed. Note that False implies that the state **may** be
+        partially populated.
     """
     need_entries_for_shas = [
         x
@@ -412,8 +464,18 @@ def ensure_state_populated_for(
         "Prepopulating Gemini entries for %d SHAs",
         len(need_entries_for_shas),
     )
-    gemini_state.revert_status.update(
-        _find_commits_reverted_by(
+    try:
+        results = _find_commits_reverted_by(
             gemini_endpoint, llvm_dir, commit_shas=need_entries_for_shas
         )
-    )
+        fetched_all = True
+    except PartialGeminiExecutionError as e:
+        logging.error(
+            "Gemini could only be partially prepopulated; exit code: %d",
+            e.returncode,
+        )
+        results = e.partial_results
+        fetched_all = False
+
+    gemini_state.revert_status.update(results)
+    return fetched_all

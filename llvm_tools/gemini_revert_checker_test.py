@@ -5,6 +5,8 @@
 """Tests for gemini_revert_checker."""
 
 import datetime
+import json
+import subprocess
 from unittest import mock
 
 from llvm_tools import gemini_revert_checker
@@ -168,3 +170,103 @@ class DiscardOldShasTest(test_helpers.TempDirTestCase):
         list_shas_mock.assert_called_once_with(
             self.llvm_dir, "main", shas=["c"]
         )
+
+
+class EnsureStatePopulatedForTest(test_helpers.TempDirTestCase):
+    """Tests for ensure_state_populated_for."""
+
+    def setUp(self):
+        self.llvm_dir = self.make_tempdir()
+        self.gemini_endpoint = gemini_revert_checker.GeminiEndpoint(
+            gemini_api_key="test-key"
+        )
+
+    @mock.patch.object(
+        gemini_revert_checker,
+        "_list_shas_between_all_of",
+        return_value=["a", "b"],
+    )
+    @mock.patch.object(gemini_revert_checker, "_find_commits_reverted_by")
+    def test_successful_population(self, find_commits_mock, list_shas_mock):
+        state = gemini_revert_checker.GeminiState()
+        find_commits_mock.return_value = {"a": _ARBITRARY_INFERENCE_RESULT}
+        result = gemini_revert_checker.ensure_state_populated_for(
+            self.gemini_endpoint,
+            state,
+            self.llvm_dir,
+            "main",
+            prepopulate_parent_shas=["c"],
+        )
+        self.assertTrue(result)
+        self.assertEqual(
+            state,
+            gemini_revert_checker.GeminiState(
+                revert_status={"a": _ARBITRARY_INFERENCE_RESULT}
+            ),
+        )
+        list_shas_mock.assert_called_once_with(
+            self.llvm_dir, "main", shas=["c"]
+        )
+        find_commits_mock.assert_called_once_with(
+            self.gemini_endpoint, self.llvm_dir, commit_shas=["a", "b"]
+        )
+
+    @mock.patch.object(
+        gemini_revert_checker,
+        "_normalize_gemini_result",
+        side_effect=lambda x, _, __: x,
+    )
+    @mock.patch.object(
+        gemini_revert_checker,
+        "_list_shas_between_all_of",
+        return_value=["a", "b"],
+    )
+    @mock.patch.object(subprocess, "run")
+    def test_partial_population(
+        self, subprocess_run_mock, list_shas_mock, normalize_gemini_result_mock
+    ):
+        """Verifies that valid JSON entries are stored in state on failure."""
+        state = gemini_revert_checker.GeminiState()
+
+        def subprocess_run_impl(command, **_):
+            # The first call is to establish_venv.sh, which we can ignore.
+            if "establish_venv.sh" in str(command[0]):
+                return subprocess.CompletedProcess(
+                    command, 0, stdout="/tmp/venv"
+                )
+
+            # The second call is to check_reverts.py. Write our partial result
+            # to the output file and simulate a failure.
+            output_file = command[command.index("-o") + 1]
+            with open(output_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "sha": "a",
+                        "result": _ARBITRARY_INFERENCE_RESULT.to_json(),
+                    },
+                    f,
+                )
+                # Write a partial JSON object.
+                f.write("\n{")
+            return subprocess.CompletedProcess(command, 1)
+
+        subprocess_run_mock.side_effect = subprocess_run_impl
+
+        result = gemini_revert_checker.ensure_state_populated_for(
+            self.gemini_endpoint,
+            state,
+            self.llvm_dir,
+            "main",
+            prepopulate_parent_shas=["c"],
+        )
+        self.assertFalse(result)
+        self.assertEqual(
+            state,
+            gemini_revert_checker.GeminiState(
+                revert_status={"a": _ARBITRARY_INFERENCE_RESULT}
+            ),
+        )
+        list_shas_mock.assert_called_once_with(
+            self.llvm_dir, "main", shas=["c"]
+        )
+        normalize_gemini_result_mock.assert_called()
