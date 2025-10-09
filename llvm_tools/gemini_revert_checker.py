@@ -85,16 +85,54 @@ _EMPTY_INFERENCE = GeminiRevertInference()
 class GeminiEndpoint:
     """Used to interact with Gemini."""
 
-    def __init__(self, gemini_api_key: str):
+    def __init__(
+        self,
+        *,
+        gemini_api_key: str | None = None,
+        gcp_project: str | None = None,
+        gcp_location: str | None = None,
+    ):
         """Creates a new GeminiEndpoint
+
+        This endpoint may _either_ use Gemini's API or VertexAI's. If Gemini's
+        API is being used, only gemini_api_key may be non-None. Otherwise, both
+        gcp_project and gcp_location must be non-None.
 
         Args:
             gemini_api_key: The API key to pass to the endpoint.
-        """
-        self._gemini_api_key = gemini_api_key
+            gcp_project: VertexAI project to use.
+            gcp_location: Location of VertexAI endpoints to use.
 
-    def get_api_key(self) -> str:
+        Raises:
+            ValueError if args are inconsistent. That is, if:
+            - `gemini_api_key` is specified alongside either `gcp_project` or
+              `gcp_location`, or
+            - `gcp_project` and `gcp_location` are not _both_ specified.
+        """
+        if gemini_api_key:
+            if gcp_project or gcp_location:
+                raise ValueError(
+                    "gemini_api_key is mutually exclusive with gcp_project "
+                    "and gcp_location"
+                )
+
+            vertexai_auth = None
+        else:
+            if not (gcp_project and gcp_location):
+                raise ValueError(
+                    "If gemini_api_key isn't specified, both gcp_project "
+                    "and gcp_location must be specified"
+                )
+            vertexai_auth = (gcp_project, gcp_location)
+
+        self._gemini_api_key = gemini_api_key
+        self._vertexai_auth = vertexai_auth
+
+    def get_gemini_api_key(self) -> str | None:
         return self._gemini_api_key
+
+    def get_vertexai_auth(self) -> tuple[str, str] | None:
+        return self._vertexai_auth
 
 
 @dataclasses.dataclass(eq=True)
@@ -341,9 +379,19 @@ def _find_commits_reverted_by(
     check_reverts_command: list[Path | str] = [
         Path(venv_location) / "bin" / "python3",
         gemini_api_dir / "check_reverts.py",
-        f"--gemini-api-key={gemini_endpoint.get_api_key()}",
         f"--llvm-dir={llvm_dir}",
     ]
+
+    if gemini_api_key := gemini_endpoint.get_gemini_api_key():
+        check_reverts_command.append(f"--gemini-api-key={gemini_api_key}")
+    else:
+        vertex_auth = gemini_endpoint.get_vertexai_auth()
+        assert vertex_auth, "Either gemini's API or VertexAI's should be used"
+        gcp_project, gcp_location = vertex_auth
+        check_reverts_command += (
+            f"--gcp-project={gcp_project}",
+            f"--gcp-location={gcp_location}",
+        )
 
     if logging.getLogger().getEffectiveLevel() <= logging.DEBUG:
         check_reverts_command.append("--debug")

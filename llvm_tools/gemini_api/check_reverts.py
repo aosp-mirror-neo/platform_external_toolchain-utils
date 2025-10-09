@@ -346,11 +346,32 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument(
+
+    auth_group = parser.add_mutually_exclusive_group()
+    auth_group.add_argument(
         "--gemini-api-key",
-        required=True,
-        help="Gemini API key to use",
+        help="""
+        Gemini API key to use. Either this must be specified, or both
+        --gcp-project and --gcp-location must.
+        """,
     )
+
+    vertex_group = auth_group.add_argument_group()
+    vertex_group.add_argument(
+        "--gcp-project",
+        help="""
+        GCP project to use for Vertex AI. If specified, --gcp-location must also
+        be specified.
+        """,
+    )
+    vertex_group.add_argument(
+        "--gcp-location",
+        help="""
+        GCP location to use for Vertex AI. If specified, --gcp-project must also
+        be specified.
+        """,
+    )
+
     parser.add_argument(
         "-n",
         "--jobs",
@@ -382,7 +403,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging"
     )
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+    if bool(opts.gcp_project) != bool(opts.gcp_location):
+        parser.error("--gcp-project requires --gcp-location")
+    if not opts.gcp_location and not opts.gemini_api_key:
+        parser.error(
+            "You must specify either --gemini-api-key or --gcp-project and "
+            "--gcp-location"
+        )
+    return opts
 
 
 def main(argv: list[str]) -> None:
@@ -396,10 +425,20 @@ def main(argv: list[str]) -> None:
 
     jobs: int = opts.jobs
     llvm_dir: Path = opts.llvm_dir
-    gemini_api_key: str = opts.gemini_api_key
     system_prompt = (my_dir / "check_reverts_system_prompt.md").read_text(
         encoding="utf-8"
     )
+
+    if gemini_api_key := opts.gemini_api_key:
+        genai_auth_args: dict[str, Any] = {
+            "api_key": gemini_api_key,
+        }
+    else:
+        genai_auth_args = {
+            "vertexai": True,
+            "project": opts.gcp_project,
+            "location": opts.gcp_location,
+        }
 
     # While the genai API _does_ seem to support `async` pretty well if that
     # mode is enabled, it does _not_ document thread safety guarantees on types.
@@ -417,7 +456,6 @@ def main(argv: list[str]) -> None:
             client = client_cache.get_nowait()
         except queue.Empty:
             client = genai.Client(
-                api_key=gemini_api_key,
                 http_options=types.HttpOptions(
                     retry_options=types.HttpRetryOptions(
                         attempts=5,
@@ -425,6 +463,7 @@ def main(argv: list[str]) -> None:
                         max_delay=60,
                     )
                 ),
+                **genai_auth_args,
             )
 
         sha_result = process_one_sha(

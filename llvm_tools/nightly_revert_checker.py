@@ -772,7 +772,7 @@ def do_email(
 
 def _load_up_to_date_gemini_state(
     gemini_state_file: Path,
-    gemini_api_key: str,
+    gemini_endpoint: gemini_revert_checker.GeminiEndpoint,
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
     interesting_shas: list[str],
@@ -785,9 +785,7 @@ def _load_up_to_date_gemini_state(
     llvm_dir = Path(llvm_config.dir)
 
     prepopulated_all = gemini_revert_checker.ensure_state_populated_for(
-        gemini_endpoint=gemini_revert_checker.GeminiEndpoint(
-            gemini_api_key=gemini_api_key
-        ),
+        gemini_endpoint=gemini_endpoint,
         gemini_state=gemini_state,
         llvm_dir=llvm_dir,
         main_ref=main_ref,
@@ -829,18 +827,37 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--state_file", required=True, help="File to store persistent state in."
     )
-    parser.add_argument(
+
+    auth_group = parser.add_mutually_exclusive_group()
+    auth_group.add_argument(
         "--gemini_api_key",
         help="""
-        Gemini API key, used to check reverts with. If not provided, Gemini
-        revert checking will be skipped.
+        Gemini API key, used to check reverts with. In order to use Gemini,
+        either this or --gcp-project and --gcp-location must be passed.
         """,
     )
+
+    vertex_group = auth_group.add_argument_group()
+    vertex_group.add_argument(
+        "--gcp_project",
+        help="""
+        GCP project to use for Vertex AI. If passed, you must also pass
+        --gcp-location.
+        """,
+    )
+    vertex_group.add_argument(
+        "--gcp_location",
+        help="""
+        GCP location to use for Vertex AI. If passed, you must also pass
+        --gcp-project.
+        """,
+    )
+
     parser.add_argument(
         "--gemini_state_file",
         type=Path,
         help="""
-        Gemini state file location. Must be provided if --gemini_api_key is
+        Gemini state file location. Must be provided if --gemini-api-key is
         provided. If the state file does not exist, it is created with defaults.
         """,
     )
@@ -886,8 +903,10 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
 
     opts = parser.parse_args(argv)
-    if opts.gemini_api_key and not opts.gemini_state_file:
-        parser.error("--gemini_api_key requires --gemini_state_file")
+    if bool(opts.gcp_project) != bool(opts.gcp_location):
+        parser.error("--gcp-project must be specified with --gcp-location")
+    if (opts.gemini_api_key or opts.gcp_project) and not opts.gemini_state_file:
+        parser.error("Gemini usage requires --gemini-state-file.")
     return opts
 
 
@@ -904,8 +923,6 @@ def main(argv: list[str]) -> int:
     llvm_dir = opts.llvm_dir
     repository = opts.repository
     state_file = opts.state_file
-    gemini_api_key: str | None = opts.gemini_api_key
-    gemini_state_file: Path | None = opts.gemini_state_file
     reviewers = opts.reviewers if opts.reviewers else []
     cc = opts.cc if opts.cc else []
 
@@ -942,12 +959,17 @@ def main(argv: list[str]) -> int:
     state = _read_state(state_file)
     logging.info("Loaded state\n%s", pprint.pformat(state))
 
-    if gemini_api_key:
+    if opts.gemini_api_key or opts.gcp_project:
         # There is logic in flag parsing to guarantee this.
-        assert gemini_state_file, "need gemini_state_file if key is passed"
+        assert opts.gemini_state_file, "need gemini_state_file if key is passed"
+        gemini_endpoint = gemini_revert_checker.GeminiEndpoint(
+            gemini_api_key=opts.gemini_api_key,
+            gcp_project=opts.gcp_project,
+            gcp_location=opts.gcp_location,
+        )
         gemini_state = _load_up_to_date_gemini_state(
-            gemini_state_file=gemini_state_file,
-            gemini_api_key=gemini_api_key,
+            gemini_state_file=opts.gemini_state_file,
+            gemini_endpoint=gemini_endpoint,
             llvm_config=llvm_config,
             upstream_main_branch=upstream_main_branch,
             interesting_shas=[sha for _, sha in interesting_shas],
