@@ -9,6 +9,7 @@ fires off an email. All LLVM SHAs to monitor are autodetected.
 """
 
 import argparse
+import collections
 import dataclasses
 import datetime
 import json
@@ -101,6 +102,14 @@ class State:
         return result
 
 
+@dataclasses.dataclass(frozen=True)
+class MultiRevert:
+    """Describes the SHAs that a SHA reverts."""
+
+    revert_sha: str
+    reverted_shas: list[str]
+
+
 def _find_interesting_android_shas(
     android_llvm_toolchain_dir: str,
 ) -> list[tuple[str, str]]:
@@ -149,7 +158,7 @@ def _generate_revert_email(
     sha: str,
     prettify_sha: Callable[[str], tiny_render.Piece],
     get_sha_description: Callable[[str], tiny_render.Piece],
-    new_reverts: list[revert_checker.Revert],
+    new_reverts: list[MultiRevert],
 ) -> _Email:
     email_pieces = [
         "It looks like there may be %s across %s ("
@@ -165,14 +174,20 @@ def _generate_revert_email(
     ]
 
     revert_listing = []
-    for revert in sorted(new_reverts, key=lambda r: r.sha):
+    for revert in sorted(new_reverts, key=lambda r: r.revert_sha):
+        prettified_shas: list[tiny_render.Piece] = []
+        for s in revert.reverted_shas:
+            if prettified_shas:
+                prettified_shas.append(", ")
+            prettified_shas.append(prettify_sha(s))
+
         revert_listing.append(
             [
-                prettify_sha(revert.sha),
+                prettify_sha(revert.revert_sha),
                 " (appears to revert ",
-                prettify_sha(revert.reverted_sha),
+                prettified_shas,
                 "): ",
-                get_sha_description(revert.sha),
+                get_sha_description(revert.revert_sha),
             ]
         )
 
@@ -250,7 +265,7 @@ class NewRevertInfo:
 
     friendly_name: str
     sha: str
-    new_reverts: list[revert_checker.Revert]
+    new_reverts: list[MultiRevert]
 
 
 def infer_reverts_with_gemini(
@@ -314,6 +329,10 @@ def locate_new_reverts_across_shas(
     now = int(time.time())
     for friendly_name, sha in interesting_shas:
         logging.info("Finding reverts across %s (%s)", friendly_name, sha)
+        # NOTE: `all_reverts` may contain multiple of the same revert SHA.
+        # e.g., if commit abc123 reverts def456 and aaa999, this list will
+        # contains two entries for it: `('abc123', 'def456')`, and `('abc123',
+        # 'aaa999').
         all_reverts = revert_checker.find_reverts(
             str(llvm_config.dir),
             sha,
@@ -326,15 +345,27 @@ def locate_new_reverts_across_shas(
             pprint.pformat(all_reverts),
         )
 
-        new_state.seen_reverts[sha] = [r.sha for r in all_reverts]
+        all_reverts_grouped: dict[str, list[str]] = collections.defaultdict(
+            list
+        )
+        for reverting_sha, reverted_sha in all_reverts:
+            all_reverts_grouped[reverting_sha].append(reverted_sha)
 
+        new_state.seen_reverts[sha] = sorted(all_reverts_grouped.keys())
         if sha not in state.seen_reverts:
             logging.info("SHA %s is new to me", sha)
             existing_reverts = set()
         else:
             existing_reverts = set(state.seen_reverts[sha])
 
-        new_reverts = [r for r in all_reverts if r.sha not in existing_reverts]
+        # Do not sort this, since we ideally want to report SHAs in the order
+        # reported by `revert_checker` (that is, oldest first). Python
+        # guarantees dicts iterate in insertion order.
+        new_reverts = [
+            MultiRevert(k, v)
+            for k, v in all_reverts_grouped.items()
+            if k not in existing_reverts
+        ]
         if not new_reverts:
             logging.info("...All of which have been reported.")
             continue
@@ -447,16 +478,16 @@ def do_cherrypick(
             # Note that it's possible that we see the same SHA in multiple
             # iterations of this loop. Since we're committing to separate
             # branches, we need to upload separate patches.
-            for sha, reverted_sha in revert_info.new_reverts:
+            for multi_revert in revert_info.new_reverts:
                 # Always `checkout` the branch's original HEAD, so we don't
                 # create a patch stack on Gerrit. Often the reviewer will want
                 # to keep/drop certain patches; stacking them adds complexity
                 # for questionable benefit.
                 git_utils.discard_changes_and_checkout(worktree, branch_head)
                 _upload_revert_cherry_pick(
-                    sha=sha,
+                    sha=multi_revert.revert_sha,
                     branch_without_remote=branch_without_remote,
-                    reverted_sha=reverted_sha,
+                    reverted_shas=multi_revert.reverted_shas,
                     llvm_config=llvm_config,
                     llvm_worktree=worktree,
                     reviewers=reviewers,
@@ -507,7 +538,7 @@ def _append_footers_to_commit_message(
 def _upload_revert_cherry_pick(
     sha: str,
     branch_without_remote: str,
-    reverted_sha: str,
+    reverted_shas: list[str],
     llvm_config: git_llvm_rev.LLVMConfig,
     llvm_worktree: Path,
     reviewers: list[str],
@@ -576,11 +607,16 @@ def _upload_revert_cherry_pick(
         stdout=subprocess.PIPE,
     ).stdout.strip()
 
+    # If multiple commits are reverted by a single SHA, the SHA only becomes
+    # applicable after the most recent reverted commit.
+    apply_from = max(
+        git_llvm_rev.translate_sha_to_rev(llvm_config, x).number
+        for x in reverted_shas
+    )
+
     footer_lines = patch_utils.generate_chromiumos_llvm_footer(
         is_cherry=True,
-        apply_from=git_llvm_rev.translate_sha_to_rev(
-            llvm_config, reverted_sha
-        ).number,
+        apply_from=apply_from,
         apply_until=git_llvm_rev.translate_sha_to_rev(llvm_config, sha).number,
         original_sha=sha,
         platforms=("chromiumos",),

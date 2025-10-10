@@ -11,7 +11,6 @@ from unittest import mock
 
 from cros_utils import tiny_render
 from llvm_tools import nightly_revert_checker
-from llvm_tools import revert_checker
 
 
 # pylint: disable=protected-access
@@ -34,8 +33,9 @@ class Test(unittest.TestCase):
             prettify_sha=prettify_sha,
             get_sha_description=get_sha_description,
             new_reverts=[
-                revert_checker.Revert(
-                    sha="${revert_sha}", reverted_sha="${reverted_sha}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha}",
+                    reverted_shas=["${reverted_sha}"],
                 )
             ],
         )
@@ -55,7 +55,7 @@ class Test(unittest.TestCase):
                         [
                             "pretty_${revert_sha}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha}",
+                            ["pretty_${reverted_sha}"],
                             "): ",
                             "subject_${revert_sha}",
                         ]
@@ -82,15 +82,18 @@ class Test(unittest.TestCase):
             prettify_sha=prettify_sha,
             get_sha_description=get_sha_description,
             new_reverts=[
-                revert_checker.Revert(
-                    sha="${revert_sha1}", reverted_sha="${reverted_sha1}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha1}",
+                    reverted_shas=["${reverted_sha1}"],
                 ),
-                revert_checker.Revert(
-                    sha="${revert_sha2}", reverted_sha="${reverted_sha2}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha2}",
+                    reverted_shas=["${reverted_sha2a}", "${reverted_sha2b}"],
                 ),
                 # Keep this out-of-order to check that we sort based on SHAs
-                revert_checker.Revert(
-                    sha="${revert_sha0}", reverted_sha="${reverted_sha0}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha0}",
+                    reverted_shas=["${reverted_sha0}"],
                 ),
             ],
         )
@@ -110,21 +113,25 @@ class Test(unittest.TestCase):
                         [
                             "pretty_${revert_sha0}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha0}",
+                            ["pretty_${reverted_sha0}"],
                             "): ",
                             "subject_${revert_sha0}",
                         ],
                         [
                             "pretty_${revert_sha1}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha1}",
+                            ["pretty_${reverted_sha1}"],
                             "): ",
                             "subject_${revert_sha1}",
                         ],
                         [
                             "pretty_${revert_sha2}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha2}",
+                            [
+                                "pretty_${reverted_sha2a}",
+                                ", ",
+                                "pretty_${reverted_sha2b}",
+                            ],
                             "): ",
                             "subject_${revert_sha2}",
                         ],
