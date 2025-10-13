@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -268,6 +270,37 @@ func TestForwardStdoutAndStderrWhenDoubleBuildFails(t *testing.T) {
 		}
 		if !strings.Contains(ctx.stdoutString(), "originalmessage") {
 			t.Errorf("unexpected stdout. Got: %s", ctx.stdoutString())
+		}
+	})
+}
+
+func TestStderrRedirectedToStdoutOnAndroidWerrorSuppression(t *testing.T) {
+	withAndroidTestContext(t, func(ctx *testContext) {
+		ctx.cfg.useLlvmNext = true
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				return newExitCodeError(1)
+			case 2:
+				fmt.Fprint(stdout, "retry_stdout")
+				fmt.Fprint(stderr, "retry_stderr")
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		stdout := ctx.stdoutString()
+		if !strings.Contains(stdout, "retry_stdout") {
+			t.Errorf("stdout missing retry stdout: %q", stdout)
+		}
+		if !strings.Contains(stdout, "retry_stderr") {
+			t.Errorf("stdout missing retry stderr: %q", stdout)
+		}
+		if stderr := ctx.stderrString(); stderr != "" {
+			t.Errorf("stderr should be empty, got: %q", stderr)
 		}
 	})
 }
@@ -821,6 +854,124 @@ func TestProcPidStatParsingWorksAsIntended(t *testing.T) {
 
 		if tc.expected.parent != parent {
 			t.Errorf("Got parent=%v when parsing %q; expected %v", parent, tc.input, tc.expected.parent)
+		}
+	}
+}
+
+func TestDoubleBuildWithErrorLimitRerunsForLogs(t *testing.T) {
+	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
+		const unlimitedStderr = "unlimited " + arbitraryWerrorStderr
+		const errorFromSecondAttempt = "error: bar [-Wbar]"
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				// Original build. Fails with limited output.
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				fmt.Fprint(stderr, "\nfatal error: too many errors emitted, stopping now")
+				return newExitCodeError(1)
+			case 2:
+				// Rerun with -ferror-limit for better logs.
+				if err := verifyArgCount(cmd, 1, unlimitedErrorsFlag); err != nil {
+					return err
+				}
+				fmt.Fprintf(stderr, "%s\n%s", unlimitedStderr, errorFromSecondAttempt)
+				return newExitCodeError(1)
+			case 3:
+				// Generally, -Wno-error is expected, but also check for -Wno-bar,
+				// since that's the error that was only dislosed in `case 2`, and
+				// needs an explicit `-Wno-error=bar`.
+				if err := verifyArgCount(cmd, 1, "-Wno-error"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-Wno-error=bar"); err != nil {
+					return err
+				}
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		if ctx.cmdCount != 3 {
+			t.Errorf("expected 3 calls. Got: %d", ctx.cmdCount)
+		}
+		loggedWarnings := readLoggedWarnings(ctx)
+		if loggedWarnings == nil {
+			t.Fatal("expected logged warnings")
+		}
+		if !strings.Contains(loggedWarnings.Stdout, unlimitedStderr) {
+			t.Errorf("logged stdout/stderr is %q; expected to see %q in it", loggedWarnings.Stdout, unlimitedStderr)
+		}
+		if !slices.Contains(loggedWarnings.Command, unlimitedErrorsFlag) {
+			t.Errorf("logged command is %#v; expected to see %s in it", loggedWarnings.Command, unlimitedErrorsFlag)
+		}
+	})
+}
+
+func TestDoubleBuildWithoutErrorLimitDoesNotRerunForLogs(t *testing.T) {
+	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				// Original build. Fails.
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				return newExitCodeError(1)
+			case 2:
+				// Rerun with -Wno-error. Succeeds.
+				if err := verifyArgCount(cmd, 1, "-Wno-error"); err != nil {
+					return err
+				}
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		if ctx.cmdCount != 2 {
+			t.Errorf("expected 2 calls. Got: %d", ctx.cmdCount)
+		}
+		loggedWarnings := readLoggedWarnings(ctx)
+		if loggedWarnings == nil {
+			t.Fatal("expected logged warnings")
+		}
+		if !strings.Contains(loggedWarnings.Stdout, arbitraryWerrorStderr) {
+			t.Errorf("logged stdout/stderr is %q; expected to see %q in it", loggedWarnings.Stdout, arbitraryWerrorStderr)
+		}
+		if slices.Contains(loggedWarnings.Command, unlimitedErrorsFlag) {
+			t.Errorf("logged command is %#v; did not expect to see -ferror-limit in it", loggedWarnings.Command)
+		}
+	})
+}
+
+func TestTrimRightSpacesInPlace(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "",
+			expected: "",
+		},
+		{
+			input:    " \t\n",
+			expected: "",
+		},
+		{
+			input:    " hello world\t\n",
+			expected: " hello world",
+		},
+	}
+
+	buf := &bytes.Buffer{}
+	for _, tc := range testCases {
+		buf.Reset()
+		buf.WriteString(tc.input)
+		trimRightSpacesInPlace(buf)
+		if got := buf.String(); got != tc.expected {
+			t.Errorf("trimRightSpacesInPlace(%q) = %q; want %q", tc.input, got, tc.expected)
 		}
 	}
 }

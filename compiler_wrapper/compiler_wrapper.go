@@ -231,7 +231,7 @@ func callCompilerInternal(env env, cfg *config, inputCmd *command) (exitCode int
 	}
 
 	if disableWerrorConfig.enabled {
-		return doubleBuildWithWNoError(env, cfg, compilerCmd, disableWerrorConfig)
+		return buildSuppressingWerror(env, cfg, compilerCmd, disableWerrorConfig)
 	}
 	if shouldCompileWithFallback(env) {
 		if rusageEnabled {
