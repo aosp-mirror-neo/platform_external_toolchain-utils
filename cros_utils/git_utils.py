@@ -20,6 +20,10 @@ from typing import Generator, Iterable, Sequence
 REVIEWER_DETECTIVE = "c-compiler-chrome@google.com"
 REVIEWER_MAGE = "chromeos-toolchain-mage@google.com"
 
+# Default git naming conventions throughout Android.
+ANDROID_INTERNAL_REMOTE = "goog"
+ANDROID_MAIN_BRANCH = "main"
+
 # Default git naming conventions throughout ChromeOS.
 CROS_EXTERNAL_REMOTE = "cros"
 CROS_INTERNAL_REMOTE = "cros-internal"
@@ -401,7 +405,7 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
     ).stdout.strip()
 
 
-def commit_all_changes(git_dir: Path, message: str) -> str:
+def commit_all_changes(git_dir: Path, message: str, quiet: bool = False) -> str:
     """Commits all changes in `git_dir`, with the given commit message.
 
     This also commits any untracked files in `git_dir`.
@@ -410,6 +414,9 @@ def commit_all_changes(git_dir: Path, message: str) -> str:
         git_dir: Anywhere in the git directory in which changes should be
             committed.
         message: Message of the commit message.
+        quiet: silence all stdout/stderr. If this is True and an operation
+          fails, the exception object will carry the combined stdout/stderr in
+          the `stdout` member.
 
     Returns:
         The SHA of the committed change.
@@ -422,13 +429,22 @@ def commit_all_changes(git_dir: Path, message: str) -> str:
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE if quiet else None,
+        stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8",
+        errors="replace",
     )
     subprocess.run(
         ["git", "commit", "-m", message],
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE if quiet else None,
+        stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8",
+        errors="replace",
     )
+
     return resolve_ref(git_dir, "HEAD")
 
 

@@ -11,21 +11,33 @@ unpacking `verbose.log`, or similar).
 If you invoke this script like:
 
 $ py/bin/android_tools/parse_and_apply_warning_exemptions.py \
-    --build-log=/tmp/build.log \
-    --dry-run
+    --android-tree=/path/to/android/tree/root \
+    --bug-number=1234 \
+    --build-log=/tmp/build.log
 
-It will parse your build log, and print exemptions that it would apply to
-different packages. A future version of this script will actually _apply_ those.
+It will:
+
+1. Parse your build log for warnings that will soon be fatal.
+2. Modify all `bp` targets that will be impacted.
+3. Create commits w/ helpful messages (tagged with b/1234) in all git repos
+   that were modified.
 """
 
 import argparse
 import collections
+import concurrent.futures
 import json
 import logging
 import os
 from pathlib import Path
-from typing import DefaultDict
+import re
+import shlex
+import subprocess
+import sys
+import textwrap
+from typing import DefaultDict, Iterable, Sequence
 
+from cros_utils import git_utils
 from llvm_tools import warning_exemption
 
 
@@ -166,10 +178,225 @@ def parse_warning_reports(
     return per_package_groups
 
 
-def apply_warning_exemptions(
-    warnings: dict[str, warning_exemption.FatalWarningGroup], dry_run: bool
+def group_targets_by_bp_file(
+    targets: Iterable[str],
+) -> dict[Path, list[tuple[str, str]]]:
+    results = collections.defaultdict(list)
+    for target in targets:
+        pieces = target.split(":")
+        if len(pieces) != 2:
+            raise ValueError(f"Invalid target: {target}")
+        android_bp_dir, target_name = pieces
+        results[Path(android_bp_dir.lstrip("/"), "Android.bp")].append(
+            (target_name, target)
+        )
+    return results
+
+
+def checked_subprocess_run(
+    cmd: Sequence[Path | str],
+    *,
+    cwd: Path | None = None,
+    input_str: str | None = None,
+) -> str:
+    """Runs cmd, logging stdout/stderr and `raise`ing on error.
+
+    Returns:
+        stdout+stderr as one stream
+    """
+    result = subprocess.run(
+        cmd,
+        check=False,
+        cwd=cwd,
+        stdin=None if input_str else subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        input=input_str,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if not result.returncode:
+        return result.stdout
+
+    logging.error(
+        "Failed to run `%s`; stdout/stderr:\n%s",
+        shlex.join(str(x) for x in cmd),
+        result.stdout,
+    )
+    result.check_returncode()
+    assert False, "unreachable"
+
+
+_HUNK_LINE_COUNT_REGEX = re.compile(r"([-+]\d+),(\d+)")
+
+
+def update_hunk_header_for_added_lines(
+    hunk_header: str,
+    added_lines: int,
+    preexisting_added_lines: int,
+) -> str:
+    """Updates a hunk header to add `added_lines`.
+
+    >>> update_hunk_header_for_added_lines(
+            "@@ -5,12 +5,18 @@",
+            added_lines=2,
+            preexisting_added_lines=4,
+        )
+    "@@ -5,12 +9,20 @@"
+
+    Args:
+        hunk_header: header to update.
+        added_lines: number of lines added to this hunk.
+        preexisting_added_lines: number of lines added to the diff before this
+            hunk.
+    """
+    # Hunk headers are formatted like:
+    # @@ -5,12 +6,18 @@
+    #
+    # This means:
+    # - This hunk begins at line 5 of the old file.
+    # - The old file has 12 lines represented in this hunk.
+    # - This hunk begins at line 6 of the old file.
+    # - The new file has 18 lines represented in this hunk.
+    line_count_matches = list(_HUNK_LINE_COUNT_REGEX.finditer(hunk_header))
+    if len(line_count_matches) != 2:
+        raise ValueError(
+            f"Expected 2 matches of {_HUNK_LINE_COUNT_REGEX} in "
+            f"{hunk_header}; git {len(line_count_matches)}"
+        )
+
+    _, add_match = line_count_matches
+    start_line_str, line_count_str = add_match.groups()
+    if not start_line_str.startswith("+"):
+        raise ValueError(
+            f"Hunk added line {start_line_str!r} didn't start with +"
+        )
+
+    new_start_line = int(start_line_str.lstrip("+")) + preexisting_added_lines
+    new_line_count = int(line_count_str) + added_lines
+    new_add_match = f"+{new_start_line},{new_line_count}"
+    return (
+        hunk_header[: add_match.start()]
+        + new_add_match
+        + hunk_header[add_match.end() :]
+    )
+
+
+def add_suppression_comments_to_diff(
+    bug_number: int,
+    bpmodify_diff: str,
+    exempted_literals: list[str],
+) -> str:
+    """Adds comments about warning suppression to the given diff.
+
+    Only supports diffs emitted by `bpmodify`.
+    """
+    # This is the comment to add before every warning suppression. `bpfmt` is
+    # expected to indent it properly. It's kept short because it may need to be
+    # indented a fair amount, and don't want to go over the line limit.
+    add_comemnt = f"+// Temporarily suppressed for b/{bug_number}\n"
+
+    # Since these diffs are well-formed (and have no commentary at the top), we
+    # can assume that all lines are either metadata, or start with one of ("-",
+    # "+", or " "). Metadata for diff hunks always starts with `"\n @@"`.
+    hunk_split = "\n@@ "
+    header, *hunks = bpmodify_diff.split(hunk_split)
+    result_file = [header]
+
+    preexisting_added_lines = 0
+    for hunk in hunks:
+        new_hunk_lines = []
+        hunk_header, *rest = hunk.splitlines(keepends=True)
+        added_lines = 0
+        for hunk_line in rest:
+            if hunk_line.startswith("+"):
+                if any(x in hunk_line for x in exempted_literals):
+                    added_lines += 1
+                    new_hunk_lines.append(add_comemnt)
+            new_hunk_lines.append(hunk_line)
+        new_hunk_header = update_hunk_header_for_added_lines(
+            hunk_header, added_lines, preexisting_added_lines
+        )
+        new_hunk_lines.insert(0, new_hunk_header)
+        result_file.append("".join(new_hunk_lines))
+        preexisting_added_lines += added_lines
+    return hunk_split.join(result_file)
+
+
+def add_warning_cflags(
+    android_tree: Path,
+    bug_number: int,
+    bpmodify_bin: Path,
+    bpfmt_bin: Path,
+    android_bp_file: Path,
+    per_target_warnings: list[tuple[str, warning_exemption.FatalWarningGroup]],
 ) -> None:
-    """Applies warning exemptions based on parsed warnings."""
+    for target_name, fatal_warnings in per_target_warnings:
+        bpmodify_cmd: list[Path | str] = [
+            bpmodify_bin,
+            "-m",
+            target_name,
+            "-property",
+            "cflags",
+        ]
+
+        exempted_literals = []
+        for warning_name in sorted(fatal_warnings.warning_names):
+            literal = f'"-Wno-{warning_name}"'
+            exempted_literals.append(literal)
+            bpmodify_cmd += (
+                "-add-literal",
+                literal,
+            )
+
+        bpmodify_cmd += ("-d", android_bp_file)
+        bpmodify_diff = checked_subprocess_run(bpmodify_cmd, cwd=android_tree)
+        # If `bpmodify` creates no diff, it will still exit successfully and
+        # output a nonempty string, but there will be no actual diff hunks.
+        #
+        # Search for `\n--- `, since that's the first definitive sign we can
+        # find of a diff hunk.
+        if "\n--- " not in bpmodify_diff:
+            raise ValueError(
+                f"bpmodify did not create a diff to add CFLAGS to "
+                f"{android_bp_file}"
+            )
+
+        fixed_diff = add_suppression_comments_to_diff(
+            bug_number, bpmodify_diff, exempted_literals
+        )
+        try:
+            checked_subprocess_run(
+                ("patch", "--batch", android_bp_file),
+                input_str=fixed_diff,
+                cwd=android_tree,
+            )
+        except subprocess.CalledProcessError:
+            logging.error(
+                "Error patching %s with patch contents:\n%r",
+                android_bp_file,
+                fixed_diff,
+            )
+            raise
+
+    # Neither bpmodify nor the post-processing we do guarantees that these are
+    # correctly formatted, so be sure to keep them pretty.
+    checked_subprocess_run((bpfmt_bin, "-w", android_bp_file), cwd=android_tree)
+    logging.info("Updated exemptions in %s successfully.", android_bp_file)
+
+
+def apply_warning_exemptions(
+    bug_number: int | None,
+    warnings: dict[str, warning_exemption.FatalWarningGroup],
+    android_tree: Path | None,
+    thread_pool: concurrent.futures.ThreadPoolExecutor,
+    dry_run: bool,
+) -> tuple[list[Path], int]:
+    """Applies warning exemptions based on parsed warnings.
+
+    Returns:
+        The number of files that failed to be updated.
+    """
     if dry_run:
         for target, warning_group in warnings.items():
             sorted_warning_list = sorted(warning_group.warning_names)
@@ -178,9 +405,169 @@ def apply_warning_exemptions(
                 sorted_warning_list,
                 target,
             )
+        return [], 0
+
+    assert android_tree, "android_tree should be non-None if not dry-run!"
+    assert bug_number, "bug_number should be non-None if not dry-run!"
+    grouped_warnings = group_targets_by_bp_file(warnings.keys())
+
+    logging.info(
+        "Spawning jobs to edit %d Android.bp file%s...",
+        len(grouped_warnings),
+        "" if len(grouped_warnings) == 1 else "s",
+    )
+    bpfmt_bin = bpfmt_path(android_tree)
+    bpmodify_bin = bpmodify_path(android_tree)
+    futures = []
+    for warning_file, targets in grouped_warnings.items():
+        per_target_warnings = []
+        for target_name, full_target in targets:
+            per_target_warnings.append((target_name, warnings[full_target]))
+        futures.append(
+            thread_pool.submit(
+                add_warning_cflags,
+                android_tree,
+                bug_number,
+                bpmodify_bin,
+                bpfmt_bin,
+                warning_file,
+                per_target_warnings,
+            )
+        )
+
+    exceptions = []
+    successful_updates = []
+    for warning_file, future in zip(grouped_warnings, futures):
+        if e := future.exception():
+            exceptions.append((warning_file, e))
+        else:
+            successful_updates.append(warning_file)
+
+    successful_count = len(grouped_warnings) - len(exceptions)
+    if successful_count:
+        logging.info(
+            "Successfully updated %d file%s.",
+            successful_count,
+            "" if successful_count == 1 else "s",
+        )
+
+    # Queue up exceptions to print until _after_ all jobs are done. This way,
+    # exceptions are prominent, compared to being interleaved with successful
+    # output.
+    if exceptions:
+        for warning_file, e in exceptions:
+            logging.error(
+                "Exception caught updating %s", warning_file, exc_info=e
+            )
+
+    return successful_updates, len(exceptions)
+
+
+def bpmodify_path(android_tree: Path) -> Path:
+    return android_tree / "out" / "host" / "linux-x86" / "bin" / "bpmodify"
+
+
+def bpfmt_path(android_tree: Path) -> Path:
+    return android_tree / "out" / "host" / "linux-x86" / "bin" / "bpfmt"
+
+
+def need_autobuild(android_tree: Path) -> bool:
+    return not (
+        bpmodify_path(android_tree).exists()
+        and bpfmt_path(android_tree).exists()
+    )
+
+
+def autobuild_bp_tooling(android_tree: Path) -> None:
+    result = subprocess.run(
+        (
+            "bash",
+            "-c",
+            ";".join(
+                (
+                    ". ./build/envsetup.sh",
+                    "lunch aosp_cf_x86_64_phone-trunk_staging-eng",
+                    "m blueprint_tools",
+                )
+            ),
+        ),
+        check=False,
+        cwd=android_tree,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if not result.returncode:
+        logging.info("bmpodify build successful.")
         return
 
-    raise NotImplementedError("only --dry-run is implemented at present")
+    logging.error("bp tooling build failed; stdout/stderr:\n%s", result.stdout)
+    result.check_returncode()
+
+
+def group_files_by_git_repo(
+    android_tree: Path,
+    thread_pool: concurrent.futures.ThreadPoolExecutor,
+    files: list[Path],
+) -> list[Path]:
+    """Returns a list of git repos containing the given files."""
+
+    def get_file_toplevel(f: Path) -> Path:
+        toplevel = checked_subprocess_run(
+            ("git", "rev-parse", "--show-toplevel"),
+            cwd=(android_tree / f).parent,
+        ).strip()
+        return Path(toplevel)
+
+    # These `--show-toplevel` invocations are pretty fast, but we already have a
+    # thread pool anyway, so use it.
+    toplevels = set(thread_pool.map(get_file_toplevel, files))
+    return sorted(toplevels)
+
+
+def commit_new_exemptions(
+    bug_number: int,
+    android_tree: Path,
+    thread_pool: concurrent.futures.ThreadPoolExecutor,
+    updated_android_bp_files: list[Path],
+    branch_name: str,
+) -> list[Path]:
+    git_repos = group_files_by_git_repo(
+        android_tree, thread_pool, updated_android_bp_files
+    )
+
+    exemption_commit_message = textwrap.dedent(
+        f"""\
+        automatically add warning exemptions
+
+        Warnings will soon be introduced here due to a larger change.
+        Preemptively suppress those. Please see the bug or contact the author
+        for more information & notes on how to remove these suppressions.
+
+        Use 'EXEMPT BUGFIX' for Flag, since this CL only disables warnings (soon
+        to be build errors, if not for this CL) here. It would be nice to fix
+        these, but disabling them is a nop.
+
+        Bug: {bug_number}
+        Test: TreeHugger
+        Flag: EXEMPT BUGFIX
+        """
+    )
+
+    def do_commit(repo: Path):
+        git_utils.create_branch(repo, branch_name)
+        git_utils.commit_all_changes(
+            git_dir=repo,
+            message=exemption_commit_message,
+            quiet=True,
+        )
+
+    # Assume simple `git commit` commands won't fail. If they do, something
+    # seems very wrong, and the program should simply abort.
+    thread_pool.map(do_commit, git_repos)
+    return git_repos
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -190,10 +577,44 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
+        "--android-tree",
+        type=Path,
+        help="""
+        Android tree to modify. Meaningless if --dry-run is set. If not
+        specified, autodetection from this script's directory will be attempted.
+        """,
+    )
+    parser.add_argument(
+        "--autobuild",
+        action="store_true",
+        help="""
+        If passed, needed tooling (e.g., bpmodify) will be automatically built
+        by this script. This may mess with your out/ dir, so is not the default.
+        """,
+    )
+    parser.add_argument(
+        "--bug-number",
+        type=int,
+        help="""
+        Bug number to reference from bp files. Must be specified if --dry-run is
+        not set. This bug should be directly related to the reason you're
+        suppressing the warnings (e.g., an LLVM upgrade bug).
+        """,
+    )
+    parser.add_argument(
         "--build-log",
         type=Path,
         required=True,
-        help="Path to the build log file to parse for warnings.",
+        help="""
+        Path to the build log file to parse for warnings. For builds run
+        remotely, this is the `build.log` artifact. For local builds, it's
+        recommended you capture this via
+        `rm -rf out; m -k checkbuild |& tee build.log`.
+
+        Clean builds are recommended, since if your `m` invocation doesn't build
+        a source file, it can't contain metadata about whether that source file
+        fails to build.
+        """,
     )
     parser.add_argument(
         "--dry-run",
@@ -203,7 +624,24 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging."
     )
-    return parser.parse_args(argv)
+    parser.add_argument(
+        "--keep-going",
+        action="store_true",
+        help="Do not fail if some files fail to be updated.",
+    )
+    parser.add_argument(
+        "--branch-name",
+        default="auto-suppress-warnings",
+        help="Name of the branch to create in repos.",
+    )
+    opts = parser.parse_args(argv)
+
+    if not opts.dry_run and not opts.bug_number:
+        parser.error(
+            "You must pass --bug-number if --dry-run is not specified."
+        )
+
+    return opts
 
 
 def main(argv: list[str]) -> None:
@@ -215,13 +653,94 @@ def main(argv: list[str]) -> None:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
-    logging.info("Parsing warnings from build log; this could take a bit...")
-    warnings = parse_warning_reports(opts.build_log)
-    if not warnings:
-        logging.info("No fatal warning reports processed; quit")
-        return
+    android_tree: Path | None = opts.android_tree
+    branch_name: str = opts.branch_name
+    bug_number: int | None = opts.bug_number
+    dry_run: bool = opts.dry_run
+    keep_going: bool = opts.keep_going
 
-    logging.info(
-        "Found warnings to disable in %d targets. Doing so...", len(warnings)
-    )
-    apply_warning_exemptions(warnings, opts.dry_run)
+    with concurrent.futures.ThreadPoolExecutor() as thread_pool:
+        autobuild_future: concurrent.futures.Future | None = None
+        if not dry_run and android_tree and need_autobuild(android_tree):
+            if not opts.autobuild:
+                sys.exit(
+                    textwrap.dedent(
+                        f"""\
+                        No bpmodify/bpfmt binary and --autobuild not specified.
+                        Please either build these in your android tree at
+                        {android_tree} via `m blueprint_tools`, or pass
+                        --autobuild (though note that `--autobuild` chooses its
+                        own lunch combo, so may mess with your out/ dir).
+                        """
+                    ).rstrip()
+                )
+            logging.info(
+                "Automatically building bp tooling in the background..."
+            )
+
+            # bp tooling takes minutes to build. Run it concurrently with log
+            # parsing to speed things up a bit.
+            autobuild_future = thread_pool.submit(
+                autobuild_bp_tooling, android_tree
+            )
+
+        # Larger logs (~500MB) take a dozen seconds or so to parse.
+        logging.info(
+            "Parsing warnings from build log; this could take about a minute..."
+        )
+        warnings = parse_warning_reports(opts.build_log)
+        if not warnings:
+            logging.info("No fatal warning reports processed; quit")
+            return
+
+        logging.info("Found warnings to disable in %d targets.", len(warnings))
+        if autobuild_future:
+            # Since this runs `envsetup` and such, this can take quite a while.
+            logging.info(
+                "Waiting for bp tooling build, this could take a few minutes..."
+            )
+            autobuild_future.result()
+
+        successfully_updated_files, update_failures = apply_warning_exemptions(
+            bug_number, warnings, android_tree, thread_pool, dry_run
+        )
+
+        if update_failures:
+            if not keep_going:
+                sys.exit(
+                    f"Failed to add exemptions to {update_failures} file(s); "
+                    "see above logs. Use --keep-going to suppress this "
+                    "behavior."
+                )
+            logging.warning(
+                "Failed to add exemptions to %d file(s), but --keep-going was "
+                "given.",
+                update_failures,
+            )
+
+        if not successfully_updated_files:
+            logging.info("No files got updated on disk; quit")
+            return
+
+        # These must be specified unless `dry_run` is passed, and `dry_run`
+        # never updates any files.
+        assert android_tree, "Files can't be updated without an Android tree"
+        assert bug_number, "Files shouldn't be updated without a bug number"
+        repos_with_commit = commit_new_exemptions(
+            bug_number,
+            android_tree,
+            thread_pool,
+            successfully_updated_files,
+            branch_name,
+        )
+        logging.info(
+            "Successfully made commits in %d repos", len(repos_with_commit)
+        )
+
+        if update_failures:
+            logging.error(
+                "As a reminder, adding exemptions failed on %d repo(s).",
+                update_failures,
+            )
+
+        sys.exit(1 if update_failures else 0)

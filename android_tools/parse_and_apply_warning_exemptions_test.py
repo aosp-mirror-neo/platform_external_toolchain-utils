@@ -4,7 +4,10 @@
 
 """Tests for parse_and_apply_warning_exemptions."""
 
-from android_tools import parse_and_apply_warning_exemptions
+from pathlib import Path
+import textwrap
+
+from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
 from llvm_tools import test_helpers
 from llvm_tools import warning_exemption
 
@@ -61,7 +64,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "bionic/libc/bionic/sigprocmask.c",
         ]
         self.assertEqual(
-            parse_and_apply_warning_exemptions.infer_target_from_cmdline(cmd),
+            parse_and_apply.infer_target_from_cmdline(cmd),
             "//bionic/libc:libc_bionic",
         )
 
@@ -70,9 +73,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "clang",
             "bionic/libc/bionic/sigprocmask.c",
         ]
-        self.assertIsNone(
-            parse_and_apply_warning_exemptions.infer_target_from_cmdline(cmd)
-        )
+        self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
 
     def test_infer_target_from_cmdline_no_soong_prefix(self):
         cmd = [
@@ -81,9 +82,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             EXAMPLE_OUT_FILE.replace("/soong/", "/not-soong/", 1),
             "bionic/libc/bionic/sigprocmask.c",
         ]
-        self.assertIsNone(
-            parse_and_apply_warning_exemptions.infer_target_from_cmdline(cmd)
-        )
+        self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
 
     def test_infer_target_from_cmdline_no_obj_dir(self):
         cmd = [
@@ -92,20 +91,19 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             EXAMPLE_OUT_FILE.replace("/obj/", "/", 1),
             "bionic/libc/bionic/sigprocmask.c",
         ]
-        self.assertIsNone(
-            parse_and_apply_warning_exemptions.infer_target_from_cmdline(cmd)
-        )
+        self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
 
 
 class TestParseOneWarningReport(test_helpers.TempDirTestCase):
     """Tests for parse_one_warning_report."""
 
     def test_parse_one_warning_report_success(self):
-        target, warnings = (
-            parse_and_apply_warning_exemptions.parse_one_warning_report(
-                EXAMPLE_WARNING_REPORT, report_line_number=1
-            )
+        parse_result = parse_and_apply.parse_one_warning_report(
+            EXAMPLE_WARNING_REPORT, report_line_number=1
         )
+        # Use `assert` to appease mypy.
+        assert parse_result, "Parsing warning report failed unexpectedly"
+        target, warnings = parse_result
         self.assertEqual(target, "//bionic/libc:libc_bionic")
         self.assertEqual(warnings, example_warning_report_expected_result())
 
@@ -127,12 +125,117 @@ class TestParseWarningReports(test_helpers.TempDirTestCase):
             encoding="utf-8",
         )
 
-        result = parse_and_apply_warning_exemptions.parse_warning_reports(
-            log_path
-        )
+        result = parse_and_apply.parse_warning_reports(log_path)
 
         parsed_result = example_warning_report_expected_result()
         self.assertEqual(
             result,
             {"//bionic/libc:libc_bionic": parsed_result},
         )
+
+
+class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
+    """Tests for group_targets_by_bp_file."""
+
+    def test_group_targets_by_bp_file_success(self):
+        targets = [
+            "//bionic/libc:libc_bionic",
+            "//system/core:libutils",
+            "//bionic/libc:libc_bionic_ndk",
+        ]
+        expected = {
+            Path("bionic/libc/Android.bp"): [
+                ("libc_bionic", "//bionic/libc:libc_bionic"),
+                ("libc_bionic_ndk", "//bionic/libc:libc_bionic_ndk"),
+            ],
+            Path("system/core/Android.bp"): [
+                ("libutils", "//system/core:libutils")
+            ],
+        }
+        result = parse_and_apply.group_targets_by_bp_file(targets)
+        # Sort these for consistent ordering.
+        for v in result.values():
+            v.sort()
+        for v in expected.values():
+            v.sort()
+        self.assertEqual(result, expected)
+
+    def test_group_targets_by_bp_file_empty_input(self):
+        self.assertEqual(parse_and_apply.group_targets_by_bp_file([]), {})
+
+    def test_group_targets_by_bp_file_invalid_target(self):
+        with self.assertRaises(ValueError):
+            parse_and_apply.group_targets_by_bp_file(["//bionic/libc"])
+
+
+class TestUpdateHunkHeaderForAddedLines(test_helpers.TempDirTestCase):
+    """Tests for update_hunk_header_for_added_lines."""
+
+    def test_update_hunk_header_docstring_example(self):
+        header = "@@ -5,12 +5,18 @@"
+        new_header = parse_and_apply.update_hunk_header_for_added_lines(
+            header, added_lines=2, preexisting_added_lines=4
+        )
+        self.assertEqual(new_header, "@@ -5,12 +9,20 @@")
+
+    def test_update_hunk_header_no_changes(self):
+        header = "@@ -1,1 +1,1 @@"
+        new_header = parse_and_apply.update_hunk_header_for_added_lines(
+            header, added_lines=0, preexisting_added_lines=0
+        )
+        self.assertEqual(new_header, "@@ -1,1 +1,1 @@")
+
+    def test_update_hunk_header_with_added_lines(self):
+        header = "@@ -10,5 +10,5 @@"
+        new_header = parse_and_apply.update_hunk_header_for_added_lines(
+            header, added_lines=3, preexisting_added_lines=0
+        )
+        self.assertEqual(new_header, "@@ -10,5 +10,8 @@")
+
+    def test_update_hunk_header_invalid_header(self):
+        with self.assertRaises(ValueError):
+            parse_and_apply.update_hunk_header_for_added_lines(
+                "invalid header", 1, 1
+            )
+
+
+class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
+    """Tests for add_suppression_comments_to_diff."""
+
+    def test_add_suppression_comments_to_diff_multiple_hunks(self):
+        diff = textwrap.dedent(
+            """
+            --- a/Android.bp
+            +++ b/Android.bp
+            @@ -1,2 +1,3 @@
+             cc_library {
+                 name: "libfoo",
+            +    cflags: ["-Wno-foo"],
+             }
+            @@ -10,3 +11,4 @@
+             cc_library {
+                 name: "libbar",
+            +    cflags: ["-Wno-bar"],
+             }"""
+        )
+        expected_diff = textwrap.dedent(
+            """
+            --- a/Android.bp
+            +++ b/Android.bp
+            @@ -1,2 +1,4 @@
+             cc_library {
+                 name: "libfoo",
+            +// Temporarily suppressed for b/12345
+            +    cflags: ["-Wno-foo"],
+             }
+            @@ -10,3 +12,5 @@
+             cc_library {
+                 name: "libbar",
+            +// Temporarily suppressed for b/12345
+            +    cflags: ["-Wno-bar"],
+             }"""
+        )
+        result = parse_and_apply.add_suppression_comments_to_diff(
+            12345, diff, ['"-Wno-foo"', '"-Wno-bar"']
+        )
+        self.assertEqual(result, expected_diff)
