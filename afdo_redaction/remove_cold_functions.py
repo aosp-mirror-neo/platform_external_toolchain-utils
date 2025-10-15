@@ -162,7 +162,7 @@ def run(input_stream, output_stream, goal, cwp=None, benchmark=None):
         )
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -190,7 +190,7 @@ def main():
         "--benchmark",
         help="Textualized benchmark profile, used for further analysis",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.number:
         parser.error("It's invalid to remove the number of functions to 0.")

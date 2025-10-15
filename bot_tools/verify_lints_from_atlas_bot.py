@@ -199,7 +199,3 @@ def main(argv: list[str]) -> None:
     had_errors = log_errors_with_lints(got_lints)
     if had_errors:
         sys.exit("Lints did not match expectations; see above logs")
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

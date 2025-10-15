@@ -613,7 +613,7 @@ def validate_patch_args(
     return patch_sources
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse CLI arguments for this script."""
 
     parser = argparse.ArgumentParser(
@@ -674,7 +674,7 @@ def parse_args() -> argparse.Namespace:
         """,
         type=str,
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
@@ -708,10 +708,10 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def main() -> None:
+def main(argv: list[str]) -> None:
     """Entry point for the program."""
 
-    args = parse_args()
+    args = parse_args(argv)
 
     # For the vast majority of cases, we'll only want to set platform to
     # ["chromiumos"], so let's make that the default.

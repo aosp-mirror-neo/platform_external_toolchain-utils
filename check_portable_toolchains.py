@@ -42,13 +42,13 @@ _COLOR_GREEN = "\033[92m"
 _COLOR_RESET = "\033[0m"
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
         level=logging.INFO,
     )
-    args = parse_args()
+    args = parse_args(argv)
 
     version = args.version
     if not version:
@@ -195,7 +195,7 @@ def _verify_version(version: str) -> Version:
     return version
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse arguments."""
     parser = argparse.ArgumentParser(
         "check_portable_toolchains", description=__doc__
@@ -216,4 +216,4 @@ def parse_args() -> argparse.Namespace:
         default=GS_PREFIX,
         help="Top level gs:// path. (default: %(default)s)",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)

@@ -642,7 +642,3 @@ def main(argv: list[str]) -> None:
         "bash -c 'for x in *; do bugged create --format=markdown < ${x} || "
         "break; done'"
     )
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

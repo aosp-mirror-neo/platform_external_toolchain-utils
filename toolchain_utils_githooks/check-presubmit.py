@@ -1097,7 +1097,3 @@ def main(argv: list[str]) -> int:
     if not all_checks_ok:
         return 1
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))

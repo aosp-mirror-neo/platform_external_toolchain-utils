@@ -403,7 +403,7 @@ def check_bad_not_good(decider, good, bad):
     return decider.run(good_copy) == StatusEnum.BAD_STATUS
 
 
-def parse_args():
+def parse_args(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -460,7 +460,7 @@ def parse_args():
     parser.add_argument(
         "--seed", type=float, help="Float specifying seed for randomness"
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main_impl(flags):
@@ -518,5 +518,5 @@ def main_impl(flags):
     return results
 
 
-def main():
-    main_impl(parse_args())
+def main(argv: list[str]):
+    main_impl(parse_args(argv))

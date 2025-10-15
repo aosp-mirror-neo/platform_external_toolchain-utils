@@ -57,7 +57,7 @@ def run(input_stream, output_stream):
         output_stream.write(line)
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -72,7 +72,7 @@ def main():
         default="/dev/stdout",
         help="File to write to. Defaults to stdout.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     with open(args.input, encoding="utf-8") as stdin:
         with open(args.output, "w", encoding="utf-8") as stdout:

@@ -35,9 +35,9 @@ class Policies:
         return {**self.__dict__}
 
 
-def main():
+def main(argv: list[str]):
     """Run the program from cmd line"""
-    args = parse_args()
+    args = parse_args(argv)
     if all(x is None for x in [args.all, args.b64, args.b32, args.none]):
         print(
             "Require at least one of {--all, --b64, --b32, --none}",
@@ -216,7 +216,7 @@ def find_potential_policy_files(packages: list[str]) -> tuple[list[str], bool]:
     return matches, all_queries_succeeded
 
 
-def parse_args() -> Any:
+def parse_args(argv: list[str]) -> Any:
     """Handle command line arguments."""
     parser = argparse.ArgumentParser(
         description="Check for missing syscalls in"
@@ -278,4 +278,4 @@ def parse_args() -> Any:
         help="Edit all files, regardless of missing status."
         " Does nothing without --edit.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)

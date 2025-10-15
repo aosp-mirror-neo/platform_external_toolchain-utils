@@ -134,8 +134,8 @@ def process_line(line: str, text: list[str]):
         text.append(line)
 
 
-def main():
-    if len(sys.argv) != 3:
+def main(argv: list[str]):
+    if len(argv) != 3:
         filename = os.path.basename(__file__)
         print("Usage: ", filename, " <input.ebuild> <output.ebuild>")
         return 1

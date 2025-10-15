@@ -218,7 +218,7 @@ def abort(never_abort: bool):
         sys.exit(EXIT_ABORT)
 
 
-def get_args() -> argparse.Namespace:
+def get_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Simple LLVM Bisection Script for use with llvm-9999."
     )
@@ -284,7 +284,7 @@ def get_args() -> argparse.Namespace:
         ),
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def run(opts: argparse.Namespace):
@@ -333,10 +333,10 @@ def run(opts: argparse.Namespace):
     test_result.exit_assert(opts.search_error, llvm_hash, log_dir)
 
 
-def main():
+def main(argv: list[str]):
     logging.basicConfig(level=logging.INFO)
     chroot.VerifyInsideChroot()
-    opts = get_args()
+    opts = get_args(argv)
     try:
         run(opts)
     except AbortingException:

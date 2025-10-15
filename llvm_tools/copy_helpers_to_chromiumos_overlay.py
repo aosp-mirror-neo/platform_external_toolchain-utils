@@ -18,14 +18,14 @@ import shutil
 from cros_utils import cros_paths
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--chromeos_path",
         help="Path to where CrOS' source tree lives. Will autodetect if you're "
         "running this from inside the CrOS source tree.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     my_dir = Path(os.path.abspath(os.path.dirname(__file__)))
     repo_root = args.chromeos_path

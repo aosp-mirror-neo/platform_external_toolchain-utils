@@ -558,7 +558,7 @@ def DetectLatestLLVMBranch(
     return most_recent_branch
 
 
-def main() -> None:
+def main(argv: list[str]) -> None:
     """Prints the git hash of LLVM.
 
     Parses the command line for the optional command line
@@ -589,7 +589,7 @@ def main() -> None:
     )
 
     # Parse command-line arguments.
-    args_output = parser.parse_args()
+    args_output = parser.parse_args(argv)
 
     cur_llvm_version = args_output.llvm_version
     chromeos_tree = args_output.chromeos_tree

@@ -229,7 +229,7 @@ def find_ebuild_path(
     return result[0]
 
 
-def parse_commandline_args() -> argparse.Namespace:
+def parse_commandline_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -276,7 +276,7 @@ def parse_commandline_args() -> argparse.Namespace:
         help="If specified, the tool will not upload the CL for review",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.cont and args.restart:
         parser.error("Please select either --continue or --restart")
 
@@ -948,10 +948,10 @@ def sudo_keepalive() -> None:
     threading.Thread(target=sudo_keepalive_loop, daemon=True).start()
 
 
-def main() -> None:
+def main(argv: list[str]) -> None:
     chroot.VerifyOutsideChroot()
     logging.basicConfig(level=logging.INFO)
-    args = parse_commandline_args()
+    args = parse_commandline_args(argv)
     state_file = pathlib.Path(args.state_file)
     tmp_state_file = state_file.with_suffix(".tmp")
 

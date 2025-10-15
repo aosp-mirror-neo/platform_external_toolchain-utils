@@ -63,7 +63,7 @@ def load_manifest_versions(manifest: Path) -> dict[str, str]:
     return {k: v[0][0] for k, v in raw_versions["packages"].items()}
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -79,7 +79,7 @@ def main():
         help="Number of recent manifests to fetch info about. 0 means "
         "unlimited.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     is_debug = args.debug
     logging.basicConfig(level=logging.DEBUG if is_debug else logging.INFO)

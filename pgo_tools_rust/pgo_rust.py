@@ -597,7 +597,7 @@ def main(argv: list[str]) -> int:
     )
 
     parser = argparse.ArgumentParser(
-        prog=sys.argv[0],
+        prog=argv[0],
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
