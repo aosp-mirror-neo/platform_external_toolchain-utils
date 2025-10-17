@@ -14,7 +14,8 @@ $ py/bin/android_tools/parse_and_apply_warning_exemptions.py \
     --android-tree=/path/to/android/tree/root \
     --bug-number=1234 \
     --build-log=/tmp/build.log \
-    --upload-with-topic=my-warning-suppressions
+    --upload-with-topic=my-warning-suppressions \
+    --update-summary-file=/tmp/summary.json
 
 It will:
 
@@ -24,11 +25,14 @@ It will:
    that were modified.
 4. Upload all changes to the git repos from step #3, tagged with the
    `my-warning-suppressions` topic.
+5. Write a summary file of all changed projects/targets to `/tmp/summary.json`,
+   for further automation.
 """
 
 import argparse
 import collections
 import concurrent.futures
+import dataclasses
 import json
 import logging
 import os
@@ -231,6 +235,55 @@ def checked_subprocess_run(
     assert False, "unreachable"
 
 
+@dataclasses.dataclass(frozen=True)
+class ApplyWarningExemptionsResult:
+    """Results of `apply_warning_exemptions`."""
+
+    successfully_updated_files: list[Path] = dataclasses.field(
+        default_factory=list
+    )
+    update_failures: int = 0
+    updated_targets: dict[str, list[str]] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class ExemptionSummary:
+    """A summary of exemptions that were applied."""
+
+    git_dirs: list[Path] = dataclasses.field(default_factory=list)
+    updated_targets: dict[str, list[str]] = dataclasses.field(
+        default_factory=dict
+    )
+
+    @classmethod
+    def from_file(cls, path: Path) -> "ExemptionSummary":
+        """Loads an ExemptionSummary from the given file."""
+        with path.open(encoding="utf-8") as f:
+            content = json.load(f)
+        return cls(
+            git_dirs=[Path(x) for x in content["git_dirs"]],
+            updated_targets=content["updated_targets"],
+        )
+
+    def write_to_file(self, path: Path) -> None:
+        """Writes this ExemptionSummary to the given file."""
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(
+                {
+                    "git_dirs": sorted(str(x) for x in self.git_dirs),
+                    "updated_targets": self.updated_targets,
+                },
+                f,
+                sort_keys=True,
+                indent=2,
+                separators=(",", ": "),
+            )
+            # Ensure a newline at the end; many editors want it.
+            f.write("\n")
+
+
 _HUNK_LINE_COUNT_REGEX = re.compile(r"([-+]\d+),(\d+)")
 
 
@@ -395,12 +448,8 @@ def apply_warning_exemptions(
     android_tree: Path | None,
     thread_pool: concurrent.futures.ThreadPoolExecutor,
     dry_run: bool,
-) -> tuple[list[Path], int]:
-    """Applies warning exemptions based on parsed warnings.
-
-    Returns:
-        The number of files that failed to be updated.
-    """
+) -> ApplyWarningExemptionsResult:
+    """Applies warning exemptions based on parsed warnings."""
     if dry_run:
         for target, warning_group in warnings.items():
             sorted_warning_list = sorted(warning_group.warning_names)
@@ -409,7 +458,7 @@ def apply_warning_exemptions(
                 sorted_warning_list,
                 target,
             )
-        return [], 0
+        return ApplyWarningExemptionsResult()
 
     assert android_tree, "android_tree should be non-None if not dry-run!"
     assert bug_number, "bug_number should be non-None if not dry-run!"
@@ -441,11 +490,16 @@ def apply_warning_exemptions(
 
     exceptions = []
     successful_updates = []
+    updated_targets: dict[str, list[str]] = {}
     for warning_file, future in zip(grouped_warnings, futures):
         if e := future.exception():
             exceptions.append((warning_file, e))
         else:
             successful_updates.append(warning_file)
+            for _, full_target in grouped_warnings[warning_file]:
+                updated_targets[full_target] = sorted(
+                    warnings[full_target].warning_names
+                )
 
     successful_count = len(grouped_warnings) - len(exceptions)
     if successful_count:
@@ -464,7 +518,11 @@ def apply_warning_exemptions(
                 "Exception caught updating %s", warning_file, exc_info=e
             )
 
-    return successful_updates, len(exceptions)
+    return ApplyWarningExemptionsResult(
+        successfully_updated_files=successful_updates,
+        update_failures=len(exceptions),
+        updated_targets=updated_targets,
+    )
 
 
 def bpmodify_path(android_tree: Path) -> Path:
@@ -636,6 +694,17 @@ def upload_all_new_exemptions(
     return [x for x, _ in exceptions]
 
 
+def write_update_summary_file(
+    target: Path,
+    updated_repos: list[Path],
+    updated_targets: dict[str, list[str]],
+) -> None:
+    summary = ExemptionSummary(
+        git_dirs=updated_repos, updated_targets=updated_targets
+    )
+    summary.write_to_file(target)
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parses and returns command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -701,6 +770,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Name of the branch to create in repos.",
     )
     parser.add_argument(
+        "--update-summary-file",
+        type=Path,
+        help="""
+        After making commits and (if applicable) uploading to Gerrit, write a
+        JSON file to this Path listing all modified repositories.
+        """,
+    )
+    parser.add_argument(
         "--upload-with-topic",
         help="""
         Upload all CLs applying suppressions using the given topic name. If you
@@ -730,6 +807,7 @@ def main(argv: list[str]) -> None:
     android_tree: Path | None = opts.android_tree
     branch_name: str = opts.branch_name
     bug_number: int | None = opts.bug_number
+    update_summary_file: Path | None = opts.update_summary_file
     dry_run: bool = opts.dry_run
     keep_going: bool = opts.keep_going
     upload_with_topic: str | None = opts.upload_with_topic
@@ -776,24 +854,25 @@ def main(argv: list[str]) -> None:
             )
             autobuild_future.result()
 
-        successfully_updated_files, update_failures = apply_warning_exemptions(
+        apply_results = apply_warning_exemptions(
             bug_number, warnings, android_tree, thread_pool, dry_run
         )
 
-        if update_failures:
+        if apply_results.update_failures:
             if not keep_going:
                 sys.exit(
-                    f"Failed to add exemptions to {update_failures} file(s); "
+                    "Failed to add exemptions to "
+                    f"{apply_results.update_failures} file(s); "
                     "see above logs. Use --keep-going to suppress this "
                     "behavior."
                 )
             logging.warning(
                 "Failed to add exemptions to %d file(s), but --keep-going was "
                 "given.",
-                update_failures,
+                apply_results.update_failures,
             )
 
-        if not successfully_updated_files:
+        if not apply_results.successfully_updated_files:
             logging.info("No files got updated on disk; quit")
             return
 
@@ -805,14 +884,14 @@ def main(argv: list[str]) -> None:
             bug_number,
             android_tree,
             thread_pool,
-            successfully_updated_files,
+            apply_results.successfully_updated_files,
             branch_name,
         )
         logging.info(
             "Successfully made commits in %d repos", len(repos_with_commit)
         )
 
-        had_failures = bool(update_failures)
+        had_failures = bool(apply_results.update_failures)
         if upload_with_topic:
             failed_uploads = upload_all_new_exemptions(
                 android_tree,
@@ -836,10 +915,18 @@ def main(argv: list[str]) -> None:
                     "".join(f"\n- {x}" for x in failed_uploads),
                 )
 
-        if update_failures:
+        if apply_results.update_failures:
             logging.error(
                 "As a reminder, adding exemptions failed on %d repo(s).",
-                update_failures,
+                apply_results.update_failures,
             )
+
+        if update_summary_file:
+            write_update_summary_file(
+                update_summary_file,
+                apply_results.successfully_updated_files,
+                apply_results.updated_targets,
+            )
+            logging.info("Wrote summary file to %s", update_summary_file)
 
         sys.exit(1 if had_failures else 0)

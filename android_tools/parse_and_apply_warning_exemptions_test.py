@@ -4,6 +4,7 @@
 
 """Tests for parse_and_apply_warning_exemptions."""
 
+import json
 from pathlib import Path
 import textwrap
 
@@ -239,3 +240,74 @@ class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
             12345, diff, ['"-Wno-foo"', '"-Wno-bar"']
         )
         self.assertEqual(result, expected_diff)
+
+
+class TestExemptionSummary(test_helpers.TempDirTestCase):
+    """Tests for ExemptionSummary."""
+
+    def test_from_file_success(self):
+        temp_dir = self.make_tempdir()
+        summary_file = temp_dir / "summary.json"
+        summary_content = {
+            "git_dirs": ["/foo/bar", "/baz/qux"],
+            "updated_targets": {
+                "//foo:bar": ["unused-variable"],
+                "//baz:qux": ["unused-function"],
+            },
+        }
+        with summary_file.open("w", encoding="utf-8") as f:
+            json.dump(summary_content, f)
+
+        summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+
+        self.assertEqual(
+            summary,
+            parse_and_apply.ExemptionSummary(
+                git_dirs=[Path("/foo/bar"), Path("/baz/qux")],
+                updated_targets={
+                    "//foo:bar": ["unused-variable"],
+                    "//baz:qux": ["unused-function"],
+                },
+            ),
+        )
+
+    def test_from_file_empty(self):
+        temp_dir = self.make_tempdir()
+        summary_file = temp_dir / "summary.json"
+        summary_content = {
+            "git_dirs": [],
+            "updated_targets": {},
+        }
+        with summary_file.open("w", encoding="utf-8") as f:
+            json.dump(summary_content, f)
+
+        summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+
+        self.assertEqual(
+            summary,
+            parse_and_apply.ExemptionSummary(
+                git_dirs=[],
+                updated_targets={},
+            ),
+        )
+
+    def test_write_to_file(self):
+        temp_dir = self.make_tempdir()
+        summary_file = temp_dir / "summary.json"
+        summary = parse_and_apply.ExemptionSummary(
+            git_dirs=[Path("/foo/bar"), Path("/baz/qux")],
+            updated_targets={
+                "//foo:bar": ["unused-variable"],
+                "//baz:qux": ["unused-function"],
+            },
+        )
+
+        summary.write_to_file(summary_file)
+
+        read_summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+
+        expected_summary = parse_and_apply.ExemptionSummary(
+            git_dirs=sorted(summary.git_dirs),
+            updated_targets=summary.updated_targets,
+        )
+        self.assertEqual(read_summary, expected_summary)
