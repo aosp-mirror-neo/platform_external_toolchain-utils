@@ -405,6 +405,40 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
     ).stdout.strip()
 
 
+def _add_all_files_and_commit(
+    git_dir: Path, quiet: bool, extra_commit_flags: tuple[str, ...]
+) -> str:
+    """Stage all changes to this repo, and run a commit.
+
+    Returns:
+        SHA of the new commit.
+    """
+    # Explicitly add using `git add -A`, since that stages all unstaged changes
+    # & adds any files that aren't tracked. `git commit -a` skips adding
+    # untracked files.
+    subprocess.run(
+        ("git", "add", "-A"),
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE if quiet else None,
+        stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8",
+        errors="replace",
+    )
+    subprocess.run(
+        ("git", "commit") + extra_commit_flags,
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE if quiet else None,
+        stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return resolve_ref(git_dir, "HEAD")
+
+
 def commit_all_changes(git_dir: Path, message: str, quiet: bool = False) -> str:
     """Commits all changes in `git_dir`, with the given commit message.
 
@@ -421,31 +455,16 @@ def commit_all_changes(git_dir: Path, message: str, quiet: bool = False) -> str:
     Returns:
         The SHA of the committed change.
     """
-    # Explicitly add using `git add -A`, since that stages all unstaged changes
-    # & adds any files that aren't tracked. `git commit -a` skips adding
-    # untracked files.
-    subprocess.run(
-        ["git", "add", "-A"],
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE if quiet else None,
-        stderr=subprocess.STDOUT if quiet else None,
-        encoding="utf-8",
-        errors="replace",
-    )
-    subprocess.run(
-        ["git", "commit", "-m", message],
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE if quiet else None,
-        stderr=subprocess.STDOUT if quiet else None,
-        encoding="utf-8",
-        errors="replace",
+    return _add_all_files_and_commit(
+        git_dir, quiet, extra_commit_flags=("-m", message)
     )
 
-    return resolve_ref(git_dir, "HEAD")
+
+def amend_head_with_all_changes(git_dir: Path, quiet: bool = False) -> str:
+    """`commit_all_changes`, but with `--amend --no-edit`."""
+    return _add_all_files_and_commit(
+        git_dir, quiet, extra_commit_flags=("--amend", "--no-edit")
+    )
 
 
 def fetch(
