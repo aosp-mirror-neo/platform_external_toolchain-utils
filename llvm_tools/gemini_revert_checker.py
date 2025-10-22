@@ -352,33 +352,22 @@ def _find_commits_reverted_by(
     if not commit_shas:
         return {}
 
-    # As mentioned in the gemini_api/README, this implementation is sketchy for
-    # the moment due to `pip` dependencies. In short, that has a
-    # `check_reverts.py` script that has to be invoked as a subprocess, since it
-    # sits in a specialized venv.
+    # TODO(b/436267619): Cleaning this up to directly import gemini_api would be
+    # nice.
     #
-    # The usage of it is, essentially:
+    # The usage of it as a standalone command is, essentially:
     # - Write SHAs, one per line, on stdin.
     # - Get **unordered** `GeminiRevertInference` results as JSON. Each result
     #   has the format {"sha": "${SHA}", "result": GeminiInferenceResult}.
     #   There is one JSON object output per line. Lines are output to a temp
     #   file.
-    gemini_api_dir = (
-        cros_paths.script_toolchain_utils_root() / "llvm_tools" / "gemini_api"
-    )
-
-    ensure_venv_script = gemini_api_dir / "establish_venv.sh"
-    venv_location = subprocess.run(
-        (ensure_venv_script,),
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    ).stdout.strip()
-
     check_reverts_command: list[Path | str] = [
-        Path(venv_location) / "bin" / "python3",
-        gemini_api_dir / "check_reverts.py",
+        cros_paths.script_toolchain_utils_root()
+        / "py"
+        / "bin"
+        / "llvm_tools"
+        / "gemini_api"
+        / "check_reverts.py",
         f"--llvm-dir={llvm_dir}",
     ]
 
