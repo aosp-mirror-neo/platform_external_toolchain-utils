@@ -13,7 +13,8 @@ If you invoke this script like:
 $ py/bin/android_tools/parse_and_apply_warning_exemptions.py \
     --android-tree=/path/to/android/tree/root \
     --bug-number=1234 \
-    --build-log=/tmp/build.log
+    --build-log=/tmp/build.log \
+    --upload-with-topic=my-warning-suppressions
 
 It will:
 
@@ -21,6 +22,8 @@ It will:
 2. Modify all `bp` targets that will be impacted.
 3. Create commits w/ helpful messages (tagged with b/1234) in all git repos
    that were modified.
+4. Upload all changes to the git repos from step #3, tagged with the
+   `my-warning-suppressions` topic.
 """
 
 import argparse
@@ -35,6 +38,7 @@ import shlex
 import subprocess
 import sys
 import textwrap
+import threading
 from typing import DefaultDict, Iterable, Sequence
 
 from cros_utils import git_utils
@@ -570,6 +574,68 @@ def commit_new_exemptions(
     return git_repos
 
 
+def upload_all_new_exemptions(
+    android_tree: Path,
+    thread_pool: concurrent.futures.ThreadPoolExecutor,
+    topic: str,
+    repos_to_upload: list[Path],
+) -> list[Path]:
+    """Uploads all new warning exemptions.
+
+    Returns:
+        A list of git repos where uploading failed.
+    """
+    # Gerrit has some pretty strict rate-limits, but uploading two repos at a
+    # time should _hopefully_ not hit those. Even with a limit as low as two,
+    # our throughput here is doubled.
+    upload_semaphore = threading.BoundedSemaphore(2)
+
+    def upload_one_repo(repo_subpath: Path) -> int:
+        repo = android_tree / repo_subpath
+        with upload_semaphore:
+            cls_uploaded = git_utils.upload_to_gerrit(
+                git_repo=repo,
+                remote=git_utils.ANDROID_INTERNAL_REMOTE,
+                branch=git_utils.ANDROID_MAIN_BRANCH,
+                topic=topic,
+                wip=True,
+            )
+
+        if not cls_uploaded:
+            raise ValueError(f"Very strange: no CLs uploaded in {repo}")
+
+        if len(cls_uploaded) != 1:
+            logging.warning(
+                "Uploaded %d CLs in %s somehow - ignoring all but the last",
+                len(cls_uploaded),
+                repo,
+            )
+        return cls_uploaded[-1]
+
+    logging.info("Uploading %d CLs...", len(repos_to_upload))
+
+    # Don't use `map`, since we filter on exceptions later.
+    upload_futures = [
+        thread_pool.submit(upload_one_repo, x) for x in repos_to_upload
+    ]
+
+    num_success = 0
+    exceptions = []
+    for repo, upload_result in zip(repos_to_upload, upload_futures):
+        if e := upload_result.exception():
+            exceptions.append((repo, e))
+        else:
+            num_success += 1
+
+    # List exceptions after all threads are done executing for clarity.
+    for repo, e in exceptions:
+        logging.error(
+            "Exception caught uploading changes to %s", repo, exc_info=e
+        )
+
+    return [x for x, _ in exceptions]
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parses and returns command-line arguments."""
     parser = argparse.ArgumentParser(
@@ -634,6 +700,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default="auto-suppress-warnings",
         help="Name of the branch to create in repos.",
     )
+    parser.add_argument(
+        "--upload-with-topic",
+        help="""
+        Upload all CLs applying suppressions using the given topic name. If you
+        don't pass this, changes will simply be committed locally. If you do,
+        they'll also be uploaded. Meaningless if --dry-run is passed.
+        """,
+    )
     opts = parser.parse_args(argv)
 
     if not opts.dry_run and not opts.bug_number:
@@ -658,6 +732,7 @@ def main(argv: list[str]) -> None:
     bug_number: int | None = opts.bug_number
     dry_run: bool = opts.dry_run
     keep_going: bool = opts.keep_going
+    upload_with_topic: str | None = opts.upload_with_topic
 
     with concurrent.futures.ThreadPoolExecutor() as thread_pool:
         autobuild_future: concurrent.futures.Future | None = None
@@ -737,10 +812,34 @@ def main(argv: list[str]) -> None:
             "Successfully made commits in %d repos", len(repos_with_commit)
         )
 
+        had_failures = bool(update_failures)
+        if upload_with_topic:
+            failed_uploads = upload_all_new_exemptions(
+                android_tree,
+                thread_pool,
+                upload_with_topic,
+                repos_with_commit,
+            )
+
+            num_successful_uploads = len(repos_with_commit) - len(
+                failed_uploads
+            )
+            logging.info(
+                "Uploaded %d CLs with topic %s",
+                num_successful_uploads,
+                upload_with_topic,
+            )
+            if failed_uploads:
+                had_failures = True
+                logging.error(
+                    "Uploading failed for repo(s):%s",
+                    "".join(f"\n- {x}" for x in failed_uploads),
+                )
+
         if update_failures:
             logging.error(
                 "As a reminder, adding exemptions failed on %d repo(s).",
                 update_failures,
             )
 
-        sys.exit(1 if update_failures else 0)
+        sys.exit(1 if had_failures else 0)
