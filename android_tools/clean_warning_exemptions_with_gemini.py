@@ -2,19 +2,188 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Uses Gemini to clean up warning exemptions for a set of git repos."""
+"""Uses tooling to clean up warning exemptions for a set of git repos."""
 
 import argparse
 import concurrent.futures
 import dataclasses
 import logging
 from pathlib import Path
+import re
 import subprocess
 import sys
 
 from android_tools import android_paths
 from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
 from cros_utils import git_utils
+
+
+_HUNK_HEADER_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)")
+
+
+@dataclasses.dataclass(frozen=True)
+class DiffHunk:
+    """A single hunk in a diff.
+
+    This is expected to be a hunk diff produced by `git diff` on a single file,
+    on a repo which is not currently undergoing any special git operation (e.g.,
+    merging).
+    """
+
+    header: str
+    lines: list[str]
+    old_start: int
+    old_len: int
+    new_start: int
+    new_len: int
+    rest: str
+
+    @staticmethod
+    def parse(
+        lines: list[str], start_idx: int = 0
+    ) -> tuple["DiffHunk", int] | None:
+        """Tries to parse a hunk at `start_line_idx`.
+
+        Returns:
+            A tuple of (hunk, first_line_idx_after_hunk), or None if parsing
+            failed.
+        """
+        line = lines[start_idx]
+        match = _HUNK_HEADER_RE.match(line)
+        if not match:
+            return None
+
+        hunk_header = line
+        (
+            old_start_str,
+            old_len_str,
+            new_start_str,
+            new_len_str,
+            rest,
+        ) = match.groups()
+
+        old_start = int(old_start_str)
+        new_start = int(new_start_str)
+        # Note that if these are omitted, their value is implicitly 1.
+        old_len = int(old_len_str) if old_len_str else 1
+        new_len = int(new_len_str) if new_len_str else 1
+
+        hunk_start_idx = start_idx + 1
+        old_lines_read = 0
+        new_lines_read = 0
+
+        if not (old_len or new_len):
+            raise ValueError("0-length hunk is nonsensical")
+
+        i = None
+        for i in range(hunk_start_idx, len(lines)):
+            # We verify that the hunk header was well-formed after this loop, so
+            # `>=` here is fine.
+            if old_lines_read >= old_len and new_lines_read >= new_len:
+                break
+
+            hunk_line = lines[i]
+            if hunk_line.startswith("+"):
+                new_lines_read += 1
+            elif hunk_line.startswith("-"):
+                old_lines_read += 1
+            elif hunk_line.startswith(" ") or not hunk_line:
+                old_lines_read += 1
+                new_lines_read += 1
+            elif hunk_line.startswith("\\ No newline at end of file"):
+                break
+            else:
+                raise ValueError(
+                    f"Invalid line in diff hunk parsing: {hunk_line}"
+                )
+
+        if not (old_lines_read == old_len and new_lines_read == new_len):
+            raise ValueError(
+                f"Invalid diff hunk; "
+                f"read {old_lines_read}, old lines, want {old_len}, and "
+                f"read {new_lines_read}, old lines, want {new_len}."
+            )
+
+        # Checked for a zero-length hunk above, so the loop must have iterated.
+        assert i, "Zero-length hunk that wasn't caught earlier?"
+        return (
+            DiffHunk(
+                header=hunk_header,
+                lines=lines[hunk_start_idx:i],
+                old_start=old_start,
+                old_len=old_len,
+                new_start=new_start,
+                new_len=new_len,
+                rest=rest,
+            ),
+            i,
+        )
+
+
+def remove_blank_lines_from_hunk(hunk: DiffHunk) -> list[str] | None:
+    """Per-hunk version of remove_blank_lines_from_diff.
+
+    Returns:
+        A new hunk with whitespace removed. If the hunk only consisted of
+        `isspace()` additions, returns None.
+    """
+    new_hunk_lines = []
+    removed_count = 0
+    for hunk_line in hunk.lines:
+        if hunk_line.startswith("+") and not hunk_line[1:].rstrip():
+            removed_count += 1
+            continue
+
+        new_hunk_lines.append(hunk_line)
+
+    if not any(x.startswith("+") or x.startswith("-") for x in new_hunk_lines):
+        return None
+
+    # _Technically_ we should be updating 'new' line numbers in headers if a
+    # prior hunk is modified, but git is happy to fuzz.
+    if not removed_count:
+        return [hunk.header] + hunk.lines
+
+    new_len_updated = hunk.new_len - removed_count
+
+    old_range = f"-{hunk.old_start},{hunk.old_len}"
+    new_range = f"+{hunk.new_start},{new_len_updated}"
+    new_hunk_header = f"@@ {old_range} {new_range} @@{hunk.rest}"
+    new_hunk_lines.insert(0, new_hunk_header)
+    return new_hunk_lines
+
+
+def remove_blank_lines_from_diff(git_diff: str) -> str:
+    """This function removes blank lines added by `git_diff`.
+
+    Sometimes, Soong tooling will lead to weird constructs that can't be
+    autoformatted away. For example, a diff might contain the following hunk
+    (ignoring the header):
+
+    ```
+     cc_defaults {
+       name: "foo",
+    +  cflags: ["-Wbar"],
+    +
+     }
+    ```
+
+    This modifies the given diff to remove the empty added line. It does nothing
+    about removed or unchanged lines.
+    """
+    lines = git_diff.split("\n")
+    output_lines = []
+    line_idx = 0
+    while line_idx < len(lines):
+        if parsed_hunk := DiffHunk.parse(lines, line_idx):
+            hunk, line_idx = parsed_hunk
+            if new_hunk := remove_blank_lines_from_hunk(hunk):
+                output_lines.extend(new_hunk)
+        else:
+            output_lines.append(lines[line_idx])
+            line_idx += 1
+
+    return "\n".join(output_lines)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -72,13 +241,37 @@ def run_on_repo(config: RunConfig, git_repo: Path) -> bool:
 
     # Gemini is instructed to only make changes to files, and has no ability to
     # use tools like `git`. So if there's a diff, it made changes.
-    if not git_utils.has_discardable_changes(git_repo_path):
-        logging.info("Gemini made no changes to %s.", git_repo)
-        return False
+    if git_utils.has_discardable_changes(git_repo_path):
+        new_sha = git_utils.amend_head_with_all_changes(
+            git_repo_path, quiet=True
+        )
+        logging.info(
+            "Committed Gemini's changes to %s; new HEAD is %s.",
+            git_repo,
+            new_sha,
+        )
+        gemini_made_change = True
+    else:
+        gemini_made_change = False
 
+    # Now, clean up any blank lines that Gemini may have added.
+    head_patch = git_utils.format_patch(git_repo_path, "HEAD")
+    cleaned_patch = remove_blank_lines_from_diff(head_patch)
+    if head_patch == cleaned_patch:
+        return gemini_made_change
+
+    logging.info("Removing blank lines from CL in %s", git_repo)
+    git_utils.checkout(git_repo_path, "HEAD~", paths=(".",))
+    try:
+        git_utils.apply_patch_contents(git_repo_path, cleaned_patch)
+    except subprocess.CalledProcessError:
+        logging.error("Failed applying patch:\n%s", cleaned_patch)
+        raise
     new_sha = git_utils.amend_head_with_all_changes(git_repo_path, quiet=True)
     logging.info(
-        "Committed Gemini's changes to %s; new HEAD is %s.", git_repo, new_sha
+        "Re-committed Gemini's changes to %s (no blank lines); new HEAD is %s.",
+        git_repo,
+        new_sha,
     )
     return True
 

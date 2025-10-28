@@ -494,10 +494,18 @@ def fetch(
     )
 
 
-def checkout(git_dir: Path, ref: str) -> None:
-    """Runs `git checkout ${ref}."""
+def checkout(git_dir: Path, ref: str, paths: Sequence[str] = ()) -> None:
+    """Runs `git checkout ${ref}`.
+
+    If `paths` is specified, only the given paths are checked out.
+    """
+    cmd = ["git", "checkout", ref]
+    if paths:
+        cmd.append("--")
+        cmd += paths
+
     subprocess.run(
-        ("git", "checkout", ref),
+        cmd,
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -676,6 +684,17 @@ def format_patch(git_dir: Path, ref: str) -> str:
         raise ValueError(f"No git diff between {ref}^..{ref}")
     logging.debug("Patch diff is %d lines long", contents.count("\n"))
     return contents
+
+
+def apply_patch_contents(git_dir: Path, patch_contents: str):
+    """Applies the given patch contents to the given git repo."""
+    subprocess.run(
+        ("git", "apply"),
+        check=True,
+        cwd=git_dir,
+        input=patch_contents,
+        encoding="utf-8",
+    )
 
 
 def get_message_subject(git_dir: Path, ref: str) -> str:
