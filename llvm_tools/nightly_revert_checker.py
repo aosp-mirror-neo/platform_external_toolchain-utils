@@ -651,7 +651,6 @@ def _upload_revert_cherry_pick(
         branch=branch_without_remote,
         reviewers=reviewers,
         cc=cc,
-        wip=True,  # TODO(ajordanr): Remove this once we verify this is correct.
     )
     if is_cl_a_merge_conflict:
         # Set V-1 for more visibility.
