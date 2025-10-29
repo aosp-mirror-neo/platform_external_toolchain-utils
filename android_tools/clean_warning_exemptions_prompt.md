@@ -1,24 +1,25 @@
 # Instructions
 
-Your task is to simplify the commit that was just made in this repository.
+Your task is to simplify an Android.bp file's modifications that were just made
+in this repository.
 
-The commit is produced after these instructions. It should consist of changes
-to `Android.bp` files, which are Blueprint files that configure Android's
-build. These changes add `cflags` to targets that break with one or more
-compiler warnings enabled.
+The diff is produced after these instructions. It should consist of changes to
+precisely one `Android.bp` file, which is a Blueprint files that configure
+Android's build. These changes add `cflags` to targets that break with one or
+more compiler warnings enabled.
 
 # Simplification rules
 
-You should carefully apply the following rules to each file that was changed:
+You should carefully apply the following rules when simplifying:
 
-1. If a file only has one target with cflags added, do nothing to that file.
-2. If a file has multiple targets with common cflags added, try to identify a
-   common `defaults` between at least two of the targets, and move the cflags
-   from the targets to the `defaults`.
+1. If the file only has one target with `cflags` added, do nothing to that file.
+2. If the file has multiple targets with common `cflags` added, try to identify
+   a common `defaults` between at least two of the targets, and move the
+   `cflags` from the targets to the `defaults`.
 
-After editing files, you are done. You are **not** to perform any operations
-outside of reading and writing files. You are **not** to attempt to run tools
-like `git`.
+You are **only** to make changes to `cflags` fields of `Android.bp` targets,
+and their related comments. Under no circumstances should you modify fields or
+comments that are unrelated to `cflags`.
 
 # Description of Android.bp files
 
@@ -256,6 +257,82 @@ cc_library {
 }
 ```
 
+## 5. Centralize in common default, with multiple options
+
+`defaults` lists may contain multiple values. In this case, `cflag` lists
+between them become concatenated. They're all equally acceptable candidates to
+move flags to, if doing so will allow for deduplication of newly-added flags.
+
+Given the following file:
+
+```
+cc_defaults {
+    name: "ex5_main_defaults",
+}
+
+cc_defaults {
+    name: "ex5_extra_defaults",
+    cflags: ["-fstrict-aliasing"],
+}
+
+cc_library {
+    name: "ex5_my_library",
+    defaults: ["ex5_main_defaults"],
+    srcs: ["my_file.cc"],
+    cflags: [
+      "-Wno-bar",
+      // b/1234: Temporarily suppress this.
+      "-Wno-foo",
+    ],
+}
+
+cc_library {
+    name: "ex5_my_other_library",
+    defaults: [
+      "ex5_extra_defaults",
+      "ex5_main_defaults",
+    ],
+    srcs: ["my_other_file.cc"],
+    // b/1234: Temporarily suppress this.
+    cflags: ["-Wno-foo"],
+}
+```
+
+`ex5_main_defaults` is shared between the `cc_library`s with `-Wno-foo`, so
+`-Wno-foo` should be moved to `ex5_main_defaults`.
+
+```
+cc_defaults {
+    name: "ex5_main_defaults",
+    // b/1234: Temporarily suppress this.
+    cflags: ["-Wno-foo"],
+}
+
+cc_defaults {
+    name: "ex5_extra_defaults",
+    cflags: ["-fstrict-aliasing"],
+}
+
+cc_library {
+    name: "ex5_my_library",
+    defaults: ["ex5_main_defaults"],
+    srcs: ["my_file.cc"],
+    cflags: [
+      "-Wno-bar",
+    ],
+}
+
+cc_library {
+    name: "ex5_my_other_library",
+    defaults: [
+      "ex5_extra_defaults",
+      "ex5_main_defaults",
+    ],
+    srcs: ["my_other_file.cc"],
+}
+```
+
 # Commit to examine
 
-The output of `git format-patch HEAD^..HEAD` for this repository is appended below:
+The output of `git diff HEAD^..HEAD -- THE_FILE` for this repository is
+appended below:

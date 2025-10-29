@@ -189,3 +189,155 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             clean_warnings.remove_blank_lines_from_diff(diff).rstrip(),
             expected_diff.rstrip(),
         )
+
+
+class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
+    """Tests for diff_trivially_has_no_dedupe_potential."""
+
+    def test_no_hunk(self):
+        diff = textwrap.dedent(
+            """
+            --- a/some/file.bp
+            +++ b/some/file.bp
+            """
+        )
+        self.assertTrue(
+            clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
+        )
+
+    def test_one_wno_flag(self):
+        diff = textwrap.dedent(
+            """
+            --- a/some/file.bp
+            +++ b/some/file.bp
+            @@ -1,3 +1,4 @@
+             cc_library {
+               name: "foo",
+            +  cflags: ["-Wno-bar"],
+             }
+            """
+        )
+        self.assertTrue(
+            clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
+        )
+
+    def test_multiple_different_wno_flags(self):
+        diff = textwrap.dedent(
+            """
+            --- a/some/file.bp
+            +++ b/some/file.bp
+            @@ -1,6 +1,8 @@
+             cc_library {
+               name: "foo",
+            +  cflags: ["-Wno-bar"],
+             }
+             cc_library {
+               name: "foo",
+            +  cflags: ["-Wno-baz"],
+             }
+            """
+        )
+        self.assertTrue(
+            clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
+        )
+
+    def test_duplicate_wno_flags_same_hunk(self):
+        diff = textwrap.dedent(
+            """
+            --- a/some/file.bp
+            +++ b/some/file.bp
+            @@ -1,6 +1,8 @@
+             cc_library {
+               name: "foo",
+            +  cflags: ["-Wno-bar"],
+             }
+             cc_library {
+               name: "foo",
+            +  cflags: ["-Wno-bar"],
+             }
+            """
+        )
+        self.assertFalse(
+            clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
+        )
+
+    def test_duplicate_wno_flags_across_hunks(self):
+        diff = textwrap.dedent(
+            """
+            --- a/some/file.bp
+            +++ b/some/file.bp
+            @@ -1,3 +1,4 @@
+             cc_library {
+               name: "foo",
+            +  cflags: ["-Wno-bar"],
+             }
+            @@ -10,3 +11,4 @@
+             cc_library {
+               name: "bar",
+            +  cflags: ["-Wno-bar"],
+             }
+            """
+        )
+        self.assertFalse(
+            clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
+        )
+
+    def test_no_added_lines(self):
+        diff = textwrap.dedent(
+            """
+            --- a/some/file.bp
+            +++ b/some/file.bp
+            @@ -1,4 +1,3 @@
+             cc_library {
+               name: "foo",
+            -  cflags: ["-Wno-bar"],
+             }
+            """
+        )
+        self.assertTrue(
+            clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
+        )
+
+
+class TestIterateDiffPieces(test_helpers.TempDirTestCase):
+    """Tests for iterate_diff_pieces."""
+
+    def test_empty_diff(self):
+        diff = ""
+        pieces = list(clean_warnings.iterate_diff_pieces(diff))
+        self.assertEqual(pieces, [""])
+
+    def test_docstring_example(self):
+        diff = (
+            textwrap.dedent(
+                """\
+                Foo bar
+                --- a/foo
+                +++ b/foo
+                @@ -1 +1 @@
+                   line
+                trailing line
+
+                """
+            ).rstrip()
+            + "\n"
+        )
+
+        pieces = list(clean_warnings.iterate_diff_pieces(diff))
+        expected_pieces = [
+            "Foo bar",
+            "--- a/foo",
+            "+++ b/foo",
+            clean_warnings.DiffHunk(
+                header="@@ -1 +1 @@",
+                lines=["   line"],
+                old_start=1,
+                old_len=1,
+                new_start=1,
+                new_len=1,
+                rest="",
+            ),
+            "trailing line",
+            "",
+        ]
+        self.assertEqual(pieces, expected_pieces)

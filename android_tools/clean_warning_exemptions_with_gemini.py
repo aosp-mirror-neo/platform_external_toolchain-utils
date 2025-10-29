@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import threading
+from typing import Iterator
 
 from android_tools import android_paths
 from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
@@ -21,7 +23,7 @@ from cros_utils import git_utils
 _HUNK_HEADER_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)")
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, eq=True)
 class DiffHunk:
     """A single hunk in a diff.
 
@@ -153,6 +155,41 @@ def remove_blank_lines_from_hunk(hunk: DiffHunk) -> list[str] | None:
     return new_hunk_lines
 
 
+def iterate_diff_pieces(git_diff: str) -> Iterator[DiffHunk | str]:
+    """Yields the 'pieces' of the given diff.
+
+    "Pieces" is, loosely, "either a meaningful, structured part of a diff, or a
+    str that represents the current line."
+
+    For example, given a diff containing:
+
+    '''
+    Foo bar
+    --- a/foo
+    +++ b/foo
+    @@ -1 +1 @@
+       line
+    trailing line
+
+    '''
+
+    This will yield the following elements:
+    ["Foo bar", "--- a/foo", "+++ b/foo", DiffHunk(...), "trailing line", ""]
+    """
+    # `splitlines()` will ignore a trailing newline, `split()` will preserve it
+    # as an empty string.
+    lines = git_diff.split("\n")
+
+    line_idx = 0
+    while line_idx < len(lines):
+        if parsed_hunk := DiffHunk.parse(lines, line_idx):
+            hunk, line_idx = parsed_hunk
+            yield hunk
+        else:
+            yield lines[line_idx]
+            line_idx += 1
+
+
 def remove_blank_lines_from_diff(git_diff: str) -> str:
     """This function removes blank lines added by `git_diff`.
 
@@ -171,18 +208,13 @@ def remove_blank_lines_from_diff(git_diff: str) -> str:
     This modifies the given diff to remove the empty added line. It does nothing
     about removed or unchanged lines.
     """
-    lines = git_diff.split("\n")
     output_lines = []
-    line_idx = 0
-    while line_idx < len(lines):
-        if parsed_hunk := DiffHunk.parse(lines, line_idx):
-            hunk, line_idx = parsed_hunk
-            if new_hunk := remove_blank_lines_from_hunk(hunk):
+    for piece in iterate_diff_pieces(git_diff):
+        if isinstance(piece, DiffHunk):
+            if new_hunk := remove_blank_lines_from_hunk(piece):
                 output_lines.extend(new_hunk)
         else:
-            output_lines.append(lines[line_idx])
-            line_idx += 1
-
+            output_lines.append(piece)
     return "\n".join(output_lines)
 
 
@@ -203,76 +235,142 @@ def read_gemini_prompt() -> str:
     return prompt_md.read_text(encoding="utf-8")
 
 
-def run_on_repo(config: RunConfig, git_repo: Path) -> bool:
-    """Runs on a git repo, returning True if changes were made."""
+_DASH_W_NO_STRING_RE = re.compile(r'"(-Wno-[^"]+)"')
 
-    logging.info("Running Gemini on %s...", git_repo)
+
+def diff_trivially_has_no_dedupe_potential(file_diff: str) -> bool:
+    """Returns True if `file_diff` has no dedupe potential.
+
+    This is meant to be a quick heuristic that lets us skip Gemini in cases
+    where it's obviously not needed. The simple act of starting Gemini and
+    sending a query for it to respond "it's obvious that no changes are needed,"
+    takes seconds of wall-time. Taking a few milliseconds instead speeds things
+    up dramatically in the common case that a file has just one change.
+    """
+    dash_w_strings = set()
+    for piece in iterate_diff_pieces(file_diff):
+        if not isinstance(piece, DiffHunk):
+            continue
+
+        for line in piece.lines:
+            if not line.startswith("+"):
+                continue
+
+            for m in _DASH_W_NO_STRING_RE.findall(line):
+                # If we've already found this `-Wno-` string elsewhere in the
+                # diff, there's room for it to be deduped.
+                if m in dash_w_strings:
+                    return False
+                dash_w_strings.add(m)
+
+    return True
+
+
+def run_on_file(
+    config: RunConfig,
+    git_repo: Path,
+    repo_lock: threading.RLock,
+    file_in_repo: Path,
+) -> None:
+    """Runs transformations on a specific file in a git repo.
+
+    Args:
+        config: RunConfig for the cleanups.
+        git_repo: Git repo inside of the Android tree to modify.
+        repo_lock: RLock to acquire before running any git operation. This lock
+          must be shared between all concurrent `run_on_file` operations on the
+          same `git_repo`.
+        file_in_repo: File to modify.
+    """
+    git_file = git_repo / file_in_repo
     git_repo_path = config.android_tree / git_repo
 
-    head_contents = git_utils.format_patch(git_repo_path, "HEAD")
-    # Use gemini-cli rather than Gemini's API, since gemini-cli has the built-in
-    # ability to edit files/etc.
-    run_result = subprocess.run(
-        (
-            "gemini",
-            # This isn't an interactive session; approve all edits, but stop
-            # short of running anything else.
-            "--approval-mode=auto_edit",
-            "\n".join((config.gemini_prompt, head_contents)),
-        ),
-        cwd=git_repo_path,
-        check=False,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        encoding="utf-8",
-        errors="replace",
-    )
-
-    if run_result.returncode:
-        logging.error(
-            "Gemini failed on %s; stdout/stderr:\n%s",
-            git_repo,
-            run_result.stdout,
+    # NOTE: Git gets angry if you modify a repo concurrently with reading it (or
+    # modify concurrently with modifying it). It's a bit ugly, but we can easily
+    # work around that by locking git ops for this repo.
+    with repo_lock:
+        file_diff = git_utils.diff(
+            git_dir=git_repo_path,
+            ref_start="HEAD~",
+            ref_end="HEAD",
+            only_files=(file_in_repo,),
         )
-        run_result.check_returncode()
 
-    logging.debug("Gemini's output on %s was:\n%s", git_repo, run_result.stdout)
-
-    # Gemini is instructed to only make changes to files, and has no ability to
-    # use tools like `git`. So if there's a diff, it made changes.
-    if git_utils.has_discardable_changes(git_repo_path):
-        new_sha = git_utils.amend_head_with_all_changes(
-            git_repo_path, quiet=True
-        )
+    raise_if_gemini_failed = lambda: None
+    if diff_trivially_has_no_dedupe_potential(file_diff):
         logging.info(
-            "Committed Gemini's changes to %s; new HEAD is %s.",
-            git_repo,
-            new_sha,
+            "Skipping Gemini on %s; there's no dedupe potential.", git_file
         )
-        gemini_made_change = True
     else:
-        gemini_made_change = False
+        logging.info("Running Gemini on %s...", git_file)
+        # Use gemini-cli rather than Gemini's API, since gemini-cli has the
+        # built-in ability to edit files/etc.
+        gemini_run_result = subprocess.run(
+            (
+                "gemini",
+                # This isn't an interactive session; approve all edits, but stop
+                # short of running anything else.
+                "--approval-mode=auto_edit",
+                "\n\n".join((config.gemini_prompt, "```", file_diff, "```")),
+            ),
+            cwd=git_repo_path,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            encoding="utf-8",
+            errors="replace",
+        )
 
-    # Now, clean up any blank lines that Gemini may have added.
-    head_patch = git_utils.format_patch(git_repo_path, "HEAD")
-    cleaned_patch = remove_blank_lines_from_diff(head_patch)
-    if head_patch == cleaned_patch:
-        return gemini_made_change
+        if gemini_run_result.returncode:
+            logging.error(
+                "Gemini failed on %s; stdout/stderr:\n%s",
+                git_file,
+                gemini_run_result.stdout,
+            )
+            raise_if_gemini_failed = gemini_run_result.check_returncode
+        else:
+            logging.debug(
+                "Gemini's output on %s was:\n%s",
+                git_file,
+                gemini_run_result.stdout,
+            )
 
-    logging.info("Removing blank lines from CL in %s", git_repo)
-    git_utils.checkout(git_repo_path, "HEAD~", paths=(".",))
-    try:
-        git_utils.apply_patch_contents(git_repo_path, cleaned_patch)
-    except subprocess.CalledProcessError:
-        logging.error("Failed applying patch:\n%s", cleaned_patch)
-        raise
-    new_sha = git_utils.amend_head_with_all_changes(git_repo_path, quiet=True)
-    logging.info(
-        "Re-committed Gemini's changes to %s (no blank lines); new HEAD is %s.",
-        git_repo,
-        new_sha,
-    )
+        with repo_lock:
+            # Refresh this, since Gemini may have made changes.
+            file_diff = git_utils.diff(
+                git_dir=git_repo_path,
+                ref_start="HEAD~",
+                # Don't set `ref_end`, since we want to take changes in the
+                # working directory into account.
+                only_files=(file_in_repo,),
+            )
+
+    cleaned_diff = remove_blank_lines_from_diff(file_diff)
+    if file_diff == cleaned_diff:
+        raise_if_gemini_failed()
+        return
+
+    logging.info("Removing blank lines from %s...", git_file)
+    with repo_lock:
+        git_utils.checkout(git_repo_path, "HEAD~", paths=(file_in_repo,))
+        try:
+            git_utils.apply_patch_contents(git_repo_path, cleaned_diff)
+        except subprocess.CalledProcessError:
+            logging.error("Failed applying patch:\n%s", cleaned_diff)
+            raise
+    raise_if_gemini_failed()
+
+
+def amend_head_if_necessary(run_config: RunConfig, git_repo: Path) -> bool:
+    """Amends HEAD if changes are present; returns True if amended."""
+    git_repo_path = run_config.android_tree / git_repo
+    if not git_utils.has_discardable_changes(git_repo_path):
+        logging.debug("No changes made to %s; not amending", git_repo_path)
+        return False
+
+    logging.debug("Changes made to %s; amending", git_repo_path)
+    git_utils.amend_head_with_all_changes(git_repo_path, quiet=True)
     return True
 
 
@@ -293,7 +391,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         """,
     )
     parser.add_argument(
-        "--jobs", type=int, default=8, help="Max jobs to run at once."
+        "--jobs",
+        type=int,
+        default=8,
+        help="""
+        Max jobs to run at once. Generally speaking, these jobs will spend most
+        of their wall time an invocation of `gemini-cli`. To avoid
+        rate-limiting, this is kept pretty low.
+        """,
     )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
@@ -348,33 +453,65 @@ def main(argv: list[str]) -> None:
         gemini_prompt=read_gemini_prompt(),
     )
 
-    with concurrent.futures.ThreadPoolExecutor(opts.jobs) as thread_pool:
-        futures = []
-        for r in repos_to_run_on:
-            f = thread_pool.submit(
-                run_on_repo,
-                run_config,
-                r,
-            )
-            futures.append((r, f))
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=opts.jobs
+    ) as thread_pool:
+        # Phase 1: Run transformations. To keep them focused, run separately per
+        # file in the repo. These will arbitrarily mutate and examine these
+        # files, but should modify no state outside of said files.
+        futures = {}
+        for repo in repos_to_run_on:
+            repo_lock = threading.RLock()
+            for file in git_utils.list_files_changed_by_commit(
+                git_dir=android_tree / repo, ref="HEAD"
+            ):
+                if Path(file).name != "Android.bp":
+                    logging.warning(
+                        "Weird: found non-Android.bp file update to %s. "
+                        "Ignoring.",
+                        repo / file,
+                    )
+                    continue
+                f = thread_pool.submit(
+                    run_on_file, run_config, repo, repo_lock, Path(file)
+                )
+                futures[f] = repo / file
 
         exceptions = []
-        num_successful_updates = 0
-        for repo, run_result in futures:
-            if e := run_result.exception():
+        for future in concurrent.futures.as_completed(futures):
+            repo = futures[future]
+            if e := future.exception():
                 exceptions.append((repo, e))
-            elif run_result.result():
-                logging.info("Successfully updated %s", repo)
-                num_successful_updates += 1
 
-        # Log exceptions in a batch afterward, so they don't get lost in any
-        # logging output above.
-        for repo, e in exceptions:
-            logging.error(
-                "Exception caught making changes to %s", repo, exc_info=e
+        # Phase 2: Commit any changes that were made. If an exception is raised
+        # for simply _amending a commit_, it's probably OK to just let that
+        # bubble up, rather than having special logic like we do for Gemini.
+        amend_results = list(
+            thread_pool.map(
+                lambda x: amend_head_if_necessary(run_config, x),
+                repos_to_run_on,
             )
+        )
+        num_changed_repos = sum(1 for x in amend_results if x)
 
-        logging.info("Applied updates to %d repos", num_successful_updates)
+        # Log Gemini-related exceptions in a batch afterward, so they don't get
+        # lost in any logging output above.
+        for repo_file, e in exceptions:
+            if isinstance(e, subprocess.CalledProcessError):
+                logging.error(
+                    "Exception caught making changes to %s; stdstreams:\n%s",
+                    repo_file,
+                    e.stdout,
+                    exc_info=e,
+                )
+            else:
+                logging.error(
+                    "Exception caught making changes to %s",
+                    repo_file,
+                    exc_info=e,
+                )
+
+        logging.info("Applied updates to %d repos", num_changed_repos)
         sys.exit(1 if exceptions else 0)
 
 

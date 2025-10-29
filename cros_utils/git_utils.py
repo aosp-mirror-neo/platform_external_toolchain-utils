@@ -494,12 +494,14 @@ def fetch(
     )
 
 
-def checkout(git_dir: Path, ref: str, paths: Sequence[str] = ()) -> None:
+def checkout(
+    git_dir: Path, ref: str, paths: Sequence[str | os.PathLike] = ()
+) -> None:
     """Runs `git checkout ${ref}`.
 
     If `paths` is specified, only the given paths are checked out.
     """
-    cmd = ["git", "checkout", ref]
+    cmd: list[str | os.PathLike] = ["git", "checkout", ref]
     if paths:
         cmd.append("--")
         cmd += paths
@@ -881,3 +883,48 @@ def list_shas_between(git_dir: Path, from_ref: str, to_ref: str) -> list[str]:
     # Git prints newest first, so reverse the list.
     results.reverse()
     return results
+
+
+def list_files_changed_by_commit(git_dir: Path, ref: str) -> list[str]:
+    """Returns a list of files changed by `ref`.
+
+    'Changed' might mean added, removed, moved, or modified.
+    """
+    file_list = subprocess.run(
+        ("git", "diff", "--name-only", f"{ref}~", ref),
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    return [x.strip() for x in file_list.splitlines()]
+
+
+def diff(
+    git_dir: Path,
+    *,
+    ref_start: str,
+    ref_end: str | None = None,
+    only_files: Sequence[str | os.PathLike] = (),
+) -> str:
+    """Returns the diff of commit `ref`.
+
+    If `only_files` is passed, the diff is scoped to the given files.
+    """
+    cmd: list[str | os.PathLike] = ["git", "diff", ref_start]
+    if ref_end:
+        cmd.append(ref_end)
+
+    if only_files:
+        cmd.append("--")
+        cmd += only_files
+
+    return subprocess.run(
+        cmd,
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
