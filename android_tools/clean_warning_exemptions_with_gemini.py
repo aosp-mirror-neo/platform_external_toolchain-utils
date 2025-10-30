@@ -2,7 +2,15 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Uses tooling to clean up warning exemptions for a set of git repos."""
+"""Uses tooling to clean up warning exemptions for a set of git repos.
+
+This tooling expects that you've recently run
+`parse_and_apply_warning_exemptions.py` on the tree in question. Specifically:
+
+1. Tools like `bpfmt` are available.
+2. Repos that `parse_and_apply_warning_exemptions` branched and modified are
+   still in that branched-and-modified state.
+"""
 
 import argparse
 import concurrent.futures
@@ -224,6 +232,7 @@ class RunConfig:
 
     android_tree: Path
     gemini_prompt: str
+    bpfmt: Path
 
 
 def read_gemini_prompt() -> str:
@@ -347,18 +356,28 @@ def run_on_file(
             )
 
     cleaned_diff = remove_blank_lines_from_diff(file_diff)
-    if file_diff == cleaned_diff:
-        raise_if_gemini_failed()
-        return
+    if file_diff != cleaned_diff:
+        logging.info("Removing blank lines from %s...", git_file)
+        with repo_lock:
+            git_utils.checkout(git_repo_path, "HEAD~", paths=(file_in_repo,))
+            try:
+                git_utils.apply_patch_contents(git_repo_path, cleaned_diff)
+            except subprocess.CalledProcessError:
+                logging.error("Failed applying patch:\n%s", cleaned_diff)
+                raise
 
-    logging.info("Removing blank lines from %s...", git_file)
-    with repo_lock:
-        git_utils.checkout(git_repo_path, "HEAD~", paths=(file_in_repo,))
-        try:
-            git_utils.apply_patch_contents(git_repo_path, cleaned_diff)
-        except subprocess.CalledProcessError:
-            logging.error("Failed applying patch:\n%s", cleaned_diff)
-            raise
+    logging.info("Formatting %s...", git_file)
+    subprocess.run(
+        (config.bpfmt, "-w", file_in_repo),
+        cwd=git_repo_path,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        # Pipe these so they're printed by main's exception handler if this
+        # fails.
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+
     raise_if_gemini_failed()
 
 
@@ -448,9 +467,18 @@ def main(argv: list[str]) -> None:
         )
         repos_to_run_on = summary_file.git_dirs
 
+    bpfmt_path = parse_and_apply.bpfmt_path(android_tree)
+    if not bpfmt_path.exists():
+        sys.exit(
+            f"No bpfmt found at {bpfmt_path} - are you using the tree you "
+            "ran parse_and_apply_warning_exemptions on? Reminder that you can "
+            "always build it via `m blueprint_tools`."
+        )
+
     run_config = RunConfig(
         android_tree=android_tree,
         gemini_prompt=read_gemini_prompt(),
+        bpfmt=bpfmt_path,
     )
 
     with concurrent.futures.ThreadPoolExecutor(
