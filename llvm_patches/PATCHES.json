@@ -1318,5 +1318,20 @@
       "from": 574158,
       "until": 575668
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [ELF] Postpone ASSERT error"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/5859863bab7fb1cd98b6028293cba6ba25f7d514.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577064
+    }
   }
 ]
