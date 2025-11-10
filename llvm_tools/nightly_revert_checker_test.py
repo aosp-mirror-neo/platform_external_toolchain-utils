@@ -320,6 +320,62 @@ class Test(unittest.TestCase):
             want_message,
         )
 
+    def test_update_new_state_head_info(self):
+        now = 1_000_000_000
+        old_state = nightly_revert_checker.State(
+            heads={
+                "dropped": nightly_revert_checker.HeadInfo(
+                    last_sha="sha_dropped",
+                    first_seen_timestamp=now - 100,
+                    next_notification_timestamp=now + 100,
+                ),
+                "kept": nightly_revert_checker.HeadInfo(
+                    last_sha="sha_kept",
+                    first_seen_timestamp=now - 200,
+                    next_notification_timestamp=now + 200,
+                ),
+                "updated": nightly_revert_checker.HeadInfo(
+                    last_sha="sha_updated_old",
+                    first_seen_timestamp=now - 300,
+                    next_notification_timestamp=now + 300,
+                ),
+            }
+        )
+        interesting_shas = [
+            ("kept", "sha_kept"),
+            ("updated", "sha_updated_new"),
+            ("added", "sha_added"),
+        ]
+        new_state = nightly_revert_checker.State()
+
+        nightly_revert_checker.update_new_state_head_info(
+            now=now,
+            interesting_shas=interesting_shas,
+            old_state=old_state,
+            new_state=new_state,
+        )
+
+        self.assertNotIn("dropped", new_state.heads)
+        self.assertEqual(new_state.heads["kept"], old_state.heads["kept"])
+        self.assertEqual(
+            new_state.heads["updated"],
+            nightly_revert_checker.HeadInfo(
+                last_sha="sha_updated_new",
+                first_seen_timestamp=now,
+                next_notification_timestamp=now
+                + nightly_revert_checker.HEAD_STALENESS_ALERT_INITIAL_SECS,
+            ),
+        )
+        self.assertEqual(
+            new_state.heads["added"],
+            nightly_revert_checker.HeadInfo(
+                last_sha="sha_added",
+                first_seen_timestamp=now,
+                next_notification_timestamp=now
+                + nightly_revert_checker.HEAD_STALENESS_ALERT_INITIAL_SECS,
+            ),
+        )
+
     def test_appending_footers_when_last_paragraph_is_tricky(self):
         base_message = textwrap.dedent(
             """\

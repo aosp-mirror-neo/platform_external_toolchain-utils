@@ -307,6 +307,37 @@ def infer_reverts_with_gemini(
         potential_pr_numbers=list(gemini_result.reverted_prs),
     )
 
+def update_new_state_head_info(
+    # Require kwargs because this takes two states, and messing up order can be
+    # subtle.
+    *,
+    now: int,
+    interesting_shas: list[tuple[str, str]],
+    old_state: State,
+    new_state: State,
+):
+    """Modifies `new_state` to take `interesting_shas` into account.
+
+    HEADs in `old_state.heads` get updated if their SHAs change. Otherwise, they
+    either get dropped (if they're no longer mentioned in `interesting_shas`),
+    or they remain unaltered.
+    """
+    for friendly_name, sha in interesting_shas:
+        new_head_info = None
+        if old_head_info := old_state.heads.get(friendly_name):
+            if old_head_info.last_sha == sha:
+                new_head_info = old_head_info
+
+        if new_head_info is None:
+            notify_at = HEAD_STALENESS_ALERT_INITIAL_SECS + now
+            new_head_info = HeadInfo(
+                last_sha=sha,
+                first_seen_timestamp=now,
+                next_notification_timestamp=notify_at,
+            )
+        new_state.heads[friendly_name] = new_head_info
+
+
 
 def locate_new_reverts_across_shas(
     llvm_config: git_llvm_rev.LLVMConfig,
@@ -366,23 +397,10 @@ def locate_new_reverts_across_shas(
             for k, v in all_reverts_grouped.items()
             if k not in existing_reverts
         ]
+
         if not new_reverts:
             logging.info("...All of which have been reported.")
             continue
-
-        new_head_info = None
-        if old_head_info := state.heads.get(friendly_name):
-            if old_head_info.last_sha == sha:
-                new_head_info = old_head_info
-
-        if new_head_info is None:
-            notify_at = HEAD_STALENESS_ALERT_INITIAL_SECS + now
-            new_head_info = HeadInfo(
-                last_sha=sha,
-                first_seen_timestamp=now,
-                next_notification_timestamp=notify_at,
-            )
-        new_state.heads[friendly_name] = new_head_info
 
         revert_infos.append(
             NewRevertInfo(
@@ -391,6 +409,9 @@ def locate_new_reverts_across_shas(
                 new_reverts=new_reverts,
             )
         )
+
+    update_new_state_head_info(now=now, interesting_shas=interesting_shas,
+                               old_state=state, new_state=new_state)
 
     for head in new_state.seen_reverts:
         new_state.last_seen_llvm_shas[head] = now
