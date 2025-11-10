@@ -307,6 +307,48 @@ def infer_reverts_with_gemini(
         potential_pr_numbers=list(gemini_result.reverted_prs),
     )
 
+
+class LLVMRevFailedException(Exception):
+    """Raised if git_llvm_rev.translate_sha_to_rev fails.
+
+    Only intended to be used with `reverts_old_commit`.
+    """
+
+
+def reverts_old_commit(
+    llvm_config: git_llvm_rev.LLVMConfig,
+    revert_sha: str,
+    reverted_shas: list[str],
+) -> bool:
+    """Returns True if the given reverted CL is too old for us to care about."""
+
+    # Generally speaking, the longer a CL sits in-tree, the more likely that
+    # it's fine for us to hold on to.
+    #
+    # Initial data from
+    # https://chromium-review.googlesource.com/c/chromiumos/third_party/toolchain-utils/+/7138097/comment/f3fb2bd8_66946ed0/
+    # suggests that we should check back a decent distance, but we've seen some
+    # CLs that claim to revert many-years-old functionality. Those seem
+    # extremely unlikely to be helpful.
+    rev_limit = 50_000
+
+    def translate_sha_to_rev(sha: str) -> int:
+        try:
+            return git_llvm_rev.translate_sha_to_rev(llvm_config, sha).number
+        except subprocess.CalledProcessError:
+            logging.exception("Translating SHA %s to rev failed", sha)
+            raise LLVMRevFailedException()
+
+    try:
+        main_rev = translate_sha_to_rev(revert_sha)
+        newest_revert_rev = max(translate_sha_to_rev(x) for x in reverted_shas)
+        should_ignore = main_rev - rev_limit >= newest_revert_rev
+        return should_ignore
+    except LLVMRevFailedException:
+        logging.warning("Revert-ignoring heuristics failed; see above logs")
+        return False
+
+
 def update_new_state_head_info(
     # Require kwargs because this takes two states, and messing up order can be
     # subtle.
@@ -336,7 +378,6 @@ def update_new_state_head_info(
                 next_notification_timestamp=notify_at,
             )
         new_state.heads[friendly_name] = new_head_info
-
 
 
 def locate_new_reverts_across_shas(
@@ -402,16 +443,28 @@ def locate_new_reverts_across_shas(
             logging.info("...All of which have been reported.")
             continue
 
-        revert_infos.append(
-            NewRevertInfo(
-                friendly_name=friendly_name,
-                sha=sha,
-                new_reverts=new_reverts,
-            )
-        )
+        filtered_new_reverts = []
+        for x in new_reverts:
+            if reverts_old_commit(llvm_config, x.revert_sha, x.reverted_shas):
+                logging.info("Heuristics say to ignore revert %s", x.revert_sha)
+            else:
+                filtered_new_reverts.append(x)
 
-    update_new_state_head_info(now=now, interesting_shas=interesting_shas,
-                               old_state=state, new_state=new_state)
+        if filtered_new_reverts:
+            revert_infos.append(
+                NewRevertInfo(
+                    friendly_name=friendly_name,
+                    sha=sha,
+                    new_reverts=filtered_new_reverts,
+                )
+            )
+
+    update_new_state_head_info(
+        now=now,
+        interesting_shas=interesting_shas,
+        old_state=state,
+        new_state=new_state,
+    )
 
     for head in new_state.seen_reverts:
         new_state.last_seen_llvm_shas[head] = now

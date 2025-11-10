@@ -4,16 +4,23 @@
 
 """Tests for nightly_revert_checker."""
 
+import subprocess
 import textwrap
 import time
 import unittest
 from unittest import mock
 
 from cros_utils import tiny_render
+from llvm_tools import git_llvm_rev
 from llvm_tools import nightly_revert_checker
 
 
 # pylint: disable=protected-access
+
+ARBITRARY_LLVM_CONFIG = git_llvm_rev.LLVMConfig(
+    remote="/remote/that/does/not/exist",
+    dir="/dir/that/does/not/exist",
+)
 
 
 class Test(unittest.TestCase):
@@ -403,4 +410,47 @@ class Test(unittest.TestCase):
                 ("foo: bar",),
             ),
             want_message,
+        )
+
+
+@mock.patch.object(git_llvm_rev, "translate_sha_to_rev", autospec=True)
+class RevertsOldCommitTest(unittest.TestCase):
+    """Tests for reverts_old_commit."""
+
+    def test_sha_translation_failure(self, mock_translate_sha_to_rev):
+        mock_translate_sha_to_rev.side_effect = subprocess.CalledProcessError(
+            1, "git"
+        )
+        self.assertFalse(
+            nightly_revert_checker.reverts_old_commit(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
+        )
+
+    def test_simple_true_case(self, mock_translate_sha_to_rev):
+        mock_translate_sha_to_rev.side_effect = [
+            git_llvm_rev.Rev(branch="main", number=100_000),
+            git_llvm_rev.Rev(branch="main", number=50_000),
+        ]
+        self.assertTrue(
+            nightly_revert_checker.reverts_old_commit(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
+        )
+
+    def test_simple_false_case(self, mock_translate_sha_to_rev):
+        mock_translate_sha_to_rev.side_effect = [
+            git_llvm_rev.Rev(branch="main", number=100_000),
+            git_llvm_rev.Rev(branch="main", number=90_000),
+        ]
+        self.assertFalse(
+            nightly_revert_checker.reverts_old_commit(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
         )
