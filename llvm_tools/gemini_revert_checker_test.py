@@ -270,3 +270,22 @@ class EnsureStatePopulatedForTest(test_helpers.TempDirTestCase):
             self.llvm_dir, "main", shas=["c"]
         )
         normalize_gemini_result_mock.assert_called()
+
+    @mock.patch.object(gemini_revert_checker, "_list_shas_between_all_of")
+    @mock.patch.object(gemini_revert_checker, "_find_commits_reverted_by")
+    def test_no_shas_to_populate_returns_true(
+        self, find_commits_mock, list_shas_mock
+    ):
+        state = gemini_revert_checker.GeminiState()
+        list_shas_mock.return_value = []
+        result = gemini_revert_checker.ensure_state_populated_for(
+            self.gemini_endpoint,
+            state,
+            self.llvm_dir,
+            "main",
+            prepopulate_parent_shas=[],
+        )
+        self.assertTrue(result)
+        self.assertEqual(state, gemini_revert_checker.GeminiState())
+        list_shas_mock.assert_called_once_with(self.llvm_dir, "main", shas=[])
+        find_commits_mock.assert_not_called()

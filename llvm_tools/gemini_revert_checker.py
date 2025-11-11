@@ -64,7 +64,7 @@ class GeminiRevertInference:
             is_reland=json_object["is_reland"],
         )
 
-    def is_empty(self):
+    def is_empty(self) -> bool:
         return not (
             self.is_revert
             or self.is_reland
@@ -187,7 +187,7 @@ def read_gemini_state_or_default(state_file: Path) -> GeminiState:
         return GeminiState()
 
 
-def write_gemini_state(state_file: Path, state: GeminiState):
+def write_gemini_state(state_file: Path, state: GeminiState) -> None:
     tmp_file = state_file.with_suffix(".new")
     with tmp_file.open("w", encoding="utf-8") as f:
         json.dump(
@@ -220,7 +220,7 @@ def discard_old_shas(
     now: datetime.datetime,
     llvm_dir: Path,
     main_ref: str,
-):
+) -> None:
     """Discards cache entries associated with SHAs deemed 'old' in `state`.
 
     Args:
@@ -464,7 +464,7 @@ def ensure_state_populated_for(
     llvm_dir: Path,
     main_ref: str,
     prepopulate_parent_shas: Sequence[str],
-):
+) -> bool:
     """Ensures `gemini_state` has entries for the given SHAs.
 
     Note that the SHAs are intended to be _parents_, so they all must be
@@ -495,7 +495,7 @@ def ensure_state_populated_for(
 
     if not need_entries_for_shas:
         logging.info("All Gemini SHA information already prepopulated")
-        return
+        return True
 
     logging.info(
         "Prepopulating Gemini entries for %d SHAs",
