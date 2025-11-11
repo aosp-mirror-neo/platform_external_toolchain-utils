@@ -293,34 +293,31 @@ class CQOrchestratorOutput:
         # cq-orchestrator spawns builders in a series of steps. Each step has a
         # markdownified link to the builder in the summaryMarkdown for each
         # step. This loop parses those out.
-        build_url_re = re.compile(
-            re.escape("https://cr-buildbucket.appspot.com/build/") + r"(\d+)"
-        )
-        # Example step name containing a build URL:
-        # "run builds|schedule new builds|${builder_name}". `builder_name`
-        # contains no spaces, though follow-up steps with the same prefix might
-        # include spaces.
-        step_name_re = re.compile(
-            re.escape("run builds|schedule new builds|") + "([^ ]+)"
+        #
+        # We look for a step named "collect|get", and entries that look like
+        # "* [some-builder-name](https://cr-buildbucket.appspot/build/12345)".
+        name_url_re = re.compile(
+            re.escape("* [")
+            + r"([^\]]+)"
+            + re.escape("](https://cr-buildbucket.appspot.com/build/")
+            + r"(\d+)\)"
         )
         for step in decoded["steps"]:
-            step_name = step["name"]
-            m = step_name_re.fullmatch(step_name)
-            if not m:
+            if step["name"] != "collect|get":
                 continue
 
-            builder = m.group(1)
             summary = step["summaryMarkdown"]
-            ids = build_url_re.findall(summary)
-            if len(ids) != 1:
+            matches = name_url_re.findall(summary)
+            if not matches:
                 raise ValueError(
-                    f"Parsing summary of builder {builder} failed: wanted one "
-                    f"match for {build_url_re}; got {ids}. Full summary: "
-                    f"{summary!r}"
+                    "Expected at least one build in collect|get, got none"
                 )
-            if builder in results:
-                raise ValueError(f"Builder {builder} spawned multiple times?")
-            results[builder] = int(ids[0])
+            for builder, build_id in matches:
+                if builder in results:
+                    raise ValueError(
+                        f"Builder {builder} spawned multiple times?"
+                    )
+                results[builder] = int(build_id)
         status = BuilderStatus.parse(decoded["status"])
         return cls(child_builders=results, status=status)
 

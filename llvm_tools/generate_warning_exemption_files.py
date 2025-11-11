@@ -261,8 +261,8 @@ def resolve_builder_artifacts(
             ]
 
         found_any_artifacts = False
-        for name, build_id, artifacts_link in named_builders:
-            build_url = cros_cls.builder_url(build_id)
+        for name, bid, artifacts_link in named_builders:
+            build_url = cros_cls.builder_url(bid)
             if not artifacts_link:
                 logging.warning("Ignoring %s; it had no artifacts", build_url)
                 continue
