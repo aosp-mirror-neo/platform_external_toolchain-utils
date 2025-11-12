@@ -171,7 +171,19 @@ def builder_url(build_id: BuildID) -> str:
 
 
 # Used to parse the build ID from a `bb add` invocation.
-_BOT_SPAWN_BUILD_ID_RE = re.compile(r"http://ci\.chromium\.org/b/(\d+)\b")
+#
+# b/460037583: previous `bb` versions used ci.chromium.org, new ones use
+# cr-buildbucket. It's unclear if this is a permanent, one-time migration, or if
+# there's potential switching between them in the future, so just match both.
+_BOT_SPAWN_BUILD_ID_RE = re.compile(
+    r"http://"
+    r"(?:"
+    + re.escape("ci.chromium.org/b")
+    + r"|"
+    + re.escape("cr-buildbucket.appspot.com/build")
+    + r")"
+    r"/(\d+)\b"
+)
 
 
 def parse_build_id_from_bb_add_output(output: str) -> BuildID:

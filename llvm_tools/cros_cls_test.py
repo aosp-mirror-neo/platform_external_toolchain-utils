@@ -198,6 +198,16 @@ class TestBuildIDParsing(unittest.TestCase):
             cros_cls.BuildID("8698399525438704705"),
         )
 
+    def test_parse_new_build_id_from_bb_add_output(self):
+        output = (
+            "http://cr-buildbucket.appspot.com/build/8698399525438704706 "
+            "SCHEDULED 'chromeos/cq/brya-bazel-lite-cq'"
+        )
+        self.assertEqual(
+            cros_cls.parse_build_id_from_bb_add_output(output),
+            cros_cls.BuildID("8698399525438704706"),
+        )
+
     def test_parse_build_id_from_bb_add_output_multiple_ids(self):
         output = (
             "http://ci.chromium.org/b/123 SCHEDULED 'bot'\n"
