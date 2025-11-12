@@ -183,3 +183,34 @@ class Test(unittest.TestCase):
             ValueError, "Unknown builder status: UNKNOWN"
         ):
             cros_cls.BuilderStatus.parse("UNKNOWN")
+
+
+class TestBuildIDParsing(unittest.TestCase):
+    """BuildID parsing tests."""
+
+    def test_parse_build_id_from_bb_add_output(self):
+        output = (
+            "http://ci.chromium.org/b/8698399525438704705 "
+            "SCHEDULED 'chromeos/cq/brya-bazel-lite-cq'"
+        )
+        self.assertEqual(
+            cros_cls.parse_build_id_from_bb_add_output(output),
+            cros_cls.BuildID("8698399525438704705"),
+        )
+
+    def test_parse_build_id_from_bb_add_output_multiple_ids(self):
+        output = (
+            "http://ci.chromium.org/b/123 SCHEDULED 'bot'\n"
+            "http://ci.chromium.org/b/456 SCHEDULED 'another_bot'"
+        )
+        with self.assertRaisesRegex(
+            ValueError, r"Expected one build-id from stdout"
+        ):
+            cros_cls.parse_build_id_from_bb_add_output(output)
+
+    def test_parse_build_id_from_bb_add_output_no_id(self):
+        output = "No build ID here"
+        with self.assertRaisesRegex(
+            ValueError, r"Expected one build-id from stdout"
+        ):
+            cros_cls.parse_build_id_from_bb_add_output(output)

@@ -174,6 +174,16 @@ def builder_url(build_id: BuildID) -> str:
 _BOT_SPAWN_BUILD_ID_RE = re.compile(r"http://ci\.chromium\.org/b/(\d+)\b")
 
 
+def parse_build_id_from_bb_add_output(output: str) -> BuildID:
+    """Given `bb add` output, parses the build ID."""
+    build_ids = _BOT_SPAWN_BUILD_ID_RE.findall(output)
+    if len(build_ids) != 1:
+        logging.error("Unexpected stdout from `bb add`; got %r", output)
+        raise ValueError(f"Expected one build-id from stdout; got {build_ids}")
+
+    return BuildID(build_ids[0])
+
+
 def spawn_bot(
     bot_name: str,
     cls: Iterable[ChangeListURL] = (),
@@ -193,12 +203,7 @@ def spawn_bot(
         stdout=subprocess.PIPE,
     ).stdout
 
-    build_ids = _BOT_SPAWN_BUILD_ID_RE.findall(run_stdout)
-    if len(build_ids) != 1:
-        logging.error("Unexpected stdout from `bb add`; got %r", run_stdout)
-        raise ValueError("Expected one build-id from stdout; got {build_ids}")
-
-    build_id = BuildID(build_ids[0])
+    build_id = parse_build_id_from_bb_add_output(run_stdout)
     logging.info("Spawned bot: %s", builder_url(build_id))
     return build_id
 
