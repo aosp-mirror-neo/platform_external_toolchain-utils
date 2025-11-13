@@ -1,0 +1,930 @@
+From 9383fb23e18bb983d0024fb956a0a724ef9eb03d Mon Sep 17 00:00:00 2001
+From: Matt Arsenault <Matthew.Arsenault@amd.com>
+Date: Thu, 8 May 2025 08:00:09 +0200
+Subject: [PATCH] Reapply "IR: Remove uselist for constantdata (#137313)"
+ (#138961)
+
+Reapply "IR: Remove uselist for constantdata (#137313)"
+
+This reverts commit 5936c02c8b9c6d1476f7830517781ce8b6e26e75.
+
+Fix checking uselists of constants in assume bundle queries
+---
+ llvm/docs/ReleaseNotes.md                     |   2 +
+ llvm/include/llvm/IR/Constants.h              |   2 +
+ llvm/include/llvm/IR/Use.h                    |  23 +---
+ llvm/include/llvm/IR/Value.h                  | 118 ++++++++++++++----
+ llvm/lib/Analysis/AssumeBundleQueries.cpp     |   4 +
+ llvm/lib/Analysis/TypeMetadataUtils.cpp       |   3 +
+ llvm/lib/AsmParser/LLParser.cpp               |   2 +
+ llvm/lib/Bitcode/Reader/BitcodeReader.cpp     |   4 +
+ llvm/lib/Bitcode/Writer/ValueEnumerator.cpp   |   3 +
+ llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp    |   2 +-
+ llvm/lib/CodeGen/CodeGenPrepare.cpp           |   3 +
+ .../lib/CodeGen/ComplexDeinterleavingPass.cpp |   3 +
+ llvm/lib/IR/AsmWriter.cpp                     |   9 +-
+ llvm/lib/IR/Instruction.cpp                   |   4 +-
+ llvm/lib/IR/Use.cpp                           |   8 +-
+ llvm/lib/IR/Value.cpp                         |  26 ++--
+ .../AArch64/GISel/AArch64RegisterBankInfo.cpp |   2 +-
+ llvm/lib/Target/SPIRV/SPIRVEmitIntrinsics.cpp |  64 +++++-----
+ .../InstCombineSimplifyDemanded.cpp           |   7 +-
+ .../InstCombine/InstructionCombining.cpp      |   2 +-
+ llvm/lib/Transforms/Scalar/Reassociate.cpp    |   3 +-
+ .../test/Analysis/MemorySSA/nondeterminism.ll |   1 -
+ .../llvm-diff/uselistorder-issue58629-gv.ll   |  14 +++
+ .../llvm-diff/uselistorder-issue58629.ll      |   5 +-
+ .../tools/llvm-reduce/bitcode-uselistorder.ll |  23 ++--
+ .../uselistorder-invalid-ir-output.ll         |   6 +-
+ .../verify-uselistorder.cpp                   |   9 ++
+ polly/lib/Support/ScopHelper.cpp              |   3 +
+ 28 files changed, 251 insertions(+), 104 deletions(-)
+ create mode 100644 llvm/test/tools/llvm-diff/uselistorder-issue58629-gv.ll
+
+diff --git a/llvm/docs/ReleaseNotes.md b/llvm/docs/ReleaseNotes.md
+index 0ed1675533d03..504db733308c1 100644
+--- a/llvm/docs/ReleaseNotes.md
++++ b/llvm/docs/ReleaseNotes.md
+@@ -56,6 +56,8 @@ Makes programs 10x faster by doing Special New Thing.
+ Changes to the LLVM IR
+ ----------------------
+ 
++* It is no longer permitted to inspect the uses of ConstantData
++
+ * The `nocapture` attribute has been replaced by `captures(none)`.
+ * The constant expression variants of the following instructions have been
+   removed:
+diff --git a/llvm/include/llvm/IR/Constants.h b/llvm/include/llvm/IR/Constants.h
+index 88d005d1adbb1..ff51f59b6ec68 100644
+--- a/llvm/include/llvm/IR/Constants.h
++++ b/llvm/include/llvm/IR/Constants.h
+@@ -50,6 +50,8 @@ template <class ConstantClass> struct ConstantAggrKeyType;
+ /// These constants have no operands; they represent their data directly.
+ /// Since they can be in use by unrelated modules (and are never based on
+ /// GlobalValues), it never makes sense to RAUW them.
++///
++/// These do not have use lists. It is illegal to inspect the uses.
+ class ConstantData : public Constant {
+   constexpr static IntrusiveOperandsAllocMarker AllocMarker{0};
+ 
+diff --git a/llvm/include/llvm/IR/Use.h b/llvm/include/llvm/IR/Use.h
+index a86b9c46c1f69..bcd1fd6677497 100644
+--- a/llvm/include/llvm/IR/Use.h
++++ b/llvm/include/llvm/IR/Use.h
+@@ -23,6 +23,7 @@
+ namespace llvm {
+ 
+ template <typename> struct simplify_type;
++class ConstantData;
+ class User;
+ class Value;
+ 
+@@ -42,10 +43,7 @@ public:
+ 
+ private:
+   /// Destructor - Only for zap()
+-  ~Use() {
+-    if (Val)
+-      removeFromList();
+-  }
++  ~Use();
+ 
+   /// Constructor
+   Use(User *Parent) : Parent(Parent) {}
+@@ -87,19 +85,10 @@ private:
+   Use **Prev = nullptr;
+   User *Parent = nullptr;
+ 
+-  void addToList(Use **List) {
+-    Next = *List;
+-    if (Next)
+-      Next->Prev = &Next;
+-    Prev = List;
+-    *Prev = this;
+-  }
+-
+-  void removeFromList() {
+-    *Prev = Next;
+-    if (Next)
+-      Next->Prev = Prev;
+-  }
++  inline void addToList(unsigned &Count);
++  inline void addToList(Use *&List);
++  inline void removeFromList(unsigned &Count);
++  inline void removeFromList(Use *&List);
+ };
+ 
+ /// Allow clients to treat uses just like values when using
+diff --git a/llvm/include/llvm/IR/Value.h b/llvm/include/llvm/IR/Value.h
+index bf1de7eef9932..180b6238eda6c 100644
+--- a/llvm/include/llvm/IR/Value.h
++++ b/llvm/include/llvm/IR/Value.h
+@@ -116,7 +116,10 @@ protected:
+ 
+ private:
+   Type *VTy;
+-  Use *UseList;
++  union {
++    Use *List = nullptr;
++    unsigned Count;
++  } Uses;
+ 
+   friend class ValueAsMetadata; // Allow access to IsUsedByMD.
+   friend class ValueHandleBase; // Allow access to HasValueHandle.
+@@ -339,21 +342,28 @@ public:
+ #endif
+   }
+ 
++  /// Check if this Value has a use-list.
++  bool hasUseList() const { return !isa<ConstantData>(this); }
++
+   bool use_empty() const {
+     assertModuleIsMaterialized();
+-    return UseList == nullptr;
++    return hasUseList() ? Uses.List == nullptr : Uses.Count == 0;
+   }
+ 
+   bool materialized_use_empty() const {
+-    return UseList == nullptr;
++    return hasUseList() ? Uses.List == nullptr : !Uses.Count;
+   }
+ 
+   using use_iterator = use_iterator_impl<Use>;
+   using const_use_iterator = use_iterator_impl<const Use>;
+ 
+-  use_iterator materialized_use_begin() { return use_iterator(UseList); }
++  use_iterator materialized_use_begin() {
++    assert(hasUseList());
++    return use_iterator(Uses.List);
++  }
+   const_use_iterator materialized_use_begin() const {
+-    return const_use_iterator(UseList);
++    assert(hasUseList());
++    return const_use_iterator(Uses.List);
+   }
+   use_iterator use_begin() {
+     assertModuleIsMaterialized();
+@@ -380,17 +390,18 @@ public:
+     return materialized_uses();
+   }
+ 
+-  bool user_empty() const {
+-    assertModuleIsMaterialized();
+-    return UseList == nullptr;
+-  }
++  bool user_empty() const { return use_empty(); }
+ 
+   using user_iterator = user_iterator_impl<User>;
+   using const_user_iterator = user_iterator_impl<const User>;
+ 
+-  user_iterator materialized_user_begin() { return user_iterator(UseList); }
++  user_iterator materialized_user_begin() {
++    assert(hasUseList());
++    return user_iterator(Uses.List);
++  }
+   const_user_iterator materialized_user_begin() const {
+-    return const_user_iterator(UseList);
++    assert(hasUseList());
++    return const_user_iterator(Uses.List);
+   }
+   user_iterator user_begin() {
+     assertModuleIsMaterialized();
+@@ -429,7 +440,11 @@ public:
+   ///
+   /// This is specialized because it is a common request and does not require
+   /// traversing the whole use list.
+-  bool hasOneUse() const { return hasSingleElement(uses()); }
++  bool hasOneUse() const {
++    if (!hasUseList())
++      return Uses.Count == 1;
++    return hasSingleElement(uses());
++  }
+ 
+   /// Return true if this Value has exactly N uses.
+   bool hasNUses(unsigned N) const;
+@@ -491,6 +506,8 @@ public:
+   static void dropDroppableUse(Use &U);
+ 
+   /// Check if this value is used in the specified basic block.
++  ///
++  /// Not supported for ConstantData.
+   bool isUsedInBasicBlock(const BasicBlock *BB) const;
+ 
+   /// This method computes the number of uses of this Value.
+@@ -500,7 +517,19 @@ public:
+   unsigned getNumUses() const;
+ 
+   /// This method should only be used by the Use class.
+-  void addUse(Use &U) { U.addToList(&UseList); }
++  void addUse(Use &U) {
++    if (hasUseList())
++      U.addToList(Uses.List);
++    else
++      U.addToList(Uses.Count);
++  }
++
++  void removeUse(Use &U) {
++    if (hasUseList())
++      U.removeFromList(Uses.List);
++    else
++      U.removeFromList(Uses.Count);
++  }
+ 
+   /// Concrete subclass of this.
+   ///
+@@ -841,7 +870,8 @@ private:
+   ///
+   /// \return the first element in the list.
+   ///
+-  /// \note Completely ignores \a Use::Prev (doesn't read, doesn't update).
++  /// \note Completely ignores \a Use::PrevOrCount (doesn't read, doesn't
++  /// update).
+   template <class Compare>
+   static Use *mergeUseLists(Use *L, Use *R, Compare Cmp) {
+     Use *Merged;
+@@ -887,10 +917,50 @@ inline raw_ostream &operator<<(raw_ostream &OS, const Value &V) {
+   return OS;
+ }
+ 
++inline Use::~Use() {
++  if (Val)
++    Val->removeUse(*this);
++}
++
++void Use::addToList(unsigned &Count) {
++  assert(isa<ConstantData>(Val) && "Only ConstantData is ref-counted");
++  ++Count;
++
++  // We don't have a uselist - clear the remnant if we are replacing a
++  // non-constant value.
++  Prev = nullptr;
++  Next = nullptr;
++}
++
++void Use::addToList(Use *&List) {
++  assert(!isa<ConstantData>(Val) && "ConstantData has no use-list");
++
++  Next = List;
++  if (Next)
++    Next->Prev = &Next;
++  Prev = &List;
++  List = this;
++}
++
++void Use::removeFromList(unsigned &Count) {
++  assert(isa<ConstantData>(Val));
++  assert(Count > 0 && "reference count underflow");
++  assert(!Prev && !Next && "should not have uselist remnant");
++  --Count;
++}
++
++void Use::removeFromList(Use *&List) {
++  *Prev = Next;
++  if (Next)
++    Next->Prev = Prev;
++}
++
+ void Use::set(Value *V) {
+-  if (Val) removeFromList();
++  if (Val)
++    Val->removeUse(*this);
+   Val = V;
+-  if (V) V->addUse(*this);
++  if (V)
++    V->addUse(*this);
+ }
+ 
+ Value *Use::operator=(Value *RHS) {
+@@ -904,7 +974,7 @@ const Use &Use::operator=(const Use &RHS) {
+ }
+ 
+ template <class Compare> void Value::sortUseList(Compare Cmp) {
+-  if (!UseList || !UseList->Next)
++  if (!hasUseList() || !Uses.List || !Uses.List->Next)
+     // No need to sort 0 or 1 uses.
+     return;
+ 
+@@ -917,10 +987,10 @@ template <class Compare> void Value::sortUseList(Compare Cmp) {
+   Use *Slots[MaxSlots];
+ 
+   // Collect the first use, turning it into a single-item list.
+-  Use *Next = UseList->Next;
+-  UseList->Next = nullptr;
++  Use *Next = Uses.List->Next;
++  Uses.List->Next = nullptr;
+   unsigned NumSlots = 1;
+-  Slots[0] = UseList;
++  Slots[0] = Uses.List;
+ 
+   // Collect all but the last use.
+   while (Next->Next) {
+@@ -956,15 +1026,15 @@ template <class Compare> void Value::sortUseList(Compare Cmp) {
+   // Merge all the lists together.
+   assert(Next && "Expected one more Use");
+   assert(!Next->Next && "Expected only one Use");
+-  UseList = Next;
++  Uses.List = Next;
+   for (unsigned I = 0; I < NumSlots; ++I)
+     if (Slots[I])
+-      // Since the uses in Slots[I] originally preceded those in UseList, send
++      // Since the uses in Slots[I] originally preceded those in Uses.List, send
+       // Slots[I] in as the left parameter to maintain a stable sort.
+-      UseList = mergeUseLists(Slots[I], UseList, Cmp);
++      Uses.List = mergeUseLists(Slots[I], Uses.List, Cmp);
+ 
+   // Fix the Prev pointers.
+-  for (Use *I = UseList, **Prev = &UseList; I; I = I->Next) {
++  for (Use *I = Uses.List, **Prev = &Uses.List; I; I = I->Next) {
+     I->Prev = Prev;
+     Prev = &I->Next;
+   }
+diff --git a/llvm/lib/Analysis/AssumeBundleQueries.cpp b/llvm/lib/Analysis/AssumeBundleQueries.cpp
+index c27bfa6f3cc2c..b37b2270bbec5 100644
+--- a/llvm/lib/Analysis/AssumeBundleQueries.cpp
++++ b/llvm/lib/Analysis/AssumeBundleQueries.cpp
+@@ -180,6 +180,10 @@ llvm::getKnowledgeForValue(const Value *V,
+     }
+     return RetainedKnowledge::none();
+   }
++
++  if (!V->hasUseList())
++    return RetainedKnowledge::none();
++
+   for (const auto &U : V->uses()) {
+     CallInst::BundleOpInfo* Bundle = getBundleFromUse(&U);
+     if (!Bundle)
+diff --git a/llvm/lib/Analysis/TypeMetadataUtils.cpp b/llvm/lib/Analysis/TypeMetadataUtils.cpp
+index 9ec0785eb5034..8099fbc3daeda 100644
+--- a/llvm/lib/Analysis/TypeMetadataUtils.cpp
++++ b/llvm/lib/Analysis/TypeMetadataUtils.cpp
+@@ -54,6 +54,9 @@ findCallsAtConstantOffset(SmallVectorImpl<DevirtCallSite> &DevirtCalls,
+ static void findLoadCallsAtConstantOffset(
+     const Module *M, SmallVectorImpl<DevirtCallSite> &DevirtCalls, Value *VPtr,
+     int64_t Offset, const CallInst *CI, DominatorTree &DT) {
++  if (!VPtr->hasUseList())
++    return;
++
+   for (const Use &U : VPtr->uses()) {
+     Value *User = U.getUser();
+     if (isa<BitCastInst>(User)) {
+diff --git a/llvm/lib/AsmParser/LLParser.cpp b/llvm/lib/AsmParser/LLParser.cpp
+index fc7f4601331df..96f86eb52f15c 100644
+--- a/llvm/lib/AsmParser/LLParser.cpp
++++ b/llvm/lib/AsmParser/LLParser.cpp
+@@ -8869,6 +8869,8 @@ bool LLParser::parseMDNodeVector(SmallVectorImpl<Metadata *> &Elts) {
+ //===----------------------------------------------------------------------===//
+ bool LLParser::sortUseListOrder(Value *V, ArrayRef<unsigned> Indexes,
+                                 SMLoc Loc) {
++  if (!V->hasUseList())
++    return false;
+   if (V->use_empty())
+     return error(Loc, "value has no uses");
+ 
+diff --git a/llvm/lib/Bitcode/Reader/BitcodeReader.cpp b/llvm/lib/Bitcode/Reader/BitcodeReader.cpp
+index b533731e8dda3..de7e9bbe69bd4 100644
+--- a/llvm/lib/Bitcode/Reader/BitcodeReader.cpp
++++ b/llvm/lib/Bitcode/Reader/BitcodeReader.cpp
+@@ -3859,6 +3859,10 @@ Error BitcodeReader::parseUseLists() {
+         V = FunctionBBs[ID];
+       } else
+         V = ValueList[ID];
++
++      if (!V->hasUseList())
++        break;
++
+       unsigned NumUses = 0;
+       SmallDenseMap<const Use *, unsigned, 16> Order;
+       for (const Use &U : V->materialized_uses()) {
+diff --git a/llvm/lib/Bitcode/Writer/ValueEnumerator.cpp b/llvm/lib/Bitcode/Writer/ValueEnumerator.cpp
+index 9f735f77d29dc..1fdb8080eab0a 100644
+--- a/llvm/lib/Bitcode/Writer/ValueEnumerator.cpp
++++ b/llvm/lib/Bitcode/Writer/ValueEnumerator.cpp
+@@ -230,6 +230,9 @@ static void predictValueUseListOrderImpl(const Value *V, const Function *F,
+ 
+ static void predictValueUseListOrder(const Value *V, const Function *F,
+                                      OrderMap &OM, UseListOrderStack &Stack) {
++  if (!V->hasUseList())
++    return;
++
+   auto &IDPair = OM[V];
+   assert(IDPair.first && "Unmapped value");
+   if (IDPair.second)
+diff --git a/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp b/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+index eb076960a5def..889e24a3f70ad 100644
+--- a/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
++++ b/llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp
+@@ -4004,7 +4004,7 @@ static void emitGlobalConstantImpl(const DataLayout &DL, const Constant *CV,
+   // Globals with sub-elements such as combinations of arrays and structs
+   // are handled recursively by emitGlobalConstantImpl. Keep track of the
+   // constant symbol base and the current position with BaseCV and Offset.
+-  if (!BaseCV && CV->hasOneUse())
++  if (!isa<ConstantData>(CV) && !BaseCV && CV->hasOneUse())
+     BaseCV = dyn_cast<Constant>(CV->user_back());
+ 
+   if (isa<ConstantAggregateZero>(CV)) {
+diff --git a/llvm/lib/CodeGen/CodeGenPrepare.cpp b/llvm/lib/CodeGen/CodeGenPrepare.cpp
+index f9dcb472ed1d2..2c53a9c27ccb2 100644
+--- a/llvm/lib/CodeGen/CodeGenPrepare.cpp
++++ b/llvm/lib/CodeGen/CodeGenPrepare.cpp
+@@ -8591,6 +8591,9 @@ static bool optimizeBranch(BranchInst *Branch, const TargetLowering &TLI,
+     return false;
+ 
+   Value *X = Cmp->getOperand(0);
++  if (!X->hasUseList())
++    return false;
++
+   APInt CmpC = cast<ConstantInt>(Cmp->getOperand(1))->getValue();
+ 
+   for (auto *U : X->users()) {
+diff --git a/llvm/lib/CodeGen/ComplexDeinterleavingPass.cpp b/llvm/lib/CodeGen/ComplexDeinterleavingPass.cpp
+index f4fe0b3970d4c..90c6c28c3c706 100644
+--- a/llvm/lib/CodeGen/ComplexDeinterleavingPass.cpp
++++ b/llvm/lib/CodeGen/ComplexDeinterleavingPass.cpp
+@@ -1034,6 +1034,9 @@ ComplexDeinterleavingGraph::identifyPartialReduction(Value *R, Value *I) {
+   if (!isa<VectorType>(R->getType()) || !isa<VectorType>(I->getType()))
+     return nullptr;
+ 
++  if (!R->hasUseList() || !I->hasUseList())
++    return nullptr;
++
+   auto CommonUser =
+       findCommonBetweenCollections<Value *>(R->users(), I->users());
+   if (!CommonUser)
+diff --git a/llvm/lib/IR/AsmWriter.cpp b/llvm/lib/IR/AsmWriter.cpp
+index 12edf6fcd510c..610cbcb1a9b6b 100644
+--- a/llvm/lib/IR/AsmWriter.cpp
++++ b/llvm/lib/IR/AsmWriter.cpp
+@@ -125,11 +125,15 @@ static void orderValue(const Value *V, OrderMap &OM) {
+   if (OM.lookup(V))
+     return;
+ 
+-  if (const Constant *C = dyn_cast<Constant>(V))
++  if (const Constant *C = dyn_cast<Constant>(V)) {
++    if (isa<ConstantData>(C))
++      return;
++
+     if (C->getNumOperands() && !isa<GlobalValue>(C))
+       for (const Value *Op : C->operands())
+         if (!isa<BasicBlock>(Op) && !isa<GlobalValue>(Op))
+           orderValue(Op, OM);
++  }
+ 
+   // Note: we cannot cache this lookup above, since inserting into the map
+   // changes the map's size, and thus affects the other IDs.
+@@ -275,7 +279,8 @@ static UseListOrderMap predictUseListOrder(const Module *M) {
+   UseListOrderMap ULOM;
+   for (const auto &Pair : OM) {
+     const Value *V = Pair.first;
+-    if (V->use_empty() || std::next(V->use_begin()) == V->use_end())
++    if (!V->hasUseList() || V->use_empty() ||
++        std::next(V->use_begin()) == V->use_end())
+       continue;
+ 
+     std::vector<unsigned> Shuffle =
+diff --git a/llvm/lib/IR/Instruction.cpp b/llvm/lib/IR/Instruction.cpp
+index 6f858110fb8ce..258681382f9e5 100644
+--- a/llvm/lib/IR/Instruction.cpp
++++ b/llvm/lib/IR/Instruction.cpp
+@@ -373,7 +373,9 @@ std::optional<BasicBlock::iterator> Instruction::getInsertionPointAfterDef() {
+ }
+ 
+ bool Instruction::isOnlyUserOfAnyOperand() {
+-  return any_of(operands(), [](Value *V) { return V->hasOneUser(); });
++  return any_of(operands(), [](const Value *V) {
++    return V->hasUseList() && V->hasOneUser();
++  });
+ }
+ 
+ void Instruction::setHasNoUnsignedWrap(bool b) {
+diff --git a/llvm/lib/IR/Use.cpp b/llvm/lib/IR/Use.cpp
+index 99a89386d75f9..67882ba0144b4 100644
+--- a/llvm/lib/IR/Use.cpp
++++ b/llvm/lib/IR/Use.cpp
+@@ -19,11 +19,15 @@ void Use::swap(Use &RHS) {
+   std::swap(Next, RHS.Next);
+   std::swap(Prev, RHS.Prev);
+ 
+-  *Prev = this;
++  if (Prev)
++    *Prev = this;
++
+   if (Next)
+     Next->Prev = &Next;
+ 
+-  *RHS.Prev = &RHS;
++  if (RHS.Prev)
++    *RHS.Prev = &RHS;
++
+   if (RHS.Next)
+     RHS.Next->Prev = &RHS.Next;
+ }
+diff --git a/llvm/lib/IR/Value.cpp b/llvm/lib/IR/Value.cpp
+index aa97b70f21aeb..74a96051f33af 100644
+--- a/llvm/lib/IR/Value.cpp
++++ b/llvm/lib/IR/Value.cpp
+@@ -53,7 +53,7 @@ static inline Type *checkType(Type *Ty) {
+ Value::Value(Type *ty, unsigned scid)
+     : SubclassID(scid), HasValueHandle(0), SubclassOptionalData(0),
+       SubclassData(0), NumUserOperands(0), IsUsedByMD(false), HasName(false),
+-      HasMetadata(false), VTy(checkType(ty)), UseList(nullptr) {
++      HasMetadata(false), VTy(checkType(ty)) {
+   static_assert(ConstantFirstVal == 0, "!(SubclassID < ConstantFirstVal)");
+   // FIXME: Why isn't this in the subclass gunk??
+   // Note, we cannot call isa<CallInst> before the CallInst has been
+@@ -148,10 +148,14 @@ void Value::destroyValueName() {
+ }
+ 
+ bool Value::hasNUses(unsigned N) const {
++  if (!hasUseList())
++    return Uses.Count == N;
+   return hasNItems(use_begin(), use_end(), N);
+ }
+ 
+ bool Value::hasNUsesOrMore(unsigned N) const {
++  if (!hasUseList())
++    return Uses.Count >= N;
+   return hasNItemsOrMore(use_begin(), use_end(), N);
+ }
+ 
+@@ -232,6 +236,8 @@ void Value::dropDroppableUse(Use &U) {
+ }
+ 
+ bool Value::isUsedInBasicBlock(const BasicBlock *BB) const {
++  assert(hasUseList() && "ConstantData has no use-list");
++
+   // This can be computed either by scanning the instructions in BB, or by
+   // scanning the use list of this Value. Both lists can be very long, but
+   // usually one is quite short.
+@@ -253,6 +259,9 @@ bool Value::isUsedInBasicBlock(const BasicBlock *BB) const {
+ }
+ 
+ unsigned Value::getNumUses() const {
++  if (!hasUseList())
++    return Uses.Count;
++
+   return (unsigned)std::distance(use_begin(), use_end());
+ }
+ 
+@@ -499,6 +508,7 @@ static bool contains(Value *Expr, Value *V) {
+ #endif // NDEBUG
+ 
+ void Value::doRAUW(Value *New, ReplaceMetadataUses ReplaceMetaUses) {
++  assert(hasUseList() && "Cannot replace constant data");
+   assert(New && "Value::replaceAllUsesWith(<null>) is invalid!");
+   assert(!contains(New, this) &&
+          "this->replaceAllUsesWith(expr(this)) is NOT valid!");
+@@ -512,7 +522,7 @@ void Value::doRAUW(Value *New, ReplaceMetadataUses ReplaceMetaUses) {
+     ValueAsMetadata::handleRAUW(this, New);
+ 
+   while (!materialized_use_empty()) {
+-    Use &U = *UseList;
++    Use &U = *Uses.List;
+     // Must handle Constants specially, we cannot call replaceUsesOfWith on a
+     // constant because they are uniqued.
+     if (auto *C = dyn_cast<Constant>(U.getUser())) {
+@@ -844,7 +854,7 @@ bool Value::canBeFreed() const {
+   // which is why we need the explicit opt in on a per collector basis.
+   if (!F->hasGC())
+     return true;
+-  
++
+   const auto &GCName = F->getGC();
+   if (GCName == "statepoint-example") {
+     auto *PT = cast<PointerType>(this->getType());
+@@ -1092,12 +1102,12 @@ const Value *Value::DoPHITranslation(const BasicBlock *CurBB,
+ LLVMContext &Value::getContext() const { return VTy->getContext(); }
+ 
+ void Value::reverseUseList() {
+-  if (!UseList || !UseList->Next)
++  if (!Uses.List || !Uses.List->Next || !hasUseList())
+     // No need to reverse 0 or 1 uses.
+     return;
+ 
+-  Use *Head = UseList;
+-  Use *Current = UseList->Next;
++  Use *Head = Uses.List;
++  Use *Current = Uses.List->Next;
+   Head->Next = nullptr;
+   while (Current) {
+     Use *Next = Current->Next;
+@@ -1106,8 +1116,8 @@ void Value::reverseUseList() {
+     Head = Current;
+     Current = Next;
+   }
+-  UseList = Head;
+-  Head->Prev = &UseList;
++  Uses.List = Head;
++  Head->Prev = &Uses.List;
+ }
+ 
+ bool Value::isSwiftError() const {
+diff --git a/llvm/lib/Target/AArch64/GISel/AArch64RegisterBankInfo.cpp b/llvm/lib/Target/AArch64/GISel/AArch64RegisterBankInfo.cpp
+index 8d83fef265e6f..6bd3fd182485d 100644
+--- a/llvm/lib/Target/AArch64/GISel/AArch64RegisterBankInfo.cpp
++++ b/llvm/lib/Target/AArch64/GISel/AArch64RegisterBankInfo.cpp
+@@ -633,7 +633,7 @@ bool AArch64RegisterBankInfo::isLoadFromFPType(const MachineInstr &MI) const {
+     // Look at the first element of the array to determine its type
+     if (isa<ArrayType>(EltTy))
+       EltTy = EltTy->getArrayElementType();
+-  } else {
++  } else if (!isa<Constant>(LdVal)) {
+     // FIXME: grubbing around uses is pretty ugly, but with no more
+     // `getPointerElementType` there's not much else we can do.
+     for (const auto *LdUser : LdVal->users()) {
+diff --git a/llvm/lib/Target/SPIRV/SPIRVEmitIntrinsics.cpp b/llvm/lib/Target/SPIRV/SPIRVEmitIntrinsics.cpp
+index 4325023406c7c..22fc1ca2c4c2d 100644
+--- a/llvm/lib/Target/SPIRV/SPIRVEmitIntrinsics.cpp
++++ b/llvm/lib/Target/SPIRV/SPIRVEmitIntrinsics.cpp
+@@ -1124,7 +1124,8 @@ void SPIRVEmitIntrinsics::deduceOperandElementType(
+       continue;
+     Value *OpTyVal = getNormalizedPoisonValue(KnownElemTy);
+     Type *OpTy = Op->getType();
+-    if (!Ty || AskTy || isUntypedPointerTy(Ty) || isTodoType(Op)) {
++    if (Op->hasUseList() &&
++        (!Ty || AskTy || isUntypedPointerTy(Ty) || isTodoType(Op))) {
+       Type *PrevElemTy = GR->findDeducedElementType(Op);
+       GR->addDeducedElementType(Op, normalizeType(KnownElemTy));
+       // check if KnownElemTy is complete
+@@ -1474,34 +1475,36 @@ void SPIRVEmitIntrinsics::replacePointerOperandWithPtrCast(
+   // Do not emit new spv_ptrcast if equivalent one already exists or when
+   // spv_assign_ptr_type already targets this pointer with the same element
+   // type.
+-  for (auto User : Pointer->users()) {
+-    auto *II = dyn_cast<IntrinsicInst>(User);
+-    if (!II ||
+-        (II->getIntrinsicID() != Intrinsic::spv_assign_ptr_type &&
+-         II->getIntrinsicID() != Intrinsic::spv_ptrcast) ||
+-        II->getOperand(0) != Pointer)
+-      continue;
++  if (Pointer->hasUseList()) {
++    for (auto User : Pointer->users()) {
++      auto *II = dyn_cast<IntrinsicInst>(User);
++      if (!II ||
++          (II->getIntrinsicID() != Intrinsic::spv_assign_ptr_type &&
++           II->getIntrinsicID() != Intrinsic::spv_ptrcast) ||
++          II->getOperand(0) != Pointer)
++        continue;
+ 
+-    // There is some spv_ptrcast/spv_assign_ptr_type already targeting this
+-    // pointer.
+-    FirstPtrCastOrAssignPtrType = false;
+-    if (II->getOperand(1) != VMD ||
+-        dyn_cast<ConstantInt>(II->getOperand(2))->getSExtValue() !=
+-            AddressSpace)
+-      continue;
++      // There is some spv_ptrcast/spv_assign_ptr_type already targeting this
++      // pointer.
++      FirstPtrCastOrAssignPtrType = false;
++      if (II->getOperand(1) != VMD ||
++          dyn_cast<ConstantInt>(II->getOperand(2))->getSExtValue() !=
++              AddressSpace)
++        continue;
+ 
+-    // The spv_ptrcast/spv_assign_ptr_type targeting this pointer is of the same
+-    // element type and address space.
+-    if (II->getIntrinsicID() != Intrinsic::spv_ptrcast)
+-      return;
++      // The spv_ptrcast/spv_assign_ptr_type targeting this pointer is of the
++      // same element type and address space.
++      if (II->getIntrinsicID() != Intrinsic::spv_ptrcast)
++        return;
+ 
+-    // This must be a spv_ptrcast, do not emit new if this one has the same BB
+-    // as I. Otherwise, search for other spv_ptrcast/spv_assign_ptr_type.
+-    if (II->getParent() != I->getParent())
+-      continue;
++      // This must be a spv_ptrcast, do not emit new if this one has the same BB
++      // as I. Otherwise, search for other spv_ptrcast/spv_assign_ptr_type.
++      if (II->getParent() != I->getParent())
++        continue;
+ 
+-    I->setOperand(OperandToReplace, II);
+-    return;
++      I->setOperand(OperandToReplace, II);
++      return;
++    }
+   }
+ 
+   if (isa<Instruction>(Pointer) || isa<Argument>(Pointer)) {
+@@ -2490,10 +2493,13 @@ bool SPIRVEmitIntrinsics::postprocessTypes(Module &M) {
+         }
+       }
+     }
+-    for (User *U : Op->users()) {
+-      Instruction *Inst = dyn_cast<Instruction>(U);
+-      if (Inst && !isa<IntrinsicInst>(Inst))
+-        ToProcess[Inst].insert(Op);
++
++    if (Op->hasUseList()) {
++      for (User *U : Op->users()) {
++        Instruction *Inst = dyn_cast<Instruction>(U);
++        if (Inst && !isa<IntrinsicInst>(Inst))
++          ToProcess[Inst].insert(Op);
++      }
+     }
+   }
+   if (TodoTypeSz == 0)
+diff --git a/llvm/lib/Transforms/InstCombine/InstCombineSimplifyDemanded.cpp b/llvm/lib/Transforms/InstCombine/InstCombineSimplifyDemanded.cpp
+index a48854a191cae..b5c1ee0e01cd0 100644
+--- a/llvm/lib/Transforms/InstCombine/InstCombineSimplifyDemanded.cpp
++++ b/llvm/lib/Transforms/InstCombine/InstCombineSimplifyDemanded.cpp
+@@ -1894,9 +1894,14 @@ Value *InstCombinerImpl::SimplifyDemandedVectorElts(Value *V,
+         // Try to use shuffle-of-operand in place of an operand:
+         // bo X, Y --> bo (shuf X), Y
+         // bo X, Y --> bo X, (shuf Y)
++
++        Value *OtherOp = MatchShufAsOp0 ? Y : X;
++        if (!OtherOp->hasUseList())
++          return nullptr;
++
+         BinaryOperator::BinaryOps Opcode = BO->getOpcode();
+         Value *ShufOp = MatchShufAsOp0 ? X : Y;
+-        Value *OtherOp = MatchShufAsOp0 ? Y : X;
++
+         for (User *U : OtherOp->users()) {
+           ArrayRef<int> Mask;
+           auto Shuf = m_Shuffle(m_Specific(ShufOp), m_Value(), m_Mask(Mask));
+diff --git a/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp b/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
+index d30c609b08a82..206d41e30db2c 100644
+--- a/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
++++ b/llvm/lib/Transforms/InstCombine/InstructionCombining.cpp
+@@ -1831,7 +1831,7 @@ Instruction *InstCombinerImpl::foldOpIntoPhi(Instruction &I, PHINode *PN,
+     // Handle some cases that can't be fully simplified, but where we know that
+     // the two instructions will fold into one.
+     auto WillFold = [&]() {
+-      if (!InVal->hasOneUser())
++      if (!InVal->hasUseList() || !InVal->hasOneUser())
+         return false;
+ 
+       // icmp of ucmp/scmp with constant will fold to icmp.
+diff --git a/llvm/lib/Transforms/Scalar/Reassociate.cpp b/llvm/lib/Transforms/Scalar/Reassociate.cpp
+index 97f9829ce54c5..cb7a9ef9b6711 100644
+--- a/llvm/lib/Transforms/Scalar/Reassociate.cpp
++++ b/llvm/lib/Transforms/Scalar/Reassociate.cpp
+@@ -439,7 +439,8 @@ static bool LinearizeExprTree(Instruction *I,
+     for (unsigned OpIdx = 0; OpIdx < I->getNumOperands(); ++OpIdx) { // Visit operands.
+       Value *Op = I->getOperand(OpIdx);
+       LLVM_DEBUG(dbgs() << "OPERAND: " << *Op << " (" << Weight << ")\n");
+-      assert(!Op->use_empty() && "No uses, so how did we get to it?!");
++      assert((!Op->hasUseList() || !Op->use_empty()) &&
++             "No uses, so how did we get to it?!");
+ 
+       // If this is a binary operation of the right kind with only one use then
+       // add its operands to the expression.
+diff --git a/llvm/test/Analysis/MemorySSA/nondeterminism.ll b/llvm/test/Analysis/MemorySSA/nondeterminism.ll
+index 90902e36b5d58..11b9703cd0dd4 100644
+--- a/llvm/test/Analysis/MemorySSA/nondeterminism.ll
++++ b/llvm/test/Analysis/MemorySSA/nondeterminism.ll
+@@ -1,7 +1,6 @@
+ ; RUN: opt -passes=simplifycfg -S --preserve-ll-uselistorder %s | FileCheck %s
+ ; REQUIRES: x86-registered-target
+ ; CHECK-LABEL: @n
+-; CHECK: uselistorder i16 0, { 3, 2, 4, 1, 5, 0, 6 }
+ 
+ ; Note: test was added in an effort to ensure determinism when updating memoryssa. See PR42574.
+ ; If the uselistorder check becomes no longer relevant, the test can be disabled or removed.
+diff --git a/llvm/test/tools/llvm-diff/uselistorder-issue58629-gv.ll b/llvm/test/tools/llvm-diff/uselistorder-issue58629-gv.ll
+new file mode 100644
+index 0000000000000..33216bb8d914e
+--- /dev/null
++++ b/llvm/test/tools/llvm-diff/uselistorder-issue58629-gv.ll
+@@ -0,0 +1,14 @@
++; RUN: llvm-diff %s %s | count 0
++; Make sure there is no error produced by using uselistorder with two
++; modules using the same constant/global in the same context.
++
++@gv = addrspace(4) global [2 x i64] zeroinitializer, align 16
++
++define void @func() {
++entry:
++  %gep0 = getelementptr inbounds i8, ptr addrspace(4) @gv, i64 12
++  %gep1 = getelementptr i8, ptr addrspace(4) @gv, i64 4
++  ret void
++}
++
++uselistorder ptr addrspace(4) @gv, { 1, 0 }
+diff --git a/llvm/test/tools/llvm-diff/uselistorder-issue58629.ll b/llvm/test/tools/llvm-diff/uselistorder-issue58629.ll
+index e89fc7a3ea100..d50b0dcb7972d 100644
+--- a/llvm/test/tools/llvm-diff/uselistorder-issue58629.ll
++++ b/llvm/test/tools/llvm-diff/uselistorder-issue58629.ll
+@@ -1,5 +1,6 @@
+-; XFAIL: *
+-; RUN: llvm-diff %s %s
++; RUN: llvm-diff %s %s | count 0
++; Make sure there is no error produced by using uselistorder with two
++; modules using the same constant in the same context.
+ 
+ define void @func() {
+ entry:
+diff --git a/llvm/test/tools/llvm-reduce/bitcode-uselistorder.ll b/llvm/test/tools/llvm-reduce/bitcode-uselistorder.ll
+index ac98d75ef2d3b..4e8d1cf746441 100644
+--- a/llvm/test/tools/llvm-reduce/bitcode-uselistorder.ll
++++ b/llvm/test/tools/llvm-reduce/bitcode-uselistorder.ll
+@@ -11,20 +11,21 @@
+ 
+ ; RUN: FileCheck -check-prefix=RESULT %s < %t.reduced.ll
+ 
++@gv = external global i32, align 4
+ 
+-; INTERESTING: add
+-; INTERESTING: add
+-; INTERESTING: add
+-define i32 @func(i32 %arg0, i32 %arg1) {
++; INTERESTING: getelementptr
++; INTERESTING: getelementptr
++; INTERESTING: getelementptr
++define ptr @func(i32 %arg0, i32 %arg1, i32 %arg2, i32 %arg3, i32 %arg4) {
+ entry:
+-  %add0 = add i32 %arg0, 0
+-  %add1 = add i32 %add0, 0
+-  %add2 = add i32 %add1, 0
+-  %add3 = add i32 %arg1, 0
+-  %add4 = add i32 %add2, %add3
+-  ret i32 %add4
++  %add0 = getelementptr i8, ptr @gv, i32 %arg0
++  %add1 = getelementptr i8, ptr @gv, i32 %arg1
++  %add2 = getelementptr i8, ptr @gv, i32 %arg2
++  %add3 = getelementptr i8, ptr @gv, i32 %arg3
++  %add4 = getelementptr i8, ptr @gv, i32 %arg4
++  ret ptr %add4
+ }
+ 
+ ; INTERESTING: uselistorder
+ ; RESULT: uselistorder
+-uselistorder i32 0, { 3, 2, 1, 0 }
++uselistorder ptr @gv, { 3, 2, 4, 1, 0 }
+diff --git a/llvm/test/tools/llvm-reduce/uselistorder-invalid-ir-output.ll b/llvm/test/tools/llvm-reduce/uselistorder-invalid-ir-output.ll
+index 4bc862bdaed26..0e9c32120f763 100644
+--- a/llvm/test/tools/llvm-reduce/uselistorder-invalid-ir-output.ll
++++ b/llvm/test/tools/llvm-reduce/uselistorder-invalid-ir-output.ll
+@@ -7,10 +7,11 @@
+ ; RUN:   --test-arg %s
+ 
+ ; Check if the final output really parses
+-; RUN: not llvm-as -o /dev/null %t.reduced.ll
++; RUN: llvm-as -o /dev/null %t.reduced.ll
+ ; RUN: FileCheck --check-prefix=RESULT %s < %t.reduced.ll
+ 
+ 
++; RESULT-LABEL: define void @kernel_ocl_path_trace_direct_lighting(
+ define void @kernel_ocl_path_trace_direct_lighting(i1 %cond.i, i1 %cmp5.i.i, i32 %arg) {
+ ; INTERESTING: entry:
+ ; INTERESTING: 0
+@@ -48,4 +49,5 @@ kernel_direct_lighting.exit:
+   ret void
+ }
+ 
+-; RESULT: uselistorder i32 0, { 4, 0, 5, 1, 6, 2, 7, 3 }
++; FIXME: Should probably fix test to use a global address
++; RESULT-NOT: uselistorder
+diff --git a/llvm/tools/verify-uselistorder/verify-uselistorder.cpp b/llvm/tools/verify-uselistorder/verify-uselistorder.cpp
+index c2810b9579c15..be8ab4738d0eb 100644
+--- a/llvm/tools/verify-uselistorder/verify-uselistorder.cpp
++++ b/llvm/tools/verify-uselistorder/verify-uselistorder.cpp
+@@ -245,6 +245,9 @@ ValueMapping::ValueMapping(const Module &M) {
+ }
+ 
+ void ValueMapping::map(const Value *V) {
++  if (!V->hasUseList())
++    return;
++
+   if (IDs.lookup(V))
+     return;
+ 
+@@ -395,6 +398,9 @@ static void verifyUseListOrder(const Module &M) {
+ 
+ static void shuffleValueUseLists(Value *V, std::minstd_rand0 &Gen,
+                                  DenseSet<Value *> &Seen) {
++  if (!V->hasUseList())
++    return;
++
+   if (!Seen.insert(V).second)
+     return;
+ 
+@@ -437,6 +443,9 @@ static void shuffleValueUseLists(Value *V, std::minstd_rand0 &Gen,
+ }
+ 
+ static void reverseValueUseLists(Value *V, DenseSet<Value *> &Seen) {
++  if (!V->hasUseList())
++    return;
++
+   if (!Seen.insert(V).second)
+     return;
+ 
+diff --git a/polly/lib/Support/ScopHelper.cpp b/polly/lib/Support/ScopHelper.cpp
+index 73c5d95deef58..a2328d1bbb3cf 100644
+--- a/polly/lib/Support/ScopHelper.cpp
++++ b/polly/lib/Support/ScopHelper.cpp
+@@ -601,6 +601,9 @@ bool polly::isHoistableLoad(LoadInst *LInst, Region &R, LoopInfo &LI,
+     L = L->getParentLoop();
+   }
+ 
++  if (!Ptr->hasUseList())
++    return true;
++
+   for (auto *User : Ptr->users()) {
+     auto *UserI = dyn_cast<Instruction>(User);
+     if (!UserI || UserI->getFunction() != LInst->getFunction() ||
+-- 
+2.52.0.rc1.455.g30608eb744-goog
+

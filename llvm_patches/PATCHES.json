@@ -1333,5 +1333,35 @@
       "from": 574158,
       "until": 577064
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Reapply \"IR: Remove uselist for constantdata (#137313)\" (#138961)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9383fb23e18bb983d0024fb956a0a724ef9eb03d.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574618
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] ValueMapper: Delete unused initializers of replaced appending globals."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/1f38d49ebe96417e368a567efa4d650b8a9ac30f.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 597042
+    }
   }
 ]
