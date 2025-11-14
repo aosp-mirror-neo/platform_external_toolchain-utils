@@ -121,7 +121,7 @@ def _parse_cls_from_upload_output(upload_output: str) -> list[int]:
     """Returns the CL number in the given upload output."""
     id_regex = re.compile(
         r"^remote:\s+https://"
-        r"(?:chromium|chrome-internal)"
+        r"(?:chromium|chrome-internal|googleplex-android)"
         r"-review\S+/\+/(\d+)\s",
         re.MULTILINE,
     )
