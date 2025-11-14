@@ -596,6 +596,11 @@ def commit_new_exemptions(
     updated_android_bp_files: list[Path],
     branch_name: str,
 ) -> list[Path]:
+    """Commits all new exemptions.
+
+    Returns:
+        A list of Git repos where a commit was made, relative to android_tree.
+    """
     git_repos = group_files_by_git_repo(
         android_tree, thread_pool, updated_android_bp_files
     )
@@ -629,7 +634,7 @@ def commit_new_exemptions(
     # Assume simple `git commit` commands won't fail. If they do, something
     # seems very wrong, and the program should simply abort.
     thread_pool.map(do_commit, git_repos)
-    return git_repos
+    return [x.relative_to(android_tree) for x in git_repos]
 
 
 def upload_all_new_exemptions(
@@ -884,8 +889,8 @@ def main(argv: list[str]) -> None:
             bug_number,
             android_tree,
             thread_pool,
-            apply_results.successfully_updated_files,
-            branch_name,
+            updated_android_bp_files=apply_results.successfully_updated_files,
+            branch_name=branch_name,
         )
         logging.info(
             "Successfully made commits in %d repos", len(repos_with_commit)
@@ -924,8 +929,8 @@ def main(argv: list[str]) -> None:
         if update_summary_file:
             write_update_summary_file(
                 update_summary_file,
-                apply_results.successfully_updated_files,
-                apply_results.updated_targets,
+                updated_repos=repos_with_commit,
+                updated_targets=apply_results.updated_targets,
             )
             logging.info("Wrote summary file to %s", update_summary_file)
 
