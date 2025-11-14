@@ -100,9 +100,7 @@ class DiffHunk:
             elif hunk_line.startswith(" ") or not hunk_line:
                 old_lines_read += 1
                 new_lines_read += 1
-            elif hunk_line.startswith("\\ No newline at end of file"):
-                break
-            else:
+            elif not hunk_line.startswith("\\ No newline at end of file"):
                 raise ValueError(
                     f"Invalid line in diff hunk parsing: {hunk_line}"
                 )
@@ -110,8 +108,8 @@ class DiffHunk:
         if not (old_lines_read == old_len and new_lines_read == new_len):
             raise ValueError(
                 f"Invalid diff hunk; "
-                f"read {old_lines_read}, old lines, want {old_len}, and "
-                f"read {new_lines_read}, old lines, want {new_len}."
+                f"read {old_lines_read} old lines, want {old_len}, and "
+                f"read {new_lines_read} new lines, want {new_len}."
             )
 
         # Checked for a zero-length hunk above, so the loop must have iterated.

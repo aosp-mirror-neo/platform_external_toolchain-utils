@@ -341,3 +341,38 @@ class TestIterateDiffPieces(test_helpers.TempDirTestCase):
             "",
         ]
         self.assertEqual(pieces, expected_pieces)
+
+
+class TestDiffHunkParsing(test_helpers.TempDirTestCase):
+    """Tests for diff hunk parsing."""
+
+    def test_no_newline_at_end_of_file_old(self):
+        diff = textwrap.dedent(
+            r"""
+            @@ -110,4 +116,4 @@ cc_fuzz {
+                    ],
+                    foo: "bar",
+                },
+            -}
+            \ No newline at end of file
+            +}
+            """
+        )
+        # Just ensure this doesn't throw; it'll do so if it can't consume
+        # exactly the number of lines specified by the hunk header.
+        clean_warnings.DiffHunk.parse(diff.lstrip().split("\n"))
+
+    def test_no_newline_at_end_of_file_new(self):
+        diff = textwrap.dedent(
+            r"""
+            @@ -110,4 +116,4 @@ cc_fuzz {
+                    ],
+                    foo: "bar",
+                },
+            -}
+            +}
+            \ No newline at end of file
+            """
+        )
+        # Just ensure this doesn't throw; same reason as above.
+        clean_warnings.DiffHunk.parse(diff.lstrip().split("\n"))
