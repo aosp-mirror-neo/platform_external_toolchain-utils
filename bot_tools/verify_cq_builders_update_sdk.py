@@ -10,6 +10,7 @@ have a step named 'update sdk'.
 
 import argparse
 import logging
+import re
 import sys
 
 from llvm_tools import cros_cls
@@ -19,10 +20,17 @@ from llvm_tools import cros_cls
 TARGET_STEP_NAME = "update sdk"
 
 # Builders to ignore in our checks, for one reason or another.
-IGNORE_BUILDERS = (
-    # This runs on CLs with Chromite changes (b/420954566#comment8). Whether or
-    # not it updates the SDK is irrelevant.
-    "chromite-cq",
+IGNORE_BUILDERS_RE = re.compile(
+    "|".join(
+        (
+            # This runs on CLs with Chromite changes (b/420954566#comment8).
+            # Whether or not it updates the SDK is irrelevant.
+            "chromite-cq",
+            # bazel-lite-cq builders don't run the update sdk step, but have
+            # their own logic to use the new toolchain.
+            ".*-bazel-lite-cq",
+        )
+    )
 )
 
 
@@ -67,7 +75,7 @@ def _inspect_and_verify_cq_orchestrator(
             builders_with_step += 1
             continue
 
-        if builder_name in IGNORE_BUILDERS:
+        if IGNORE_BUILDERS_RE.fullmatch(builder_name):
             logging.info(
                 "Builder %s lacked step, but is marked as ignored", builder_name
             )
