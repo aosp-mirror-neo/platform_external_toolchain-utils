@@ -15,12 +15,14 @@ This tooling expects that you've recently run
 import argparse
 import concurrent.futures
 import dataclasses
+import itertools
 import logging
 from pathlib import Path
 import re
 import subprocess
 import sys
 import threading
+import time
 from typing import Iterator
 
 from android_tools import android_paths
@@ -273,6 +275,10 @@ def diff_trivially_has_no_dedupe_potential(file_diff: str) -> bool:
     return True
 
 
+class RetryableRunOnFileError(Exception):
+    """Raised when `run_on_file` fails in a way that may be retryable."""
+
+
 def run_on_file(
     config: RunConfig,
     git_repo: Path,
@@ -303,7 +309,6 @@ def run_on_file(
             only_files=(file_in_repo,),
         )
 
-    raise_if_gemini_failed = lambda: None
     if diff_trivially_has_no_dedupe_potential(file_diff):
         logging.info(
             "Skipping Gemini on %s; there's no dedupe potential.", git_file
@@ -312,36 +317,38 @@ def run_on_file(
         logging.info("Running Gemini on %s...", git_file)
         # Use gemini-cli rather than Gemini's API, since gemini-cli has the
         # built-in ability to edit files/etc.
-        gemini_run_result = subprocess.run(
-            (
-                "gemini",
-                # This isn't an interactive session; approve all edits, but stop
-                # short of running anything else.
-                "--approval-mode=auto_edit",
-                "\n\n".join((config.gemini_prompt, "```", file_diff, "```")),
-            ),
-            cwd=git_repo_path,
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            encoding="utf-8",
-            errors="replace",
-        )
-
-        if gemini_run_result.returncode:
+        try:
+            gemini_run_result = subprocess.run(
+                (
+                    "gemini",
+                    # This isn't an interactive session; approve all edits, but
+                    # stop short of running anything else.
+                    "--approval-mode=auto_edit",
+                    "\n\n".join(
+                        (config.gemini_prompt, "```", file_diff, "```")
+                    ),
+                ),
+                cwd=git_repo_path,
+                check=True,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except subprocess.CalledProcessError as e:
             logging.error(
                 "Gemini failed on %s; stdout/stderr:\n%s",
                 git_file,
-                gemini_run_result.stdout,
+                e.stdout,
             )
-            raise_if_gemini_failed = gemini_run_result.check_returncode
-        else:
-            logging.debug(
-                "Gemini's output on %s was:\n%s",
-                git_file,
-                gemini_run_result.stdout,
-            )
+            raise RetryableRunOnFileError from e
+
+        logging.debug(
+            "Gemini's output on %s was:\n%s",
+            git_file,
+            gemini_run_result.stdout,
+        )
 
         with repo_lock:
             # Refresh this, since Gemini may have made changes.
@@ -365,18 +372,67 @@ def run_on_file(
                 raise
 
     logging.info("Formatting %s...", git_file)
-    subprocess.run(
-        (config.bpfmt, "-w", file_in_repo),
-        cwd=git_repo_path,
-        check=True,
-        stdin=subprocess.DEVNULL,
-        # Pipe these so they're printed by main's exception handler if this
-        # fails.
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
+    try:
+        subprocess.run(
+            (config.bpfmt, "-w", file_in_repo),
+            cwd=git_repo_path,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            # Pipe these so they're printed by main's exception handler if this
+            # fails.
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+    except subprocess.CalledProcessError as e:
+        # bpfmt should be deterministic, but Gemini will (very) rarely insert
+        # syntax errors. `bpfmt` failing is indicative of a syntax error.
+        logging.error(
+            "Formatting failed on %s; stdout/stderr:\n%s",
+            git_file,
+            e.stdout,
+        )
+        raise RetryableRunOnFileError from e
 
-    raise_if_gemini_failed()
+
+def run_on_file_with_retries(
+    config: RunConfig,
+    git_repo: Path,
+    repo_lock: threading.RLock,
+    file_in_repo: Path,
+    max_retries: int = 5,
+    retry_backoff_secs: int = 1,
+) -> None:
+    git_file = config.android_tree / git_repo / file_in_repo
+    original_file_contents = git_file.read_bytes()
+    for i in itertools.count():
+        try:
+            run_on_file(config, git_repo, repo_lock, file_in_repo)
+        except RetryableRunOnFileError as e:
+            if i == max_retries:
+                # It's a bug if these don't have a `__cause__`, but type
+                # definitions say `__cause__` can be None, so placate mypy.
+                #
+                # Simultaneously, disable `pylint`. For some reason, it asserts
+                # that `e.__cause__` has a constant value, which makes the
+                # conditional pointless.
+                #
+                # pylint: disable=using-constant-test
+                if e.__cause__:
+                    raise e.__cause__
+                raise e
+            logging.exception(
+                "Caught exception running on file %s, retrying in %ds",
+                git_file,
+                retry_backoff_secs,
+            )
+        else:
+            return
+
+        time.sleep(retry_backoff_secs)
+        retry_backoff_secs *= 2
+        git_file.write_bytes(original_file_contents)
+
+    assert False, "Unreachable"
 
 
 def amend_head_if_necessary(run_config: RunConfig, git_repo: Path) -> bool:
@@ -567,7 +623,11 @@ def main(argv: list[str]) -> None:
                     )
                     continue
                 f = thread_pool.submit(
-                    run_on_file, run_config, repo, repo_lock, Path(file)
+                    run_on_file_with_retries,
+                    run_config,
+                    repo,
+                    repo_lock,
+                    Path(file),
                 )
                 futures[f] = repo / file
 
