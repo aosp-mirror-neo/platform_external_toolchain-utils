@@ -1,0 +1,44 @@
+From 149f91bad66972ad8bf0add5c79bf74055f6905a Mon Sep 17 00:00:00 2001
+From: Sander de Smalen <sander.desmalen@arm.com>
+Date: Fri, 12 Sep 2025 17:20:16 +0200
+Subject: [PATCH] [compiler-rt][AArch64] Don't use x18 in __arm_sme_save
+ (#157802)
+
+The AAPCS recommends avoiding the use of x18 as it may be used for other
+purposes such as a shadow call stack.
+
+In this particular case it could just as well use x16 instead.
+---
+ compiler-rt/lib/builtins/aarch64/sme-abi.S | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/compiler-rt/lib/builtins/aarch64/sme-abi.S b/compiler-rt/lib/builtins/aarch64/sme-abi.S
+index d5510ac0cfa50..1713a5969459a 100644
+--- a/compiler-rt/lib/builtins/aarch64/sme-abi.S
++++ b/compiler-rt/lib/builtins/aarch64/sme-abi.S
+@@ -280,17 +280,17 @@ DEFINE_COMPILERRT_FUNCTION(__arm_sme_save)
+   mov     w16, #1
+   str     x16, [x0]
+ 
+-  add     x18, x0, #32
++  add     x16, x0, #32
+   tbz     x17, #FEAT_SME2_BIT, 1f
+ 
+   // Store ZT0
+-  str     zt0, [x18]
+-  add     x18, x18, #64
++  str     zt0, [x16]
++  add     x16, x16, #64
+ 
+ 1:
+-  // Set up lazy-save (x18 = pointer to buffer)
++  // Set up lazy-save (x16 = pointer to buffer)
+   rdsvl   x17, #1
+-  str     x18, [x0, #16]!
++  str     x16, [x0, #16]!
+   strh    w17, [x0, #8]
+   strh    wzr, [x0, #10]
+   str     wzr, [x0, #12]
+-- 
+2.52.0.rc1.455.g30608eb744-goog
+

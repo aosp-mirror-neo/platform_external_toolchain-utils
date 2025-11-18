@@ -1,0 +1,124 @@
+From 031fb7414fd6edf20e0cd7f7783666313169a0d2 Mon Sep 17 00:00:00 2001
+From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+Date: Thu, 2 Oct 2025 09:27:48 +0100
+Subject: [PATCH] [AArch64][SME] Preserve `Chain` when selecting multi-vector
+ LUT4Is (#161494)
+
+Previously, the `Chain` was dropped meaning LUTI4 nodes that only
+differed in the chain operand would be incorrectly CSE'd.
+
+Fixes: #161420
+---
+ llvm/lib/Target/AArch64/AArch64ISelDAGToDAG.cpp     | 12 +++++++-----
+ llvm/test/CodeGen/AArch64/pr161420.ll               | 13 ++++++++-----
+ .../AArch64/sme2-intrinsics-luti4-lane-x4.ll        |  5 ++++-
+ llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4.ll  |  5 ++++-
+ 4 files changed, 23 insertions(+), 12 deletions(-)
+
+diff --git a/llvm/lib/Target/AArch64/AArch64ISelDAGToDAG.cpp b/llvm/lib/Target/AArch64/AArch64ISelDAGToDAG.cpp
+index 6a1b06eea4309..177b4b0febcac 100644
+--- a/llvm/lib/Target/AArch64/AArch64ISelDAGToDAG.cpp
++++ b/llvm/lib/Target/AArch64/AArch64ISelDAGToDAG.cpp
+@@ -2089,7 +2089,8 @@ void AArch64DAGToDAGISel::SelectMultiVectorLutiLane(SDNode *Node,
+   if (!ImmToReg<AArch64::ZT0, 0>(Node->getOperand(2), ZtValue))
+     return;
+ 
+-  SDValue Ops[] = {ZtValue, Node->getOperand(3), Node->getOperand(4)};
++  SDValue Chain = Node->getOperand(0);
++  SDValue Ops[] = {ZtValue, Node->getOperand(3), Node->getOperand(4), Chain};
+   SDLoc DL(Node);
+   EVT VT = Node->getValueType(0);
+ 
+@@ -2110,14 +2111,15 @@ void AArch64DAGToDAGISel::SelectMultiVectorLutiLane(SDNode *Node,
+ void AArch64DAGToDAGISel::SelectMultiVectorLuti(SDNode *Node,
+                                                 unsigned NumOutVecs,
+                                                 unsigned Opc) {
+-
+   SDValue ZtValue;
+-  SmallVector<SDValue, 4> Ops;
+   if (!ImmToReg<AArch64::ZT0, 0>(Node->getOperand(2), ZtValue))
+     return;
+ 
+-  Ops.push_back(ZtValue);
+-  Ops.push_back(createZMulTuple({Node->getOperand(3), Node->getOperand(4)}));
++  SDValue Chain = Node->getOperand(0);
++  SDValue Ops[] = {ZtValue,
++                   createZMulTuple({Node->getOperand(3), Node->getOperand(4)}),
++                   Chain};
++
+   SDLoc DL(Node);
+   EVT VT = Node->getValueType(0);
+ 
+diff --git a/llvm/test/CodeGen/AArch64/pr161420.ll b/llvm/test/CodeGen/AArch64/pr161420.ll
+index 515a1bf47cc1e..dcdf0ed1e7a35 100644
+--- a/llvm/test/CodeGen/AArch64/pr161420.ll
++++ b/llvm/test/CodeGen/AArch64/pr161420.ll
+@@ -5,17 +5,20 @@ target datalayout = "e-m:o-i64:64-i128:128-n32:64-S128-Fn32"
+ target triple = "arm64-apple-macosx15.0.0"
+ 
+ ; From: https://github.com/llvm/llvm-project/issues/161420. This test checks that
+-; two `luti4` instructions are emitted. FIXME: This is currently broken!
++; two `luti4` instructions are emitted.
+ define void @pluto(ptr %arg, ptr %arg1, ptr %arg2, ptr %arg3) #0 {
+ ; CHECK-LABEL: pluto:
+ ; CHECK:       ; %bb.0: ; %bb
+ ; CHECK-NEXT:    mov w8, #0 ; =0x0
+ ; CHECK-NEXT:    ldr zt0, [x1]
+-; CHECK-NEXT:    ldr z0, [x3]
++; CHECK-NEXT:    ldr z4, [x3]
+ ; CHECK-NEXT:    ptrue pn8.h
+-; CHECK-NEXT:    ld1h { z4.h - z7.h }, pn8/z, [x0]
+-; CHECK-NEXT:    luti4 { z0.h - z3.h }, zt0, z0[0]
+-; CHECK-NEXT:    fmla za.h[w8, 2, vgx4], { z4.h - z7.h }, { z0.h - z3.h }
++; CHECK-NEXT:    ld1h { z0.h - z3.h }, pn8/z, [x0]
++; CHECK-NEXT:    luti4 { z16.h - z19.h }, zt0, z4[0]
++; CHECK-NEXT:    fmla za.h[w8, 0, vgx4], { z0.h - z3.h }, { z16.h - z19.h }
++; CHECK-NEXT:    ldr zt0, [x2]
++; CHECK-NEXT:    luti4 { z4.h - z7.h }, zt0, z4[0]
++; CHECK-NEXT:    fmla za.h[w8, 2, vgx4], { z0.h - z3.h }, { z4.h - z7.h }
+ ; CHECK-NEXT:    ret
+ bb:
+   tail call void @llvm.aarch64.sme.ldr.zt(i32 0, ptr %arg1)
+diff --git a/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4-lane-x4.ll b/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4-lane-x4.ll
+index cf306e5238018..d48e0cd4d9a92 100644
+--- a/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4-lane-x4.ll
++++ b/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4-lane-x4.ll
+@@ -49,10 +49,13 @@ define {<vscale x 4 x float>, <vscale x 4 x float>, <vscale x 4 x float>, <vscal
+ }
+ 
+ ; Tests multiple identical luti4 intrinsics with ZT0 loads interspersed, are not CSD'd.
+-; FIXME: This is currently broken!
+ define void @test_multiple_luti4_zt_i8(ptr %ptrA, ptr %ptrB, <vscale x 16 x i8> %x) {
+ ; CHECK-LABEL: test_multiple_luti4_zt_i8:
+ ; CHECK:       // %bb.0:
++; CHECK-NEXT:    ldr zt0, [x0]
++; CHECK-NEXT:    luti4 { z4.s - z7.s }, zt0, z0[1]
++; CHECK-NEXT:    // fake_use: $z4 $z4_z5_z6_z7
++; CHECK-NEXT:    ldr zt0, [x1]
+ ; CHECK-NEXT:    luti4 { z0.s - z3.s }, zt0, z0[1]
+ ; CHECK-NEXT:    // fake_use: $z0 $z0_z1_z2_z3
+ ; CHECK-NEXT:    ret
+diff --git a/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4.ll b/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4.ll
+index 0024b70bd7c8f..c1eff8dd1f8a8 100644
+--- a/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4.ll
++++ b/llvm/test/CodeGen/AArch64/sme2-intrinsics-luti4.ll
+@@ -15,12 +15,15 @@ define {<vscale x 16 x i8>, <vscale x 16 x i8>, <vscale x 16 x i8>, <vscale x 16
+ }
+ 
+ ; Tests multiple identical luti4 intrinsics with ZT0 loads interspersed, are not CSD'd.
+-; FIXME: This is currently broken!
+ define void @test_multiple_luti4_zt_i8(ptr %ptrA, ptr %ptrB, <vscale x 16 x i8> %v0, <vscale x 16 x i8> %v1) #0 {
+ ; CHECK-LABEL: test_multiple_luti4_zt_i8:
+ ; CHECK:       // %bb.0:
++; CHECK-NEXT:    ldr zt0, [x0]
+ ; CHECK-NEXT:    // kill: def $z1 killed $z1 killed $z0_z1 def $z0_z1
+ ; CHECK-NEXT:    // kill: def $z0 killed $z0 killed $z0_z1 def $z0_z1
++; CHECK-NEXT:    luti4 { z4.b - z7.b }, zt0, { z0, z1 }
++; CHECK-NEXT:    // fake_use: $z4 $z4_z5_z6_z7
++; CHECK-NEXT:    ldr zt0, [x1]
+ ; CHECK-NEXT:    luti4 { z0.b - z3.b }, zt0, { z0, z1 }
+ ; CHECK-NEXT:    // fake_use: $z0 $z0_z1_z2_z3
+ ; CHECK-NEXT:    ret
+-- 
+2.52.0.rc1.455.g30608eb744-goog
+

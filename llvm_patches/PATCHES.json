@@ -1363,5 +1363,65 @@
       "from": 574158,
       "until": 597042
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [compiler-rt][AArch64] Don't use x18 in __arm_sme_save (#157802)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/149f91bad66972ad8bf0add5c79bf74055f6905a.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 590288
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Precommit tests for LUT4I `Chain` issues (NFC) (#161505)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/cd0f560cc7e88bffedc4c34e3eb3efbf00dcb3ef.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 592434
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Preserve `Chain` when selecting multi-vector LUT4Is (#161494)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/031fb7414fd6edf20e0cd7f7783666313169a0d2.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 592533
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Disable tail calls for callees that require saving ZT0 (#165371)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/bfb54e8ba6262a509343985c018f9a8d52963734.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 595389
+    }
   }
 ]
