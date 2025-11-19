@@ -282,7 +282,6 @@ class RetryableRunOnFileError(Exception):
 def run_on_file(
     config: RunConfig,
     git_repo: Path,
-    repo_lock: threading.RLock,
     file_in_repo: Path,
 ) -> None:
     """Runs transformations on a specific file in a git repo.
@@ -290,24 +289,17 @@ def run_on_file(
     Args:
         config: RunConfig for the cleanups.
         git_repo: Git repo inside of the Android tree to modify.
-        repo_lock: RLock to acquire before running any git operation. This lock
-          must be shared between all concurrent `run_on_file` operations on the
-          same `git_repo`.
         file_in_repo: File to modify.
     """
     git_file = git_repo / file_in_repo
     git_repo_path = config.android_tree / git_repo
 
-    # NOTE: Git gets angry if you modify a repo concurrently with reading it (or
-    # modify concurrently with modifying it). It's a bit ugly, but we can easily
-    # work around that by locking git ops for this repo.
-    with repo_lock:
-        file_diff = git_utils.diff(
-            git_dir=git_repo_path,
-            ref_start="HEAD~",
-            ref_end="HEAD",
-            only_files=(file_in_repo,),
-        )
+    file_diff = git_utils.diff(
+        git_dir=git_repo_path,
+        ref_start="HEAD~",
+        ref_end="HEAD",
+        only_files=(file_in_repo,),
+    )
 
     if diff_trivially_has_no_dedupe_potential(file_diff):
         logging.info(
@@ -350,26 +342,24 @@ def run_on_file(
             gemini_run_result.stdout,
         )
 
-        with repo_lock:
-            # Refresh this, since Gemini may have made changes.
-            file_diff = git_utils.diff(
-                git_dir=git_repo_path,
-                ref_start="HEAD~",
-                # Don't set `ref_end`, since we want to take changes in the
-                # working directory into account.
-                only_files=(file_in_repo,),
-            )
+        # Refresh this, since Gemini may have made changes.
+        file_diff = git_utils.diff(
+            git_dir=git_repo_path,
+            ref_start="HEAD~",
+            # Don't set `ref_end`, since we want to take changes in the
+            # working directory into account.
+            only_files=(file_in_repo,),
+        )
 
     cleaned_diff = remove_blank_lines_from_diff(file_diff)
     if file_diff != cleaned_diff:
         logging.info("Removing blank lines from %s...", git_file)
-        with repo_lock:
-            git_utils.checkout(git_repo_path, "HEAD~", paths=(file_in_repo,))
-            try:
-                git_utils.apply_patch_contents(git_repo_path, cleaned_diff)
-            except subprocess.CalledProcessError:
-                logging.error("Failed applying patch:\n%s", cleaned_diff)
-                raise
+        git_utils.checkout(git_repo_path, "HEAD~", paths=(file_in_repo,))
+        try:
+            git_utils.apply_patch_contents(git_repo_path, cleaned_diff)
+        except subprocess.CalledProcessError:
+            logging.error("Failed applying patch:\n%s", cleaned_diff)
+            raise
 
     logging.info("Formatting %s...", git_file)
     try:
@@ -397,16 +387,33 @@ def run_on_file(
 def run_on_file_with_retries(
     config: RunConfig,
     git_repo: Path,
-    repo_lock: threading.RLock,
     file_in_repo: Path,
     max_retries: int = 5,
     retry_backoff_secs: int = 1,
 ) -> None:
-    git_file = config.android_tree / git_repo / file_in_repo
-    original_file_contents = git_file.read_bytes()
+    """Runs Gemini on the given file, retrying as needed.
+
+    Note that this will stage files in the given repository.
+    """
+    # Arbitrarily selected retry limit.
+    max_retries = 5
+    retry_backoff_secs = 1
+
+    git_repo_path = config.android_tree / git_repo
+    git_file = git_repo_path / file_in_repo
+
+    # Stage the state of the repo before we start. `run_on_file` likely
+    # modifies `file_in_repo`, and if it fails, we want to reset to the state we
+    # were in before we started.
+    #
+    # In rare cases, Gemini may modify _multiple_ files in `run_on_file` (e.g.,
+    # if the `defaults` is in a distant-but-still-in-repo Android.bp), so the
+    # full repo is analyzed rather than just `file_in_repo`.
+    git_utils.stage_all_unstaged_changes(git_repo_path, quiet=True)
+
     for i in itertools.count():
         try:
-            run_on_file(config, git_repo, repo_lock, file_in_repo)
+            run_on_file(config, git_repo, file_in_repo)
         except RetryableRunOnFileError as e:
             if i == max_retries:
                 # It's a bug if these don't have a `__cause__`, but type
@@ -430,7 +437,9 @@ def run_on_file_with_retries(
 
         time.sleep(retry_backoff_secs)
         retry_backoff_secs *= 2
-        git_file.write_bytes(original_file_contents)
+
+        # Restore repo state to what was staged above.
+        git_utils.checkout(git_repo_path, ref=None, paths=(".",))
 
     assert False, "Unreachable"
 
@@ -445,6 +454,40 @@ def amend_head_if_necessary(run_config: RunConfig, git_repo: Path) -> bool:
     logging.debug("Changes made to %s; amending", git_repo_path)
     git_utils.amend_head_with_all_changes(git_repo_path, quiet=True)
     return True
+
+
+def run_on_repo(config: RunConfig, git_repo: Path) -> bool:
+    """Runs the cleanup process on a single repository.
+
+    Returns:
+        True if the repository was amended, False otherwise.
+    """
+    git_repo_path = config.android_tree / git_repo
+    changed_files = git_utils.list_files_changed_by_commit(
+        git_dir=git_repo_path, ref="HEAD"
+    )
+
+    # NOTE: Fixing up individual files in a repo is _almost_ something we can
+    # parallelize, but it is not easy to do so.
+    #
+    # 1. Gemini performs _much_ better at this task if it's asked to evaluate
+    #    a single file at a time, so `gemini-cli` is only asked to edit one
+    #    file per invocation.
+    # 2. `git` operations in `run_on_file_with_retries` will sometimes break if
+    #    run concurrently with other `git` operations.
+    # 3. `gemini-cli` may edit a file **elsewhere in a git repo** if it
+    #    determines that doing so allows for dedupe (b/455912162#comment12).
+    for file in changed_files:
+        if Path(file).name != "Android.bp":
+            logging.warning(
+                "Weird: found non-Android.bp file update to %s. Ignoring.",
+                git_repo / file,
+            )
+            continue
+
+        run_on_file_with_retries(config, git_repo, Path(file))
+
+    return amend_head_if_necessary(config, git_repo)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -606,79 +649,48 @@ def main(argv: list[str]) -> None:
     with concurrent.futures.ThreadPoolExecutor(
         max_workers=opts.jobs
     ) as thread_pool:
-        # Phase 1: Run transformations. To keep them focused, run separately per
-        # file in the repo. These will arbitrarily mutate and examine these
-        # files, but should modify no state outside of said files.
-        futures = {}
-        for repo in repos_to_run_on:
-            repo_lock = threading.RLock()
-            for file in git_utils.list_files_changed_by_commit(
-                git_dir=android_tree / repo, ref="HEAD"
-            ):
-                if Path(file).name != "Android.bp":
-                    logging.warning(
-                        "Weird: found non-Android.bp file update to %s. "
-                        "Ignoring.",
-                        repo / file,
-                    )
-                    continue
-                f = thread_pool.submit(
-                    run_on_file_with_retries,
-                    run_config,
-                    repo,
-                    repo_lock,
-                    Path(file),
-                )
-                futures[f] = repo / file
+        future_to_repo = {
+            thread_pool.submit(run_on_repo, run_config, repo): repo
+            for repo in repos_to_run_on
+        }
 
+        amended_repos = []
         exceptions = []
-        for future in concurrent.futures.as_completed(futures):
-            repo = futures[future]
-            if e := future.exception():
+
+        for future in concurrent.futures.as_completed(future_to_repo):
+            repo = future_to_repo[future]
+            try:
+                amended = future.result()
+                if amended:
+                    amended_repos.append(repo)
+            except Exception as e:
                 exceptions.append((repo, e))
 
-        # Phase 2: Commit any changes that were made. If an exception is raised
-        # for simply _amending a commit_, it's probably OK to just let that
-        # bubble up, rather than having special logic like we do for Gemini.
-        amend_results = list(
-            thread_pool.map(
-                lambda x: amend_head_if_necessary(run_config, x),
-                repos_to_run_on,
-            )
-        )
-
         failed_uploads = []
-        if opts.upload:
-            repos_to_upload = [
-                repo
-                for repo, amended in zip(repos_to_run_on, amend_results)
-                if amended
-            ]
-            if repos_to_upload:
-                failed_uploads = upload_changes(
-                    android_tree,
-                    thread_pool,
-                    repos_to_upload,
-                )
-            else:
-                logging.info("No repos amended, so nothing to upload.")
+        if opts.upload and amended_repos:
+            failed_uploads = upload_changes(
+                android_tree,
+                thread_pool,
+                amended_repos,
+            )
+        elif not amended_repos:
+            logging.info("No repos amended, so nothing to upload.")
 
-        num_changed_repos = sum(1 for x in amend_results if x)
         # Log exceptions/errors in a batch afterward, so they don't get lost in
         # any logging output above.
-        for repo_file, e in exceptions:
-            if isinstance(e, subprocess.CalledProcessError):
+        for repo, exc in exceptions:
+            if isinstance(exc, subprocess.CalledProcessError):
                 logging.error(
                     "Exception caught making changes to %s; stdstreams:\n%s",
-                    repo_file,
-                    e.stdout,
-                    exc_info=e,
+                    repo,
+                    exc.stdout,
+                    exc_info=exc,
                 )
             else:
                 logging.error(
                     "Exception caught making changes to %s",
-                    repo_file,
-                    exc_info=e,
+                    repo,
+                    exc_info=exc,
                 )
 
         if failed_uploads:
@@ -689,5 +701,5 @@ def main(argv: list[str]) -> None:
 
         had_failures = exceptions or failed_uploads
 
-        logging.info("Applied updates to %d repos", num_changed_repos)
+        logging.info("Applied updates to %d repos", len(amended_repos))
         sys.exit(1 if had_failures else 0)

@@ -405,17 +405,8 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
     ).stdout.strip()
 
 
-def _add_all_files_and_commit(
-    git_dir: Path, quiet: bool, extra_commit_flags: tuple[str, ...]
-) -> str:
-    """Stage all changes to this repo, and run a commit.
-
-    Returns:
-        SHA of the new commit.
-    """
-    # Explicitly add using `git add -A`, since that stages all unstaged changes
-    # & adds any files that aren't tracked. `git commit -a` skips adding
-    # untracked files.
+def stage_all_unstaged_changes(git_dir: Path, quiet: bool = False) -> None:
+    """Runs `git add -A` to stage all changes."""
     subprocess.run(
         ("git", "add", "-A"),
         check=True,
@@ -426,6 +417,19 @@ def _add_all_files_and_commit(
         encoding="utf-8",
         errors="replace",
     )
+
+
+def _add_all_files_and_commit(
+    git_dir: Path, quiet: bool, extra_commit_flags: tuple[str, ...]
+) -> str:
+    """Stage all changes to this repo, and run a commit.
+
+    Returns:
+        SHA of the new commit.
+    """
+    # Explicitly add`, since that stages all unstaged changes & adds any files
+    # that aren't tracked. `git commit -a` skips adding untracked files.
+    stage_all_unstaged_changes(git_dir, quiet)
     subprocess.run(
         ("git", "commit") + extra_commit_flags,
         check=True,
@@ -495,13 +499,23 @@ def fetch(
 
 
 def checkout(
-    git_dir: Path, ref: str, paths: Sequence[str | os.PathLike] = ()
+    git_dir: Path, ref: str | None, paths: Sequence[str | os.PathLike] = ()
 ) -> None:
     """Runs `git checkout ${ref}`.
 
+    If `ref` is specified, the given ref is targeted for the checkout.
+    Otherwise, it's Git's standard "HEAD plus staged changes."
+
     If `paths` is specified, only the given paths are checked out.
     """
-    cmd: list[str | os.PathLike] = ["git", "checkout", ref]
+    if not ref and not paths:
+        raise ValueError("`git checkout` makes no sense without paths or a ref")
+
+    cmd: list[str | os.PathLike] = ["git", "checkout"]
+
+    if ref:
+        cmd.append(ref)
+
     if paths:
         cmd.append("--")
         cmd += paths
