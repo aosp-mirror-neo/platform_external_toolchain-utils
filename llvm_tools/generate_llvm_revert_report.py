@@ -14,100 +14,83 @@ import csv
 import dataclasses
 import json
 import logging
-from pathlib import Path
-import re
+import shlex
 import subprocess
 import sys
-from typing import TextIO
+from typing import Any, TextIO
 
-from cros_utils import cros_paths
-from llvm_tools import get_llvm_hash
-from llvm_tools import revert_checker
+
+GERRIT = "gerrit"
 
 
 @dataclasses.dataclass(frozen=True)
-class RevertInfo:
-    """Information to write about a revert."""
+class Revert:
+    """Represents a commit that reverts an LLVM change."""
 
-    revert: revert_checker.Revert
-    has_in_patches: bool
+    url: str
     subject: str
+    status: str
+
+    @staticmethod
+    def from_dict(data: dict[str, Any]) -> "Revert":
+        """Parses a Revert from a dict."""
+        try:
+            return Revert(
+                url=data["url"],
+                subject=data["subject"],
+                status=data["status"],
+            )
+        except:
+            logging.error("Could not parse Revert from %r", data)
+            raise
 
 
-def list_upstream_cherrypicks(patches_json: Path) -> set[str]:
-    with patches_json.open(encoding="utf-8") as f:
-        applicable_patches = [
-            x
-            for x in json.load(f)
-            if not x.get("platforms") or "chromiumos" in x["platforms"]
-        ]
-
-    # Allow for arbitrary prefixes and suffixes for patches; some have `-v2`,
-    # `_fixed`, etc.
-    sha_re = re.compile(r"cherry/.*([a-fA-F0-9]{40})\b.*\.patch$")
-    sha_like_patches = set()
-    for p in applicable_patches:
-        if s := p.get("metadata", {}).get("original_sha"):
-            sha_like_patches.add(s)
-            continue
-
-        if m := sha_re.match(p["rel_patch_path"]):
-            sha_like_patches.add(m.group(1))
-
-    return sha_like_patches
-
-
-def fetch_commit_subject(llvm_git_dir: Path, sha: str) -> str:
-    result = subprocess.run(
-        ["git", "log", "--format=%s", "-n1", sha],
+def find_reverts_in_gerrit(branch: str) -> str:
+    """Queries Gerrit for reverts on the given branch."""
+    cmd = (
+        GERRIT,
+        "--format",
+        "json",
+        "search",
+        "--branch",
+        branch,
+        "--topic",
+        "revert-checker",
+        "project:external/github.com/llvm/llvm-project",
+    )
+    logging.info("Running: %s", shlex.join(cmd))
+    process = subprocess.run(
+        cmd,
         check=True,
-        cwd=llvm_git_dir,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
-        # Don't set stderr, since that should only be written to on error (and
-        # `check=True`).
     )
-    return result.stdout.strip()
+    return process.stdout
 
 
-def write_reverts_as_csv(write_to: TextIO, reverts: list[RevertInfo]):
+def find_reverts(branch: str) -> list[Revert]:
+    """Queries Gerrit for reverts on the given branch."""
+    reverts = find_reverts_in_gerrit(branch)
+    return [Revert.from_dict(d) for d in json.loads(reverts)]
+
+
+def write_reverts_as_csv(write_to: TextIO, reverts: list[Revert]):
     writer = csv.writer(write_to, quoting=csv.QUOTE_ALL)
     # Write the header.
-    writer.writerow(("SHA", "Reverted SHA", "Has Revert", "Subject"))
-    writer.writerows(
-        (x.revert.sha, x.revert.reverted_sha, x.has_in_patches, x.subject)
-        for x in reverts
-    )
+    writer.writerow(("Status", "URI", "Subject", "Notes"))
+    writer.writerows((x.status, x.url, x.subject) for x in reverts)
 
 
 def main(argv: list[str]):
-    # `cros_root` is hardcoded here, since:
-    # - this one only reads tree state, and
-    # - the person/automation invoking it is almost definitely invoking it _in
-    #   the tree that it should run in_.
-    cros_root = cros_paths.script_chromiumos_checkout_or_exit()
-
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "-C",
-        "--git-dir",
-        default=str(cros_root / cros_paths.LLVM_PROJECT),
-        help="LLVM git directory to use.",
-        # Note that this is left as `type=str` because that's what
-        # `revert_checker` expects.
-        type=str,
-    )
-    parser.add_argument(
-        "--llvm-next", action="store_true", help="Use the llvm-next hash"
-    )
-    parser.add_argument(
-        "--llvm-head",
-        default="cros/upstream/main",
-        help="ref to treat as 'origin/main' in the given LLVM dir.",
+        "--branch",
+        help="Branch to examine. For example: chromeos/llvm-r574158-1",
+        required=True,
     )
     parser.add_argument(
         "--debug",
@@ -122,42 +105,11 @@ def main(argv: list[str]):
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
-    if opts.llvm_next:
-        llvm_sha = get_llvm_hash.LLVMHash().GetCrOSLLVMNextHash()
-    else:
-        llvm_sha = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(cros_root)
-
-    logging.info("Resolved %r as the LLVM SHA to check.", llvm_sha)
-
-    in_tree_cherrypicks = list_upstream_cherrypicks(
-        cros_root / cros_paths.DEFAULT_PATCHES_PATH
-    )
-    logging.info("Identified %d local cherrypicks.", len(in_tree_cherrypicks))
-    logging.debug("Cherry-pick SHAs: %s", in_tree_cherrypicks)
-
-    raw_reverts = revert_checker.find_reverts(
-        opts.git_dir,
-        llvm_sha,
-        opts.llvm_head,
-    )
-
-    llvm_dir = Path(opts.git_dir)
-    # Sort by `has_in_patches`, since that ordering is easier to visually scan.
-    # Note that `sorted` is stable, so any ordering in `find_reverts` will be
-    # preserved secondary to the `has_in_patches` ordering. Reverts not in
-    # PATCHES.json will appear earlier than those that are.
     reverts = sorted(
-        (
-            RevertInfo(
-                revert=revert,
-                subject=fetch_commit_subject(llvm_dir, revert.sha),
-                has_in_patches=revert.sha in in_tree_cherrypicks,
-            )
-            for revert in raw_reverts
-        ),
-        key=lambda x: x.has_in_patches,
+        find_reverts(opts.branch),
+        key=lambda r: r.status,
+        reverse=True,
     )
 
-    print()
-    print("CSV summary of reverts:")
+    print("\nCSV summary of reverts:")
     write_reverts_as_csv(sys.stdout, reverts)
