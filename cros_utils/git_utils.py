@@ -899,13 +899,17 @@ def list_shas_between(git_dir: Path, from_ref: str, to_ref: str) -> list[str]:
     return results
 
 
-def list_files_changed_by_commit(git_dir: Path, ref: str) -> list[str]:
-    """Returns a list of files changed by `ref`.
+def _list_files_changed(
+    git_dir: Path, ref_start: str | None, ref_end: str | None
+) -> list[str]:
+    cmd = ["git", "diff", "--name-only"]
+    if ref_start:
+        cmd.append(ref_start)
+    if ref_end:
+        cmd.append(ref_end)
 
-    'Changed' might mean added, removed, moved, or modified.
-    """
     file_list = subprocess.run(
-        ("git", "diff", "--name-only", f"{ref}~", ref),
+        cmd,
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -913,6 +917,24 @@ def list_files_changed_by_commit(git_dir: Path, ref: str) -> list[str]:
         encoding="utf-8",
     ).stdout
     return [x.strip() for x in file_list.splitlines()]
+
+
+def list_uncommitted_files_changed(git_dir: Path) -> list[str]:
+    """Returns a list of files that a diff from `HEAD`."""
+    return _list_files_changed(git_dir, ref_start="HEAD", ref_end=None)
+
+
+def list_unstaged_files_changed(git_dir: Path) -> list[str]:
+    """Returns a list of files that have unstaged changes."""
+    return _list_files_changed(git_dir, ref_start=None, ref_end=None)
+
+
+def list_files_changed_by_commit(git_dir: Path, ref: str) -> list[str]:
+    """Returns a list of files changed by `ref`.
+
+    'Changed' might mean added, removed, moved, or modified.
+    """
+    return _list_files_changed(git_dir, ref_start=f"{ref}~", ref_end=ref)
 
 
 def diff(
