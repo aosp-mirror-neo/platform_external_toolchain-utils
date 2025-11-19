@@ -32,6 +32,58 @@ from cros_utils import git_utils
 
 _HUNK_HEADER_RE = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)")
 
+# More info on `git diff`'s output can be found here:
+# https://git-scm.com/docs/diff-format#generate_patch_text_with_p
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class DiffFileHeader:
+    """A file header in a diff.
+
+    This is expected to be a produced by `git diff` on a single file, on a repo
+    which is not currently undergoing any special git operation (e.g., merging).
+    """
+
+    # No special parsing is done, but we _do_ need to treat these file headers
+    # specially. Example list contents are:
+    # [
+    #   "diff --git a/... b/...",
+    #   "index ...",
+    #   "--- a/foo/bar",
+    #   "+++ b/baz/qux",
+    # ]
+    lines: list[str]
+
+    @staticmethod
+    def parse(
+        lines: list[str], start_idx: int = 0
+    ) -> tuple["DiffFileHeader", int] | None:
+        """Tries to parse a file header at `start_idx`.
+
+        Returns:
+            A tuple of (file_header, first_line_idx_after_header), or None if
+            parsing failed.
+        """
+        file_header_prefix = "diff --git "
+        if not lines[start_idx].startswith(file_header_prefix):
+            return None
+
+        # So the number of potential follow-ups here is pretty high.
+        # Rather than matching those exactly, just search for a
+        # hunk header (which indicates diffs exist in the file), or
+        # another file header (which indicates that the file may have just been
+        # moved, or something).
+
+        i = start_idx + 1
+        while i < len(lines):
+            if lines[i].startswith(file_header_prefix) or _HUNK_HEADER_RE.match(
+                lines[i]
+            ):
+                break
+            i += 1
+
+        return DiffFileHeader(lines=lines[start_idx:i]), i
+
 
 @dataclasses.dataclass(frozen=True, eq=True)
 class DiffHunk:
@@ -163,7 +215,9 @@ def remove_blank_lines_from_hunk(hunk: DiffHunk) -> list[str] | None:
     return new_hunk_lines
 
 
-def iterate_diff_pieces(git_diff: str) -> Iterator[DiffHunk | str]:
+def iterate_diff_pieces(
+    git_diff: str,
+) -> Iterator[DiffFileHeader | DiffHunk | str]:
     """Yields the 'pieces' of the given diff.
 
     "Pieces" is, loosely, "either a meaningful, structured part of a diff, or a
@@ -190,7 +244,10 @@ def iterate_diff_pieces(git_diff: str) -> Iterator[DiffHunk | str]:
 
     line_idx = 0
     while line_idx < len(lines):
-        if parsed_hunk := DiffHunk.parse(lines, line_idx):
+        if parsed_header := DiffFileHeader.parse(lines, line_idx):
+            header, line_idx = parsed_header
+            yield header
+        elif parsed_hunk := DiffHunk.parse(lines, line_idx):
             hunk, line_idx = parsed_hunk
             yield hunk
         else:
@@ -217,12 +274,38 @@ def remove_blank_lines_from_diff(git_diff: str) -> str:
     about removed or unchanged lines.
     """
     output_lines = []
+
+    # Defer adding diff file headers, since git isn't fond of file headers with
+    # no corresponding diff.
+    pending_file_header = None
+    pending_header_had_hunk = False
+
     for piece in iterate_diff_pieces(git_diff):
+        if isinstance(piece, DiffFileHeader):
+            # If there were no hunks associated with the pending header
+            # originally, emit it now.
+            if pending_file_header and not pending_header_had_hunk:
+                output_lines.extend(pending_file_header.lines)
+
+            pending_file_header = piece
+            pending_header_had_hunk = False
+            continue
+
         if isinstance(piece, DiffHunk):
+            pending_header_had_hunk = True
             if new_hunk := remove_blank_lines_from_hunk(piece):
+                if pending_file_header:
+                    output_lines += pending_file_header.lines
+                    pending_file_header = None
+
                 output_lines.extend(new_hunk)
-        else:
-            output_lines.append(piece)
+            continue
+
+        output_lines.append(piece)
+
+    if pending_file_header and not pending_header_had_hunk:
+        output_lines.extend(pending_file_header.lines)
+
     return "\n".join(output_lines)
 
 

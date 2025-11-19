@@ -16,6 +16,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
     def test_remove_blank_lines_from_diff_basic_example(self):
         diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,3 +1,5 @@
@@ -28,6 +29,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
         )
         expected_diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,3 +1,4 @@
@@ -44,6 +46,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
     def test_no_blank_lines_no_change(self):
         diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,3 +1,4 @@
@@ -60,6 +63,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
     def test_multiple_hunks_with_indent(self):
         diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,3 +1,5 @@
@@ -79,6 +83,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
         )
         expected_diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,3 +1,4 @@
@@ -100,6 +105,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
     def test_removed_and_context_blank_line_is_kept(self):
         diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,5 +1,4 @@
@@ -119,6 +125,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
         """Test remove_blank_lines_from_diff with omitted hunk lengths."""
         diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/foo
             +++ b/foo
             @@ -1 +1 @@
@@ -128,6 +135,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
         )
         expected_diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/foo
             +++ b/foo
             @@ -1,1 +1,0 @@
@@ -142,10 +150,13 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
         """Test remove_blank_lines_from_diff with omitted hunk lengths."""
         diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/foo
             +++ b/foo
             @@ -1,0 +1 @@
             +
+            @@ -10,0 +10 @@
+            +foo
             """
         )
         # While hunks with no diff are errors, files with no hunks are not.
@@ -154,8 +165,11 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
         # there's a reason not to.
         expected_diff = textwrap.dedent(
             """
+            diff --git a/... b/...
             --- a/foo
             +++ b/foo
+            @@ -10,0 +10 @@
+            +foo
             """
         )
         self.assertEqual(
@@ -163,31 +177,79 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             expected_diff.rstrip(),
         )
 
-    def test_multifile_hunk_removal_if_only_whitespace(self):
-        """Test remove_blank_lines_from_diff with omitted hunk lengths."""
+    def test_hunk_removal_keeps_header_if_no_hunk(self):
+        """If no hunk is found, headers should be kept."""
         diff = textwrap.dedent(
-            """
+            """\
+            diff --git a/foo b/foo
             --- a/foo
             +++ b/foo
-            @@ -1,0 +1 @@
-            +
+            diff --git a/bar b/bar
             --- a/bar
             +++ b/bar
-            @@ -1,0 +1 @@
-            +
             """
         )
         expected_diff = textwrap.dedent(
-            """
+            """\
+            diff --git a/foo b/foo
             --- a/foo
             +++ b/foo
+            diff --git a/bar b/bar
             --- a/bar
             +++ b/bar
             """
         )
         self.assertEqual(
-            clean_warnings.remove_blank_lines_from_diff(diff).rstrip(),
-            expected_diff.rstrip(),
+            clean_warnings.remove_blank_lines_from_diff(diff).strip(),
+            expected_diff.strip(),
+        )
+
+    def test_hunk_removal_keeps_header_multiple_hunks(self):
+        """If all hunks are removed, the header should be kept."""
+        diff = textwrap.dedent(
+            """\
+            diff --git a/foo b/foo
+            --- a/foo
+            +++ b/foo
+            @@ -0,0 +1 @@
+            +
+            @@ -10,0 +11 @@
+            +a
+            """
+        )
+        expected_diff = textwrap.dedent(
+            """\
+            diff --git a/foo b/foo
+            --- a/foo
+            +++ b/foo
+            @@ -10,0 +11 @@
+            +a
+            """
+        )
+        self.assertEqual(
+            clean_warnings.remove_blank_lines_from_diff(diff).strip(),
+            expected_diff.strip(),
+        )
+
+    def test_multifile_hunk_removal_if_only_whitespace(self):
+        """Test remove_blank_lines_from_diff with omitted hunk lengths."""
+        diff = textwrap.dedent(
+            """
+            diff --git a/... b/...
+            --- a/foo
+            +++ b/foo
+            @@ -1,0 +1 @@
+            +
+            diff --git a/... b/...
+            --- a/bar
+            +++ b/bar
+            @@ -1,0 +1 @@
+            +
+            """
+        )
+        self.assertEqual(
+            clean_warnings.remove_blank_lines_from_diff(diff).strip(),
+            "",
         )
 
 
