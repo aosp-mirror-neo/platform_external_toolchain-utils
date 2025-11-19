@@ -328,12 +328,6 @@ def run_gemini_on_file(
         only_files=(file_in_repo,),
     )
 
-    if diff_trivially_has_no_dedupe_potential(file_diff):
-        logging.info(
-            "Skipping Gemini on %s; there's no dedupe potential.", git_file
-        )
-        return
-
     logging.info("Running Gemini on %s...", git_file)
     # Use gemini-cli rather than Gemini's API, since gemini-cli has the
     # built-in ability to edit files/etc.
@@ -479,25 +473,35 @@ def run_on_repo(config: RunConfig, git_repo: Path) -> bool:
         git_dir=git_repo_path, ref="HEAD"
     )
 
-    # NOTE: Fixing up individual files in a repo is _almost_ something we can
-    # parallelize, but it is not easy to do so.
-    #
-    # 1. Gemini performs _much_ better at this task if it's asked to evaluate
-    #    a single file at a time, so `gemini-cli` is only asked to edit one
-    #    file per invocation.
-    # 2. `git` operations in `run_on_file_with_retries` will sometimes break if
-    #    run concurrently with other `git` operations.
-    # 3. `gemini-cli` may edit a file **elsewhere in a git repo** if it
-    #    determines that doing so allows for dedupe (b/455912162#comment12).
-    for file in changed_files:
-        if Path(file).name != "Android.bp":
-            logging.warning(
-                "Weird: found non-Android.bp file update to %s. Ignoring.",
-                git_repo / file,
-            )
-            continue
+    initial_diff = git_utils.diff(
+        git_dir=git_repo_path,
+        ref_start="HEAD~",
+    )
+    if diff_trivially_has_no_dedupe_potential(initial_diff):
+        logging.info(
+            "Skipping Gemini on files in %s; no dedupe potential exists.",
+            git_repo,
+        )
+    else:
+        # NOTE: Fixing up individual files in a repo is _almost_ something we
+        # can parallelize, but it is not easy to do so.
+        #
+        # 1. Gemini performs _much_ better at this task if it's asked to
+        #    evaluate a single file at a time, so `gemini-cli` is only asked to
+        #    edit one file per invocation.
+        # 2. `git` operations in `run_on_file_with_retries` will sometimes break
+        #    if run concurrently with other `git` operations.
+        # 3. `gemini-cli` may edit a file **elsewhere in a git repo** if it
+        #    determines that doing so allows for dedupe (b/455912162#comment12).
+        for file in changed_files:
+            if Path(file).name != "Android.bp":
+                logging.warning(
+                    "Weird: found non-Android.bp file update to %s. Ignoring.",
+                    git_repo / file,
+                )
+                continue
 
-        run_gemini_on_file_with_retries(config, git_repo, Path(file))
+            run_gemini_on_file_with_retries(config, git_repo, Path(file))
 
     # ...Now we've made an arbitrary set of changes to an arbitrary set of
     # Android.bp files. Some formatted, some not. Fix blank lines up as
