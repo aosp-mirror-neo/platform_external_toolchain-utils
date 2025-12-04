@@ -840,15 +840,25 @@ def remove_old_patches(svn_version: int, patches_json: Path) -> list[Path]:
     indent_len = predict_indent(contents.splitlines())
 
     still_new = []
-    removed_patches = []
+    removed_entries = []
     patches_parent = patches_json.parent
     for entry in json.loads(contents):
         if patch_applies_after(entry.get("version_range"), svn_version):
             still_new.append(entry)
         else:
-            removed_patches.append(patches_parent / entry["rel_patch_path"])
+            removed_entries.append(entry)
+
+    active_rel_paths = {x["rel_patch_path"] for x in still_new}
+
+    # Note that this is a set, since multiple entries may refer to the same
+    # `rel_patch_path`. We don't want to return the same `Path` to remove twice.
+    files_to_remove = {
+        patches_parent / x["rel_patch_path"]
+        for x in removed_entries
+        if x["rel_patch_path"] not in active_rel_paths
+    }
 
     with atomic_write_file.atomic_write(patches_json, encoding="utf-8") as f:
         _write_json_changes(still_new, f, indent_len=indent_len)
 
-    return removed_patches
+    return sorted(files_to_remove)

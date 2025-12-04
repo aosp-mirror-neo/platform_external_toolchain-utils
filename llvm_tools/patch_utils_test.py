@@ -336,6 +336,51 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             expected_patches,
         )
 
+    def test_remove_old_patches_with_shared_and_duplicate_files(self):
+        patches = [
+            # Shared file, one entry removed, one kept. File shouldn't be
+            # removed.
+            {
+                "rel_patch_path": "shared.patch",
+                "version_range": {"until": 4},
+            },
+            {
+                "rel_patch_path": "shared.patch",
+                "version_range": {"from": 6},
+            },
+            # Duplicate file, both entries removed.
+            {
+                "rel_patch_path": "dead.patch",
+                "version_range": {"until": 5},
+            },
+            {
+                "rel_patch_path": "dead.patch",
+                "version_range": {"from": 6, "until": 8},
+            },
+            # Normal removal.
+            {
+                "rel_patch_path": "gone.patch",
+                "version_range": {"until": 5},
+            },
+            # Kept.
+            {
+                "rel_patch_path": "kept.patch",
+                "version_range": {"from": 0},
+            },
+        ]
+
+        tempdir = self.make_tempdir()
+        patches_json = tempdir / "PATCHES.json"
+        with patches_json.open("w", encoding="utf-8") as f:
+            json.dump(patches, f)
+
+        removed_paths = pu.remove_old_patches(
+            svn_version=10, patches_json=patches_json
+        )
+        self.assertEqual(
+            removed_paths, [tempdir / "dead.patch", tempdir / "gone.patch"]
+        )
+
     @staticmethod
     def _default_json_dict():
         return {
