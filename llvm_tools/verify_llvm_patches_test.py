@@ -62,9 +62,6 @@ class VerifyLLVMPatchesTest(unittest.TestCase):
                 f"PATCHES.json:\n{unreferenced_str}"
             )
 
-    # TODO(b/466078369): This is an expected failure since PATCHES.json has two
-    # entries for the same patch.
-    @unittest.expectedFailure
     def test_no_overlapping_patches(self):
         """Verifies that entries pointing to the same patch do not overlap."""
         patches_dir = _PATCHES_JSON_PATH.parent

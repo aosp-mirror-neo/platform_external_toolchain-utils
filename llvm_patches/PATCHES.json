@@ -490,22 +490,6 @@
   },
   {
     "metadata": {
-      "author": "Peter Smith <peter.smith@arm.com>",
-      "info": [],
-      "original_sha": "ba476d0b83dc8a4bbf066dc02a0f73ded27114f0",
-      "title": "[LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/ba476d0b83dc8a4bbf066dc02a0f73ded27114f0.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 564320
-    }
-  },
-  {
-    "metadata": {
       "author": "Pengxuan Zheng <pzheng@quicinc.com>",
       "info": [],
       "original_sha": "36acaa0be5cf6273200d4cc4c35042c4bfc3861b",
