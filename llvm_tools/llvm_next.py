@@ -16,7 +16,7 @@ LLVM_NEXT_REV = 574158
 # Please note that these are (somewhat) automatically curated. See
 # llvm_next_py_autoupdate.py.
 # pylint: disable=line-too-long
-LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ("https://crrev.com/i/8443637/10",)
+LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ()
 # A list of CLs that constitute the current llvm-next roll.
 # This is taken as the set of CLs that will be landed simultaneously in order
 # to make llvm-next go live.
