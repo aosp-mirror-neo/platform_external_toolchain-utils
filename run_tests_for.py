@@ -23,6 +23,8 @@ import signal
 import subprocess
 import sys
 
+from cros_utils import cros_paths
+
 
 TestSpec = collections.namedtuple("TestSpec", ["directory", "command"])
 
@@ -203,7 +205,14 @@ def main(argv):
         return 0
 
     tests_to_run = []
-    if any(x.endswith(".py") for x in modified_files):
+    llvm_patches_dir = str(
+        cros_paths.script_toolchain_utils_root()
+        / cros_paths.DEFAULT_PATCHES_PATH_IN_TOOLCHAIN_UTILS.parent
+    )
+    if any(
+        x.endswith(".py") or x.startswith(llvm_patches_dir)
+        for x in modified_files
+    ):
         tests_to_run.append(
             TestSpec(
                 directory=toolchain_utils,
