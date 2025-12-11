@@ -12,9 +12,20 @@ import subprocess
 import sys
 from typing import Callable, Iterable
 
-from llvm_tools import failure_modes
 from llvm_tools import get_llvm_hash
 from llvm_tools import patch_utils
+
+
+class FailureModes(enum.Enum):
+    """Different modes for the patch manager when handling a failed patch."""
+
+    FAIL = "fail"
+    CONTINUE = "continue"
+    DISABLE_PATCHES = "disable_patches"
+    BISECT_PATCHES = "bisect_patches"
+
+    # Only used by 'bisect_patches'.
+    INTERNAL_BISECTION = "internal_bisection"
 
 
 class GitBisectionCode(enum.IntEnum):
@@ -67,8 +78,8 @@ def GetCommandLineArgs(sys_argv: list[str] | None):
     # applicable patches.
     parser.add_argument(
         "--failure_mode",
-        default=failure_modes.FailureModes.FAIL,
-        type=failure_modes.FailureModes,
+        default=FailureModes.FAIL,
+        type=FailureModes,
         help="the mode of the patch manager when handling failed patches "
         "(default: %(default)s)",
     )
@@ -291,8 +302,7 @@ def main(sys_argv: list[str]):
             llvm_src_dir=llvm_src_dir,
             patches_json_fp=patches_json_fp,
             patch_cmd=patch_cmd,
-            continue_on_failure=args.failure_mode
-            == failure_modes.FailureModes.CONTINUE,
+            continue_on_failure=args.failure_mode == FailureModes.CONTINUE,
         )
         PrintPatchResults(result)
 
@@ -318,10 +328,10 @@ def main(sys_argv: list[str]):
         sys.exit(int(error_code))
 
     dispatch_table = {
-        failure_modes.FailureModes.FAIL: _apply_all,
-        failure_modes.FailureModes.CONTINUE: _apply_all,
-        failure_modes.FailureModes.DISABLE_PATCHES: _disable,
-        failure_modes.FailureModes.BISECT_PATCHES: _test_single,
+        FailureModes.FAIL: _apply_all,
+        FailureModes.CONTINUE: _apply_all,
+        FailureModes.DISABLE_PATCHES: _disable,
+        FailureModes.BISECT_PATCHES: _test_single,
     }
 
     if args_output.failure_mode in dispatch_table:
