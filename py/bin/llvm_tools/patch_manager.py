@@ -1,1 +1,1 @@
-../../../venv_tc/venv_python3_wrapper.sh
+../../../venvless_python3_wrapper.py
