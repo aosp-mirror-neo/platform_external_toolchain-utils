@@ -26,7 +26,6 @@ from llvm_tools import cros_llvm_repo
 from llvm_tools import git_llvm_rev
 from llvm_tools import llvm_next
 from llvm_tools import manifest_utils
-from llvm_tools import subprocess_helpers
 
 
 _LLVM_GIT_URL = (
@@ -335,7 +334,7 @@ def GetGoogle3LLVMVersion(stable: bool) -> int:
             "installs/llvm/git_origin_rev_id",
         ),
     ]
-    git_hash = subprocess_helpers.check_output(cmd).rstrip()
+    git_hash = subprocess.check_output(cmd, encoding="utf-8").rstrip()
     return GetCachedUpToDateReadOnlyLLVMRepo().GetRevisionFromHash(git_hash)
 
 
@@ -510,8 +509,9 @@ class LLVMHash:
         """Gets the latest git hash from top of trunk of LLVM."""
 
         path_to_main_branch = "refs/heads/main"
-        llvm_tot_git_hash = subprocess_helpers.check_output(
-            ["git", "ls-remote", _LLVM_GIT_URL, path_to_main_branch]
+        llvm_tot_git_hash = subprocess.check_output(
+            ["git", "ls-remote", _LLVM_GIT_URL, path_to_main_branch],
+            encoding="utf-8",
         )
         return llvm_tot_git_hash.rstrip().split()[0]
 

@@ -8,13 +8,13 @@ import argparse
 import enum
 import os
 from pathlib import Path
+import subprocess
 import sys
 from typing import Callable, Iterable
 
 from llvm_tools import failure_modes
 from llvm_tools import get_llvm_hash
 from llvm_tools import patch_utils
-from llvm_tools import subprocess_helpers
 
 
 class GitBisectionCode(enum.IntEnum):
@@ -102,8 +102,8 @@ def GetCommandLineArgs(sys_argv: list[str] | None):
 
 def GetHEADSVNVersion(src_path):
     """Gets the SVN version of HEAD in the src tree."""
-    git_hash = subprocess_helpers.check_output(
-        ["git", "-C", src_path, "rev-parse", "HEAD"]
+    git_hash = subprocess.check_output(
+        ["git", "-C", src_path, "rev-parse", "HEAD"], encoding="utf-8"
     )
     return get_llvm_hash.GetVersionFrom(src_path, git_hash.rstrip())
 
