@@ -187,6 +187,9 @@ def _write_results_to_file(
 
 
 def main(argv: list[str]) -> None:
+    # This is essentially an assertion, so just do it super early in main.
+    _verify_no_duplicate_golden_shas()
+
     my_dir = Path(__file__).resolve().parent
     golden_json = my_dir / "validate_check_reverts_output_golden.json"
     opts = parse_args(argv)
@@ -579,8 +582,3 @@ def _verify_no_duplicate_golden_shas() -> None:
             "SHA(s) in GOLDEN_SHAS have multiple mentions:"
             f"{shas_with_multiple_mentions}"
         )
-
-
-if __name__ == "__main__":
-    _verify_no_duplicate_golden_shas()
-    main(sys.argv[1:])

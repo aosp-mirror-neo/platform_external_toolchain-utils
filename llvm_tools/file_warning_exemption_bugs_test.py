@@ -10,7 +10,6 @@ from pathlib import Path
 import subprocess
 import textwrap
 from typing import Iterable
-import unittest
 from unittest import mock
 
 # Short name so we don't have tons of unnecessarily long lines.
@@ -389,7 +388,3 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
                 overlay / "foo",
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()
