@@ -1,0 +1,10 @@
+[tool.mypy]
+# These settings configure mypy to support toolchain-utils' project structure
+# (no __init__.py, PYTHONPATH pointed at the dir containing this file).
+mypy_path = "$MYPY_CONFIG_FILE_DIR"
+namespace_packages = true
+explicit_package_bases = true
+
+# Don't complain about errors in `import`ed files. Until toolchain-utils is
+# overwhelmingly mypy-clean, this has to be the default.
+follow_imports = "silent"

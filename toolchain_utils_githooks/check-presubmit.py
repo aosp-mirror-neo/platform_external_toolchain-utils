@@ -311,18 +311,6 @@ def check_mypy(
     prefix = f"Using {output.strip()}, "
 
     cmd = list(mypy.command)
-    cmd += (
-        # Suppress mypy errors in files that aren't specified on `argv`. Until
-        # toolchain-utils is overwhelmingly mypy-clean, this has to be the
-        # default.
-        "--follow-imports=silent",
-        # b/338058766: in toolchain-utils, mypy will infer that each file
-        # passed in is a package of its own. This leads to errors if one
-        # file transitively imports another. `--explicit-package-bases` causes
-        # mypy to treat $CWD (and other env var values) as the only package
-        # bases, and $CWD == toolchain_utils_root.
-        "--explicit-package-bases",
-    )
     cmd += files
     exit_code, output = run_command_unchecked(
         cmd, cwd=toolchain_utils_root, env=fixed_env
