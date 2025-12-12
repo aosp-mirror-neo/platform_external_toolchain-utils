@@ -56,6 +56,20 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 
+# (str) paths relative to toolchain-utils' root where `__name__ == "__main__"`
+# is allowed. Generally speaking, these don't work as one might expect, due to
+# how we use wrappers.
+NAME_MAIN_ALLOWLIST = (
+    # This is just mirrored from the compiler wrapper dir, so is also directly
+    # executed by users.
+    "compiler_wrapper/build.py",
+    # This is mirrored from LLVM's upstream; no point in having divergence.
+    "llvm_tools/revert_checker.py",
+    # These are directly executed by users.
+    "venv_python3_wrapper.py",
+    "venv_tc/wheels.py",
+)
+
 
 def run_command_unchecked(
     command: Command,
@@ -371,6 +385,47 @@ def check_python_file_headers(python_files: Iterable[str]) -> CheckResult:
     )
 
 
+def check_python_name_eq_main(
+    toolchain_utils_root: str, python_files: Iterable[str]
+) -> CheckResult:
+    """Subchecker of check_py_format. Checks for no __name__ == __main__."""
+    name_main_re = re.compile(r"if\s+__name__\s+==\s+['\"]__main__['\"]:")
+    bad_files = []
+    abs_name_main_allowlist = {
+        Path(toolchain_utils_root, x) for x in NAME_MAIN_ALLOWLIST
+    }
+    bad_files = [
+        x
+        for x in (Path(x) for x in python_files)
+        if x not in abs_name_main_allowlist
+        and name_main_re.search(x.read_text(encoding="utf-8"))
+    ]
+
+    if not bad_files:
+        return CheckResult(
+            ok=True,
+            output="",
+            autofix_commands=[],
+        )
+
+    error_lines = [
+        "if __name__ == '__main__' detected in unexpected files. This does ",
+        "nothing most of the time due to our Python wrappers. Please remove ",
+        "it, or add the file to NAME_MAIN_ALLOWLIST in check-presubmit.py.",
+        "",
+        "File(s):",
+    ]
+    error_lines += (f"- {x}" for x in bad_files)
+    return CheckResult(
+        ok=False,
+        output="\n".join(error_lines),
+        # It's kind of difficult to autofix this, since we need to scrape for
+        # multiple `__name__ == "__main__"` blocks and everything indented under
+        # them. Should be simple enough for the user to handle themself.
+        autofix_commands=[],
+    )
+
+
 def check_py_format(
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
@@ -416,6 +471,12 @@ def check_py_format(
         (
             "check_file_headers",
             thread_pool.apply_async(check_python_file_headers, (python_files,)),
+        ),
+        (
+            "check_name_eq_main",
+            thread_pool.apply_async(
+                check_python_name_eq_main, (toolchain_utils_root, python_files)
+            ),
         ),
     ]
     return [(name, get_check_result_or_catch(task)) for name, task in tasks]
