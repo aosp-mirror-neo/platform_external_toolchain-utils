@@ -47,6 +47,8 @@ Python practices to keep in mind:
 -    When implementing conditional logic, prefer early exits (e.g., `if not foo: continue`, `if foo: return`).
 -    When writing a call to file functions that accept an encoding kwarg, always specify `encoding="utf-8"` (e.g., `open("foo", encoding="utf-8")`, `Path("foo").read_text(encoding="utf-8")`).
 -    Inside of a multiline string, never use escaped newlines (e.g., `\n`); only use literal newlines.
+-    `if __name__ == "__main__"` is **not** advised here, for either tests or scripts. All scripts are executed through a Python wrapper that handles this.
+-    All clients have at least Python 3.11, so the use of newer `typing` features like `list[T]` and `T | None` is encouraged.
 
 ### Common Tasks
 
