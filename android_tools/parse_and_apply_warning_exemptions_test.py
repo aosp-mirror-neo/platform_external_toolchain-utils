@@ -250,6 +250,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
         summary_content: dict[str, Any] = {
+            "bug_number": 12345,
             "git_dirs": ["/foo/bar", "/baz/qux"],
             "updated_targets": {
                 "//foo:bar": ["unused-variable"],
@@ -264,6 +265,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         self.assertEqual(
             summary,
             parse_and_apply.ExemptionSummary(
+                bug_number=12345,
                 git_dirs=[Path("/foo/bar"), Path("/baz/qux")],
                 updated_targets={
                     "//foo:bar": ["unused-variable"],
@@ -276,6 +278,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
         summary_content: dict[str, Any] = {
+            "bug_number": 123,
             "git_dirs": [],
             "updated_targets": {},
         }
@@ -287,6 +290,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         self.assertEqual(
             summary,
             parse_and_apply.ExemptionSummary(
+                bug_number=123,
                 git_dirs=[],
                 updated_targets={},
             ),
@@ -296,6 +300,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
         summary = parse_and_apply.ExemptionSummary(
+            bug_number=987,
             git_dirs=[Path("/foo/bar"), Path("/baz/qux")],
             updated_targets={
                 "//foo:bar": ["unused-variable"],
@@ -308,6 +313,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         read_summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
 
         expected_summary = parse_and_apply.ExemptionSummary(
+            bug_number=987,
             git_dirs=sorted(summary.git_dirs),
             updated_targets=summary.updated_targets,
         )

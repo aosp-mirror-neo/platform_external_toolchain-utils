@@ -252,6 +252,7 @@ class ApplyWarningExemptionsResult:
 class ExemptionSummary:
     """A summary of exemptions that were applied."""
 
+    bug_number: int
     git_dirs: list[Path] = dataclasses.field(default_factory=list)
     updated_targets: dict[str, list[str]] = dataclasses.field(
         default_factory=dict
@@ -263,6 +264,7 @@ class ExemptionSummary:
         with path.open(encoding="utf-8") as f:
             content = json.load(f)
         return cls(
+            bug_number=content["bug_number"],
             git_dirs=[Path(x) for x in content["git_dirs"]],
             updated_targets=content["updated_targets"],
         )
@@ -272,6 +274,7 @@ class ExemptionSummary:
         with path.open("w", encoding="utf-8") as f:
             json.dump(
                 {
+                    "bug_number": self.bug_number,
                     "git_dirs": sorted(str(x) for x in self.git_dirs),
                     "updated_targets": self.updated_targets,
                 },
@@ -701,11 +704,14 @@ def upload_all_new_exemptions(
 
 def write_update_summary_file(
     target: Path,
+    bug_number: int,
     updated_repos: list[Path],
     updated_targets: dict[str, list[str]],
 ) -> None:
     summary = ExemptionSummary(
-        git_dirs=updated_repos, updated_targets=updated_targets
+        bug_number=bug_number,
+        git_dirs=updated_repos,
+        updated_targets=updated_targets,
     )
     summary.write_to_file(target)
 
@@ -937,6 +943,7 @@ def main(argv: list[str]) -> None:
         if update_summary_file:
             write_update_summary_file(
                 update_summary_file,
+                bug_number,
                 updated_repos=repos_with_commit,
                 updated_targets=apply_results.updated_targets,
             )

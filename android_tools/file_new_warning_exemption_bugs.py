@@ -57,6 +57,7 @@ def format_bug_body(
     git_repo_relative_path: Path,
     targets_and_warnings: dict[str, list[str]],
     contact: str,
+    original_bug: int,
 ) -> str:
     """Returns a suitable body for the bug."""
     lines = [
@@ -75,8 +76,9 @@ def format_bug_body(
     lines += (
         "",
         "These were suppressed due to a global change that introduced them "
-        "(e.g., a toolchain upgrade). Compiler warnings are very useful for "
-        "shifting bugs left, so we recommend that the warnings are fixed.",
+        f"(e.g., a toolchain upgrade). b/{original_bug} may have more info. "
+        "Compiler warnings are very useful for shifting bugs left, so we "
+        "recommend that the warnings are fixed.",
         "",
         "For next steps and FAQs, please see "
         "go/android-llvm-warning-suppression-bug.",
@@ -165,6 +167,7 @@ def main(argv: list[str]) -> None:
             git_repo_relative_path=git_repo,
             targets_and_warnings=targets_dict,
             contact=opts.contact,
+            original_bug=summary.bug_number,
         )
 
         title = f"Toolchain warnings are suppressed in {git_repo}"
