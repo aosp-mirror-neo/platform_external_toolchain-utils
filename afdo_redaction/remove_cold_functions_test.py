@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,7 +7,7 @@
 
 import io
 import unittest
-from unittest.mock import patch
+from unittest import mock
 
 from afdo_redaction import remove_cold_functions
 
@@ -117,9 +115,9 @@ class Test(unittest.TestCase):
             1: _construct_profile([3]),
         }
 
-        for num in expected_profile_lines:
+        for num, expected_lines in expected_profile_lines.items():
             self.assertCountEqual(
-                _run_test(input_profile_lines, num), expected_profile_lines[num]
+                _run_test(input_profile_lines, num), expected_lines
             )
 
     def test_analyze_cwp_and_benchmark_work(self):
@@ -128,21 +126,27 @@ class Test(unittest.TestCase):
         benchmark_profile = _construct_profile([1, 2, 3, 4])
         cwp_buf = io.StringIO("\n".join(cwp_profile))
         benchmark_buf = io.StringIO("\n".join(benchmark_profile))
-        with patch("sys.stderr", new=io.StringIO()) as fake_output:
+        with mock.patch("sys.stderr", new=io.StringIO()) as fake_output:
             _run_test(input_profile_lines, 3, cwp_buf, benchmark_buf)
 
         output = fake_output.getvalue()
         self.assertIn("Retained 3/5 (60.0%) functions in the profile", output)
         self.assertIn(
-            "Retained 1/1 (100.0%) functions only appear in the CWP profile",
+            (
+                "Retained 1/1 (100.0%) functions only appear in the CWP "
+                "profile"
+            ),
             output,
         )
         self.assertIn(
-            "Retained 0/1 (0.0%) functions only appear in the benchmark profile",
+            "Retained 0/1 (0.0%) functions only appear in the benchmark "
+            "profile",
             output,
         )
         self.assertIn(
-            "Retained 2/3 (66.7%) functions appear in both CWP and benchmark"
-            " profiles",
+            (
+                "Retained 2/3 (66.7%) functions appear in both CWP and "
+                "benchmark profiles"
+            ),
             output,
         )

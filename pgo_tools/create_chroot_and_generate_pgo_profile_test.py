@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -12,7 +11,9 @@ import unittest
 
 # This script's name makes lines exceed 80 chars if it's not imported `as`
 # something shorter.
-from pgo_tools import create_chroot_and_generate_pgo_profile as create_chroot_etc
+from pgo_tools import (
+    create_chroot_and_generate_pgo_profile as create_chroot_etc,
+)
 
 
 EXAMPLE_SDK_VERSION_CONF_FILE = r"""

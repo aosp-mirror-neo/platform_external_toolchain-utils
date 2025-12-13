@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 # Copyright 2021 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -10,6 +8,7 @@ import unittest
 from unittest import mock
 
 from seccomp_tools.mass_seccomp_editor import mass_seccomp_editor
+
 
 BASE_SECCOMP_CONTENTS = """
 fstat: 1

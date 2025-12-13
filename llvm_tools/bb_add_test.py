@@ -20,7 +20,7 @@ class Test(unittest.TestCase):
 
     def set_llvm_next_cls(self, cls: Iterable[cros_cls.ChangeListURL]):
         old_cls = llvm_next.LLVM_NEXT_TESTING_CLS
-        llvm_next.LLVM_NEXT_TESTING_CLS = cls
+        llvm_next.LLVM_NEXT_TESTING_CLS = tuple(cls)
 
         def restore_cls():
             llvm_next.LLVM_NEXT_TESTING_CLS = old_cls

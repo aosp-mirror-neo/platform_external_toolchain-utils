@@ -23,7 +23,6 @@ import json
 import logging
 import os
 import subprocess
-import sys
 import tempfile
 
 
@@ -42,12 +41,12 @@ def _find_chromium_root(search_from):
 def _create_gn_args_for(arch):
     """Creates a `gn args` listing for the given architecture."""
     # FIXME(gbiv): is_chromeos_device = True would be nice to support, as well.
-    # Requires playing nicely with SimpleChrome though, and this should be "close
-    # enough" for now.
+    # Requires playing nicely with SimpleChrome though, and this should be
+    # "close enough" for now.
     return "\n".join(
         (
             'target_os = "chromeos"',
-            'target_cpu = "%s"' % arch,
+            f'target_cpu = "{arch}"',
             "is_official_build = true",
             "is_chrome_branded = true",
         )
@@ -58,10 +57,10 @@ def _parse_gn_desc_output(output):
     """Parses the output of `gn desc --format=json`.
 
     Args:
-      output: a seekable file containing the JSON output of `gn desc`.
+        output: a seekable file containing the JSON output of `gn desc`.
 
     Returns:
-      A tuple of (warnings, gn_desc_json).
+        A tuple of (warnings, gn_desc_json).
     """
     warnings = []
     desc_json = None
@@ -166,7 +165,9 @@ def main(args):
     opts = parser.parse_args(args)
 
     logging.basicConfig(
-        format="%(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: %(message)s",
+        format=(
+            "%(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: %(message)s"
+        ),
         level=logging.INFO,
     )
 
