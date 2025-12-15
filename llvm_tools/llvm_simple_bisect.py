@@ -61,7 +61,7 @@ class CommandResult:
         error_string: str,
         llvm_hash: str,
         log_dir: Path | None = None,
-    ):
+    ) -> None:
         """Exit program with error code based on result."""
         if self.success():
             decision, decision_str = EXIT_GOOD, "GOOD"
@@ -81,7 +81,7 @@ class CommandResult:
             self.log_result(log_dir, llvm_hash, decision_str)
         sys.exit(decision)
 
-    def log_result(self, log_dir: Path, llvm_hash: str, decision: str):
+    def log_result(self, log_dir: Path, llvm_hash: str, decision: str) -> None:
         """Log command's output to `{log_dir}/{llvm_hash}.{decision}`.
 
         Args:
@@ -126,7 +126,7 @@ class LLVMRepo:
             raise AbortingException
         return output
 
-    def set_workon(self, workon: bool):
+    def set_workon(self, workon: bool) -> None:
         """Toggle llvm-9999 mode on or off."""
         if self.workon == workon:
             return
@@ -140,7 +140,7 @@ class LLVMRepo:
             raise AbortingException
         self.workon = workon
 
-    def reset(self):
+    def reset(self) -> None:
         """Reset installed LLVM version."""
         logging.info("Reseting llvm to downloaded binary.")
         self.set_workon(False)
@@ -205,7 +205,7 @@ def get_use_flags(
     return " ".join(use_flags)
 
 
-def abort(never_abort: bool):
+def abort(never_abort: bool) -> None:
     """Exit with EXIT_ABORT or else EXIT_SKIP if never_abort is set."""
     if never_abort:
         logging.info(
@@ -287,7 +287,7 @@ def get_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def run(opts: argparse.Namespace):
+def run(opts: argparse.Namespace) -> None:
     # Validate path to Log dir.
     log_dir = opts.log_dir
     if log_dir:
@@ -333,7 +333,7 @@ def run(opts: argparse.Namespace):
     test_result.exit_assert(opts.search_error, llvm_hash, log_dir)
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     logging.basicConfig(level=logging.INFO)
     chroot.VerifyInsideChroot()
     opts = get_args(argv)

@@ -52,7 +52,7 @@ MANIFEST_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 class TestManifestUtils(unittest.TestCase):
     """Test manifest_utils."""
 
-    def test_update_chromeos_manifest(self):
+    def test_update_chromeos_manifest(self) -> None:
         root = ElementTree.fromstring(
             MANIFEST_FIXTURE,
             parser=manifest_utils.make_xmlparser(),
@@ -76,7 +76,7 @@ class TestManifestUtils(unittest.TestCase):
         string_root2 = ElementTree.tostring(root)
         self.assertEqual(string_root1, string_root2)
 
-    def test_extract_current_llvm_hash(self):
+    def test_extract_current_llvm_hash(self) -> None:
         root = ElementTree.fromstring(
             MANIFEST_FIXTURE,
             parser=manifest_utils.make_xmlparser(),

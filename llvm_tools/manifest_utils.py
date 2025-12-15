@@ -162,7 +162,9 @@ def get_chromeos_manifest_path_from_manifest_dir(manifest_dir: Path) -> Path:
     return manifest_dir / "_toolchain.xml"
 
 
-def update_chromeos_manifest_tree(revision: str, xmlroot: ElementTree.Element):
+def update_chromeos_manifest_tree(
+    revision: str, xmlroot: ElementTree.Element
+) -> None:
     """Update the revision info for LLVM for a manifest XML root."""
     llvm_project_elem = _find_llvm_project_in_manifest_tree(xmlroot)
     # Element objects can be falsy, so we need to explicitly check None.
@@ -171,7 +173,7 @@ def update_chromeos_manifest_tree(revision: str, xmlroot: ElementTree.Element):
     llvm_project_elem.attrib["revision"] = revision
 
 
-def format_manifest(repo_manifest: Path, cwd: Path | None = None):
+def format_manifest(repo_manifest: Path, cwd: Path | None = None) -> None:
     """Use cros format to format the given manifest."""
     if not shutil.which("cros"):
         raise FormattingError(

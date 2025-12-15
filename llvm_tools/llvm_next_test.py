@@ -12,6 +12,6 @@ from llvm_tools import llvm_next
 class Test(unittest.TestCase):
     """Tests for llvm_next."""
 
-    def test_all_cls_have_patchesets(self):
+    def test_all_cls_have_patchesets(self) -> None:
         for cl in llvm_next.LLVM_NEXT_TESTING_CLS:
             self.assertIsNotNone(cl.patch_set, f"CL {cl} needs a patch-set")

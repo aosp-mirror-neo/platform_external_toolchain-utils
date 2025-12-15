@@ -357,7 +357,7 @@ def update_new_state_head_info(
     interesting_shas: list[tuple[str, str]],
     old_state: State,
     new_state: State,
-):
+) -> None:
     """Modifies `new_state` to take `interesting_shas` into account.
 
     HEADs in `old_state.heads` get updated if their SHAs change. Otherwise, they
@@ -617,7 +617,7 @@ def _upload_revert_cherry_pick(
     llvm_worktree: Path,
     reviewers: list[str],
     cc: list[str],
-):
+) -> None:
     """Mockable helper to create and upload patches."""
     cherry_pick_returncode = subprocess.run(
         ["git", "cherry-pick", sha],
