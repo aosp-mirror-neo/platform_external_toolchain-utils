@@ -22,7 +22,7 @@ TEST_FP = "foo"
 class TestMassSeccompEditor(unittest.TestCase):
     """Test the mass_seccomp_editor."""
 
-    def test_check_missing_sycalls(self):
+    def test_check_missing_sycalls(self) -> None:
         """Test we can find missing syscalls."""
         with mock.patch(
             "builtins.open", mock.mock_open(read_data=BASE_SECCOMP_CONTENTS)
