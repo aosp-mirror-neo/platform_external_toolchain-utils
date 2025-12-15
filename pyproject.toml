@@ -9,6 +9,9 @@ explicit_package_bases = true
 # overwhelmingly mypy-clean, this has to be the default.
 follow_imports = "silent"
 
+# # Disallow function definitions without types on them
+disallow_untyped_defs = true
+
 # Disallow interpreting `def foo(s: str = None):` as `def foo(s: str | None = None)`
 no_implicit_optional = true
 
