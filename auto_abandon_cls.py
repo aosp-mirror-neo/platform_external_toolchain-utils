@@ -21,7 +21,7 @@ class GerritSearchType(enum.Enum):
     LLVM_ONLY = enum.auto()
     INTERNAL_ONLY = enum.auto()
 
-    def is_internal(self):
+    def is_internal(self) -> bool:
         return self is self.INTERNAL_ONLY
 
 

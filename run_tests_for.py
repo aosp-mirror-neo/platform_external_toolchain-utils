@@ -19,7 +19,7 @@ import sys
 from cros_utils import cros_paths
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, order=True)
 class TestSpec:
     """Describes a test to run."""
 
@@ -74,7 +74,12 @@ def _run_test(test_spec: TestSpec, timeout: int) -> tuple[int | None, str]:
             raise
 
 
-def _run_test_scripts(pool, all_tests, timeout, show_successful_output=False):
+def _run_test_scripts(
+    pool: multiprocessing.pool.ThreadPool,
+    all_tests: list[TestSpec],
+    timeout: int,
+    show_successful_output: bool = False,
+) -> bool:
     """Runs a list of TestSpecs. Returns whether all of them succeeded."""
     results = [
         pool.apply_async(_run_test, (test, timeout)) for test in all_tests
@@ -86,7 +91,7 @@ def _run_test_scripts(pool, all_tests, timeout, show_successful_output=False):
         if show_successful_output and i:
             print("\n")
 
-        pretty_test = shlex.join(test.command)
+        pretty_test = shlex.join(str(x) for x in test.command)
         pretty_directory = os.path.relpath(test.directory)
         if pretty_directory == ".":
             test_message = pretty_test
@@ -121,7 +126,7 @@ def _run_test_scripts(pool, all_tests, timeout, show_successful_output=False):
     return not failures
 
 
-def _find_go_tests(test_paths):
+def _find_go_tests(test_paths: list[str]) -> list[TestSpec]:
     """Returns TestSpecs for the go folders of the given files"""
     assert all(os.path.isabs(path) for path in test_paths)
 
@@ -136,7 +141,7 @@ def _find_go_tests(test_paths):
     ]
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     default_toolchain_utils = os.path.abspath(os.path.dirname(__file__))
 
     parser = argparse.ArgumentParser(description=__doc__)
