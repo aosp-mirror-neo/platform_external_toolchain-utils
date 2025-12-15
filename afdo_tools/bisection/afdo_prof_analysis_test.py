@@ -14,7 +14,7 @@ from afdo_tools.bisection import afdo_prof_analysis as analysis
 class AfdoProfAnalysisTest(unittest.TestCase):
     """Class for testing AFDO Profile Analysis"""
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         self.bad_items = {"func_a": "1", "func_b": "3", "func_c": "5"}
@@ -32,7 +32,7 @@ class AfdoProfAnalysisTest(unittest.TestCase):
             else:
                 self.bad_items[func_name] = "test_data"
 
-    def test_text_to_json(self):
+    def test_text_to_json(self) -> None:
         test_data = io.StringIO(
             "deflate_slow:87460059:3\n"
             " 3: 24\n"
@@ -63,25 +63,35 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         self.assertEqual(actual, expected)
         test_data.close()
 
-    def test_text_to_json_empty_afdo(self):
-        expected = {}
-        actual = analysis.text_to_json("")
+    def test_text_to_json_empty_afdo(self) -> None:
+        expected: dict[str, str] = {}
+        actual = analysis.text_to_json(io.StringIO(""))
         self.assertEqual(actual, expected)
 
-    def test_json_to_text(self):
+    def test_json_to_text(self) -> None:
         example_prof = {"func_a": ":1\ndata\n", "func_b": ":2\nmore data\n"}
         expected_text = "func_a:1\ndata\nfunc_b:2\nmore data\n"
         self.assertEqual(analysis.json_to_text(example_prof), expected_text)
 
-    def test_bisect_profiles(self):
+    def test_bisect_profiles(self) -> None:
         # mock run of external script with arbitrarily-chosen bad profile vals
         # save_run specified and unused b/c afdo_prof_analysis.py
         # will call with argument explicitly specified
         # pylint: disable=unused-argument
-        class DeciderClass:
+        class DeciderClass(analysis.DeciderState):
             """Class for this tests's decider."""
 
-            def run(self, prof, save_run=False):
+            def __init__(self) -> None:
+                # This is a ugly, but we have no need for any of the fields
+                # normally init'ed by the superclass' `__init__`, and calling
+                # __init__ from the superclass complicates things.
+
+                # pylint: disable=super-init-not-called
+                pass
+
+            def run(
+                self, prof: dict[str, str], save_run: bool = False
+            ) -> analysis.StatusEnum:
                 if "1" in prof["func_a"] or "3" in prof["func_b"]:
                     return analysis.StatusEnum.BAD_STATUS
                 return analysis.StatusEnum.GOOD_STATUS
@@ -95,14 +105,24 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         self.assertEqual(results["individuals"], sorted(["func_a", "func_b"]))
         self.assertEqual(results["ranges"], [])
 
-    def test_range_search(self):
+    def test_range_search(self) -> None:
         # arbitrarily chosen functions whose values in the bad profile
         # constitute a problematic pair
         # pylint: disable=unused-argument
-        class DeciderClass:
+        class DeciderClass(analysis.DeciderState):
             """Class for this tests's decider."""
 
-            def run(self, prof, save_run=False):
+            def __init__(self) -> None:
+                # This is a ugly, but we have no need for any of the fields
+                # normally init'ed by the superclass' `__init__`, and calling
+                # __init__ from the superclass complicates things.
+
+                # pylint: disable=super-init-not-called
+                pass
+
+            def run(
+                self, prof: dict[str, str], save_run: bool = False
+            ) -> analysis.StatusEnum:
                 if "1" in prof["func_a"] and "3" in prof["func_b"]:
                     return analysis.StatusEnum.BAD_STATUS
                 return analysis.StatusEnum.GOOD_STATUS
@@ -129,14 +149,24 @@ class AfdoProfAnalysisTest(unittest.TestCase):
 
         self.assertEqual(["func_a", "func_b"], problem_range)
 
-    def test_check_good_not_bad(self):
+    def test_check_good_not_bad(self) -> None:
         func_in_good = "func_c"
 
         # pylint: disable=unused-argument
-        class DeciderClass:
+        class DeciderClass(analysis.DeciderState):
             """Class for this tests's decider."""
 
-            def run(self, prof, save_run=False):
+            def __init__(self) -> None:
+                # This is a ugly, but we have no need for any of the fields
+                # normally init'ed by the superclass' `__init__`, and calling
+                # __init__ from the superclass complicates things.
+
+                # pylint: disable=super-init-not-called
+                pass
+
+            def run(
+                self, prof: dict[str, str], save_run: bool = False
+            ) -> analysis.StatusEnum:
                 if func_in_good in prof:
                     return analysis.StatusEnum.GOOD_STATUS
                 return analysis.StatusEnum.BAD_STATUS
@@ -147,14 +177,20 @@ class AfdoProfAnalysisTest(unittest.TestCase):
             )
         )
 
-    def test_check_bad_not_good(self):
+    def test_check_bad_not_good(self) -> None:
         func_in_bad = "func_d"
 
         # pylint: disable=unused-argument
-        class DeciderClass:
+        class DeciderClass(analysis.DeciderState):
             """Class for this tests's decider."""
 
-            def run(self, prof, save_run=False):
+            def __init__(self) -> None:
+                # pylint: disable=super-init-not-called
+                pass
+
+            def run(
+                self, prof: dict[str, str], save_run: bool = False
+            ) -> analysis.StatusEnum:
                 if func_in_bad in prof:
                     return analysis.StatusEnum.BAD_STATUS
                 return analysis.StatusEnum.GOOD_STATUS
