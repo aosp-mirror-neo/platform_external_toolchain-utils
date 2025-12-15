@@ -26,7 +26,7 @@ from llvm_tools import chroot
 _LOCALMIRROR_ROOT = "gs://chromeos-localmirror/distfiles/"
 
 
-def _chroot_run(command: Sequence[str | Path], chromiumos_root: Path):
+def _chroot_run(command: Sequence[str | Path], chromiumos_root: Path) -> None:
     run_command: list[str | Path] = ["cros_sdk", "--"]
     run_command += command
     subprocess.run(
@@ -37,7 +37,7 @@ def _chroot_run(command: Sequence[str | Path], chromiumos_root: Path):
     )
 
 
-def _ensure_lbzip2_is_installed(chromiumos_checkout: Path):
+def _ensure_lbzip2_is_installed(chromiumos_checkout: Path) -> None:
     logging.info("Ensuring lbzip2 is installed...")
     # `--noreplace` could be used, but checking `which lbzip2 ||` is
     # significantly faster than invoking emerge, so prefer that.
@@ -59,7 +59,7 @@ def determine_target_path(sdk_path: str) -> str:
     return _LOCALMIRROR_ROOT + file_name
 
 
-def _download(remote_path: str, local_file: Path):
+def _download(remote_path: str, local_file: Path) -> None:
     """Downloads the given gs:// path to the given local file."""
     logging.info("Downloading %s -> %s", remote_path, local_file)
     subprocess.run(
@@ -115,7 +115,7 @@ def _debinpkgify_in_chroot(
     return tbz2_file
 
 
-def _upload(local_file: Path, remote_path: str, force: bool):
+def _upload(local_file: Path, remote_path: str, force: bool) -> None:
     """Uploads the local file to the given gs:// path."""
     logging.info("Uploading %s -> %s", local_file, remote_path)
     cmd_base = ["gsutil", "cp", "-a", "public-read"]
@@ -128,7 +128,7 @@ def _upload(local_file: Path, remote_path: str, force: bool):
     )
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     chromiumos_checkout = cros_paths.script_chromiumos_checkout_or_exit()
     chroot.VerifyOutsideChroot()
 
@@ -177,10 +177,10 @@ def main(argv: list[str]):
         host_tmpdir = Path(raw_tempdir)
         chroot_tmpdir = chroot_tmpdir_base / host_tmpdir.name
 
-        def host_tmp_path_to_chroot(host_path: Path):
+        def host_tmp_path_to_chroot(host_path: Path) -> Path:
             return chroot_tmpdir / host_path.relative_to(host_tmpdir)
 
-        def chroot_tmp_path_to_host(chroot_path: Path):
+        def chroot_tmp_path_to_host(chroot_path: Path) -> Path:
             return host_tmpdir / chroot_path.relative_to(chroot_tmpdir)
 
         download_path = host_tmpdir / "sdk_artifact"
