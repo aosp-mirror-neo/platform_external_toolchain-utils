@@ -8,3 +8,6 @@ explicit_package_bases = true
 # Don't complain about errors in `import`ed files. Until toolchain-utils is
 # overwhelmingly mypy-clean, this has to be the default.
 follow_imports = "silent"
+
+# Disallow interpreting `def foo(s: str = None):` as `def foo(s: str | None = None)`
+no_implicit_optional = true
