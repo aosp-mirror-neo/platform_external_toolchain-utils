@@ -130,7 +130,7 @@ def _process_new_diagnostics(
     return new_state_file, new_diagnostics
 
 
-def _file_bugs_for_new_diags(new_diags: dict[str, list[str]]):
+def _file_bugs_for_new_diags(new_diags: dict[str, list[str]]) -> None:
     for tool, diags in sorted(new_diags.items()):
         for diag in diags:
             bugs.CreateNewBug(

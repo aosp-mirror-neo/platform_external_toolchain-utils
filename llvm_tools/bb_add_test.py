@@ -18,16 +18,16 @@ _ARBITRARY_BOTS = ["chromeos/cq/amd64-generic-cq"]
 class Test(unittest.TestCase):
     """Tests for bb_add.py."""
 
-    def set_llvm_next_cls(self, cls: Iterable[cros_cls.ChangeListURL]):
+    def set_llvm_next_cls(self, cls: Iterable[cros_cls.ChangeListURL]) -> None:
         old_cls = llvm_next.LLVM_NEXT_TESTING_CLS
         llvm_next.LLVM_NEXT_TESTING_CLS = tuple(cls)
 
-        def restore_cls():
+        def restore_cls() -> None:
             llvm_next.LLVM_NEXT_TESTING_CLS = old_cls
 
         self.addCleanup(restore_cls)
 
-    def test_generate_bb_add_raises_if_no_llvm_next_cls(self):
+    def test_generate_bb_add_raises_if_no_llvm_next_cls(self) -> None:
         self.set_llvm_next_cls(())
         with self.assertRaisesRegex(
             ValueError, "^llvm-next testing requested.*"
@@ -39,7 +39,7 @@ class Test(unittest.TestCase):
                 tags=(),
             )
 
-    def test_generate_bb_add_adds_llvm_next_cls(self):
+    def test_generate_bb_add_adds_llvm_next_cls(self) -> None:
         self.set_llvm_next_cls((cros_cls.ChangeListURL(123, 1),))
         cmd = bb_add.generate_bb_add_command(
             use_llvm_next=True,
@@ -51,7 +51,7 @@ class Test(unittest.TestCase):
             cmd, ["bb", "add", "-cl", "crrev.com/c/123/1"] + _ARBITRARY_BOTS
         )
 
-    def test_generate_bb_add_adds_extra_cls(self):
+    def test_generate_bb_add_adds_extra_cls(self) -> None:
         cmd = bb_add.generate_bb_add_command(
             use_llvm_next=False,
             extra_cls=(
@@ -74,7 +74,7 @@ class Test(unittest.TestCase):
             + _ARBITRARY_BOTS,
         )
 
-    def test_use_of_tags(self):
+    def test_use_of_tags(self) -> None:
         cmd = bb_add.generate_bb_add_command(
             use_llvm_next=False,
             extra_cls=(cros_cls.ChangeListURL(126),),
