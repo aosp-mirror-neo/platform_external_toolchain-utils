@@ -20,7 +20,7 @@ _PATCHES_JSON_PATH = (
 class VerifyLLVMPatchesTest(unittest.TestCase):
     """Verifies that llvm_patches/PATCHES.json is well-formed."""
 
-    def test_patches_exist(self):
+    def test_patches_exist(self) -> None:
         """Verifies that all patches referenced in PATCHES.json exist."""
         patches_dir = _PATCHES_JSON_PATH.parent
 
@@ -39,7 +39,7 @@ class VerifyLLVMPatchesTest(unittest.TestCase):
         if failures:
             self.fail("\n\n".join(failures))
 
-    def test_all_patches_referenced(self):
+    def test_all_patches_referenced(self) -> None:
         """Verifies that all .patch files in are referenced by PATCHES.json."""
         patches_dir = _PATCHES_JSON_PATH.parent
 
@@ -62,7 +62,7 @@ class VerifyLLVMPatchesTest(unittest.TestCase):
                 f"PATCHES.json:\n{unreferenced_str}"
             )
 
-    def test_no_overlapping_patches(self):
+    def test_no_overlapping_patches(self) -> None:
         """Verifies that entries pointing to the same patch do not overlap."""
         patches_dir = _PATCHES_JSON_PATH.parent
 
@@ -87,16 +87,18 @@ class VerifyLLVMPatchesTest(unittest.TestCase):
                     range1 = e1.version_range or {}
                     from1 = range1.get("from") or 0
                     until1 = range1.get("until")
-                    if until1 is None:
-                        until1 = float("inf")
+                    until1_typed: float | int = (
+                        float("inf") if until1 is None else until1
+                    )
 
                     range2 = e2.version_range or {}
                     from2 = range2.get("from") or 0
                     until2 = range2.get("until")
-                    if until2 is None:
-                        until2 = float("inf")
+                    until2_typed: float | int = (
+                        float("inf") if until2 is None else until2
+                    )
 
-                    if from1 < until2 and from2 < until1:
+                    if from1 < until2_typed and from2 < until1_typed:
                         failures.append(
                             f"Patch {rel_path} has overlapping entries:\n"
                             f"  Entry 1: from {from1} until {until1}\n"
@@ -106,7 +108,7 @@ class VerifyLLVMPatchesTest(unittest.TestCase):
         if failures:
             self.fail("\n\n".join(failures))
 
-    def test_interval_order(self):
+    def test_interval_order(self) -> None:
         """Verifies from < until on all relevant entries."""
         patches_dir = _PATCHES_JSON_PATH.parent
 

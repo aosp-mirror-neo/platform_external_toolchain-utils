@@ -54,7 +54,7 @@ def read_last_tried_sha(retry_state: Path) -> str | None:
         return None
 
 
-def write_last_tried_sha(retry_state: Path, sha: str):
+def write_last_tried_sha(retry_state: Path, sha: str) -> None:
     """Writes the last tried SHA to the state file."""
     with atomic_write_file.atomic_write(retry_state) as f:
         json.dump({"last_tried_sha": sha}, f)
@@ -183,7 +183,7 @@ def add_cl_comment(
     cl_id: int,
     internal: bool,
     comment: str,
-):
+) -> None:
     """Creates & uploads the LLVM update manifest CL.
 
     Returns:
@@ -256,7 +256,7 @@ def make_gerrit_cq_dry_run_command(cls: list[int], internal: bool) -> list[str]:
     return cmd
 
 
-def cq_dry_run_cls(chromeos_tree: Path, cls: UploadedCLs):
+def cq_dry_run_cls(chromeos_tree: Path, cls: UploadedCLs) -> None:
     """Sets CQ+1 on the given uploaded CL listing."""
     # At the time of writing, this is expected given the context of the script.
     # Can easily refactor to make `cls.internal` optional, though.

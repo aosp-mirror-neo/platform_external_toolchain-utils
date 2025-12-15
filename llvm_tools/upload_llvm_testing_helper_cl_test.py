@@ -11,7 +11,7 @@ from llvm_tools import upload_llvm_testing_helper_cl
 class Test(test_helpers.TempDirTestCase):
     """Tests for upload_llvm_testing_helper_cl"""
 
-    def test_force_rebuild_marker_addition(self):
+    def test_force_rebuild_marker_addition(self) -> None:
         chromiumos_overlay = self.make_tempdir()
         llvm_filesdir = chromiumos_overlay / "sys-devel" / "llvm" / "files"
         llvm_filesdir.mkdir(parents=True)
@@ -23,7 +23,7 @@ class Test(test_helpers.TempDirTestCase):
             f"Missing force_rebuild marker in {llvm_filesdir}",
         )
 
-    def test_use_force_block_addition(self):
+    def test_use_force_block_addition(self) -> None:
         chromiumos_overlay = self.make_tempdir()
         use_force_file = chromiumos_overlay / "profiles" / "base" / "use.force"
         use_force_file.parent.mkdir(parents=True)
@@ -37,7 +37,7 @@ class Test(test_helpers.TempDirTestCase):
             upload_llvm_testing_helper_cl.USE_FORCE_BLOCK, new_contents
         )
 
-    def test_warning_disable_block_addition(self):
+    def test_warning_disable_block_addition(self) -> None:
         chromiumos_overlay = self.make_tempdir()
         profile_bashrc = (
             chromiumos_overlay / "profiles" / "base" / "profile.bashrc"
