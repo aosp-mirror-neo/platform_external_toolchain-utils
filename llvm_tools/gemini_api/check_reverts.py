@@ -40,8 +40,8 @@ from typing import Any, IO
 # not contain `google.genai`. `mypy` can _see_ the module, but complains that it
 # doesn't have correct typing markers.
 # pylint:disable=import-error
-from google import genai  # type: ignore[import-untyped]
-from google.genai import types  # type: ignore[import-untyped]
+from google import genai
+from google.genai import types
 
 
 T = typing.TypeVar("T")
@@ -70,7 +70,7 @@ def get_dict_elem_with_type(
         # don't want a `True` to pass when the user asks for `int`.
         # pylint:disable=unidiomatic-typecheck
         if type(value) is expect_type:
-            return typing.cast(T, value)
+            return value
         raise ValueError(
             f"Key {key} is of type {type(value)}; wanted {expect_type} in {obj}"
         )
