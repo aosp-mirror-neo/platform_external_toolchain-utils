@@ -17,12 +17,12 @@ _CREATE_LLVM_PROF = "create_llvm_prof"
 _GS_PREFIX = "gs://"
 
 
-def _fetch_gs_artifact(remote_name, local_name):
+def _fetch_gs_artifact(remote_name: str, local_name: str) -> None:
     assert remote_name.startswith(_GS_PREFIX)
     subprocess.check_call(["gsutil", "cp", remote_name, local_name])
 
 
-def _fetch_and_maybe_unpack(remote_name, local_name):
+def _fetch_and_maybe_unpack(remote_name: str, local_name: str) -> None:
     unpackers = [
         (".tar.bz2", ["tar", "xaf"]),
         (".bz2", ["bunzip2"]),
@@ -45,7 +45,9 @@ def _fetch_and_maybe_unpack(remote_name, local_name):
         assert os.path.exists(local_name)
 
 
-def _generate_afdo(perf_profile_loc, tryjob_loc, output_name):
+def _generate_afdo(
+    perf_profile_loc: str, tryjob_loc: str, output_name: str
+) -> None:
     if perf_profile_loc.startswith(_GS_PREFIX):
         local_loc = "perf.data"
         _fetch_and_maybe_unpack(perf_profile_loc, local_loc)
@@ -76,13 +78,13 @@ def _generate_afdo(perf_profile_loc, tryjob_loc, output_name):
     )
 
 
-def _abspath_or_gs_link(path):
+def _abspath_or_gs_link(path: str) -> str:
     if path.startswith(_GS_PREFIX):
         return path
     return os.path.abspath(path)
 
 
-def _tryjob_arg(tryjob_arg):
+def _tryjob_arg(tryjob_arg: str) -> str:
     # Forward gs args through
     if tryjob_arg.startswith(_GS_PREFIX):
         return tryjob_arg
@@ -106,7 +108,7 @@ def _tryjob_arg(tryjob_arg):
     return _GS_PREFIX + chell_path + tryjob_arg
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--perf_profile",

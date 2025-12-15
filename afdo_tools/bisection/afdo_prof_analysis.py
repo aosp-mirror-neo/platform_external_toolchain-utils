@@ -28,7 +28,7 @@ import random
 import subprocess
 import tempfile
 import time
-from typing import Any
+from typing import Any, IO
 
 
 class StatusEnum(enum.IntEnum):
@@ -45,7 +45,7 @@ statuses = StatusEnum.__members__.values()
 _NUM_RUNS_RANGE_SEARCH = 20  # how many times range search should run its algo
 
 
-def json_to_text(json_prof):
+def json_to_text(json_prof: dict[str, str]) -> str:
     text_profile = []
     for func in json_prof:
         text_profile.append(func)
@@ -53,7 +53,7 @@ def json_to_text(json_prof):
     return "".join(text_profile)
 
 
-def text_to_json(f):
+def text_to_json(f: IO[str]) -> dict[str, str]:
     """Performs basic parsing of an AFDO text-based profile.
 
     This parsing expects an input file object with contents of the form
@@ -78,7 +78,7 @@ def text_to_json(f):
     return results
 
 
-def prof_to_tmp(prof):
+def prof_to_tmp(prof: dict[str, str]) -> str:
     """Creates (and returns) temp filename for given JSON-based AFDO profile."""
     fd, temp_path = tempfile.mkstemp(prefix="afdo_bisection_")
     try:
@@ -97,8 +97,8 @@ class DeciderState:
 
     def __init__(
         self,
-        state_file,
-        external_decider,
+        state_file: str,
+        external_decider: str,
         seed: float | None,
         save_problem_decider: bool = True,
     ):
@@ -111,7 +111,7 @@ class DeciderState:
         self.seed = seed if seed is not None else time.time()
         self.save_problem_decider = save_problem_decider
 
-    def load_state(self):
+    def load_state(self) -> None:
         if not os.path.exists(self.state_file):
             logging.info(
                 "State file %s is empty, starting from beginning",
@@ -138,7 +138,7 @@ class DeciderState:
         self.saved_results = data["accumulated_results"]
         logging.info("Restored state from %s...", self.state_file)
 
-    def save_state(self):
+    def save_state(self) -> None:
         state = {
             "seed": self.seed,
             "accumulated_results": self.accumulated_results,
@@ -149,7 +149,7 @@ class DeciderState:
         os.rename(tmp_file, self.state_file)
         logging.info("Logged state to %s...", self.state_file)
 
-    def run(self, prof, save_run=True):
+    def run(self, prof: dict[str, str], save_run: bool = True) -> StatusEnum:
         """Run the external deciding script on the given profile."""
         if self.saved_results and save_run:
             result = self.saved_results.pop(0)
@@ -195,8 +195,14 @@ class DeciderState:
 
 
 def bisect_profiles(
-    decider, good, bad, common_funcs, lo, hi, rng: random.Random
-):
+    decider: DeciderState,
+    good: dict[str, str],
+    bad: dict[str, str],
+    common_funcs: list[str],
+    lo: int,
+    hi: int,
+    rng: random.Random,
+) -> dict[str, Any]:
     """Recursive function which bisects good and bad profiles.
 
     Args:
@@ -262,7 +268,12 @@ def bisect_profiles(
     return results
 
 
-def bisect_profiles_wrapper(decider, good, bad, rng: random.Random):
+def bisect_profiles_wrapper(
+    decider: DeciderState,
+    good: dict[str, str],
+    bad: dict[str, str],
+    rng: random.Random,
+) -> dict[str, Any]:
     """Wrapper for recursive profile bisection."""
 
     # Validate good and bad profiles are such, otherwise bisection reports noise
@@ -289,7 +300,15 @@ def bisect_profiles_wrapper(decider, good, bad, rng: random.Random):
     return results
 
 
-def range_search(decider, good, bad, common_funcs, lo, hi, rng: random.Random):
+def range_search(
+    decider: DeciderState,
+    good: dict[str, str],
+    bad: dict[str, str],
+    common_funcs: list[str],
+    lo: int,
+    hi: int,
+    rng: random.Random,
+) -> list[str]:
     """Searches for problematic range crossing mid border.
 
     The main inner algorithm is the following, which looks for the smallest
@@ -304,7 +323,13 @@ def range_search(decider, good, bad, common_funcs, lo, hi, rng: random.Random):
     """
     average = lambda x, y: int(round((x + y) // 2.0))
 
-    def find_upper_border(good_copy, funcs, lo, hi, last_bad_val=None):
+    def find_upper_border(
+        good_copy: dict[str, str],
+        funcs: list[str],
+        lo: int,
+        hi: int,
+        last_bad_val: int | None = None,
+    ) -> int:
         """Finds the upper border of problematic range."""
         mid = average(lo, hi)
         if mid in (lo, hi):
@@ -322,7 +347,13 @@ def range_search(decider, good, bad, common_funcs, lo, hi, rng: random.Random):
             return find_upper_border(good_copy, funcs, lo, mid, mid)
         return find_upper_border(good_copy, funcs, mid, hi, last_bad_val)
 
-    def find_lower_border(good_copy, funcs, lo, hi, last_bad_val=None):
+    def find_lower_border(
+        good_copy: dict[str, str],
+        funcs: list[str],
+        lo: int,
+        hi: int,
+        last_bad_val: int | None = None,
+    ) -> int:
         """Finds the lower border of problematic range."""
         mid = average(lo, hi)
         if mid in (lo, hi):
@@ -385,7 +416,9 @@ def range_search(decider, good, bad, common_funcs, lo, hi, rng: random.Random):
     return min_range_funcs
 
 
-def check_good_not_bad(decider, good, bad):
+def check_good_not_bad(
+    decider: DeciderState, good: dict[str, str], bad: dict[str, str]
+) -> bool:
     """Check if bad prof becomes GOOD by adding funcs it lacks from good prof"""
     bad_copy = bad.copy()
     for func in good:
@@ -394,7 +427,9 @@ def check_good_not_bad(decider, good, bad):
     return decider.run(bad_copy) == StatusEnum.GOOD_STATUS
 
 
-def check_bad_not_good(decider, good, bad):
+def check_bad_not_good(
+    decider: DeciderState, good: dict[str, str], bad: dict[str, str]
+) -> bool:
     """Check if good prof BAD after adding funcs exclusive to bad prof"""
     good_copy = good.copy()
     for func in bad:
@@ -403,7 +438,7 @@ def check_bad_not_good(decider, good, bad):
     return decider.run(good_copy) == StatusEnum.BAD_STATUS
 
 
-def parse_args(argv: list[str]):
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -463,7 +498,7 @@ def parse_args(argv: list[str]):
     return parser.parse_args(argv)
 
 
-def main_impl(flags):
+def main_impl(flags: argparse.Namespace) -> dict[str, Any]:
     logging.getLogger().setLevel(logging.INFO)
     if not flags.no_resume and flags.seed:  # conflicting seeds
         raise RuntimeError(
@@ -518,5 +553,5 @@ def main_impl(flags):
     return results
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     main_impl(parse_args(argv))

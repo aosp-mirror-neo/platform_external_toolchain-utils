@@ -24,7 +24,7 @@ class Test(unittest.TestCase):
         self.addCleanup(shutil.rmtree, x)
         return x
 
-    def test_kernel_version_parsing(self):
+    def test_kernel_version_parsing(self) -> None:
         self.assertEqual(
             update_kernel_afdo.KernelVersion.parse("5.10"),
             update_kernel_afdo.KernelVersion(major=5, minor=10),
@@ -33,12 +33,12 @@ class Test(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, ".*invalid kernel version.*"):
             update_kernel_afdo.KernelVersion.parse("5")
 
-    def test_kernel_version_formatting(self):
+    def test_kernel_version_formatting(self) -> None:
         self.assertEqual(
             str(update_kernel_afdo.KernelVersion(major=5, minor=10)), "5.10"
         )
 
-    def test_read_update_cfg_file(self):
+    def test_read_update_cfg_file(self) -> None:
         valid_contents = textwrap.dedent(
             """
             # some comment
@@ -75,7 +75,7 @@ class Test(unittest.TestCase):
             },
         )
 
-    def test_parse_kernel_gs_profile(self):
+    def test_parse_kernel_gs_profile(self) -> None:
         timestamp = datetime.datetime.fromtimestamp(1234, datetime.timezone.utc)
         profile = update_kernel_afdo.KernelGsProfile.from_file_name(
             timestamp,
@@ -92,7 +92,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_kernel_gs_profile_file_name(self):
+    def test_kernel_gs_profile_file_name(self) -> None:
         timestamp = datetime.datetime.fromtimestamp(1234, datetime.timezone.utc)
         profile = update_kernel_afdo.KernelGsProfile.from_file_name(
             timestamp,
@@ -101,7 +101,7 @@ class Test(unittest.TestCase):
         self.assertEqual(profile.file_name_no_suffix, "R124-15808.0-1710149961")
         self.assertEqual(profile.file_name, "R124-15808.0-1710149961.afdo.xz")
 
-    def test_untracked_version_removal(self):
+    def test_untracked_version_removal(self) -> None:
         kernel_5_10 = update_kernel_afdo.KernelVersion(5, 10)
         kernel_5_15 = update_kernel_afdo.KernelVersion(5, 15)
         kernel_6_1 = update_kernel_afdo.KernelVersion(6, 1)
@@ -115,7 +115,9 @@ class Test(unittest.TestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_kernel_profile_fetcher_caches_urls(self, subprocess_run):
+    def test_kernel_profile_fetcher_caches_urls(
+        self, subprocess_run: mock.MagicMock
+    ) -> None:
         subprocess_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -139,7 +141,9 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
         subprocess_run.assert_called_once()
 
     @mock.patch.object(update_kernel_afdo.KernelProfileFetcher, "fetch")
-    def test_newest_afdo_artifact_finding_works(self, fetch):
+    def test_newest_afdo_artifact_finding_works(
+        self, fetch: mock.MagicMock
+    ) -> None:
         late = update_kernel_afdo.KernelGsProfile.from_file_name(
             datetime.datetime.fromtimestamp(1236, datetime.timezone.utc),
             "R124-15786.10-1709548729.afdo.xz",
@@ -160,7 +164,7 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
             late,
         )
 
-    def test_afdo_descriptor_file_round_trips(self):
+    def test_afdo_descriptor_file_round_trips(self) -> None:
         tmpdir = self.make_tempdir()
         file_path = tmpdir / "desc-file.json"
 
@@ -176,7 +180,9 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
             contents,
         )
 
-    def test_afdo_descriptor_file_refuses_to_rewrite_identical_contents(self):
+    def test_afdo_descriptor_file_refuses_to_rewrite_identical_contents(
+        self,
+    ) -> None:
         tmpdir = self.make_tempdir()
         file_path = tmpdir / "desc-file.json"
 

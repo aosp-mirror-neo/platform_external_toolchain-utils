@@ -72,7 +72,7 @@ def increasing_chrome_gs_profile_sequence(
 class Test(unittest.TestCase):
     """Tests for monitor_chrome_afdo."""
 
-    def test_all_profile_arch_parsing(self):
+    def test_all_profile_arch_parsing(self) -> None:
         for arch in monitor_chrome_afdo.ProfileArch:
             self.assertEqual(
                 arch, monitor_chrome_afdo.ProfileArch.parse(arch.value)
@@ -80,7 +80,7 @@ class Test(unittest.TestCase):
         with self.assertRaises(ValueError):
             monitor_chrome_afdo.ProfileArch.parse("not-a-profile-arch")
 
-    def test_all_profile_subtype_parsing(self):
+    def test_all_profile_subtype_parsing(self) -> None:
         for subtype in monitor_chrome_afdo.ProfileSubtype:
             self.assertEqual(
                 subtype, monitor_chrome_afdo.ProfileSubtype.parse(subtype.value)
@@ -88,7 +88,7 @@ class Test(unittest.TestCase):
         with self.assertRaises(ValueError):
             monitor_chrome_afdo.ProfileSubtype.parse("not-a-profile-subtype")
 
-    def test_gs_profile_parsing(self):
+    def test_gs_profile_parsing(self) -> None:
         last_modified = arbitrary_time()
         profile_name = arbitrary_chrome_gs_profile_name()
         self.assertEqual(
@@ -120,7 +120,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_gs_profile_parsing_without_pre(self):
+    def test_gs_profile_parsing_without_pre(self) -> None:
         last_modified = arbitrary_time()
         # Not all profiles have `_pre${X}` in them; this verifies that that
         # still works.
@@ -156,7 +156,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_gs_profile_name_round_trips(self):
+    def test_gs_profile_name_round_trips(self) -> None:
         last_modified = arbitrary_time()
         profile_name = arbitrary_chrome_gs_profile_name()
         result = (
@@ -171,7 +171,7 @@ class Test(unittest.TestCase):
             profile_name,
         )
 
-    def test_gs_profile_parsing_on_old_profile(self):
+    def test_gs_profile_parsing_on_old_profile(self) -> None:
         major_bench_version = monitor_chrome_afdo.MIN_PROFILE_MAJOR_VERSION - 1
 
         last_modified = arbitrary_time()
@@ -186,7 +186,7 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_finding_newest_chrome_version_on_no_stable_ebuilds(self):
+    def test_finding_newest_chrome_version_on_no_stable_ebuilds(self) -> None:
         with self.assertRaisesRegex(ValueError, "^No stable Chrome ebuilds.*"):
             monitor_chrome_afdo.find_newest_chrome_version(
                 [
@@ -196,7 +196,7 @@ class Test(unittest.TestCase):
                 ]
             )
 
-    def test_finding_newest_chrome_version_multiple_ebuilds(self):
+    def test_finding_newest_chrome_version_multiple_ebuilds(self) -> None:
         self.assertEqual(
             monitor_chrome_afdo.find_newest_chrome_version(
                 [
@@ -217,7 +217,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_finding_newest_chrome_version_pre(self):
+    def test_finding_newest_chrome_version_pre(self) -> None:
         self.assertEqual(
             monitor_chrome_afdo.find_newest_chrome_version(
                 [
@@ -238,7 +238,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_afdo_version_finding_works(self):
+    def test_afdo_version_finding_works(self) -> None:
         profile1, profile2, profile3 = increasing_chrome_gs_profile_sequence(3)
         profiles = {
             1: [profile1, profile2],
@@ -258,7 +258,9 @@ class Test(unittest.TestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_chrome_tag_parsing(self, mock_subprocess_run):
+    def test_chrome_tag_parsing(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         mock_subprocess_run.return_value.stdout = textwrap.dedent(
             """\
             1.2.3.4
@@ -287,7 +289,7 @@ class Test(unittest.TestCase):
             ],
         )
 
-    def test_branch_profile_finding_works_in_simple_cases(self):
+    def test_branch_profile_finding_works_in_simple_cases(self) -> None:
         profile1, profile2, profile3 = increasing_chrome_gs_profile_sequence(3)
         arch = monitor_chrome_afdo.ProfileArch.AMD64
         subtype = monitor_chrome_afdo.ProfileSubtype.BIGCORE
@@ -317,7 +319,7 @@ class Test(unittest.TestCase):
                 branch_number=1,
             )
 
-    def test_branch_profile_finding_falls_back_to_prior_branches(self):
+    def test_branch_profile_finding_falls_back_to_prior_branches(self) -> None:
         profile1, profile2, profile3 = increasing_chrome_gs_profile_sequence(3)
         arch = monitor_chrome_afdo.ProfileArch.AMD64
         subtype = monitor_chrome_afdo.ProfileSubtype.BIGCORE
