@@ -21,7 +21,7 @@ from llvm_tools import warning_exemption
 class Test(test_helpers.TempDirTestCase):
     """Tests for file_warning_exemption_bugs."""
 
-    def test_pluralize_works(self):
+    def test_pluralize_works(self) -> None:
         self.assertEqual(
             fweb.pluralize(3, "There are %(num)d bug%(plural)s in this code"),
             "There are 3 bugs in this code",
@@ -33,7 +33,7 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_dir_metadata_scraping_works(self, mock_run):
+    def test_dir_metadata_scraping_works(self, mock_run: mock.Mock) -> None:
         mock_run.return_value = mock.MagicMock()
         mock_run.return_value.stdout = json.dumps(
             {
@@ -50,7 +50,9 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(fweb.scrape_component_from_dir_metadata_file(""), 123)
 
     @mock.patch.object(subprocess, "run")
-    def test_dir_metadata_scraping_prefers_internal_component(self, mock_run):
+    def test_dir_metadata_scraping_prefers_internal_component(
+        self, mock_run: mock.Mock
+    ) -> None:
         mock_run.return_value = mock.MagicMock()
         mock_run.return_value.stdout = json.dumps(
             {
@@ -70,13 +72,15 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(fweb.scrape_component_from_dir_metadata_file(""), 321)
 
     @mock.patch.object(subprocess, "run")
-    def test_dir_metadata_scraping_handles_no_component(self, mock_run):
+    def test_dir_metadata_scraping_handles_no_component(
+        self, mock_run: mock.Mock
+    ) -> None:
         mock_run.return_value = mock.MagicMock()
         mock_run.return_value.stdout = json.dumps({"stdin": {"json": {}}})
 
         self.assertIsNone(fweb.scrape_component_from_dir_metadata_file(""))
 
-    def test_format_bug_golden_case(self):
+    def test_format_bug_golden_case(self) -> None:
         b = fweb.format_bug(
             title="[title]",
             body="[body]",
@@ -86,8 +90,7 @@ class Test(test_helpers.TempDirTestCase):
             priority=1,
         )
         expected_body = textwrap.dedent(
-            """\
-            [title]
+            """            [title]
 
             [body]
 
@@ -102,10 +105,10 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(b, expected_body)
 
     @mock.patch.object(subprocess, "run")
-    def test_repo_list_works(self, mock_run):
+    def test_repo_list_works(self, mock_run: mock.Mock) -> None:
         mock_run.return_value = mock.MagicMock()
         mock_run.return_value.stdout = textwrap.dedent(
-            """\
+            """
             chromite : chromiumos/chromite
             src/foo : chromiumos/foo
             src-internal/subfoo : chromiumos/foo/subfoo
@@ -130,7 +133,9 @@ class Test(test_helpers.TempDirTestCase):
             repo_list.lookup_local_path("not-chromiumos/foo/bar/baz.txt")
         )
 
-    def test_mage_followup_bug_files_nothing_if_all_warnings_addressed(self):
+    def test_mage_followup_bug_files_nothing_if_all_warnings_addressed(
+        self,
+    ) -> None:
         exemptions = [
             warning_exemption.YamlPackageWarnings(
                 package=warning_exemption.Package("foo", "bar"),
@@ -157,7 +162,7 @@ class Test(test_helpers.TempDirTestCase):
             )
         )
 
-    def test_mage_followup_bug_files_bug_if_warnings_are_skipped(self):
+    def test_mage_followup_bug_files_bug_if_warnings_are_skipped(self) -> None:
         exemption = warning_exemption.YamlPackageWarnings(
             package=warning_exemption.Package("foo", "bar"),
             warning_lines=[],
@@ -203,7 +208,10 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
         )
 
     @staticmethod
-    def ensure_exists(dirs: Iterable[Path] = (), files: Iterable[Path] = ()):
+    def ensure_exists(
+        dirs: Iterable[Path] = (),
+        files: Iterable[Path] = (),
+    ) -> None:
         for d in dirs:
             d.mkdir(parents=True, exist_ok=True)
 
@@ -211,7 +219,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             f.parent.mkdir(parents=True, exist_ok=True)
             f.touch()
 
-    def test_empty_ebuild_only_searches_parents(self):
+    def test_empty_ebuild_only_searches_parents(self) -> None:
         tempdir = self.make_tempdir()
         overlay = tempdir / "overlay"
         candidates = self.find_dirmd_candidates(
@@ -228,7 +236,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             ],
         )
 
-    def test_ebuild_with_homepage_searches_homepage(self):
+    def test_ebuild_with_homepage_searches_homepage(self) -> None:
         tempdir = self.make_tempdir()
         overlay = tempdir / "overlay"
 
@@ -261,7 +269,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             ],
         )
 
-    def test_ebuild_with_subtree_searches_subtree(self):
+    def test_ebuild_with_subtree_searches_subtree(self) -> None:
         tempdir = self.make_tempdir()
         overlay = tempdir / "overlay"
 
@@ -276,7 +284,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             tempdir=tempdir,
             package=warning_exemption.Package("foo", "bar"),
             ebuild_contents=textwrap.dedent(
-                """\
+                """
                 CROS_WORKON_PROJECT="chromiumos/project"
                 CROS_WORKON_SUBTREE="subtree/path"
                 """
@@ -296,7 +304,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             ],
         )
 
-    def test_ebuild_with_many_subtrees_skips_subtrees(self):
+    def test_ebuild_with_many_subtrees_skips_subtrees(self) -> None:
         tempdir = self.make_tempdir()
         overlay = tempdir / "overlay"
 
@@ -311,7 +319,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             tempdir=tempdir,
             package=warning_exemption.Package("foo", "bar"),
             ebuild_contents=textwrap.dedent(
-                """\
+                """
                 CROS_WORKON_PROJECT="chromiumos/project"
                 CROS_WORKON_SUBTREE="subtree/path subtree"
                 """
@@ -328,7 +336,9 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             ],
         )
 
-    def test_ebuild_searches_platform_subdir_regardless_of_subtree(self):
+    def test_ebuild_searches_platform_subdir_regardless_of_subtree(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         overlay = tempdir / "overlay"
 
@@ -343,7 +353,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             tempdir=tempdir,
             package=warning_exemption.Package("foo", "bar"),
             ebuild_contents=textwrap.dedent(
-                """\
+                """
                 CROS_WORKON_PROJECT="chromiumos/project"
                 CROS_WORKON_SUBTREE="subtree/path subtree"
                 PLATFORM_SUBDIR="subtree"
@@ -363,7 +373,7 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
             ],
         )
 
-    def test_ebuild_with_no_subtree_only_searches_root(self):
+    def test_ebuild_with_no_subtree_only_searches_root(self) -> None:
         tempdir = self.make_tempdir()
         overlay = tempdir / "overlay"
 

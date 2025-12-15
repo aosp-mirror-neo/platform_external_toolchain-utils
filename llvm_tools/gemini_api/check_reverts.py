@@ -336,7 +336,7 @@ def process_one_sha(
 
 def write_one_result(
     output: IO[str], sha: str, sha_result: GeminiRevertInference
-):
+) -> None:
     obj = {"sha": sha, "result": sha_result.to_json()}
     json.dump(obj, output)
     output.write("\n")

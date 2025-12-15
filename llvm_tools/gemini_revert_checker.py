@@ -331,7 +331,10 @@ class PartialGeminiExecutionError(subprocess.CalledProcessError):
     """Raised when check_reverts fails, but did produce some results."""
 
     def __init__(
-        self, partial_results: dict[str, GeminiRevertInference], *args, **kwargs
+        self,
+        partial_results: dict[str, GeminiRevertInference],
+        *args: Any,
+        **kwargs: Any,
     ):
         super().__init__(*args, **kwargs)
         self.partial_results = partial_results

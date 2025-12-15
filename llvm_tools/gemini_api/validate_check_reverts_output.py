@@ -250,7 +250,7 @@ def main(argv: list[str]) -> None:
 
     had_errors = False
 
-    def log_golden_error(*args):
+    def log_golden_error(*args: object) -> None:
         nonlocal had_errors
         had_errors = True
         logging.error(*args)

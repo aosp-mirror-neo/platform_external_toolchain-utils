@@ -23,7 +23,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Generator
+from typing import Any, Generator
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -55,7 +55,7 @@ CROS_EBUILD_PLATFORM_SUBDIR_RE = re.compile(
 CROS_WORKON_SUBTREE_RE = re.compile("CROS_WORKON_SUBTREE=['\"]([^'\"]+)['\"]")
 
 
-def pluralize(num: int, s: str, **kwargs) -> str:
+def pluralize(num: int, s: str, **kwargs: Any) -> str:
     """A correct-enough-for-this-script function to make strings plural.
 
     Examples:
@@ -84,7 +84,7 @@ class RepoList:
         self._remote_to_local = remote_to_local_map
 
     @classmethod
-    def new_from_repo(cls, cros_root: Path):
+    def new_from_repo(cls, cros_root: Path) -> "RepoList":
         # TODO: Ew
         repo_list = subprocess.run(
             ("repo", "list"),
@@ -534,7 +534,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return opts
 
 
-def verify_chroot_exists(chromeos_root: Path):
+def verify_chroot_exists(chromeos_root: Path) -> None:
     logging.info(
         "Verifying that `sudo` credentials are fresh (this may prompt for "
         "your password)."
