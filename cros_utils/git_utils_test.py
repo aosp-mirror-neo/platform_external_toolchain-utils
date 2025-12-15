@@ -90,12 +90,12 @@ remote:   https://googleplex-android-review.git.corp.google.com/c/platform/art/+
 class Test(test_helpers.TempDirTestCase):
     """Tests for git_utils."""
 
-    def test_is_full_git_sha_success_cases(self):
+    def test_is_full_git_sha_success_cases(self) -> None:
         shas = ("a" * 40, EXAMPLE_GIT_SHA)
         for s in shas:
             self.assertTrue(git_utils.is_full_git_sha(s), s)
 
-    def test_is_full_git_sha_failure_cases(self):
+    def test_is_full_git_sha_failure_cases(self) -> None:
         shas = (
             "",
             "A" * 40,
@@ -106,23 +106,23 @@ class Test(test_helpers.TempDirTestCase):
         for s in shas:
             self.assertFalse(git_utils.is_full_git_sha(s), s)
 
-    def test_cl_parsing_complains_if_no_output(self):
+    def test_cl_parsing_complains_if_no_output(self) -> None:
         with self.assertRaisesRegex(ValueError, ".*; found 0"):
             git_utils._parse_cls_from_upload_output("")
 
-    def test_cl_parsing_works_with_one_cl(self):
+    def test_cl_parsing_works_with_one_cl(self) -> None:
         self.assertEqual(
             git_utils._parse_cls_from_upload_output(GERRIT_OUTPUT_WITH_ONE_CL),
             [5375204],
         )
 
-    def test_cl_parsing_works_with_two_cls(self):
+    def test_cl_parsing_works_with_two_cls(self) -> None:
         self.assertEqual(
             git_utils._parse_cls_from_upload_output(GERRIT_OUTPUT_WITH_TWO_CLS),
             [5375204, 5375205],
         )
 
-    def test_cl_parsing_works_with_internal_cl(self):
+    def test_cl_parsing_works_with_internal_cl(self) -> None:
         self.assertEqual(
             git_utils._parse_cls_from_upload_output(
                 GERRIT_OUTPUT_WITH_INTERNAL_CL
@@ -130,7 +130,7 @@ class Test(test_helpers.TempDirTestCase):
             [7190037],
         )
 
-    def test_cl_parsing_works_with_internal_android_cl(self):
+    def test_cl_parsing_works_with_internal_android_cl(self) -> None:
         self.assertEqual(
             git_utils._parse_cls_from_upload_output(
                 GERRIT_OUTPUT_WITH_ANDROID_INTERNAL_CL
@@ -138,7 +138,7 @@ class Test(test_helpers.TempDirTestCase):
             [36999324],
         )
 
-    def test_parse_message_metadata(self):
+    def test_parse_message_metadata(self) -> None:
         """Test we can parse commit metadata."""
 
         message_lines = [
@@ -160,7 +160,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(parsed["patch.version_range.until"], "null")
         self.assertEqual(parsed.get("BUG"), None)
 
-    def test_channel_parsing(self):
+    def test_channel_parsing(self) -> None:
         with self.assertRaisesRegex(ValueError, "No such channel.*"):
             git_utils.Channel.parse("not a channel")
 
@@ -169,7 +169,7 @@ class Test(test_helpers.TempDirTestCase):
             self.assertEqual(channel, git_utils.Channel.parse(channel.value))
 
     @mock.patch.object(subprocess, "run")
-    def test_branch_autodetection(self, subprocess_run):
+    def test_branch_autodetection(self, subprocess_run: mock.Mock) -> None:
         subprocess_run.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -218,7 +218,7 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
     output in error cases.
     """
 
-    def test_show_file_at_rev_works(self):
+    def test_show_file_at_rev_works(self) -> None:
         temp_dir = self.make_tempdir()
         subprocess.run(
             ["git", "init"],
@@ -247,7 +247,7 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
             git_utils.maybe_show_file_at_commit(temp_dir, "HEAD", "bar")
         )
 
-    def test_show_dir_at_rev_works(self):
+    def test_show_dir_at_rev_works(self) -> None:
         temp_dir = self.make_tempdir()
         subprocess.run(
             ["git", "init"],
@@ -297,7 +297,7 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
                 temp_dir, "HEAD", "file"
             )
 
-    def test_gerrit_cmd_wip(self):
+    def test_gerrit_cmd_wip(self) -> None:
         cmd = git_utils.generate_upload_to_gerrit_cmd(
             remote="cros",
             branch="main",
@@ -322,7 +322,7 @@ class FormatPatchTest(test_helpers.TempDirTestCase):
     which gives us nice temp directories.
     """
 
-    def setUp(self):
+    def setUp(self) -> None:
         """Set up the tests."""
 
         # This cleans up automatically. No tearDown needed.
@@ -343,7 +343,7 @@ class FormatPatchTest(test_helpers.TempDirTestCase):
         subject = "Second commit"
         git_utils.commit_all_changes(self.temp_dir, message=subject)
 
-    def test_format_patch(self):
+    def test_format_patch(self) -> None:
         """Test that we can format patches correctly."""
 
         formatted_patch = git_utils.format_patch(self.temp_dir, "HEAD")

@@ -260,7 +260,9 @@ def upload_to_gerrit(
     return _parse_cls_from_upload_output(run_result.stdout)
 
 
-def set_gerrit_label(cwd: Path, cl_id: int, label_name: str, label_value: str):
+def set_gerrit_label(
+    cwd: Path, cl_id: int, label_name: str, label_value: str
+) -> None:
     """Sets the given gerrit label to the given value for `cl_id`.
 
     Args:
@@ -549,7 +551,7 @@ def has_discardable_changes(git_dir: Path) -> bool:
     return bool(stdout.strip())
 
 
-def discard_changes_and_checkout(git_dir: Path, ref: str):
+def discard_changes_and_checkout(git_dir: Path, ref: str) -> None:
     """Discards local changes, and checks `ref` out."""
     subprocess.run(
         ["git", "clean", "-fd"],
@@ -702,7 +704,7 @@ def format_patch(git_dir: Path, ref: str) -> str:
     return contents
 
 
-def apply_patch_contents(git_dir: Path, patch_contents: str):
+def apply_patch_contents(git_dir: Path, patch_contents: str) -> None:
     """Applies the given patch contents to the given git repo."""
     subprocess.run(
         ("git", "apply"),

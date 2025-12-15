@@ -55,13 +55,13 @@ class _FileNameGenerator:
     # we add to it in `generate_json_file_name`.
     _ENTROPY_STR_SIZE = len(str(2 * _MAX_OS_ENTROPY_VALUE))
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._entropy = int.from_bytes(
             os.getrandom(self._RANDOM_BYTES), byteorder="little", signed=False
         )
 
-    def generate_json_file_name(self, now: datetime.datetime):
+    def generate_json_file_name(self, now: datetime.datetime) -> str:
         with self._lock:
             my_entropy = self._entropy
             self._entropy += 1
@@ -79,7 +79,7 @@ def _WriteBugJSONFile(
     object_type: str,
     json_object: dict[str, Any],
     local_directory: os.PathLike | str | None,
-):
+) -> str:
     """Writes a JSON file to `directory` with the given bug-ish object.
 
     Args:
@@ -119,7 +119,7 @@ def _WriteBugJSONFile(
 
 def AppendToExistingBug(
     bug_id: int, body: str, local_directory: os.PathLike | None = None
-):
+) -> None:
     """Sends a reply to an existing bug."""
     _WriteBugJSONFile(
         "AppendToExistingBugRequest",
@@ -139,7 +139,7 @@ def CreateNewBug(
     cc: list[str] | None = None,
     local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
-):
+) -> None:
     """Sends a request to create a new bug.
 
     Args:
@@ -181,7 +181,7 @@ def SendCronjobLog(
     turndown_time_hours: int = 0,
     local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
-):
+) -> None:
     """Sends the record of a cronjob to our bug infra.
 
     Args:
