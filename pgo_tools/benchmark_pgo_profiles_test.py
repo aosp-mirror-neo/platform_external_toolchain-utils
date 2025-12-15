@@ -13,7 +13,7 @@ from pgo_tools import benchmark_pgo_profiles
 class Test(unittest.TestCase):
     """Tests for benchmark_pgo_profiles."""
 
-    def test_run_data_parsing_succeeds(self):
+    def test_run_data_parsing_succeeds(self) -> None:
         run_data = benchmark_pgo_profiles.RunData.from_json(
             "foo",
             io.StringIO(
@@ -39,7 +39,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_special_profile_parsing_succeeds(self):
+    def test_special_profile_parsing_succeeds(self) -> None:
         for profile in benchmark_pgo_profiles.SpecialProfile:
             self.assertIs(
                 profile, benchmark_pgo_profiles.parse_profile_path(str(profile))

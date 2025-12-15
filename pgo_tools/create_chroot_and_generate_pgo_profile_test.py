@@ -45,7 +45,7 @@ class Test(unittest.TestCase):
         self.addCleanup(lambda: shutil.rmtree(tempdir))
         return tempdir
 
-    def test_sdk_version_detection_works(self):
+    def test_sdk_version_detection_works(self) -> None:
         repo_root = self.make_tempdir()
         sdk_version_conf = repo_root / create_chroot_etc.SDK_VERSION_CONF_SUBDIR
         sdk_version_conf.parent.mkdir(parents=True)
@@ -57,7 +57,7 @@ class Test(unittest.TestCase):
             "2024.03.12.020106",
         )
 
-    def test_path_translation_works(self):
+    def test_path_translation_works(self) -> None:
         repo_root = Path("/some/repo")
         chroot_info = create_chroot_etc.ChrootInfo(
             chroot_name="my-chroot",
@@ -66,7 +66,7 @@ class Test(unittest.TestCase):
         )
         self.assertEqual(
             create_chroot_etc.translate_chroot_path_to_out_of_chroot(
-                repo_root, "/tmp/file/path", chroot_info
+                repo_root, Path("/tmp/file/path"), chroot_info
             ),
             repo_root / "my-out" / "tmp/file/path",
         )

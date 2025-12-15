@@ -31,7 +31,7 @@ def synthesize_run_data(
 class Test(unittest.TestCase):
     """Tests for ensure_pgo_is_a_win."""
 
-    def test_speedup_calculation_works(self):
+    def test_speedup_calculation_works(self) -> None:
         no_profile, profile = synthesize_run_data(
             no_profile_user_time=1, profile_user_time=1
         )

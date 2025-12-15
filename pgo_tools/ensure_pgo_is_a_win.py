@@ -37,7 +37,7 @@ def calculate_pgo_speedup(
     return no_profile.user_time / default_profile.user_time
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

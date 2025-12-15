@@ -40,7 +40,7 @@ class Test(test_helpers.TempDirTestCase):
         llvm_9999.write_text(EXAMPLE_LLVM_EBUILD_SNIPPET, encoding="utf-8")
         return cros_overlay
 
-    def test_ebuild_updating_is_nop_when_revs_dont_change(self):
+    def test_ebuild_updating_is_nop_when_revs_dont_change(self) -> None:
         cros_overlay = self.make_tempdir_with_example_llvm_ebuild()
         updated = auto_update_llvm_pgo_profile.overwrite_llvm_pgo_listing(
             cros_overlay, ["516547", "516548"]
@@ -51,7 +51,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(EXAMPLE_LLVM_EBUILD_SNIPPET, new_contents)
         self.assertFalse(updated)
 
-    def test_ebuild_updating_works_when_rev_is_removed(self):
+    def test_ebuild_updating_works_when_rev_is_removed(self) -> None:
         cros_overlay = self.make_tempdir_with_example_llvm_ebuild()
         self.assertTrue(
             auto_update_llvm_pgo_profile.overwrite_llvm_pgo_listing(
@@ -64,7 +64,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assertIn("\n\t516547\n", new_contents)
         self.assertNotIn("\n\t516548\n", new_contents)
 
-    def test_ebuild_updating_works_when_rev_is_added(self):
+    def test_ebuild_updating_works_when_rev_is_added(self) -> None:
         cros_overlay = self.make_tempdir_with_example_llvm_ebuild()
         self.assertTrue(
             auto_update_llvm_pgo_profile.overwrite_llvm_pgo_listing(
@@ -79,7 +79,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assertIn("\n\t516549-v3\n", new_contents)
 
     @mock.patch.object(subprocess, "run")
-    def test_gs_parsing_works(self, mock_run):
+    def test_gs_parsing_works(self, mock_run: mock.MagicMock) -> None:
         run_return = mock.MagicMock()
         run_return.stdout = textwrap.dedent(
             """\
