@@ -29,6 +29,7 @@ from urllib import request
 from cros_utils import cros_paths
 from cros_utils import git_utils
 from llvm_tools import atomic_write_file
+from llvm_tools import chroot
 from llvm_tools import git_llvm_rev
 from llvm_tools import patch_utils
 
@@ -550,25 +551,6 @@ def _has_repo_child(path: Path) -> bool:
     return path.is_dir() and child_maybe.is_dir()
 
 
-def _autodetect_chromiumos_root(
-    parent: Path | None = None,
-) -> Path | None:
-    """Find the root of the chromiumos source tree from the current workdir.
-
-    Returns:
-        The root directory of the current chromiumos source tree.
-        If the current working directory is not within a chromiumos source
-        tree, then this returns None.
-    """
-    if parent is None:
-        parent = Path.cwd()
-    if parent.resolve() == Path.root:
-        return None
-    if _has_repo_child(parent):
-        return parent
-    return _autodetect_chromiumos_root(parent.parent)
-
-
 def _write_patch(title: str, contents: str, path: Path) -> None:
     """Actually write the patch contents to a file."""
     # This is mostly separated for mocking.
@@ -686,7 +668,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         if not _has_repo_child(args.chromiumos_root):
             parser.error("chromiumos root directly passed but has no .repo")
         logging.debug("chromiumos root directly passed; found and verified")
-    elif tmp := _autodetect_chromiumos_root():
+    elif tmp := chroot.TryFindChromeOSRootAbove(Path.cwd()):
         logging.debug("chromiumos root autodetected; found and verified")
         args.chromiumos_root = tmp
     else:

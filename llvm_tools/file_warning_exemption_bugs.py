@@ -14,6 +14,7 @@ run outside of the chroot to file all of the bugs.
 """
 
 import argparse
+import itertools
 import json
 import logging
 import multiprocessing.pool
@@ -262,14 +263,10 @@ def find_ebuild_dir_metadata_candidates(
         if not d.exists():
             return
 
-        while True:
-            yield d
-            if (d / ".git").exists():
+        for p in itertools.chain([d], d.parents):
+            yield p
+            if (p / ".git").exists():
                 break
-            d = d.parent
-
-            # This should never break out of `.repo`, but just in case...
-            assert d != d.root, "Somehow this got to /?"
 
     # Bundle of heuristics to find a DIR_METADATA file.
     #

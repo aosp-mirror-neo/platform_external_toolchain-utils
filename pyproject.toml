@@ -12,6 +12,9 @@ follow_imports = "silent"
 # Disallow interpreting `def foo(s: str = None):` as `def foo(s: str | None = None)`
 no_implicit_optional = true
 
+# Require equality checks to be between the same types.
+strict_equality = true
+
 # Warn on redundant operations/suppressions.
 warn_redundant_casts = true
 warn_unused_ignores = true
