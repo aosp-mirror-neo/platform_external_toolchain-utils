@@ -98,7 +98,7 @@ class Test(unittest.TestCase):
         )
         self.assertEqual(sha, "199700a5cfeedf227619f966aa3125cef18bc958")
 
-    def test_known_rev_sha_pairs_are_sorted(self):
+    def test_known_rev_sha_pairs_are_sorted(self) -> None:
         revs = [rev for rev, _ in git_llvm_rev.known_llvm_rev_sha_pairs]
         self.assertEqual(revs, sorted(revs))
 
@@ -111,10 +111,10 @@ class Test(unittest.TestCase):
     # imagine it's going to be very cold code, so I'm not inclined to optimize
     # it much.
 
-    def test_zz_non_base_rev_sha_pairs_are_correct(self):
+    def test_zz_non_base_rev_sha_pairs_are_correct(self) -> None:
         base_rev_sha_pairs = git_llvm_rev.known_llvm_rev_sha_pairs
 
-        def restore_rev_sha_pairs():
+        def restore_rev_sha_pairs() -> None:
             git_llvm_rev.known_llvm_rev_sha_pairs = base_rev_sha_pairs
 
         self.addCleanup(restore_rev_sha_pairs)

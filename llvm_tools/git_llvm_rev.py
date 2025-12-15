@@ -36,7 +36,7 @@ base_llvm_sha = "186155b89c2d2a2f62337081e3ca15f676c9434b"
 # The first element is the first non-`llvm-svn` commit that exists. Later ones
 # are functional nops, but speed this script up immensely, since `git` can take
 # quite a while to walk >100K commits.
-known_llvm_rev_sha_pairs = (
+known_llvm_rev_sha_pairs: tuple[tuple[int, str], ...] = (
     (base_llvm_revision, base_llvm_sha),
     (425000, "af870e11aed7a5c475ae41a72e3015c4c88597d1"),
     (450000, "906ebd5830e6053b50c52bf098e3586b567e8499"),

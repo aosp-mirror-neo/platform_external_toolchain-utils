@@ -137,7 +137,7 @@ def GetLLVMMajorVersion(git_hash: str | None = None) -> str:
     )
 
 
-def _LockAndCloneLLVMProject(clone_target: Path, tmpdir_path: Path):
+def _LockAndCloneLLVMProject(clone_target: Path, tmpdir_path: Path) -> None:
     """Creates and locks `tmpdir_path`, and clones LLVM into it.
 
     Multithreading and multiprocessing safe.
