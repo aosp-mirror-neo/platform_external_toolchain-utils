@@ -245,7 +245,7 @@ def generate_wheel_manifest(
     return WheelManifest(manifest_dict)
 
 
-def update_wheels_and_manifest(venv_dir: Path, upload: bool):
+def update_wheels_and_manifest(venv_dir: Path, upload: bool) -> None:
     wheel_dir = get_wheel_dir(venv_dir)
 
     # Always start fresh, since we'll generate the Manifest based on the files
@@ -315,7 +315,7 @@ def validate_files_against_manifest(
     return [res for res in results if res]
 
 
-def ensure_downloaded(venv_dir: Path, clean: bool):
+def ensure_downloaded(venv_dir: Path, clean: bool) -> None:
     """Ensures that wheels/ contains all wheels in the wheel-manifest.
 
     Also verifies that hashes match the manifest; if not, the local files get
