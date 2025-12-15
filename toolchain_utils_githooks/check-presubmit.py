@@ -614,7 +614,11 @@ def check_cros_lint(
     return results
 
 
-def check_go_format(toolchain_utils_root, _thread_pool, files):
+def check_go_format(
+    toolchain_utils_root: str,
+    _thread_pool: multiprocessing.pool.ThreadPool,
+    files: Iterable[str],
+) -> CheckResult:
     """Runs gofmt on files to check for style bugs."""
     gofmt = "gofmt"
     if not has_executable_on_path(gofmt):

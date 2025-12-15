@@ -113,7 +113,7 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import cast, List, Mapping
+from typing import Any, cast, Iterator, Mapping, Sequence
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -139,7 +139,7 @@ CRATE_VERSION = "13.0.0"
 
 
 @contextlib.contextmanager
-def chdir(new_directory: Path):
+def chdir(new_directory: Path) -> Iterator[None]:
     initial_directory = Path.cwd()
     os.chdir(new_directory)
     try:
@@ -149,7 +149,7 @@ def chdir(new_directory: Path):
 
 
 def run(
-    args: List,
+    args: Sequence[str | os.PathLike],
     *,
     indent: int = 4,
     env: Mapping[str, str] | None = None,
@@ -205,7 +205,7 @@ def run(
     return ret
 
 
-def get_command_output(args: List, **kwargs) -> str:
+def get_command_output(args: Sequence[str | os.PathLike], **kwargs: Any) -> str:
     """Runs a command and returns its stdout and stderr as a string."""
     return cast(str, run(args, capture_stdout=True, **kwargs))
 
@@ -217,7 +217,7 @@ def get_rust_version() -> str:
     return m.group(0)
 
 
-def download_unpack_crate(*, crate_name: str, crate_version: str):
+def download_unpack_crate(*, crate_name: str, crate_version: str) -> None:
     filename_no_extension = f"{crate_name}-{crate_version}"
     gs_path = GS_PERMANENT_BASE / "crates" / f"{filename_no_extension}.tar.xz"
     local_path = LOCAL_BASE / "crates"
@@ -235,7 +235,7 @@ def build_crate(
     crate_version: str,
     target_triple: str,
     time_file: Path | None = None,
-):
+) -> None:
     local_path = LOCAL_BASE / "crates" / f"{crate_name}-{crate_version}"
     with chdir(local_path):
         Path(".cargo").mkdir(exist_ok=True)
@@ -282,7 +282,7 @@ def build_rust(
     generate_llvm_profile: bool = False,
     use_frontend_profile: bool = False,
     use_llvm_profile: bool = False,
-):
+) -> None:
     if use_frontend_profile or use_llvm_profile:
         assert not generate_frontend_profile and not generate_llvm_profile, (
             "Can't build a compiler to both use profile information "
@@ -323,7 +323,9 @@ def build_rust(
     )
 
 
-def merge_profdata(llvm_or_frontend, *, source_directory: Path, dest: Path):
+def merge_profdata(
+    llvm_or_frontend: str, *, source_directory: Path, dest: Path
+) -> None:
     assert llvm_or_frontend in ("llvm", "frontend")
 
     # The two `llvm-profdata` programs come from different LLVM versions, and
@@ -337,12 +339,14 @@ def merge_profdata(llvm_or_frontend, *, source_directory: Path, dest: Path):
 
     dest.parent.mkdir(parents=True, exist_ok=True)
 
-    files = list(source_directory.glob("*.profraw"))
+    files = source_directory.glob("*.profraw")
     assert files, f"No profraw files found in {source_directory}"
-    run([llvm_profdata, "merge", f"--output={dest}"] + files)
+    cmd: list[str | Path] = [llvm_profdata, "merge", f"--output={dest}"]
+    cmd += files
+    run(cmd)
 
 
-def do_upload_profdata(*, source: Path, dest: PurePosixPath):
+def do_upload_profdata(*, source: Path, dest: PurePosixPath) -> None:
     new_path = source.parent / (source.name + ".xz")
     run(["xz", "--keep", "--compress", "--force", source])
     upload_file(source=new_path, dest=dest, public_read=True)
@@ -350,14 +354,14 @@ def do_upload_profdata(*, source: Path, dest: PurePosixPath):
 
 def upload_file(
     *, source: Path, dest: PurePosixPath, public_read: bool = False
-):
+) -> None:
     if public_read:
         run(["gsutil", "cp", "-a", "public-read", source, f"gs:/{dest}"])
     else:
         run(["gsutil", "cp", source, f"gs:/{dest}"])
 
 
-def maybe_download_crate(*, crate_name: str, crate_version: str):
+def maybe_download_crate(*, crate_name: str, crate_version: str) -> None:
     """Downloads a crate if its download directory does not already exist."""
     directory = LOCAL_BASE / "crates" / f"{crate_name}-{crate_version}"
     if directory.is_dir():
@@ -369,7 +373,7 @@ def maybe_download_crate(*, crate_name: str, crate_version: str):
         )
 
 
-def generate(args):
+def generate(args: argparse.Namespace) -> None:
     maybe_download_crate(
         crate_name=args.crate_name, crate_version=args.crate_version
     )
@@ -433,7 +437,7 @@ def generate(args):
     )
 
 
-def benchmark_nopgo(args):
+def benchmark_nopgo(args: argparse.Namespace) -> None:
     maybe_download_crate(
         crate_name=args.bench_crate_name, crate_version=args.bench_crate_version
     )
@@ -466,7 +470,7 @@ def benchmark_nopgo(args):
         )
 
 
-def benchmark_pgo(args):
+def benchmark_pgo(args: argparse.Namespace) -> None:
     maybe_download_crate(
         crate_name=args.bench_crate_name, crate_version=args.bench_crate_version
     )
@@ -583,7 +587,7 @@ def upload_profdata_impl(
     )
 
 
-def upload_profdata(args):
+def upload_profdata(args: argparse.Namespace) -> None:
     upload_profdata_impl(
         crate_name=args.crate_name,
         crate_version=args.crate_version,

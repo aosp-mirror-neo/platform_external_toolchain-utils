@@ -17,7 +17,7 @@ from cwp.cr_os import fetch_gn_descs
 class Test(unittest.TestCase):
     """Tests for fetch_gn_descs."""
 
-    def test_fix_result_removes_uninteresting_items(self):
+    def test_fix_result_removes_uninteresting_items(self) -> None:
         items = {
             "//uninteresting:a": {},
             "//uninteresting:b": {
@@ -49,7 +49,7 @@ class Test(unittest.TestCase):
             fetch_gn_descs._fix_result("/", "/", "/", items), expected_items
         )
 
-    def test_fix_result_translates_paths_in_out_dir(self):
+    def test_fix_result_translates_paths_in_out_dir(self) -> None:
         items = {
             "//interesting:a": {
                 "sources": ["//out_dir/foo", "//out_dir"],
@@ -74,7 +74,7 @@ class Test(unittest.TestCase):
             expected_items,
         )
 
-    def test_gn_desc_output_parsing_skips_pre_json_warnings(self):
+    def test_gn_desc_output_parsing_skips_pre_json_warnings(self) -> None:
         gn_desc = io.StringIO(
             "\n".join(
                 (
@@ -106,7 +106,7 @@ class Test(unittest.TestCase):
 
     def test_gn_desc_output_parsing_issues_no_warnings_if_none_are_present(
         self,
-    ):
+    ) -> None:
         gn_desc = io.StringIO('{"bar": "baz"}')
         warnings, desc_json = fetch_gn_descs._parse_gn_desc_output(gn_desc)
         self.assertEqual(warnings, "")

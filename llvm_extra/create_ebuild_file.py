@@ -93,7 +93,7 @@ import os
 import sys
 
 
-def process_line(line: str, text: list[str]):
+def process_line(line: str, text: list[str]) -> None:
     # Process the line and append to the text we want to generate.
     # Check if line has any patterns that we want to handle.
     newline = line.strip()
@@ -134,7 +134,7 @@ def process_line(line: str, text: list[str]):
         text.append(line)
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> int:
     if len(argv) != 3:
         filename = os.path.basename(__file__)
         print("Usage: ", filename, " <input.ebuild> <output.ebuild>")
