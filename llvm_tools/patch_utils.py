@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, IO, Iterable
+from typing import Any, Callable, Generator, IO, Iterable
 
 from llvm_tools import atomic_write_file
 
@@ -132,7 +132,7 @@ class PatchResult:
         default_factory=dict
     )
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.succeeded
 
     def failure_info(self) -> str:
@@ -164,12 +164,12 @@ class PatchEntry:
     """Don't verify the workdir exists. Used for testing."""
     _parsed_hunks = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.verify_workdir and not self.workdir.is_dir():
             raise ValueError(f"workdir {self.workdir} is not a directory")
 
     @classmethod
-    def from_dict(cls, workdir: Path, data: dict[str, Any]):
+    def from_dict(cls, workdir: Path, data: dict[str, Any]) -> "PatchEntry":
         """Instatiate from a dictionary.
 
         Dictionary must have at least the following key:
@@ -439,7 +439,7 @@ def _run_git_applylike(
     root_dir: Path,
     cmd: list[Path | str],
     quiet: bool = False,
-):
+) -> PatchResult:
     try:
         subprocess.run(
             cmd,
@@ -541,7 +541,7 @@ class PatchInfo:
     # Can be deleted once legacy code is removed.
     modified_metadata: str | None
 
-    def _asdict(self):
+    def _asdict(self) -> dict:
         return dataclasses.asdict(self)
 
 
@@ -565,7 +565,9 @@ def json_str_to_patch_entries(workdir: Path, json_str: str) -> list[PatchEntry]:
     return [PatchEntry.from_dict(workdir, d) for d in json.loads(json_str)]
 
 
-def _print_failed_patch(pe: PatchEntry, failed_hunks: dict[str, list[Hunk]]):
+def _print_failed_patch(
+    pe: PatchEntry, failed_hunks: dict[str, list[Hunk]]
+) -> None:
     """Print information about a single failing PatchEntry.
 
     Args:
@@ -683,20 +685,16 @@ def is_git_dirty(git_root_dir: Path) -> bool:
     )
 
 
-def clean_src_tree(src_path):
+def clean_src_tree(src_path: Path) -> None:
     """Cleans the source tree of the changes made in 'src_path'."""
-
-    reset_src_tree_cmd = ["git", "-C", src_path, "reset", "HEAD", "--hard"]
-
-    subprocess.run(reset_src_tree_cmd, check=True)
-
-    clean_src_tree_cmd = ["git", "-C", src_path, "clean", "-fd"]
-
-    subprocess.run(clean_src_tree_cmd, check=True)
+    subprocess.run(
+        ("git", "-C", src_path, "reset", "HEAD", "--hard"), check=True
+    )
+    subprocess.run(("git", "-C", src_path, "clean", "-fd"), check=True)
 
 
 @contextlib.contextmanager
-def git_clean_context(git_root_dir: Path):
+def git_clean_context(git_root_dir: Path) -> Generator[None, None, None]:
     """Cleans up a git directory when the context exits."""
     if is_git_dirty(git_root_dir):
         raise RuntimeError("Cannot setup clean context; git_root_dir is dirty")
@@ -707,8 +705,8 @@ def git_clean_context(git_root_dir: Path):
 
 
 def _write_json_changes(
-    patches: list[dict[str, Any]], file_io: IO[str], indent_len=2
-):
+    patches: list[dict[str, Any]], file_io: IO[str], indent_len: int = 2
+) -> None:
     """Write JSON changes to file, does not acquire new file lock."""
     json.dump(patches, file_io, indent=indent_len, separators=(",", ": "))
     # Need to add a newline as json.dump omits it.

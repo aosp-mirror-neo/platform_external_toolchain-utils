@@ -9,6 +9,7 @@ import io
 import json
 from pathlib import Path
 import subprocess
+from typing import Any
 from unittest import mock
 
 from llvm_tools import patch_utils as pu
@@ -18,7 +19,7 @@ from llvm_tools import test_helpers
 class TestPatchUtils(test_helpers.TempDirTestCase):
     """Test the patch_utils."""
 
-    def test_predict_indent(self):
+    def test_predict_indent(self) -> None:
         test_str1 = """
 a
   a
@@ -36,7 +37,7 @@ a
 """
         self.assertEqual(pu.predict_indent(test_str2.splitlines()), 4)
 
-    def test_from_to_dict(self):
+    def test_from_to_dict(self) -> None:
         """Test to and from dict conversion."""
         d = TestPatchUtils._default_json_dict()
         d["metadata"] = {
@@ -58,7 +59,7 @@ a
             list(e.to_dict()["metadata"].keys()),
         )
 
-    def test_patch_path(self):
+    def test_patch_path(self) -> None:
         """Test that we can get the full path from a PatchEntry."""
         d = TestPatchUtils._default_json_dict()
         with mock.patch.object(Path, "is_dir", return_value=True):
@@ -67,7 +68,7 @@ a
                 entry.patch_path(), Path("/home/dir") / d["rel_patch_path"]
             )
 
-    def test_can_patch_version(self):
+    def test_can_patch_version(self) -> None:
         """Test that patch application based on version is correct."""
         base_dict = TestPatchUtils._default_json_dict()
         workdir = TestPatchUtils._mock_dir()
@@ -97,7 +98,7 @@ a
         self.assertTrue(e5.can_patch_version(5))
         self.assertFalse(e5.can_patch_version(9))
 
-    def test_can_parse_from_json(self):
+    def test_can_parse_from_json(self) -> None:
         """Test that patches be loaded from json."""
         patches_json = """
 [
@@ -127,11 +128,13 @@ a
         result = pu.json_to_patch_entries(Path(), io.StringIO(patches_json))
         self.assertEqual(len(result), 4)
 
-    def test_parsed_hunks(self):
+    def test_parsed_hunks(self) -> None:
         """Test that we can parse patch file hunks."""
         m = mock.mock_open(read_data=_EXAMPLE_PATCH)
 
-        def mocked_open(self, *args, **kwargs):
+        def mocked_open(
+            self: Path, *args: Any, **kwargs: Any
+        ) -> io.TextIOWrapper:
             return m(self, *args, **kwargs)
 
         with mock.patch.object(Path, "open", mocked_open):
@@ -149,7 +152,7 @@ a
         self.assertEqual(len(hunk_list1), 1)
         self.assertEqual(len(hunk_list2), 2)
 
-    def test_apply_when_patch_nonexistent(self):
+    def test_apply_when_patch_nonexistent(self) -> None:
         """Test that we error out when we try to apply a non-existent patch."""
         src_dir = TestPatchUtils._mock_dir("somewhere/llvm-project")
         patch_dir = TestPatchUtils._mock_dir()
@@ -159,7 +162,7 @@ a
         with mock.patch("subprocess.run", mock.MagicMock()):
             self.assertRaises(RuntimeError, lambda: e.apply(src_dir))
 
-    def test_apply_success(self):
+    def test_apply_success(self) -> None:
         """Test that we can call apply."""
         src_dir = TestPatchUtils._mock_dir("somewhere/llvm-project")
         patch_dir = TestPatchUtils._mock_dir()
@@ -181,7 +184,7 @@ a
                 result1 = e1.apply(src_dir, pu.git_am)
         self.assertTrue(result1.succeeded)
 
-    def test_parse_failed_patch_output(self):
+    def test_parse_failed_patch_output(self) -> None:
         """Test that we can call parse `patch` output."""
         fixture = """
 checking file a/b/c.cpp
@@ -198,11 +201,11 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
         self.assertEqual(result["x/y/z.h"], [4])
         self.assertNotIn("works.cpp", result)
 
-    def test_is_git_dirty(self):
+    def test_is_git_dirty(self) -> None:
         """Test if a git directory has uncommitted changes."""
         dirpath = self.make_tempdir()
 
-        def _run_h(cmd):
+        def _run_h(cmd: list[str]) -> None:
             subprocess.run(
                 cmd,
                 cwd=dirpath,
@@ -226,7 +229,9 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
         self.assertTrue(pu.is_git_dirty(dirpath))
 
     @mock.patch.object(pu, "git_clean_context")
-    def test_update_version_ranges(self, _mock_git_clean_context):
+    def test_update_version_ranges(
+        self, _mock_git_clean_context: mock.MagicMock
+    ) -> None:
         """Test the UpdateVersionRanges function."""
         dirpath = self.make_tempdir()
         patches = [
@@ -262,24 +267,24 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             ),
         ]
 
-        patches[0].apply = mock.MagicMock(
+        with mock.patch.object(
+            patches[0],
+            "apply",
             return_value=pu.PatchResult(
                 succeeded=False, failed_hunks={"a/b/c": []}
+            ),
+        ), mock.patch.object(
+            patches[1], "apply", return_value=pu.PatchResult(succeeded=True)
+        ), mock.patch.object(
+            patches[2], "apply", return_value=pu.PatchResult(succeeded=False)
+        ):
+            # Make a deepcopy of patches to test commit patch option
+            patches2 = copy.deepcopy(patches)
+
+            results: list[pu.PatchEntry]
+            results, _ = pu.update_version_ranges_with_entries(
+                1, dirpath, patches, pu.gnu_patch
             )
-        )
-        patches[1].apply = mock.MagicMock(
-            return_value=pu.PatchResult(succeeded=True)
-        )
-        patches[2].apply = mock.MagicMock(
-            return_value=pu.PatchResult(succeeded=False)
-        )
-
-        # Make a deepcopy of patches to test commit patch option
-        patches2 = copy.deepcopy(patches)
-
-        results, _ = pu.update_version_ranges_with_entries(
-            1, dirpath, patches, pu.gnu_patch
-        )
 
         # We should only have updated the version_range of the first patch,
         # as that one failed to apply.
@@ -290,11 +295,10 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
         self.assertEqual(patches[2].version_range, {"from": 4, "until": 5})
 
         # Test git am option
+        results2: list[pu.PatchEntry]
         results2, _ = pu.update_version_ranges_with_entries(
             1, dirpath, patches2, pu.git_am
-        )
-
-        # We should only have updated the version_range of the first patch
+        )  # We should only have updated the version_range of the first patch
         # via git am, as that one failed to apply.
         self.assertEqual(len(results2), 1)
         self.assertEqual(results2[0].version_range, {"from": 0, "until": 1})
@@ -302,8 +306,8 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
         self.assertEqual(patches2[1].version_range, {"from": 0, "until": 2})
         self.assertEqual(patches2[2].version_range, {"from": 4, "until": 5})
 
-    def test_remove_old_patches(self):
-        patches = [
+    def test_remove_old_patches(self) -> None:
+        patches: list[dict[str, Any]] = [
             {"rel_patch_path": "foo.patch"},
             {
                 "rel_patch_path": "bar.patch",
@@ -336,7 +340,7 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             expected_patches,
         )
 
-    def test_remove_old_patches_with_shared_and_duplicate_files(self):
+    def test_remove_old_patches_with_shared_and_duplicate_files(self) -> None:
         patches = [
             # Shared file, one entry removed, one kept. File shouldn't be
             # removed.
@@ -382,7 +386,7 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
         )
 
     @staticmethod
-    def _default_json_dict():
+    def _default_json_dict() -> dict:
         return {
             "metadata": {
                 "title": "hello world",
@@ -396,7 +400,7 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
         }
 
     @staticmethod
-    def _mock_dir(path: str = "a/b/c"):
+    def _mock_dir(path: str = "a/b/c") -> mock.MagicMock:
         workdir = Path(path)
         workdir = mock.MagicMock(workdir)
         workdir.is_dir = lambda: True
