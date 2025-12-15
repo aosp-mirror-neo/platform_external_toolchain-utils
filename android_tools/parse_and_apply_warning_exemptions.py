@@ -623,7 +623,7 @@ def commit_new_exemptions(
         """
     )
 
-    def do_commit(repo: Path):
+    def do_commit(repo: Path) -> None:
         git_utils.create_branch(repo, branch_name)
         git_utils.commit_all_changes(
             git_dir=repo,

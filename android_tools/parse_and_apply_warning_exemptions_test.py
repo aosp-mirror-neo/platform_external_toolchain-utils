@@ -7,6 +7,7 @@
 import json
 from pathlib import Path
 import textwrap
+from typing import Any
 
 from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
 from llvm_tools import test_helpers
@@ -57,7 +58,7 @@ def example_warning_report_expected_result() -> (
 class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
     """Tests for parse_and_apply_warning_exemptions."""
 
-    def test_infer_target_from_cmdline_success(self):
+    def test_infer_target_from_cmdline_success(self) -> None:
         cmd = [
             "clang",
             "-o",
@@ -69,14 +70,14 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "//bionic/libc:libc_bionic",
         )
 
-    def test_infer_target_from_cmdline_no_dash_o(self):
+    def test_infer_target_from_cmdline_no_dash_o(self) -> None:
         cmd = [
             "clang",
             "bionic/libc/bionic/sigprocmask.c",
         ]
         self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
 
-    def test_infer_target_from_cmdline_no_soong_prefix(self):
+    def test_infer_target_from_cmdline_no_soong_prefix(self) -> None:
         cmd = [
             "clang",
             "-o",
@@ -85,7 +86,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
         ]
         self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
 
-    def test_infer_target_from_cmdline_no_obj_dir(self):
+    def test_infer_target_from_cmdline_no_obj_dir(self) -> None:
         cmd = [
             "clang",
             "-o",
@@ -98,7 +99,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
 class TestParseOneWarningReport(test_helpers.TempDirTestCase):
     """Tests for parse_one_warning_report."""
 
-    def test_parse_one_warning_report_success(self):
+    def test_parse_one_warning_report_success(self) -> None:
         parse_result = parse_and_apply.parse_one_warning_report(
             EXAMPLE_WARNING_REPORT, report_line_number=1
         )
@@ -112,7 +113,7 @@ class TestParseOneWarningReport(test_helpers.TempDirTestCase):
 class TestParseWarningReports(test_helpers.TempDirTestCase):
     """Tests for parse_warning_reports."""
 
-    def test_parse_warning_reports_success(self):
+    def test_parse_warning_reports_success(self) -> None:
         json_content = EXAMPLE_WARNING_REPORT.replace("\n", " ")
         log_path = self.make_tempdir() / "build.log"
         log_path.write_text(
@@ -138,7 +139,7 @@ class TestParseWarningReports(test_helpers.TempDirTestCase):
 class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
     """Tests for group_targets_by_bp_file."""
 
-    def test_group_targets_by_bp_file_success(self):
+    def test_group_targets_by_bp_file_success(self) -> None:
         targets = [
             "//bionic/libc:libc_bionic",
             "//system/core:libutils",
@@ -161,10 +162,10 @@ class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
             v.sort()
         self.assertEqual(result, expected)
 
-    def test_group_targets_by_bp_file_empty_input(self):
+    def test_group_targets_by_bp_file_empty_input(self) -> None:
         self.assertEqual(parse_and_apply.group_targets_by_bp_file([]), {})
 
-    def test_group_targets_by_bp_file_invalid_target(self):
+    def test_group_targets_by_bp_file_invalid_target(self) -> None:
         with self.assertRaises(ValueError):
             parse_and_apply.group_targets_by_bp_file(["//bionic/libc"])
 
@@ -172,28 +173,28 @@ class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
 class TestUpdateHunkHeaderForAddedLines(test_helpers.TempDirTestCase):
     """Tests for update_hunk_header_for_added_lines."""
 
-    def test_update_hunk_header_docstring_example(self):
+    def test_update_hunk_header_docstring_example(self) -> None:
         header = "@@ -5,12 +5,18 @@"
         new_header = parse_and_apply.update_hunk_header_for_added_lines(
             header, added_lines=2, preexisting_added_lines=4
         )
         self.assertEqual(new_header, "@@ -5,12 +9,20 @@")
 
-    def test_update_hunk_header_no_changes(self):
+    def test_update_hunk_header_no_changes(self) -> None:
         header = "@@ -1,1 +1,1 @@"
         new_header = parse_and_apply.update_hunk_header_for_added_lines(
             header, added_lines=0, preexisting_added_lines=0
         )
         self.assertEqual(new_header, "@@ -1,1 +1,1 @@")
 
-    def test_update_hunk_header_with_added_lines(self):
+    def test_update_hunk_header_with_added_lines(self) -> None:
         header = "@@ -10,5 +10,5 @@"
         new_header = parse_and_apply.update_hunk_header_for_added_lines(
             header, added_lines=3, preexisting_added_lines=0
         )
         self.assertEqual(new_header, "@@ -10,5 +10,8 @@")
 
-    def test_update_hunk_header_invalid_header(self):
+    def test_update_hunk_header_invalid_header(self) -> None:
         with self.assertRaises(ValueError):
             parse_and_apply.update_hunk_header_for_added_lines(
                 "invalid header", 1, 1
@@ -203,7 +204,7 @@ class TestUpdateHunkHeaderForAddedLines(test_helpers.TempDirTestCase):
 class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
     """Tests for add_suppression_comments_to_diff."""
 
-    def test_add_suppression_comments_to_diff_multiple_hunks(self):
+    def test_add_suppression_comments_to_diff_multiple_hunks(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/Android.bp
@@ -245,10 +246,10 @@ class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
 class TestExemptionSummary(test_helpers.TempDirTestCase):
     """Tests for ExemptionSummary."""
 
-    def test_from_file_success(self):
+    def test_from_file_success(self) -> None:
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
-        summary_content = {
+        summary_content: dict[str, Any] = {
             "git_dirs": ["/foo/bar", "/baz/qux"],
             "updated_targets": {
                 "//foo:bar": ["unused-variable"],
@@ -271,10 +272,10 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_from_file_empty(self):
+    def test_from_file_empty(self) -> None:
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
-        summary_content = {
+        summary_content: dict[str, Any] = {
             "git_dirs": [],
             "updated_targets": {},
         }
@@ -291,7 +292,7 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_write_to_file(self):
+    def test_write_to_file(self) -> None:
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
         summary = parse_and_apply.ExemptionSummary(

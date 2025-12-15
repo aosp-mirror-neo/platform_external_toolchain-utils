@@ -39,7 +39,7 @@ _SUPPRESS_WARNING_FLAG = "-D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout"
 _OPT_LEVEL_FLAG_RE = re.compile(r'^(\s+)"-O.",\s*$')
 
 
-def add_flag_after_optimization_level(file_contents: str, flag: str):
+def add_flag_after_optimization_level(file_contents: str, flag: str) -> str:
     """Adds the given flag after the optimization level in a Soong file.
 
     Nothing's particularly special about the optimization level in this case;
