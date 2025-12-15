@@ -90,7 +90,7 @@ def asciify(s: str) -> str:
     return s.encode("ascii", "backslashreplace").decode("ascii")
 
 
-def write_findings(to_file: Path, findings: list[bot_lints.Finding]):
+def write_findings(to_file: Path, findings: list[bot_lints.Finding]) -> None:
     """Writes `findings` to `to_file` as a CSV."""
     with to_file.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
@@ -110,7 +110,7 @@ def write_findings(to_file: Path, findings: list[bot_lints.Finding]):
 
 def write_grouped_findings(
     out_dir: Path, findings: dict[datetime.date, list[bot_lints.Finding]]
-):
+) -> None:
     """Writes `findings` to dated subdirectories of `out_dir`.
 
     `findings` are individually written as CSVs. The output file paths are

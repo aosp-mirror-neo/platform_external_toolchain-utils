@@ -21,8 +21,10 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
     """Tests for _inspect_and_verify_cq_orchestrator."""
 
     def test_no_error_if_all_children_have_step(
-        self, mock_fetch_builder_steps, mock_cq_orch_fetch
-    ):
+        self,
+        mock_fetch_builder_steps: mock.MagicMock,
+        mock_cq_orch_fetch: mock.MagicMock,
+    ) -> None:
         mock_cq_orch_fetch.side_effect = [
             cros_cls.CQOrchestratorOutput(
                 status=cros_cls.BuilderStatus.SUCCESS,
@@ -47,8 +49,10 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
         )
 
     def test_no_error_if_ignored_child_lacks_step(
-        self, mock_fetch_builder_steps, mock_cq_orch_fetch
-    ):
+        self,
+        mock_fetch_builder_steps: mock.MagicMock,
+        mock_cq_orch_fetch: mock.MagicMock,
+    ) -> None:
         mock_cq_orch_fetch.side_effect = [
             cros_cls.CQOrchestratorOutput(
                 status=cros_cls.BuilderStatus.SUCCESS,
@@ -75,8 +79,10 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
         )
 
     def test_too_few_child_builders(
-        self, mock_fetch_builder_steps, mock_cq_orch_fetch
-    ):
+        self,
+        mock_fetch_builder_steps: mock.MagicMock,
+        mock_cq_orch_fetch: mock.MagicMock,
+    ) -> None:
         mock_cq_orch_fetch.side_effect = [
             cros_cls.CQOrchestratorOutput(
                 status=cros_cls.BuilderStatus.SUCCESS,
@@ -101,8 +107,10 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
         )
 
     def test_builder_missing_step(
-        self, mock_fetch_builder_steps, mock_cq_orch_fetch
-    ):
+        self,
+        mock_fetch_builder_steps: mock.MagicMock,
+        mock_cq_orch_fetch: mock.MagicMock,
+    ) -> None:
         mock_cq_orch_fetch.side_effect = [
             cros_cls.CQOrchestratorOutput(
                 status=cros_cls.BuilderStatus.SUCCESS,
