@@ -61,7 +61,7 @@ class LLVMPatchContext:
     branch_refs: Iterable[str]
     main_branch_ref: str
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         self.llvm_config = git_llvm_rev.LLVMConfig(
             git_llvm_rev.MAIN_BRANCH, self.llvm_dir
         )
@@ -85,7 +85,7 @@ class BranchContext:
     patch_entry_combos: list[PatchCombo]
 
     @property
-    def patch_entries(self):
+    def patch_entries(self) -> list[patch_utils.PatchEntry]:
         return [p.entry for p in self.patch_entry_combos]
 
 
@@ -126,7 +126,7 @@ def _get_metadata_original_sha(
 @functools.lru_cache
 def _translate_sha_to_rev_cached(
     llvm_config: git_llvm_rev.LLVMConfig, sha: str
-):
+) -> git_llvm_rev.Rev:
     return git_llvm_rev.translate_sha_to_rev(llvm_config, sha)
 
 
@@ -434,7 +434,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return args
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     """Entry point for the program."""
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "

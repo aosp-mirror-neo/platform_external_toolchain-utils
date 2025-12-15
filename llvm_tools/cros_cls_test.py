@@ -12,7 +12,7 @@ from llvm_tools import cros_cls
 class TestChangeListURL(unittest.TestCase):
     """ChangeListURL tests."""
 
-    def test_parsing_long_form_url(self):
+    def test_parsing_long_form_url(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse(
                 "chromium-review.googlesource.com/c/chromiumos/overlays/"
@@ -21,7 +21,7 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
         )
 
-    def test_parsing_long_form_internal_url(self):
+    def test_parsing_long_form_internal_url(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse(
                 "chrome-internal-review.googlesource.com/c/chromeos/"
@@ -30,7 +30,7 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
         )
 
-    def test_parsing_long_form_git_corp_url(self):
+    def test_parsing_long_form_git_corp_url(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse(
                 "chromium-review.git.corp.google.com/c/chromiumos/overlays/"
@@ -39,7 +39,7 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
         )
 
-    def test_parsing_long_form_git_corp_internal_url(self):
+    def test_parsing_long_form_git_corp_internal_url(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse(
                 "chrome-internal-review.git.corp.google.com/c/chromeos/"
@@ -48,31 +48,31 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
         )
 
-    def test_parsing_short_internal_url(self):
+    def test_parsing_short_internal_url(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse("crrev.com/i/654321"),
             cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
         )
 
-    def test_parsing_discards_http(self):
+    def test_parsing_discards_http(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse("http://crrev.com/c/123456"),
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
         )
 
-    def test_parsing_discards_https(self):
+    def test_parsing_discards_https(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse("https://crrev.com/c/123456"),
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
         )
 
-    def test_parsing_detects_patch_sets(self):
+    def test_parsing_detects_patch_sets(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse("crrev.com/c/123456/14"),
             cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
         )
 
-    def test_parsing_is_okay_with_trailing_slash(self):
+    def test_parsing_is_okay_with_trailing_slash(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse("crrev.com/c/123456/"),
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
@@ -82,7 +82,7 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
         )
 
-    def test_parsing_is_okay_with_valid_trailing_junk(self):
+    def test_parsing_is_okay_with_valid_trailing_junk(self) -> None:
         self.assertEqual(
             cros_cls.ChangeListURL.parse("crrev.com/c/123456?foo=bar"),
             cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
@@ -110,14 +110,14 @@ class TestChangeListURL(unittest.TestCase):
             cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
         )
 
-    def test_parsing_raises_on_invalid_trailing_jumk(self):
+    def test_parsing_raises_on_invalid_trailing_jumk(self) -> None:
         with self.assertRaises(ValueError):
             cros_cls.ChangeListURL.parse("crrev.com/c/123456foo=bar")
 
         with self.assertRaises(ValueError):
             cros_cls.ChangeListURL.parse("crrev.com/c/123456/14foo=bar")
 
-    def test_str_functions_properly(self):
+    def test_str_functions_properly(self) -> None:
         self.assertEqual(
             str(
                 cros_cls.ChangeListURL(
@@ -153,7 +153,7 @@ class TestChangeListURL(unittest.TestCase):
 class Test(unittest.TestCase):
     """General tests for cros_cls."""
 
-    def test_release_builder_parsing_works(self):
+    def test_release_builder_parsing_works(self) -> None:
         self.assertEqual(
             cros_cls.parse_release_from_builder_artifacts_link(
                 "gs://chromeos-image-archive/amd64-generic-asan-cq/"
@@ -170,7 +170,7 @@ class Test(unittest.TestCase):
             "R122-15711.0.0",
         )
 
-    def test_parse_build_status(self):
+    def test_parse_build_status(self) -> None:
         self.assertEqual(
             cros_cls.BuilderStatus.parse("SCHEDULED"),
             cros_cls.BuilderStatus.SCHEDULED,
@@ -188,7 +188,7 @@ class Test(unittest.TestCase):
 class TestBuildIDParsing(unittest.TestCase):
     """BuildID parsing tests."""
 
-    def test_parse_build_id_from_bb_add_output(self):
+    def test_parse_build_id_from_bb_add_output(self) -> None:
         output = (
             "http://ci.chromium.org/b/8698399525438704705 "
             "SCHEDULED 'chromeos/cq/brya-bazel-lite-cq'"
@@ -198,7 +198,7 @@ class TestBuildIDParsing(unittest.TestCase):
             cros_cls.BuildID("8698399525438704705"),
         )
 
-    def test_parse_new_build_id_from_bb_add_output(self):
+    def test_parse_new_build_id_from_bb_add_output(self) -> None:
         output = (
             "http://cr-buildbucket.appspot.com/build/8698399525438704706 "
             "SCHEDULED 'chromeos/cq/brya-bazel-lite-cq'"
@@ -208,7 +208,7 @@ class TestBuildIDParsing(unittest.TestCase):
             cros_cls.BuildID("8698399525438704706"),
         )
 
-    def test_parse_build_id_from_bb_add_output_multiple_ids(self):
+    def test_parse_build_id_from_bb_add_output_multiple_ids(self) -> None:
         output = (
             "http://ci.chromium.org/b/123 SCHEDULED 'bot'\n"
             "http://ci.chromium.org/b/456 SCHEDULED 'another_bot'"
@@ -218,7 +218,7 @@ class TestBuildIDParsing(unittest.TestCase):
         ):
             cros_cls.parse_build_id_from_bb_add_output(output)
 
-    def test_parse_build_id_from_bb_add_output_no_id(self):
+    def test_parse_build_id_from_bb_add_output_no_id(self) -> None:
         output = "No build ID here"
         with self.assertRaisesRegex(
             ValueError, r"Expected one build-id from stdout"
