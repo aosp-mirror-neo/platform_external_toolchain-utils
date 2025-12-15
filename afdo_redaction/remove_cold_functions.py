@@ -27,6 +27,7 @@ import argparse
 import collections
 import re
 import sys
+from typing import IO
 
 
 _function_line_re = re.compile(r"^([\w\$\.@]+):(\d+)(?::\d+)?$")
@@ -35,20 +36,20 @@ ProfileRecord = collections.namedtuple(
 )
 
 
-def _read_sample_count(line):
+def _read_sample_count(line: str) -> tuple[str, int]:
     m = _function_line_re.match(line)
     assert m, "Failed to interpret function line %s" % line
     return m.group(1), int(m.group(2))
 
 
-def _read_textual_afdo_profile(stream):
+def _read_textual_afdo_profile(stream: IO[str]) -> list[ProfileRecord]:
     """Parses an AFDO profile from a line stream into ProfileRecords."""
     # ProfileRecords are actually nested, due to inlining. For the purpose of
     # this script, that doesn't matter.
     lines = (line.rstrip() for line in stream)
     function_line = None
-    samples = []
-    ret = []
+    samples: list[str] = []
+    ret: list[ProfileRecord] = []
     for line in lines:
         if not line:
             continue
@@ -82,12 +83,18 @@ def _read_textual_afdo_profile(stream):
     return ret
 
 
-def write_textual_afdo_profile(stream, records):
+def write_textual_afdo_profile(
+    stream: IO[str], records: list[ProfileRecord]
+) -> None:
     for r in records:
         print("\n".join(r.function_body), file=stream)
 
 
-def analyze_functions(records, cwp, benchmark):
+def analyze_functions(
+    records: list[ProfileRecord],
+    cwp: list[ProfileRecord],
+    benchmark: list[ProfileRecord],
+) -> tuple[int, int, int]:
     cwp_functions = {x.function_name for x in cwp}
     benchmark_functions = {x.function_name for x in benchmark}
     all_functions = {x.function_name for x in records}
@@ -104,7 +111,13 @@ def analyze_functions(records, cwp, benchmark):
     return cwp_only_functions, benchmark_only_functions, common_functions
 
 
-def run(input_stream, output_stream, goal, cwp=None, benchmark=None):
+def run(
+    input_stream: IO[str],
+    output_stream: IO[str],
+    goal: int,
+    cwp: IO[str] | None = None,
+    benchmark: IO[str] | None = None,
+) -> None:
     records = _read_textual_afdo_profile(input_stream)
     num_functions = len(records)
     if not num_functions:
@@ -162,7 +175,7 @@ def run(input_stream, output_stream, goal, cwp=None, benchmark=None):
         )
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

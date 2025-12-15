@@ -11,7 +11,7 @@ import unittest
 from afdo_redaction import remove_indirect_calls
 
 
-def _run_test(input_lines):
+def _run_test(input_lines: list[str]) -> list[str]:
     input_buf = io.StringIO("\n".join(input_lines))
     output_buf = io.StringIO()
     remove_indirect_calls.run(input_buf, output_buf)
@@ -21,10 +21,10 @@ def _run_test(input_lines):
 class Test(unittest.TestCase):
     """Tests"""
 
-    def test_empty_profile(self):
+    def test_empty_profile(self) -> None:
         self.assertEqual(_run_test([]), [])
 
-    def test_removal_on_real_world_code(self):
+    def test_removal_on_real_world_code(self) -> None:
         # These are copied from an actual textual AFDO profile, but the
         # names made lints unhappy due to their length, so I had to be
         # creative.

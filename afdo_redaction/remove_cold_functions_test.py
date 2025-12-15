@@ -12,7 +12,7 @@ from unittest import mock
 from afdo_redaction import remove_cold_functions
 
 
-def _construct_profile(indices=None):
+def _construct_profile(indices: list[int] | None = None) -> list[str]:
     real_world_profile_functions = [
         """SomeFunction1:24150:300
  2: 75
@@ -78,7 +78,12 @@ def _construct_profile(indices=None):
     return ret
 
 
-def _run_test(input_lines, goal, cwp_file=None, benchmark_file=None):
+def _run_test(
+    input_lines: list[str],
+    goal: int,
+    cwp_file: io.StringIO | None = None,
+    benchmark_file: io.StringIO | None = None,
+) -> list[str]:
     input_buf = io.StringIO("\n".join(input_lines))
     output_buf = io.StringIO()
     remove_cold_functions.run(
@@ -90,10 +95,10 @@ def _run_test(input_lines, goal, cwp_file=None, benchmark_file=None):
 class Test(unittest.TestCase):
     """Test functions in remove_cold_functions.py"""
 
-    def test_empty_profile(self):
+    def test_empty_profile(self) -> None:
         self.assertEqual(_run_test([], 0), [])
 
-    def test_remove_all_functions_fail(self):
+    def test_remove_all_functions_fail(self) -> None:
         input_profile_lines = _construct_profile()
         with self.assertRaises(Exception) as context:
             _run_test(input_profile_lines, 0)
@@ -102,7 +107,7 @@ class Test(unittest.TestCase):
             "It's invalid to remove all functions in the profile",
         )
 
-    def test_remove_cold_functions_work(self):
+    def test_remove_cold_functions_work(self) -> None:
         input_profile_lines = _construct_profile()
         # To make sure the cold functions are removed in order
         expected_profile_lines = {
@@ -120,7 +125,7 @@ class Test(unittest.TestCase):
                 _run_test(input_profile_lines, num), expected_lines
             )
 
-    def test_analyze_cwp_and_benchmark_work(self):
+    def test_analyze_cwp_and_benchmark_work(self) -> None:
         input_profile_lines = _construct_profile()
         cwp_profile = _construct_profile([0, 1, 3, 4])
         benchmark_profile = _construct_profile([1, 2, 3, 4])
