@@ -1,5 +1,5 @@
 From bcba9ea5d205f7b9978276da3bef9f0e5ad78aaa Mon Sep 17 00:00:00 2001
-From: Yi Kong <yikong@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Tue, 28 Feb 2023 12:50:21 +0900
 Subject: [PATCH] Revert "[Driver] Allow target override containing . in
  executable name"

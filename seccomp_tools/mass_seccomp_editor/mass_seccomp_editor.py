@@ -5,13 +5,12 @@
 """Script to make mass, CrOS-wide seccomp changes."""
 
 import argparse
-from dataclasses import dataclass
-from dataclasses import field
+import dataclasses
 import re
 import shutil
 import subprocess
 import sys
-from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
+from typing import Any, Iterable
 
 
 # Pre-compiled regexes.
@@ -21,24 +20,24 @@ AARCH64_RE = re.compile(r".*a(arch|rm)64.*\.policy")
 ARM_RE = re.compile(r".*arm(v7)?.*\.policy")
 
 
-@dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True)
 class Policies:
     """Dataclass to hold lists of policies which match certain types."""
 
-    arm: List[str] = field(default_factory=list)
-    x86_64: List[str] = field(default_factory=list)
-    x86: List[str] = field(default_factory=list)
-    arm64: List[str] = field(default_factory=list)
-    none: List[str] = field(default_factory=list)
+    arm: list[str] = dataclasses.field(default_factory=list)
+    x86_64: list[str] = dataclasses.field(default_factory=list)
+    x86: list[str] = dataclasses.field(default_factory=list)
+    arm64: list[str] = dataclasses.field(default_factory=list)
+    none: list[str] = dataclasses.field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, List[str]]:
+    def to_dict(self) -> dict[str, list[str]]:
         """Convert this class to a dictionary."""
         return {**self.__dict__}
 
 
-def main():
+def main(argv: list[str]):
     """Run the program from cmd line"""
-    args = parse_args()
+    args = parse_args(argv)
     if all(x is None for x in [args.all, args.b64, args.b32, args.none]):
         print(
             "Require at least one of {--all, --b64, --b32, --none}",
@@ -96,16 +95,16 @@ def main():
     sys.exit(0 if success else 2)
 
 
-def _make_syscall_lookup_table(args: Any) -> Dict[str, List[str]]:
+def _make_syscall_lookup_table(args: Any) -> dict[str, list[str]]:
     """Make lookup table, segmented by all/b32/b64/none policies.
 
     Args:
-      args: Direct output from parse_args.
+        args: Direct output from parse_args.
 
     Returns:
-      dict of syscalls we want to search for in each policy file,
-      where the key is the policy file arch, and the value is
-      a list of syscalls as strings.
+        dict of syscalls we want to search for in each policy file,
+        where the key is the policy file arch, and the value is
+        a list of syscalls as strings.
     """
     syscall_lookup_table = Policies().to_dict()
     if args.all:
@@ -130,9 +129,9 @@ def _confirm_add(fp: str, syscalls: Iterable[str], noninteractive=None):
     """Interactive confirmation check you wish to add a syscall.
 
     Args:
-      fp: filepath of the file to edit.
-      syscalls: list-like of syscalls to add to append to the files.
-      noninteractive: Just add the syscalls without asking.
+        fp: filepath of the file to edit.
+        syscalls: list-like of syscalls to add to append to the files.
+        noninteractive: Just add the syscalls without asking.
     """
     if noninteractive:
         _update_seccomp(fp, list(syscalls))
@@ -146,10 +145,10 @@ def _confirm_add(fp: str, syscalls: Iterable[str], noninteractive=None):
         print(f"Skipping {fp}")
 
 
-def check_missing_syscalls(syscalls: List[str], fp: str) -> Optional[Set[str]]:
+def check_missing_syscalls(syscalls: list[str], fp: str) -> set[str] | None:
     """Return which specified syscalls are missing in the given file."""
     missing_syscalls = set(syscalls)
-    with open(fp) as f:
+    with open(fp, encoding="utf-8") as f:
         try:
             lines = f.readlines()
             for syscall in syscalls:
@@ -161,15 +160,15 @@ def check_missing_syscalls(syscalls: List[str], fp: str) -> Optional[Set[str]]:
     return missing_syscalls
 
 
-def _update_seccomp(fp: str, missing_syscalls: List[str]):
+def _update_seccomp(fp: str, missing_syscalls: list[str]):
     """Update the seccomp of the file based on the seccomp change type."""
-    with open(fp, "a") as f:
+    with open(fp, "a", encoding="utf-8") as f:
         sorted_syscalls = sorted(missing_syscalls)
         for to_write in sorted_syscalls:
             f.write(to_write + ": 1\n")
 
 
-def _search_cmd(query: str, use_fd=True) -> List[str]:
+def _search_cmd(query: str, use_fd=True) -> list[str]:
     if use_fd and shutil.which("fdfind") is not None:
         return [
             "fdfind",
@@ -188,13 +187,13 @@ def _search_cmd(query: str, use_fd=True) -> List[str]:
     ]
 
 
-def find_potential_policy_files(packages: List[str]) -> Tuple[List[str], bool]:
+def find_potential_policy_files(packages: list[str]) -> tuple[list[str], bool]:
     """Find potentially related policy files to the given packages.
 
     Returns:
-      (policy_files, successful): A list of policy file paths, and a boolean
-      indicating whether all queries were successful in finding at least
-      one related policy file.
+        (policy_files, successful): A list of policy file paths, and a boolean
+        indicating whether all queries were successful in finding at least
+        one related policy file.
     """
     all_queries_succeeded = True
     matches = []
@@ -217,7 +216,7 @@ def find_potential_policy_files(packages: List[str]) -> Tuple[List[str], bool]:
     return matches, all_queries_succeeded
 
 
-def parse_args() -> Any:
+def parse_args(argv: list[str]) -> Any:
     """Handle command line arguments."""
     parser = argparse.ArgumentParser(
         description="Check for missing syscalls in"
@@ -279,4 +278,4 @@ def parse_args() -> Any:
         help="Edit all files, regardless of missing status."
         " Does nothing without --edit.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)

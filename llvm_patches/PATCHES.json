@@ -1,6 +1,7 @@
 [
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Adds a allowlist of packages that have known memory leaks"
     },
@@ -15,6 +16,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Sets the ASAN message to go to /va/log/asan${pid} by\ndefault"
     },
@@ -29,6 +31,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Fixes crbug/591436. Force fallback to traditional executable detection"
     },
@@ -43,6 +46,7 @@
   },
   {
     "metadata": {
+      "author": "Caroline Tice <cmtice@google.com>",
       "info": [],
       "title": "Temporary workaround. Breakpad cannot handle Dwarf\nVersion 4. Works around issue by forcing Debug Frames\nversion of Dwarf to be version 1, while leaving the rest of\nthe Dwarf data at version 4"
     },
@@ -57,6 +61,7 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
       "title": "Uses argv[0] to get host system information. Created\na wrapper of LLD and real lld becomes lld.elf so the LLD\ncannot get the host system information and dies"
     },
@@ -71,6 +76,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Fixes clang.elf calling clang.elf because direct\ncalls to clang.elf misses all environment setup in clang\nwrapper. Calls to clang wrapper instead of clang.elf binary"
     },
@@ -85,34 +91,22 @@
   },
   {
     "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
       "info": [],
-      "title": "v5: Crash when dereferencing nullopt for std::optional"
+      "title": "v7: Crash when dereferencing nullopt for std::optional"
     },
     "platforms": [
       "chromiumos"
     ],
-    "rel_patch_path": "v5-Crash-when-dereferencing-nullopt-for-std-optional.patch",
+    "rel_patch_path": "v7-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
-      "from": 547379,
-      "until": 563880
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "v6: Crash when dereferencing nullopt for std::optional"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "v6-Crash-when-dereferencing-nullopt-for-std-optional.patch",
-    "version_range": {
-      "from": 563880,
+      "from": 571439,
       "until": null
     }
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
       "title": "Increase max allocation size to allow BOLTing clang and rustc"
     },
@@ -128,6 +122,7 @@
   },
   {
     "metadata": {
+      "author": "Emre Kultursay <emrekultursay@google.com>",
       "info": [],
       "title": "Disable vfork events v2"
     },
@@ -143,6 +138,7 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
       "title": "v2: Revert [Driver] Allow target override containing . in executable name"
     },
@@ -158,6 +154,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Disable Cast Assertion"
     },
@@ -172,6 +169,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "inline-cost: skip threshold checks"
     },
@@ -186,6 +184,7 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
       "title": "[LoopUnroll] Ignore inlinable calls if unrolling is forced"
     },
@@ -200,6 +199,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "[PATCH] [scudo] Add baseline Scudo config for ChromeOS"
     },
@@ -214,6 +214,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Disable querying git in benchmarking code"
     },
@@ -228,6 +229,7 @@
   },
   {
     "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Revert \"add_tablegen: Quick fix to reflect LLVM_TABLEGEN to llvm-min-tblgen\""
     },
@@ -242,20 +244,7 @@
   },
   {
     "metadata": {
-      "info": [],
-      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "libc-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTAB.patch",
-    "version_range": {
-      "from": 530567,
-      "until": 563880
-    }
-  },
-  {
-    "metadata": {
+      "author": "Tom Hughes <tomhughes@chromium.org>",
       "info": [],
       "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
     },
@@ -270,20 +259,7 @@
   },
   {
     "metadata": {
-      "info": [],
-      "title": "[lldb] Add terminfo dependency for ncurses support"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "-lldb-Add-terminfo-dependency-for-ncurses-support.patch",
-    "version_range": {
-      "from": 537678,
-      "until": 566148
-    }
-  },
-  {
-    "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\""
     },
@@ -298,124 +274,7 @@
   },
   {
     "metadata": {
-      "info": [],
-      "title": "cros: add llvm-rev file"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cros-add-llvm-rev-file.patch",
-    "version_range": {
-      "from": null,
-      "until": 563880
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "Revert \"[lldb] Add terminfo dependency for ncurses support\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "Revert-lldb-Add-terminfo-dependency-for-ncurses-support-.patch",
-    "version_range": {
-      "from": 537678,
-      "until": 566148
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "8fff0c181f26a5e8b2344c061ebf2559118b1160",
-      "title": "[lldb] Add terminfo dependency for ncurses support (#126810)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/8fff0c181f26a5e8b2344c061ebf2559118b1160.patch",
-    "version_range": {
-      "from": 537678,
-      "until": 565379
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "bb6a273d9ab9ee90dbb957e541f4d810fffb22ee",
-      "title": "[lldb] Fix manual CURSES_LIBRARIES tinfo finding (#128245)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/bb6a273d9ab9ee90dbb957e541f4d810fffb22ee.patch",
-    "version_range": {
-      "from": 537678,
-      "until": 566148
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "c9d0a464c9f3a0a66f35d0ca28f36a96efc6961b",
-      "title": "Revert \"[mlir][math]Update `convertPowfOp` `ExpandPatterns.cpp`\" (#126063)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/c9d0a464c9f3a0a66f35d0ca28f36a96efc6961b.patch",
-    "version_range": {
-      "from": 563468,
-      "until": 564416
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "0227396417d4625bc93affdd8957ff8d90c76299",
-      "title": "Revert \"[libc++] Reduce std::conjunction overhead (#124259)\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/0227396417d4625bc93affdd8957ff8d90c76299.patch",
-    "version_range": {
-      "from": 563049,
-      "until": 564591
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "c65ed964657c93d51f3e05de9e0609419768a143",
-      "title": "Revert \"[reland][libc][bazel] Enable software prefetching for memcpy\" (#127189)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/c65ed964657c93d51f3e05de9e0609419768a143.patch",
-    "version_range": {
-      "from": 554178,
-      "until": 565287
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "cd6e959102888279dc7e75a41ebd75a08ac3f7a5",
-      "title": "Revert \"[MC] Explicitly mark MCSymbol for MO_ExternalSymbol\" (#133291)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/cd6e959102888279dc7e75a41ebd75a08ac3f7a5.patch",
-    "version_range": {
-      "from": 550362,
-      "until": 570122
-    }
-  },
-  {
-    "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
       "title": "cros: add user-enumeration patch"
     },
@@ -430,6 +289,7 @@
   },
   {
     "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
       "title": "llvm: don't touch VCS files"
     },
@@ -444,216 +304,7 @@
   },
   {
     "metadata": {
-      "info": [],
-      "original_sha": "ba476d0b83dc8a4bbf066dc02a0f73ded27114f0",
-      "title": "[LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/ba476d0b83dc8a4bbf066dc02a0f73ded27114f0.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 564320
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "original_sha": "36acaa0be5cf6273200d4cc4c35042c4bfc3861b",
-      "title": "Revert \"[ARM][ConstantIslands] Correct MinNoSplitDisp calculation (#114590)\""
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/36acaa0be5cf6273200d4cc4c35042c4bfc3861b.patch",
-    "version_range": {
-      "from": 559379,
-      "until": 571637
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [libc++][TZDB] Fixes %z escaping. (#125399)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/a27f3b2bb137001735949549354aff89dbf227f4.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 564142
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [libc++] Fix stray usage of _LIBCPP_HAS_NO_WIDE_CHARACTERS on Windows"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/bcfd9f81e1bc9954d616ffbb8625099916bebd5b.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 564267
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [LLD][ELF][AArch64] Discard .ARM.attributes sections (#125838)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/ba476d0b83dc8a4bbf066dc02a0f73ded27114f0.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 564320
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [libc++] Reduce the dependency of the locale base API on the base system from the headers (#117764)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/f00b32e2d0ee666d32f1ddd0c687e269fab95b44.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 565900
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [AArch64][SME2] Don't preserve ZT0 around SME ABI routines (#132722)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/107260cc29368070bba815d94f9d5b7cec1df7d0.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 569778
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [MTE] decide whether to tag global in AsmPrinter (#135891)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/9ed4c705ac1c5c8797f328694f6cd22fbcdae03b.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 572390
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [MTE] do not tag zero sized globals (#136020)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/6bac20b391edce2bde348e59f5be2143157304b5.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 572391
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [lld] Merge equivalent symbols found during ICF (#134342)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/8389d6fad76bd880f02bddce7f0f2612ff0afc40.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 572756
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] [AArch64][SME] Allow spills of ZT0 around SME ABI routines again (#136726)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/8c7a2ce01a77c96028fe2c8566f65c45ad9408d3.patch",
-    "version_range": {
-      "from": 563880,
-      "until": 573249
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] Fix connecting via abstract socket (#136466)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/488eeb3ae508221f8e476bbc9d2e9f014542862e.patch",
-    "version_range": {
-      "from": 547379,
-      "until": 573315
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] Fix Windows build (#137414)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/935bc84158e933239047de69b9edc77969b5c70c.patch",
-    "version_range": {
-      "from": 547379,
-      "until": 573330
-    }
-  },
-  {
-    "metadata": {
-      "info": [],
-      "title": "[UPSTREAM] Skip tests if socket name is longer than 107 bytes (#137405)"
-    },
-    "platforms": [
-      "android",
-      "chromiumos"
-    ],
-    "rel_patch_path": "cherry/6c78dedc14e7431aa0dd92b9dd8d35bed3e0ed7d.patch",
-    "version_range": {
-      "from": 547379,
-      "until": 573331
-    }
-  },
-  {
-    "metadata": {
+      "author": "Florian Mayer <fmayer@google.com>",
       "info": [],
       "title": "[UPSTREAM] [HWASan] fix missing BTI attribute on personality function thunks (#139138)"
     },
@@ -669,6 +320,7 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
       "title": "Add stubs and headers for nl_types APIs."
     },
@@ -684,6 +336,7 @@
   },
   {
     "metadata": {
+      "author": "Yi Kong <yikong@google.com>",
       "info": [],
       "title": "Disable integer sanitizer for __libcxx_blsr"
     },
@@ -699,6 +352,7 @@
   },
   {
     "metadata": {
+      "author": "Fangrui Song <i@maskray.me>",
       "info": [],
       "title": "[UPSTREAM] [ELF,RISCV] Fix oscillation due to call relaxation"
     },
@@ -714,6 +368,7 @@
   },
   {
     "metadata": {
+      "author": "tynasello-google <tynasello@google.com>",
       "info": [],
       "title": "[UPSTREAM] [libc++] Expand Android libc++ test config files (#142846)"
     },
@@ -729,21 +384,263 @@
   },
   {
     "metadata": {
+      "author": "Nikita Popov <npopov@redhat.com>",
       "info": [],
-      "title": "Revert [Clang][counted_by] Refactor __builtin_dynamic_object_size on FAMs (#122198)"
+      "title": "v2: [UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
     },
     "platforms": [
       "android",
       "chromiumos"
     ],
-    "rel_patch_path": "Revert-Clang-counted_by-Refactor-__builtin_dynamic_o.patch",
+    "rel_patch_path": "cherry/v2-183acdd27985afd332463e3d9fd4a2ca46d85cf1.patch",
     "version_range": {
-      "from": 563729,
-      "until": 563880
+      "from": 565817,
+      "until": 580792
     }
   },
   {
     "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Fix accessing the emergency spill slot with hazard padding (#142190)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/b5cf03033251a642b184b2e0ea6bdac171c17702.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 577444
+    }
+  },
+  {
+    "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Fix restoring callee-saves from FP with hazard padding (#143371)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/d8e8ab79773f739c602c5869f80c6c5b5962c558.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 579344
+    }
+  },
+  {
+    "metadata": {
+      "author": "Maksim Ivanov <emaxx@google.com>",
+      "info": [],
+      "title": "[UPSTREAM] [clang] Fix nondeterminism in MemberPointerType (#137910)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/0764f65a7fb06703610b33a86ca79025fa4050a4.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574242
+    }
+  },
+  {
+    "metadata": {
+      "author": "cor3ntin <corentinjabot@gmail.com>",
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Preserve CXXParenListInitExpr in TreeTransform. (#138518)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/13926e149081ca2771bdea7c08c07d92d87f7818.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574256
+    }
+  },
+  {
+    "metadata": {
+      "author": "Aaron Ballman <aaron@aaronballman.com>",
+      "info": [],
+      "title": "[UPSTREAM] [C] Handle comma operator for implicit int->enum conversions (#138752)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/b59ab701e94cce455a53358cbe5082a3efb58fbf.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574501
+    }
+  },
+  {
+    "metadata": {
+      "author": "Alexey Samsonov <vonosmas@gmail.com>",
+      "info": [],
+      "title": "[UPSTREAM] [libc][bazel] Re-enable memcpy prefetching on x86. (#138945)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/98d26b8f67e6abdac24591138f07dc34e7f0e36e.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574609
+    }
+  },
+  {
+    "metadata": {
+      "author": "Hans Wennborg <hans@chromium.org>",
+      "info": [],
+      "title": "[UPSTREAM] Revert \"[lld] Merge equivalent symbols found during ICF (#134342)\""
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/fd3fecfc0936703f2715fe6fea890e81b0b3c2ac.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575244
+    }
+  },
+  {
+    "metadata": {
+      "author": "Aaron Ballman <aaron@aaronballman.com>",
+      "info": [],
+      "title": "[UPSTREAM] [C] Fix a false-positive with tentative defn compat (#139738)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/e3f87e15910a5f1c5552fc3ef57e7dda3f68901a.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575291
+    }
+  },
+  {
+    "metadata": {
+      "author": "weiguozhi <57237827+weiguozhi@users.noreply.github.com>",
+      "info": [],
+      "title": "[UPSTREAM] [CodeGenPrepare] Make sure instruction get from SunkAddrs is before MemoryInst (#139303)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/59c6d70ed8120b8864e5f796e2bf3de5518a0ef0.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575589
+    }
+  },
+  {
+    "metadata": {
+      "author": "cor3ntin <corentinjabot@gmail.com>",
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Fix an assertion in the resolution of perfect matches (#140073)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/090f46d8d246762401c41c5486dde299382d6c90.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575615
+    }
+  },
+  {
+    "metadata": {
+      "author": "cor3ntin <corentinjabot@gmail.com>",
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Fix a regression introduced by #140073 (#140288)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/efa28338d858e1ea2bf705d50a0404bc602c8fe1.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575735
+    }
+  },
+  {
+    "metadata": {
+      "author": "Qiongsi Wu <qiongsiwu@gmail.com>",
+      "info": [],
+      "title": "[UPSTREAM] Revert \"[clang][Dependency Scanning] Report What a Module Exports during Scanning (#137421)\" (#140820)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8f4fd864033601aad99a10c2b878769b84df7537.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577150
+    }
+  },
+  {
+    "metadata": {
+      "author": "Alexander Kornienko <alexfh@google.com>",
+      "info": [],
+      "title": "[UPSTREAM] Fix an error introduced in #138518 (#142988)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f53216793e15588d65601196b7a0625f73c12cea.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577943
+    }
+  },
+  {
+    "metadata": {
+      "author": "Joseph Huber <huberjn@outlook.com>",
+      "info": [],
+      "title": "[UPSTREAM] Revert \"[HIP] use offload wrapper for non-device-only non-rdc (#132869)\" (#143432)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f5e499a3383c1e3b9f60e60151075e8d9c1c3166.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 578300
+    }
+  },
+  {
+    "metadata": {
+      "author": "Aaron Ballman <aaron@aaronballman.com>",
+      "info": [],
+      "title": "[UPSTREAM] Remove delayed typo expressions (#143423)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9eef4d1c5fa6b1bcbbe675c14ca8301d5d346f7b.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 578806
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikita Popov <npopov@redhat.com>",
       "info": [],
       "title": "[UPSTREAM] [GlobalOpt] Revert global widening transform (#144652)"
     },
@@ -751,10 +648,338 @@
       "android",
       "chromiumos"
     ],
-    "rel_patch_path": "cherry/183acdd27985afd332463e3d9fd4a2ca46d85cf1.patch",
+    "rel_patch_path": "cherry/183acdd27985afd332463e3d9fd4a2ca46d85cf1-v2.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 580792
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
+      "info": [],
+      "title": "Fix for x86 ndk sysroot define being mixed with parameter for i686 lldb build"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Fix-for-x86-ndk-sysroot-define.patch",
+    "version_range": {
+      "from": 574158,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "author": "Yutong Zhu <115899167+YutongZhuu@users.noreply.github.com>",
+      "info": [],
+      "title": "[UPSTREAM] [Clang] Separate implicit int conversion on negation sign to new diagnostic group (#139429)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/0ada5c7b1a52afb668bc42dd2d5573e5805433d1.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577453
+    }
+  },
+  {
+    "metadata": {
+      "author": "Benjamin Maxwell <benjamin.maxwell@arm.com>",
+      "info": [],
+      "title": "[UPSTREAM] [AArch64] Ensure the LR is preserved if we must call __arm_get_current_vg (#145760)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/af7166a3f126ce4e4d2a05eccc1358bd0427cf0f.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 580344
+    }
+  },
+  {
+    "metadata": {
+      "author": "Timm Baeder <tbaeder@redhat.com>",
+      "info": [],
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8.patch",
     "version_range": {
       "from": 563880,
-      "until": 580792
+      "until": 574158
+    }
+  },
+  {
+    "metadata": {
+      "author": "\"A. Jiang\" <de34@live.cn>",
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Fix padding calculation for function reference types (#142125)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/769c42f4a552a75c8c38870ddc1b50d2ea874e4e.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 577632
+    }
+  },
+  {
+    "metadata": {
+      "author": "Peter Collingbourne <peter@pcc.me.uk>",
+      "info": [],
+      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Emit __cfi_check to full LTO part of bitcode file."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ff85dbdf6b399eac7bffa13e579f0f5e6edac3c0.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 587473
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Add tests for the ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154559)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/2a83cf5d0e592890f74c5d5ff4a30ae4cf54b61b.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 587558
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Fix ABI break introduced by switching to _LIBCPP_COMPRESSED_PAIR (#154686)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f5e687d7bf49cd9fe38ba7acdeb52d4f30468dee.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 587656
+    }
+  },
+  {
+    "metadata": {
+      "author": "Akira Hatanaka <ahatanak@gmail.com>",
+      "info": [],
+      "title": "[UPSTREAM] Cap IntRange::Width to MaxWidth (#145356)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/5bbe1536dfa6f1dce8737e466c209c553d614e50.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 580366
+    }
+  },
+  {
+    "metadata": {
+      "author": "Timm Baeder <tbaeder@redhat.com>",
+      "info": [],
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8-v2.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 587658
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
+      "info": [],
+      "title": "Disable unsigned-integer-overflow checks for std::sort"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Disable-unsigned-integer-overflow-checks-for-s.patch",
+    "version_range": {
+      "from": 574158,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "author": "Peter Collingbourne <peter@pcc.me.uk>",
+      "info": [],
+      "title": "[UPSTREAM] ThinLTOBitcodeWriter: Split modules with __cfi_check and no type metadata."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/43c85afce9c25141de79da6731b1d5f8bb2491b1.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 588422
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sjoerd Meijer <smeijer@nvidia.com>",
+      "info": [],
+      "title": "[UPSTREAM] [LoopIdiomVectorize] Fix FindFirstByte successors (#156945)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/2873d9fac550a248a1c62cfc106ac31fef84fa7d.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 589350
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64] Restrict .variant_pcs directive to ELF targets (#138924)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/3aaf44f95de24339d73c0093576a4a3cc42404ad.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 575668
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [ELF] Postpone ASSERT error"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/5859863bab7fb1cd98b6028293cba6ba25f7d514.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 577064
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] Reapply \"IR: Remove uselist for constantdata (#137313)\" (#138961)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9383fb23e18bb983d0024fb956a0a724ef9eb03d.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574618
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] ValueMapper: Delete unused initializers of replaced appending globals."
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/1f38d49ebe96417e368a567efa4d650b8a9ac30f.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 597042
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [compiler-rt][AArch64] Don't use x18 in __arm_sme_save (#157802)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/149f91bad66972ad8bf0add5c79bf74055f6905a.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 590288
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Precommit tests for LUT4I `Chain` issues (NFC) (#161505)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/cd0f560cc7e88bffedc4c34e3eb3efbf00dcb3ef.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 592434
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Preserve `Chain` when selecting multi-vector LUT4Is (#161494)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/031fb7414fd6edf20e0cd7f7783666313169a0d2.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 592533
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [AArch64][SME] Disable tail calls for callees that require saving ZT0 (#165371)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/bfb54e8ba6262a509343985c018f9a8d52963734.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 595389
     }
   }
 ]

@@ -1,0 +1,53 @@
+From 0ea472ceac370abc3bbdb978034589f4109fa721 Mon Sep 17 00:00:00 2001
+From: Benjamin Maxwell <benjamin.maxwell@arm.com>
+Date: Tue, 28 Oct 2025 14:53:08 +0000
+Subject: [PATCH] [AArch64][SME] Disable tail calls for callees that require
+ saving ZT0
+
+We may need to load ZT0 after the call, so we can't perform a tail call.
+---
+ .../lib/Target/AArch64/AArch64ISelLowering.cpp |  1 +
+ llvm/test/CodeGen/AArch64/sme-zt0-state.ll     | 18 ++++++++++++++++++
+ 2 files changed, 19 insertions(+)
+
+diff --git a/llvm/lib/Target/AArch64/AArch64ISelLowering.cpp b/llvm/lib/Target/AArch64/AArch64ISelLowering.cpp
+index 4f6e3ddd18def..3088907059793 100644
+--- a/llvm/lib/Target/AArch64/AArch64ISelLowering.cpp
++++ b/llvm/lib/Target/AArch64/AArch64ISelLowering.cpp
+@@ -8589,6 +8589,7 @@ bool AArch64TargetLowering::isEligibleForTailCallOptimization(
+   SMECallAttrs CallAttrs = getSMECallAttrs(CallerF, CLI);
+   if (CallAttrs.requiresSMChange() || CallAttrs.requiresLazySave() ||
+       CallAttrs.requiresPreservingAllZAState() ||
++      CallAttrs.requiresPreservingZT0() ||
+       CallAttrs.caller().hasStreamingBody())
+     return false;
+ 
+diff --git a/llvm/test/CodeGen/AArch64/sme-zt0-state.ll b/llvm/test/CodeGen/AArch64/sme-zt0-state.ll
+index 63577e4d217a8..fd302c92d4735 100644
+--- a/llvm/test/CodeGen/AArch64/sme-zt0-state.ll
++++ b/llvm/test/CodeGen/AArch64/sme-zt0-state.ll
+@@ -274,3 +274,21 @@ define void @shared_za_new_zt0(ptr %callee) "aarch64_inout_za" "aarch64_new_zt0"
+   call void %callee() "aarch64_inout_za" "aarch64_in_zt0";
+   ret void;
+ }
++
++define void @disable_tailcallopt(ptr %callee) "aarch64_inout_zt0" nounwind {
++; CHECK-COMMON-LABEL: disable_tailcallopt:
++; CHECK-COMMON:       // %bb.0:
++; CHECK-COMMON-NEXT:    sub sp, sp, #80
++; CHECK-COMMON-NEXT:    stp x30, x19, [sp, #64] // 16-byte Folded Spill
++; CHECK-COMMON-NEXT:    mov x19, sp
++; CHECK-COMMON-NEXT:    str zt0, [x19]
++; CHECK-COMMON-NEXT:    smstop za
++; CHECK-COMMON-NEXT:    blr x0
++; CHECK-COMMON-NEXT:    smstart za
++; CHECK-COMMON-NEXT:    ldr zt0, [x19]
++; CHECK-COMMON-NEXT:    ldp x30, x19, [sp, #64] // 16-byte Folded Reload
++; CHECK-COMMON-NEXT:    add sp, sp, #80
++; CHECK-COMMON-NEXT:    ret
++  tail call void %callee()
++  ret void
++}
+-- 
+2.52.0.rc1.455.g30608eb744-goog
+

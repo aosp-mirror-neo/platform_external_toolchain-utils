@@ -25,16 +25,16 @@ def _remove_indirect_call_targets(lines):
     #   1.1: 1234 foo:111 bar:122
     #
     # Where 1.1 is the line info/discriminator, 1234 is the total number of
-    # samples seen for that line/discriminator, foo:111 is "111 of the calls here
-    # went to foo," and bar:122 is "122 of the calls here went to bar."
+    # samples seen for that line/discriminator, foo:111 is "111 of the calls
+    # here went to foo," and bar:122 is "122 of the calls here went to bar."
     call_target_re = re.compile(
         r"""
-      ^\s+                    # Top-level lines are function records.
-      \d+(?:\.\d+)?:          # Line info/discriminator
+      ^\s+                  # Top-level lines are function records.
+      \d+(?:\.\d+)?:        # Line info/discriminator
       \s+
-      \d+                     # Total sample count
+      \d+                   # Total sample count
       \s+
-      ((?:[^\s:]+:\d+\s*)+)   # Indirect call target(s)
+      ((?:[^\s:]+:\d+\s*)+) # Indirect call target(s)
       $
   """,
         re.VERBOSE,
@@ -57,7 +57,7 @@ def run(input_stream, output_stream):
         output_stream.write(line)
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -72,8 +72,8 @@ def main():
         default="/dev/stdout",
         help="File to write to. Defaults to stdout.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
-    with open(args.input) as stdin:
-        with open(args.output, "w") as stdout:
+    with open(args.input, encoding="utf-8") as stdin:
+        with open(args.output, "w", encoding="utf-8") as stdout:
             run(stdin, stdout)

@@ -12,7 +12,6 @@ These CLs make the validation of LLVM easier, and do things like:
 import argparse
 import logging
 from pathlib import Path
-from typing import List
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -112,7 +111,7 @@ def create_helper_cl_commit_in_worktree_of(
         return git_utils.commit_all_changes(worktree, COMMIT_MESSAGE)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

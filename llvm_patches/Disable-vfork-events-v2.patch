@@ -1,5 +1,5 @@
 From 5cd24994e3ffa20c3c30890d7f40fdae03beb0e7 Mon Sep 17 00:00:00 2001
-From: Emre Kultursay <emrekultursay@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Mon, 19 Sep 2022 12:55:03 +0900
 Subject: [PATCH] Disable vfork events v2
 

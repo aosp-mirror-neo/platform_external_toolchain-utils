@@ -1,5 +1,5 @@
 From 9f04550d40b2f259adace54b8fc81c9cdee6f96b Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Sat, 15 Jun 2024 00:11:11 +0000
 Subject: [PATCH] [scudo] Add baseline Scudo config for ChromeOS v2
 

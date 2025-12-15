@@ -15,7 +15,7 @@ const ANDROID_LLVM_REL_PATH: &str = "toolchain/llvm_android";
 
 // Need to checkout the upstream, rather than the local clone.
 const CROS_MAIN_BRANCH: &str = "cros/main";
-const ANDROID_MAIN_BRANCH: &str = "aosp/main";
+const ANDROID_MAIN_BRANCH: &str = "goog/main";
 const WORK_BRANCH_NAME: &str = "__patch_sync_tmp";
 
 /// Options for changes that get `repo upload`ed.

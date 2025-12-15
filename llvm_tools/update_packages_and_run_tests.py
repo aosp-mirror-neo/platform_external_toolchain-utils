@@ -17,7 +17,6 @@ import logging
 from pathlib import Path
 import subprocess
 import textwrap
-from typing import List, Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -46,7 +45,7 @@ def resolve_llvm_sha(sha_or_special: str) -> str:
     )
 
 
-def read_last_tried_sha(retry_state: Path) -> Optional[str]:
+def read_last_tried_sha(retry_state: Path) -> str | None:
     """Reads the last tried SHA from the state file."""
     try:
         with retry_state.open(encoding="utf-8") as f:
@@ -65,12 +64,12 @@ def write_last_tried_sha(retry_state: Path, sha: str):
 class UploadedCLs:
     """Listing of CL numbers uploaded by a function."""
 
-    internal: List[int]
-    external: List[int]
+    internal: list[int]
+    external: list[int]
 
 
 def upload_one_cl_to_main(
-    git_dir: Path, sha: str, remote: str, topic: Optional[str] = None
+    git_dir: Path, sha: str, remote: str, topic: str | None = None
 ) -> int:
     """Uploads exactly one SHA from `git_dir`. Returns the CL number.
 
@@ -116,7 +115,7 @@ def create_and_upload_test_helpers_cl(
 def build_manifest_commit_message(
     llvm_sha: str,
     llvm_rev: int,
-    cq_depend_external: Optional[int],
+    cq_depend_external: int | None,
 ) -> str:
     msg = textwrap.dedent(
         f"""\
@@ -136,9 +135,9 @@ def create_and_upload_manifest_cl(
     chromeos_tree: Path,
     llvm_sha: str,
     llvm_rev: int,
-    cq_depend_external: Optional[int],
+    cq_depend_external: int | None,
     dry_run: bool,
-    topic: Optional[str],
+    topic: str | None,
     tot: bool,
 ) -> int:
     """Creates & uploads the LLVM update manifest CL.
@@ -209,7 +208,7 @@ def create_and_upload_cls(
     llvm_rev: int,
     include_test_helpers: bool,
     dry_run: bool,
-    manifest_gerrit_topic: Optional[str],
+    manifest_gerrit_topic: str | None,
     tot: bool,
 ) -> UploadedCLs:
     external_cls = []
@@ -246,7 +245,7 @@ def create_and_upload_cls(
     )
 
 
-def make_gerrit_cq_dry_run_command(cls: List[int], internal: bool) -> List[str]:
+def make_gerrit_cq_dry_run_command(cls: list[int], internal: bool) -> list[str]:
     assert cls, "Can't make a dry-run command with no CLs to dry-run."
     cmd = ["gerrit"]
     if internal:
@@ -279,7 +278,7 @@ def cq_dry_run_cls(chromeos_tree: Path, cls: UploadedCLs):
         )
 
 
-def parse_opts(argv: List[str]) -> argparse.Namespace:
+def parse_opts(argv: list[str]) -> argparse.Namespace:
     """Parse command-line options."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -348,7 +347,7 @@ def parse_opts(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

@@ -12,13 +12,13 @@ import re
 import shlex
 import subprocess
 import time
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Iterable
 
 
 BuildID = int
 
 
-def _run_bb_decoding_output(command: List[str], multiline: bool = False) -> Any:
+def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
     """Runs `bb` with the `json` flag, and decodes the command's output.
 
     Args:
@@ -67,7 +67,7 @@ class ChangeListURL:
     """
 
     cl_id: int
-    patch_set: Optional[int] = None
+    patch_set: int | None = None
     internal: bool = False
 
     _URL_PARSE_RE = re.compile(
@@ -171,7 +171,29 @@ def builder_url(build_id: BuildID) -> str:
 
 
 # Used to parse the build ID from a `bb add` invocation.
-_BOT_SPAWN_BUILD_ID_RE = re.compile(r"http://ci\.chromium\.org/b/(\d+)\b")
+#
+# b/460037583: previous `bb` versions used ci.chromium.org, new ones use
+# cr-buildbucket. It's unclear if this is a permanent, one-time migration, or if
+# there's potential switching between them in the future, so just match both.
+_BOT_SPAWN_BUILD_ID_RE = re.compile(
+    r"http://"
+    r"(?:"
+    + re.escape("ci.chromium.org/b")
+    + r"|"
+    + re.escape("cr-buildbucket.appspot.com/build")
+    + r")"
+    r"/(\d+)\b"
+)
+
+
+def parse_build_id_from_bb_add_output(output: str) -> BuildID:
+    """Given `bb add` output, parses the build ID."""
+    build_ids = _BOT_SPAWN_BUILD_ID_RE.findall(output)
+    if len(build_ids) != 1:
+        logging.error("Unexpected stdout from `bb add`; got %r", output)
+        raise ValueError(f"Expected one build-id from stdout; got {build_ids}")
+
+    return BuildID(build_ids[0])
 
 
 def spawn_bot(
@@ -193,12 +215,7 @@ def spawn_bot(
         stdout=subprocess.PIPE,
     ).stdout
 
-    build_ids = _BOT_SPAWN_BUILD_ID_RE.findall(run_stdout)
-    if len(build_ids) != 1:
-        logging.error("Unexpected stdout from `bb add`; got %r", run_stdout)
-        raise ValueError("Expected one build-id from stdout; got {build_ids}")
-
-    build_id = BuildID(build_ids[0])
+    build_id = parse_build_id_from_bb_add_output(run_stdout)
     logging.info("Spawned bot: %s", builder_url(build_id))
     return build_id
 
@@ -235,7 +252,7 @@ def wait_for_bot_to_finish(
         time.sleep(check_frequency_secs)
 
 
-def fetch_builder_steps(build_id: BuildID) -> List[Any]:
+def fetch_builder_steps(build_id: BuildID) -> list[Any]:
     """Returns the JSON dict of the given builder's steps."""
     result = _run_bb_decoding_output(["get", "-steps", str(build_id)])
     # A build with no steps is functionally equivalent to a build with an empty
@@ -245,12 +262,12 @@ def fetch_builder_steps(build_id: BuildID) -> List[Any]:
 
 def fetch_cq_orchestrator_ids(
     cl: ChangeListURL,
-) -> List[BuildID]:
+) -> list[BuildID]:
     """Returns the BuildID of completed cq-orchestrator runs on a CL.
 
     Newer runs are sorted later in the list.
     """
-    results: List[Dict[str, Any]] = _run_bb_decoding_output(
+    results: list[dict[str, Any]] = _run_bb_decoding_output(
         [
             "ls",
             "-cl",
@@ -281,11 +298,11 @@ class CQOrchestratorOutput:
     # The status of the CQ builder.
     status: BuilderStatus
     # A dict of builders that this CQ builder spawned.
-    child_builders: Dict[str, BuildID]
+    child_builders: dict[str, BuildID]
 
     @classmethod
     def fetch(cls, bot_id: BuildID) -> "CQOrchestratorOutput":
-        decoded: Dict[str, Any] = _run_bb_decoding_output(
+        decoded: dict[str, Any] = _run_bb_decoding_output(
             ["get", "-steps", str(bot_id)]
         )
         results = {}
@@ -293,34 +310,31 @@ class CQOrchestratorOutput:
         # cq-orchestrator spawns builders in a series of steps. Each step has a
         # markdownified link to the builder in the summaryMarkdown for each
         # step. This loop parses those out.
-        build_url_re = re.compile(
-            re.escape("https://cr-buildbucket.appspot.com/build/") + r"(\d+)"
-        )
-        # Example step name containing a build URL:
-        # "run builds|schedule new builds|${builder_name}". `builder_name`
-        # contains no spaces, though follow-up steps with the same prefix might
-        # include spaces.
-        step_name_re = re.compile(
-            re.escape("run builds|schedule new builds|") + "([^ ]+)"
+        #
+        # We look for a step named "collect|get", and entries that look like
+        # "* [some-builder-name](https://cr-buildbucket.appspot/build/12345)".
+        name_url_re = re.compile(
+            re.escape("* [")
+            + r"([^\]]+)"
+            + re.escape("](https://cr-buildbucket.appspot.com/build/")
+            + r"(\d+)\)"
         )
         for step in decoded["steps"]:
-            step_name = step["name"]
-            m = step_name_re.fullmatch(step_name)
-            if not m:
+            if step["name"] != "collect|get":
                 continue
 
-            builder = m.group(1)
             summary = step["summaryMarkdown"]
-            ids = build_url_re.findall(summary)
-            if len(ids) != 1:
+            matches = name_url_re.findall(summary)
+            if not matches:
                 raise ValueError(
-                    f"Parsing summary of builder {builder} failed: wanted one "
-                    f"match for {build_url_re}; got {ids}. Full summary: "
-                    f"{summary!r}"
+                    "Expected at least one build in collect|get, got none"
                 )
-            if builder in results:
-                raise ValueError(f"Builder {builder} spawned multiple times?")
-            results[builder] = int(ids[0])
+            for builder, build_id in matches:
+                if builder in results:
+                    raise ValueError(
+                        f"Builder {builder} spawned multiple times?"
+                    )
+                results[builder] = int(build_id)
         status = BuilderStatus.parse(decoded["status"])
         return cls(child_builders=results, status=status)
 
@@ -334,12 +348,12 @@ class CQBoardBuilderOutput:
     # Link to artifacts produced by this builder. Not available if the builder
     # isn't yet finished, and not available if the builder failed in a weird
     # way (e.g., INFRA_ERROR)
-    artifacts_link: Optional[str]
+    artifacts_link: str | None
 
     @classmethod
     def fetch_many(
         cls, bot_ids: Iterable[BuildID]
-    ) -> List["CQBoardBuilderOutput"]:
+    ) -> list["CQBoardBuilderOutput"]:
         """Fetches CQBoardBuilderOutput for the given bots."""
         bb_output = _run_bb_decoding_output(
             ["get", "-p"] + [str(x) for x in bot_ids], multiline=True
@@ -358,7 +372,7 @@ class CQBoardBuilderOutput:
 
 def fetch_cq_orchestrator_or_board_builder(
     bot_id: BuildID,
-) -> Tuple[str, Union[CQOrchestratorOutput, CQBoardBuilderOutput]]:
+) -> tuple[str, CQOrchestratorOutput | CQBoardBuilderOutput]:
     """Figures out the builder type of bot_id, then fetches it."""
     result = _run_bb_decoding_output(["get", str(bot_id)])
     builder_name = result["builder"]["builder"]

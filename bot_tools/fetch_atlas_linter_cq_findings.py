@@ -13,7 +13,6 @@ import json
 import logging
 from pathlib import Path
 import subprocess
-from typing import Dict, List
 
 from bot_tools import bot_lints
 
@@ -30,7 +29,7 @@ def date_to_proto(date: datetime.date) -> str:
 
 def enumerate_bots(
     start_at: datetime.date, stop_at: datetime.date
-) -> List[int]:
+) -> list[int]:
     """Returns all successful bots created in the given timeframe.
 
     Args:
@@ -69,8 +68,8 @@ def enumerate_bots(
 
 
 def group_findings_by_date(
-    info: List[bot_lints.LinterBotInfo],
-) -> Dict[datetime.date, List[bot_lints.Finding]]:
+    info: list[bot_lints.LinterBotInfo],
+) -> dict[datetime.date, list[bot_lints.Finding]]:
     """Groups the given linter bots' findings by the date the bot was run on."""
     grouped = collections.defaultdict(list)
     for bot_info in info:
@@ -91,7 +90,7 @@ def asciify(s: str) -> str:
     return s.encode("ascii", "backslashreplace").decode("ascii")
 
 
-def write_findings(to_file: Path, findings: List[bot_lints.Finding]):
+def write_findings(to_file: Path, findings: list[bot_lints.Finding]):
     """Writes `findings` to `to_file` as a CSV."""
     with to_file.open("w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(
@@ -110,7 +109,7 @@ def write_findings(to_file: Path, findings: List[bot_lints.Finding]):
 
 
 def write_grouped_findings(
-    out_dir: Path, findings: Dict[datetime.date, List[bot_lints.Finding]]
+    out_dir: Path, findings: dict[datetime.date, list[bot_lints.Finding]]
 ):
     """Writes `findings` to dated subdirectories of `out_dir`.
 
@@ -142,7 +141,7 @@ def parse_date(x: str) -> datetime.date:
     return datetime.datetime.strptime(x, "%Y-%m-%d").date()
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -170,7 +169,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     opts = parse_args(argv)
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "

@@ -1,5 +1,5 @@
 From 681987a87a78e0d7f9f1ff0fb7f16da324afb893 Mon Sep 17 00:00:00 2001
-From: Yi Kong <yikong@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 1 May 2019 11:16:58 -0700
 Subject: [PATCH] Add stubs and headers for nl_types APIs.
 

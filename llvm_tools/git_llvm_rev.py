@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
-from typing import IO, Iterable, List, NamedTuple, Optional, Tuple, Union
+from typing import IO, Iterable, NamedTuple
 
 
 MAIN_BRANCH = "main"
@@ -49,9 +49,7 @@ known_llvm_rev_sha_pairs = (
 # Represents an LLVM git checkout:
 #  - |dir| is the directory of the LLVM checkout
 #  - |remote| is the name of the LLVM remote. Generally it's "origin".
-LLVMConfig = NamedTuple(
-    "LLVMConfig", (("remote", str), ("dir", Union[Path, str]))
-)
+LLVMConfig = NamedTuple("LLVMConfig", (("remote", str), ("dir", Path | str)))
 
 
 class Rev(NamedTuple("Rev", (("branch", str), ("number", int)))):
@@ -96,7 +94,7 @@ def is_git_sha(xs: str) -> bool:
     )
 
 
-def check_output(command: List[str], cwd: Union[Path, str]) -> str:
+def check_output(command: list[str], cwd: Path | str) -> str:
     """Shorthand for subprocess.check_output. Auto-decodes any stdout."""
     result = subprocess.run(
         command,
@@ -221,8 +219,8 @@ def translate_sha_to_rev(llvm_config: LLVMConfig, sha_or_ref: str) -> Rev:
 
 
 def parse_git_commit_messages(
-    stream: Union[Iterable[str], IO[str]], separator: str
-) -> Iterable[Tuple[str, str]]:
+    stream: Iterable[str] | IO[str], separator: str
+) -> Iterable[tuple[str, str]]:
     """Parses a stream of git log messages.
 
     These are expected to be in the format:
@@ -303,7 +301,7 @@ def translate_rev_to_sha_from_baseline(
     parent_sha: str,
     parent_rev: int,
     child_sha: str,
-    child_rev: Optional[int],
+    child_rev: int | None,
     want_rev: int,
     branch_name: str,
 ) -> str:
@@ -443,7 +441,7 @@ def find_root_llvm_dir(root_dir: str = ".") -> str:
     return result.strip()
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--llvm_dir",

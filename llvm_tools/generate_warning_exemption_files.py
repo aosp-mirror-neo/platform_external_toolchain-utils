@@ -18,9 +18,7 @@ Where NNN is the provided LLVM revision.
 
 import argparse
 import collections
-import dataclasses
 import datetime
-import json
 import logging
 import multiprocessing
 import multiprocessing.pool
@@ -31,16 +29,7 @@ import shutil
 import subprocess
 import tempfile
 import textwrap
-from typing import (
-    DefaultDict,
-    Dict,
-    Generator,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Tuple,
-)
+from typing import Iterable
 
 from cros_utils import gs
 from llvm_tools import cros_cls
@@ -56,217 +45,9 @@ GO_COPYRIGHT_HEADER = f"""\
 // found in the LICENSE file.
 """
 
-# This parses two kinds of errors:
-# 1. `clang-17: error: foo [-W...]`
-# 2. `/file/path:123:45: error: foo [-W...]"
-_FATAL_WARNING_RE = re.compile(
-    r"""
-    ^(?:([^:]*):\d+:\d+:\s|clang-\d+:\s)?  # clang-N or the file location
-    error:\s                               # Nonfatal warnings need not apply.
-    .*?\s+                                 # Diagnostic message.
-    \[(-W[^\][]+)\]\s*$                    # List of warnings (likely incl.
-                                           # -Werror)
-    """,
-    re.VERBOSE,
-)
-
-
-@dataclasses.dataclass(frozen=True, eq=True, order=True)
-class FatalPackageWarning:
-    """Represents a fatal warning recorded for a specific package."""
-
-    # Package this happened in.
-    package: warning_exemption.Package
-    # Warning name, without `-W`. e.g., `all`, `extra`.
-    warning_name: str
-
-
-def absolutize_path(cwd: str, p: str) -> str:
-    """Makes `p` into an absolute path, and normalizes it."""
-    return os.path.normpath(os.path.join(cwd, p))
-
-
-_BASH_STYLE_RE = re.compile(
-    # All style sequences start with ESC
-    "\x1b"
-    # Then they can be one of:
-    r"(?:"
-    # - a single character
-    r"[A-Za-z]"
-    # - a '[', then a sequence of characters terminated in 'm'
-    r"|\[[^m]*m"
-    # - a ']', then a sequence of characters terminated in '\a' (BEL)
-    r"|\][^\a]*"
-    "\a)"
-)
-
-
-def remove_bash_style_sequences(s: str) -> str:
-    """Removes all bash font style sequences from `s`."""
-    return _BASH_STYLE_RE.sub("", s)
-
-
-def scrape_fatal_warnings_from_stdout(
-    stdout: str, absolutize_with_cwd: Optional[str] = None
-) -> List[Tuple[str, str]]:
-    """Returns a list of fatal warnings scraped from `stdout`.
-
-    Args:
-        stdout: stdout to scrape
-        absolutize_with_cwd: if provided and non-None, warning paths will be
-            made absolute with `absolutize_with_cwd` being treated as CWD.
-
-    Returns:
-        A list of (full_warning_line, warning_name) for each warning in stdout.
-    """
-    warning_lines = set()
-    lines_without_style = [
-        remove_bash_style_sequences(x) for x in stdout.splitlines()
-    ]
-    for line in lines_without_style:
-        m = _FATAL_WARNING_RE.fullmatch(line)
-        if not m:
-            continue
-
-        warning_flags = m.group(2)
-        warning_flags_no_werror = [
-            x for x in warning_flags.split(",") if x != "-Werror"
-        ]
-        if len(warning_flags_no_werror) != 1:
-            raise ValueError(
-                f"Weird: parsed warnings {warning_flags_no_werror} out "
-                f"of {line}"
-            )
-
-        warning_flag = warning_flags_no_werror[0]
-        if not warning_flag.startswith("-W"):
-            raise ValueError(
-                f"Weird: parsed warning flag {warning_flag} without -W out "
-                f"of {line}"
-            )
-        warning_flag_without_w = warning_flag[2:]
-
-        fixed_line = line.strip()
-        if absolutize_with_cwd is not None:
-            if path_as_written := m.group(1):
-                assert (
-                    m.start(1) == 0
-                ), f"Warning didn't start at beginning of line in {line}"
-                fixed_path = absolutize_path(
-                    absolutize_with_cwd, path_as_written
-                )
-                fixed_line = fixed_path + line[m.end(1) :]
-
-        warning_lines.add((fixed_line, warning_flag_without_w))
-    return sorted(warning_lines)
-
-
-@dataclasses.dataclass(eq=True)
-class FatalWarningGroup:
-    """A grouping of fatal warning reports."""
-
-    # Names of warnings, e.g., `alloca`
-    warning_names: Set[str] = dataclasses.field(default_factory=set)
-    # Lines with fatal warnings, e.g.,
-    # `foo/bar:12:34: error: baz [-Werror,-Wbaz]`,
-    # with paths normalized where available.
-    warning_lines: Set[str] = dataclasses.field(default_factory=set)
-
-    def add(self, other: "FatalWarningGroup"):
-        self.warning_names |= other.warning_names
-        self.warning_lines |= other.warning_lines
-
-
-def parse_fatal_warnings_file(
-    warnings_json_file: Path,
-) -> Optional[Tuple[warning_exemption.Package, FatalWarningGroup]]:
-    logging.debug("Parsing warnings report: %s", warnings_json_file)
-    with warnings_json_file.open(encoding="utf-8") as f:
-        warnings_json = json.load(f)
-
-    # The shape of warnings_json is:
-    # {
-    #   "cwd": "/path/to/directory",
-    #   "command": ["ccache", "full", "compile", "command"],
-    #   "stdout": "stdout/stderr of the build",
-    #   "parent_process_data": [
-    #     {
-    #       "invocation": ["parent", "process", "command"],
-    #       "env": ["ENV1=", "ENV2=value", ""]
-    #     }
-    #   ]
-    # }
-    parsed_warnings = scrape_fatal_warnings_from_stdout(
-        warnings_json["stdout"], absolutize_with_cwd=warnings_json["cwd"]
-    )
-    if not parsed_warnings:
-        logging.warning(
-            "Could not scrape any fatal warning reports from %s; ignoring file",
-            warnings_json_file,
-        )
-        return None
-
-    # Hunt in parent process info for CATEGORY/PN env vars. Note that this isn't
-    # guaranteed to be in the first parent
-    for parent in warnings_json.get("parent_process_data", ()):
-        parent_env = parent.get("env", ())
-        category = ""
-        package_name = ""
-        for e in parent_env:
-            if e.startswith("CATEGORY="):
-                category = e.split("=", 1)[1]
-            elif e.startswith("PN="):
-                package_name = e.split("=", 1)[1]
-
-        if category and package_name:
-            break
-    else:
-        logging.error(
-            "No CATEGORY/PN could be inferred for %s; ignoring file",
-            warnings_json_file,
-        )
-        return None
-
-    package = warning_exemption.Package(category, package_name)
-    result_lines = {x for x, _ in parsed_warnings}
-    result_names = {x for _, x in parsed_warnings}
-    logging.debug(
-        "Parsed %d unique fatal warning(s) for %s",
-        len(result_lines),
-        warnings_json_file,
-    )
-    return package, FatalWarningGroup(result_names, result_lines)
-
-
-def find_all_warning_reports_in(root: Path) -> Generator[Path, None, None]:
-    for dirpath_str, _, filenames in os.walk(root):
-        dirpath = Path(dirpath_str)
-        for filename in filenames:
-            if filename.endswith(".json") and filename.startswith(
-                "warnings_report"
-            ):
-                yield dirpath / filename
-
-
-def parse_all_fatal_warnings(
-    warning_reports: Path,
-) -> DefaultDict[warning_exemption.Package, FatalWarningGroup]:
-    logging.info("Parsing warning reports under %s", warning_reports)
-
-    per_package_groups: DefaultDict[
-        warning_exemption.Package, FatalWarningGroup
-    ] = collections.defaultdict(FatalWarningGroup)
-    for warning_report in find_all_warning_reports_in(warning_reports):
-        parse_result = parse_fatal_warnings_file(warning_report)
-        if not parse_result:
-            continue
-        package, warnings_group = parse_result
-        per_package_groups[package].add(warnings_group)
-    return per_package_groups
-
 
 def create_exemption_comment_for_package(
-    builders: List[warning_exemption.Builder],
+    builders: list[warning_exemption.Builder],
 ) -> str:
     if not builders:
         return "// (No builder links were available for these exemptions)."
@@ -287,19 +68,23 @@ def create_exemption_comment_for_package(
 
 
 def group_warnings_per_package(
-    fatal_warnings: Dict[
-        Optional[warning_exemption.Builder],
-        Dict[warning_exemption.Package, FatalWarningGroup],
+    fatal_warnings: dict[
+        warning_exemption.Builder | None,
+        dict[warning_exemption.Package, warning_exemption.FatalWarningGroup],
     ],
-) -> Dict[
+) -> dict[
     warning_exemption.Package,
-    Tuple[FatalWarningGroup, Set[warning_exemption.Builder]],
+    tuple[warning_exemption.FatalWarningGroup, set[warning_exemption.Builder]],
 ]:
     """Converts cmd output into file-creation-friendly input."""
-    results: Dict[
+    results: dict[
         warning_exemption.Package,
-        Tuple[FatalWarningGroup, Set[warning_exemption.Builder]],
-    ] = collections.defaultdict(lambda: (FatalWarningGroup(), set()))
+        tuple[
+            warning_exemption.FatalWarningGroup, set[warning_exemption.Builder]
+        ],
+    ] = collections.defaultdict(
+        lambda: (warning_exemption.FatalWarningGroup(), set())
+    )
     for builder, package_warnings in fatal_warnings.items():
         for package, warning_group in package_warnings.items():
             result_group, builders = results[package]
@@ -311,9 +96,11 @@ def group_warnings_per_package(
 
 def create_go_file(
     llvm_revision: int,
-    per_package_warnings: Dict[
+    per_package_warnings: dict[
         warning_exemption.Package,
-        Tuple[FatalWarningGroup, Set[warning_exemption.Builder]],
+        tuple[
+            warning_exemption.FatalWarningGroup, set[warning_exemption.Builder]
+        ],
     ],
 ) -> str:
     """Creates a file that parses as Go to ignore the given warnings.
@@ -374,7 +161,7 @@ def create_go_file(
     return "".join(file_pieces)
 
 
-def canonicalize_warning_lines(warning_lines: Iterable[str]) -> List[str]:
+def canonicalize_warning_lines(warning_lines: Iterable[str]) -> list[str]:
     """Canonicalizes warning lines... somewhat.
 
     At the moment, this just replaces `/build/${board_name}` with
@@ -391,9 +178,11 @@ def canonicalize_warning_lines(warning_lines: Iterable[str]) -> List[str]:
 
 def create_yaml_file(
     go_file_name: str,
-    per_package_warnings: Dict[
+    per_package_warnings: dict[
         warning_exemption.Package,
-        Tuple[FatalWarningGroup, Set[warning_exemption.Builder]],
+        tuple[
+            warning_exemption.FatalWarningGroup, set[warning_exemption.Builder]
+        ],
     ],
 ) -> str:
     """Returns the contents of a YAML file generated from the arg."""
@@ -423,9 +212,9 @@ def create_yaml_file(
 
 def cmd_local(
     opts: argparse.Namespace,
-) -> Dict[
-    Optional[warning_exemption.Builder],
-    Dict[warning_exemption.Package, FatalWarningGroup],
+) -> dict[
+    warning_exemption.Builder | None,
+    dict[warning_exemption.Package, warning_exemption.FatalWarningGroup],
 ]:
     """Implements the `local` subcommand."""
     builder = None
@@ -435,13 +224,15 @@ def cmd_local(
             name=opts.builder_name, url=opts.builder_url
         )
 
-    fatal_warnings = parse_all_fatal_warnings(opts.warning_reports)
+    fatal_warnings = warning_exemption.parse_all_fatal_warnings(
+        opts.warning_reports
+    )
     return {builder: fatal_warnings}
 
 
 def resolve_builder_artifacts(
-    build_ids: List[int],
-) -> List[Tuple[warning_exemption.Builder, str]]:
+    build_ids: list[int],
+) -> list[tuple[warning_exemption.Builder, str]]:
     """Resolves build_ids into tuples of (builder, artifacts_gs_link).
 
     If any of the `build_ids` are cq-orchestrators, this will find their
@@ -470,8 +261,8 @@ def resolve_builder_artifacts(
             ]
 
         found_any_artifacts = False
-        for name, build_id, artifacts_link in named_builders:
-            build_url = cros_cls.builder_url(build_id)
+        for name, bid, artifacts_link in named_builders:
+            build_url = cros_cls.builder_url(bid)
             if not artifacts_link:
                 logging.warning("Ignoring %s; it had no artifacts", build_url)
                 continue
@@ -487,7 +278,7 @@ def resolve_builder_artifacts(
 
 def fetch_and_unpack_fatal_warnings_tarballs(
     tmpdir: Path, builder_artifacts: str
-) -> List[Path]:
+) -> list[Path]:
     tmpdir.mkdir(parents=True, exist_ok=True)
 
     tarball_suffix = "fatal_clang_warnings.tar.xz"
@@ -532,9 +323,9 @@ def fetch_and_unpack_fatal_warnings_tarballs(
 
 def cmd_builders(
     opts: argparse.Namespace,
-) -> Dict[
-    Optional[warning_exemption.Builder],
-    Dict[warning_exemption.Package, FatalWarningGroup],
+) -> dict[
+    warning_exemption.Builder | None,
+    dict[warning_exemption.Package, warning_exemption.FatalWarningGroup],
 ]:
     """Implements the `builders` subcommand."""
     builder_artifacts = resolve_builder_artifacts(opts.builder_id)
@@ -568,16 +359,18 @@ def cmd_builders(
                     continue
                 unpack_actions.append((builder, artifacts_url, unpack_dirs))
 
-        results: Dict[
-            Optional[warning_exemption.Builder],
-            Dict[warning_exemption.Package, FatalWarningGroup],
+        results: dict[
+            warning_exemption.Builder | None,
+            dict[
+                warning_exemption.Package, warning_exemption.FatalWarningGroup
+            ],
         ] = {}
         for builder, artifacts_url, unpack_dir_list in unpack_actions:
-            builder_results: Dict[
-                warning_exemption.Package, FatalWarningGroup
-            ] = collections.defaultdict(FatalWarningGroup)
+            builder_results: dict[
+                warning_exemption.Package, warning_exemption.FatalWarningGroup
+            ] = collections.defaultdict(warning_exemption.FatalWarningGroup)
             for unpack_dir in unpack_dir_list:
-                for package, grp in parse_all_fatal_warnings(
+                for package, grp in warning_exemption.parse_all_fatal_warnings(
                     unpack_dir
                 ).items():
                     builder_results[package].add(grp)
@@ -596,7 +389,7 @@ def cmd_builders(
     return results
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parses flags for this program."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -711,7 +504,7 @@ def go_fmt_file(contents: str) -> str:
     ).stdout
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     opts = parse_args(argv)
 
     logging.basicConfig(
@@ -730,7 +523,7 @@ def main(argv: List[str]) -> None:
     output.write_text(formatted_go_file, encoding="utf-8")
     logging.info("Generated Go file to %s.", output)
 
-    yaml_output: Optional[Path] = opts.yaml_output
+    yaml_output: Path | None = opts.yaml_output
     if not yaml_output:
         return
 

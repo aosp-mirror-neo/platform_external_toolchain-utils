@@ -1,5 +1,5 @@
 From b03f99e57e606076d1aa77e88df7a1c1a077a14e Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Jun 2024 21:29:09 +0000
 Subject: [PATCH] Disable Cast Assertion
 

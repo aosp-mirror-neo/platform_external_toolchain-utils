@@ -1,0 +1,433 @@
+From 8f4fd864033601aad99a10c2b878769b84df7537 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Thu, 29 May 2025 11:11:31 -0700
+Subject: [PATCH] Revert "[clang][Dependency Scanning] Report What a Module
+ Exports during Scanning (#137421)" (#140820)
+
+This reverts commit ea1bfbf3f6399b7d2d840722f0e87542d00f6a35.
+
+The commit did not solve the fundamental issue we need to handle and is
+no longer necessary.
+
+rdar://144794793
+---
+ .../DependencyScanning/ModuleDepCollector.h   |  30 ++--
+ .../DependencyScanning/ModuleDepCollector.cpp |  65 ++++-----
+ clang/test/ClangScanDeps/export.c             | 133 ------------------
+ clang/test/ClangScanDeps/optimize-vfs-pch.m   |   3 +-
+ clang/tools/clang-scan-deps/ClangScanDeps.cpp |  26 +---
+ 5 files changed, 41 insertions(+), 216 deletions(-)
+ delete mode 100644 clang/test/ClangScanDeps/export.c
+
+diff --git a/clang/include/clang/Tooling/DependencyScanning/ModuleDepCollector.h b/clang/include/clang/Tooling/DependencyScanning/ModuleDepCollector.h
+index 06717a64c9a7..d2d0d56e5212 100644
+--- a/clang/include/clang/Tooling/DependencyScanning/ModuleDepCollector.h
++++ b/clang/include/clang/Tooling/DependencyScanning/ModuleDepCollector.h
+@@ -178,25 +178,12 @@ struct ModuleDeps {
+   /// on, not including transitive dependencies.
+   std::vector<PrebuiltModuleDep> PrebuiltModuleDeps;
+ 
+-  /// This struct contains information about a single dependency.
+-  struct DepInfo {
+-    /// Identifies the dependency.
+-    ModuleID ID;
+-
+-    /// Indicates if the module that has this dependency exports it or not.
+-    bool Exported = false;
+-
+-    bool operator<(const DepInfo &Other) const {
+-      return std::tie(ID, Exported) < std::tie(Other.ID, Other.Exported);
+-    }
+-  };
+-
+-  /// A list of DepsInfo containing information about modules this module
+-  /// directly depends on, not including transitive dependencies.
++  /// A list of module identifiers this module directly depends on, not
++  /// including transitive dependencies.
+   ///
+   /// This may include modules with a different context hash when it can be
+   /// determined that the differences are benign for this compilation.
+-  std::vector<ModuleDeps::DepInfo> ClangModuleDeps;
++  std::vector<ModuleID> ClangModuleDeps;
+ 
+   /// The set of libraries or frameworks to link against when
+   /// an entity from this module is used.
+@@ -283,8 +270,7 @@ private:
+                           llvm::DenseSet<const Module *> &AddedModules);
+ 
+   /// Add discovered module dependency for the given module.
+-  void addOneModuleDep(const Module *M, bool Exported, const ModuleID ID,
+-                       ModuleDeps &MD);
++  void addOneModuleDep(const Module *M, const ModuleID ID, ModuleDeps &MD);
+ };
+ 
+ /// Collects modular and non-modular dependencies of the main file by attaching
+@@ -366,16 +352,16 @@ private:
+ 
+   /// Collect module map files for given modules.
+   llvm::DenseSet<const FileEntry *>
+-  collectModuleMapFiles(ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const;
++  collectModuleMapFiles(ArrayRef<ModuleID> ClangModuleDeps) const;
+ 
+   /// Add module map files to the invocation, if needed.
+   void addModuleMapFiles(CompilerInvocation &CI,
+-                         ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const;
++                         ArrayRef<ModuleID> ClangModuleDeps) const;
+   /// Add module files (pcm) to the invocation, if needed.
+   void addModuleFiles(CompilerInvocation &CI,
+-                      ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const;
++                      ArrayRef<ModuleID> ClangModuleDeps) const;
+   void addModuleFiles(CowCompilerInvocation &CI,
+-                      ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const;
++                      ArrayRef<ModuleID> ClangModuleDeps) const;
+ 
+   /// Add paths that require looking up outputs to the given dependencies.
+   void addOutputPaths(CowCompilerInvocation &CI, ModuleDeps &Deps);
+diff --git a/clang/lib/Tooling/DependencyScanning/ModuleDepCollector.cpp b/clang/lib/Tooling/DependencyScanning/ModuleDepCollector.cpp
+index 45901cbcedcb..eb674246e2d5 100644
+--- a/clang/lib/Tooling/DependencyScanning/ModuleDepCollector.cpp
++++ b/clang/lib/Tooling/DependencyScanning/ModuleDepCollector.cpp
+@@ -389,10 +389,10 @@ ModuleDepCollector::getInvocationAdjustedForModuleBuildWithoutOutputs(
+ }
+ 
+ llvm::DenseSet<const FileEntry *> ModuleDepCollector::collectModuleMapFiles(
+-    ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const {
++    ArrayRef<ModuleID> ClangModuleDeps) const {
+   llvm::DenseSet<const FileEntry *> ModuleMapFiles;
+-  for (const auto &Info : ClangModuleDeps) {
+-    ModuleDeps *MD = ModuleDepsByID.lookup(Info.ID);
++  for (const ModuleID &MID : ClangModuleDeps) {
++    ModuleDeps *MD = ModuleDepsByID.lookup(MID);
+     assert(MD && "Inconsistent dependency info");
+     // TODO: Track ClangModuleMapFile as `FileEntryRef`.
+     auto FE = ScanInstance.getFileManager().getOptionalFileRef(
+@@ -404,23 +404,21 @@ llvm::DenseSet<const FileEntry *> ModuleDepCollector::collectModuleMapFiles(
+ }
+ 
+ void ModuleDepCollector::addModuleMapFiles(
+-    CompilerInvocation &CI,
+-    ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const {
++    CompilerInvocation &CI, ArrayRef<ModuleID> ClangModuleDeps) const {
+   if (Service.shouldEagerLoadModules())
+     return; // Only pcm is needed for eager load.
+ 
+-  for (const auto &Info : ClangModuleDeps) {
+-    ModuleDeps *MD = ModuleDepsByID.lookup(Info.ID);
++  for (const ModuleID &MID : ClangModuleDeps) {
++    ModuleDeps *MD = ModuleDepsByID.lookup(MID);
+     assert(MD && "Inconsistent dependency info");
+     CI.getFrontendOpts().ModuleMapFiles.push_back(MD->ClangModuleMapFile);
+   }
+ }
+ 
+ void ModuleDepCollector::addModuleFiles(
+-    CompilerInvocation &CI,
+-    ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const {
+-  for (const auto &Info : ClangModuleDeps) {
+-    ModuleDeps *MD = ModuleDepsByID.lookup(Info.ID);
++    CompilerInvocation &CI, ArrayRef<ModuleID> ClangModuleDeps) const {
++  for (const ModuleID &MID : ClangModuleDeps) {
++    ModuleDeps *MD = ModuleDepsByID.lookup(MID);
+     std::string PCMPath =
+         Controller.lookupModuleOutput(*MD, ModuleOutputKind::ModuleFile);
+ 
+@@ -428,15 +426,14 @@ void ModuleDepCollector::addModuleFiles(
+       CI.getFrontendOpts().ModuleFiles.push_back(std::move(PCMPath));
+     else
+       CI.getHeaderSearchOpts().PrebuiltModuleFiles.insert(
+-          {Info.ID.ModuleName, std::move(PCMPath)});
++          {MID.ModuleName, std::move(PCMPath)});
+   }
+ }
+ 
+ void ModuleDepCollector::addModuleFiles(
+-    CowCompilerInvocation &CI,
+-    ArrayRef<ModuleDeps::DepInfo> ClangModuleDeps) const {
+-  for (const auto &Info : ClangModuleDeps) {
+-    ModuleDeps *MD = ModuleDepsByID.lookup(Info.ID);
++    CowCompilerInvocation &CI, ArrayRef<ModuleID> ClangModuleDeps) const {
++  for (const ModuleID &MID : ClangModuleDeps) {
++    ModuleDeps *MD = ModuleDepsByID.lookup(MID);
+     std::string PCMPath =
+         Controller.lookupModuleOutput(*MD, ModuleOutputKind::ModuleFile);
+ 
+@@ -444,7 +441,7 @@ void ModuleDepCollector::addModuleFiles(
+       CI.getMutFrontendOpts().ModuleFiles.push_back(std::move(PCMPath));
+     else
+       CI.getMutHeaderSearchOpts().PrebuiltModuleFiles.insert(
+-          {Info.ID.ModuleName, std::move(PCMPath)});
++          {MID.ModuleName, std::move(PCMPath)});
+   }
+ }
+ 
+@@ -474,10 +471,10 @@ void ModuleDepCollector::applyDiscoveredDependencies(CompilerInvocation &CI) {
+         CI.getFrontendOpts().ModuleMapFiles.emplace_back(
+             CurrentModuleMap->getNameAsRequested());
+ 
+-    SmallVector<ModuleDeps::DepInfo> DirectDeps;
++    SmallVector<ModuleID> DirectDeps;
+     for (const auto &KV : ModularDeps)
+       if (DirectModularDeps.contains(KV.first))
+-        DirectDeps.push_back({KV.second->ID, /* Exported = */ false});
++        DirectDeps.push_back(KV.second->ID);
+ 
+     // TODO: Report module maps the same way it's done for modular dependencies.
+     addModuleMapFiles(CI, DirectDeps);
+@@ -600,9 +597,9 @@ static std::string getModuleContextHash(const ModuleDeps &MD,
+   // example, case-insensitive paths to modulemap files. Usually such a case
+   // would indicate a missed optimization to canonicalize, but it may be
+   // difficult to canonicalize all cases when there is a VFS.
+-  for (const auto &Info : MD.ClangModuleDeps) {
+-    HashBuilder.add(Info.ID.ModuleName);
+-    HashBuilder.add(Info.ID.ContextHash);
++  for (const auto &ID : MD.ClangModuleDeps) {
++    HashBuilder.add(ID.ModuleName);
++    HashBuilder.add(ID.ContextHash);
+   }
+ 
+   HashBuilder.add(EagerLoadModules);
+@@ -926,10 +923,9 @@ void ModuleDepCollectorPP::addAllSubmoduleDeps(
+   });
+ }
+ 
+-void ModuleDepCollectorPP::addOneModuleDep(const Module *M, bool Exported,
+-                                           const ModuleID ID, ModuleDeps &MD) {
+-  MD.ClangModuleDeps.push_back({ID, Exported});
+-
++void ModuleDepCollectorPP::addOneModuleDep(const Module *M, const ModuleID ID,
++                                           ModuleDeps &MD) {
++  MD.ClangModuleDeps.push_back(ID);
+   if (MD.IsInStableDirectories)
+     MD.IsInStableDirectories = MDC.ModularDeps[M]->IsInStableDirectories;
+ }
+@@ -937,19 +933,12 @@ void ModuleDepCollectorPP::addOneModuleDep(const Module *M, bool Exported,
+ void ModuleDepCollectorPP::addModuleDep(
+     const Module *M, ModuleDeps &MD,
+     llvm::DenseSet<const Module *> &AddedModules) {
+-  SmallVector<Module *> ExportedModulesVector;
+-  M->getExportedModules(ExportedModulesVector);
+-  llvm::DenseSet<const Module *> ExportedModulesSet(
+-      ExportedModulesVector.begin(), ExportedModulesVector.end());
+   for (const Module *Import : M->Imports) {
+-    const Module *ImportedTopLevelModule = Import->getTopLevelModule();
+-    if (ImportedTopLevelModule != M->getTopLevelModule() &&
++    if (Import->getTopLevelModule() != M->getTopLevelModule() &&
+         !MDC.isPrebuiltModule(Import)) {
+-      if (auto ImportID = handleTopLevelModule(ImportedTopLevelModule))
+-        if (AddedModules.insert(ImportedTopLevelModule).second) {
+-          bool Exported = ExportedModulesSet.contains(ImportedTopLevelModule);
+-          addOneModuleDep(ImportedTopLevelModule, Exported, *ImportID, MD);
+-        }
++      if (auto ImportID = handleTopLevelModule(Import->getTopLevelModule()))
++        if (AddedModules.insert(Import->getTopLevelModule()).second)
++          addOneModuleDep(Import->getTopLevelModule(), *ImportID, MD);
+     }
+   }
+ }
+@@ -973,7 +962,7 @@ void ModuleDepCollectorPP::addAffectingClangModule(
+         !MDC.isPrebuiltModule(Affecting)) {
+       if (auto ImportID = handleTopLevelModule(Affecting))
+         if (AddedModules.insert(Affecting).second)
+-          addOneModuleDep(Affecting, /* Exported = */ false, *ImportID, MD);
++          addOneModuleDep(Affecting, *ImportID, MD);
+     }
+   }
+ }
+diff --git a/clang/test/ClangScanDeps/export.c b/clang/test/ClangScanDeps/export.c
+deleted file mode 100644
+index a68747c9e6fe..000000000000
+--- a/clang/test/ClangScanDeps/export.c
++++ /dev/null
+@@ -1,133 +0,0 @@
+-// Test correctly reporting what a module exports during dependency scanning.
+-// Module A depends on modules B, C and D, but only exports B and C.
+-// Module E depends on modules B, C and D, and exports all of them.
+-
+-// RUN: rm -rf %t
+-// RUN: split-file %s %t
+-// RUN: sed -e "s|DIR|%/t|g" %t/cdb.json.template > %t/cdb.json
+-// RUN: clang-scan-deps -compilation-database \
+-// RUN:   %t/cdb.json -format experimental-full > %t/deps.db
+-// RUN: cat %t/deps.db | sed 's:\\\\\?:/:g' | FileCheck %s
+-
+-//--- cdb.json.template
+-[
+-    {
+-      "directory": "DIR",
+-      "command": "clang -c DIR/test.c -I DIR/AH -I DIR/BH -I DIR/CH -I DIR/DH -I DIR/EH -fmodules -fmodules-cache-path=DIR/cache",
+-      "file": "DIR/test.c"
+-    },
+-]
+-
+-//--- AH/A.h
+-#include "B.h"
+-#include "C.h"
+-#include "D.h"
+-
+-int funcA();
+-
+-//--- AH/module.modulemap
+-module A {
+-    header "A.h"
+-
+-    export B
+-    export C
+-}
+-
+-//--- BH/B.h
+-//--- BH/module.modulemap
+-module B {
+-    header "B.h"
+-}
+-
+-//--- CH/C.h
+-//--- CH/module.modulemap
+-module C {
+-    header "C.h"
+-}
+-
+-//--- DH/D.h
+-//--- DH/module.modulemap
+-module D {
+-    header "D.h"
+-}
+-
+-//--- EH/E.h
+-#include "B.h"
+-#include "C.h"
+-#include "D.h"
+-
+-//--- EH/module.modulemap
+-module E {
+-    header "E.h"
+-    export *
+-}
+-
+-//--- test.c
+-#include "A.h"
+-#include "E.h"
+-
+-int test1() {
+-  return funcA();
+-}
+-
+-// CHECK:      {
+-// CHECK-NEXT:   "modules": [
+-// CHECK-NEXT:         {
+-// CHECK-NEXT:           "clang-module-deps": [
+-// CHECK-NEXT:             {
+-// CHECK-NEXT:               "context-hash": "[[HASH_MOD_B:.*]]",
+-// CHECK-NEXT:               "module-name": "B",
+-// CHECK-NEXT:               "exported": "true"
+-// CHECK-NEXT:             },
+-// CHECK-NEXT:             {
+-// CHECK-NEXT:               "context-hash": "[[HASH_MOD_C:.*]]",
+-// CHECK-NEXT:               "module-name": "C",
+-// CHECK-NEXT:               "exported": "true"
+-// CHECK-NEXT:             },
+-// CHECK-NEXT:             {
+-// CHECK-NEXT:               "context-hash": "[[HASH_MOD_D:.*]]",
+-// CHECK-NEXT:               "module-name": "D"
+-// CHECK-NEXT:             }
+-// CHECK-NEXT:           ],
+-// CHECK-NEXT:           "clang-modulemap-file":{{.*}},
+-// CHECK-NEXT:           "command-line": [
+-// CHECK:                 ],
+-// CHECK:                "name": "A"
+-// CHECK-NEXT:       }
+-// CHECK:            {
+-// CHECK:                 "name": "B"
+-// CHECK:            }
+-// CHECK:            {
+-// CHECK:                 "name": "C"
+-// CHECK:            }
+-// CHECK:            {
+-// CHECK:                 "name": "D"
+-// CHECK:            }
+-// CHECK:            {
+-// CHECK-NEXT:           "clang-module-deps": [
+-// CHECK-NEXT:             {
+-// CHECK-NEXT:               "context-hash": "[[HASH_MOD_B]]",
+-// CHECK-NEXT:               "module-name": "B",
+-// CHECK-NEXT:               "exported": "true"
+-// CHECK-NEXT:             },
+-// CHECK-NEXT:             {
+-// CHECK-NEXT:               "context-hash": "[[HASH_MOD_C]]",
+-// CHECK-NEXT:               "module-name": "C",
+-// CHECK-NEXT:               "exported": "true"
+-// CHECK-NEXT:             },
+-// CHECK-NEXT:             {
+-// CHECK-NEXT:               "context-hash": "[[HASH_MOD_D]]",
+-// CHECK-NEXT:               "module-name": "D",
+-// CHECK-NEXT:               "exported": "true"
+-// CHECK-NEXT:             }
+-// CHECK-NEXT:           ],
+-// CHECK-NEXT:           "clang-modulemap-file":{{.*}},
+-// CHECK-NEXT:           "command-line": [
+-// CHECK:                 ],
+-// CHECK:                "name": "E"
+-// CHECK-NEXT:       }
+-// CHECK:   ]
+-// CHECK:   }
+-
+-
+-
+diff --git a/clang/test/ClangScanDeps/optimize-vfs-pch.m b/clang/test/ClangScanDeps/optimize-vfs-pch.m
+index 190a0509644a..0b5cb08d365e 100644
+--- a/clang/test/ClangScanDeps/optimize-vfs-pch.m
++++ b/clang/test/ClangScanDeps/optimize-vfs-pch.m
+@@ -54,8 +54,7 @@
+ // CHECK-NEXT:       "clang-module-deps": [
+ // CHECK-NEXT:         {
+ // CHECK-NEXT:           "context-hash": "{{.*}}",
+-// CHECK-NEXT:           "module-name": "E",
+-// CHECK-NEXT:           "exported": "true"
++// CHECK-NEXT:           "module-name": "E"
+ // CHECK-NEXT:         }
+ // CHECK-NEXT:       ],
+ // CHECK-NEXT:       "clang-modulemap-file": "[[PREFIX]]/modules/D/module.modulemap",
+diff --git a/clang/tools/clang-scan-deps/ClangScanDeps.cpp b/clang/tools/clang-scan-deps/ClangScanDeps.cpp
+index c17eb9dcadfd..921ba7aadd67 100644
+--- a/clang/tools/clang-scan-deps/ClangScanDeps.cpp
++++ b/clang/tools/clang-scan-deps/ClangScanDeps.cpp
+@@ -353,32 +353,16 @@ static auto toJSONStrings(llvm::json::OStream &JOS, Container &&Strings) {
+   };
+ }
+ 
+-static auto toJSONModuleID(llvm::json::OStream &JOS, StringRef ContextHash,
+-                           StringRef ModuleName, bool Exported) {
+-  return JOS.object([&] {
+-    JOS.attribute("context-hash", StringRef(ContextHash));
+-    JOS.attribute("module-name", StringRef(ModuleName));
+-    if (Exported)
+-      JOS.attribute("exported", StringRef("true"));
+-  });
+-}
+-
+ // Technically, we don't need to sort the dependency list to get determinism.
+ // Leaving these be will simply preserve the import order.
+ static auto toJSONSorted(llvm::json::OStream &JOS, std::vector<ModuleID> V) {
+   llvm::sort(V);
+   return [&JOS, V = std::move(V)] {
+-    for (const auto &MID : V)
+-      toJSONModuleID(JOS, MID.ContextHash, MID.ModuleName, false);
+-  };
+-}
+-
+-static auto toJSONSorted(llvm::json::OStream &JOS,
+-                         std::vector<ModuleDeps::DepInfo> V) {
+-  llvm::sort(V);
+-  return [&JOS, V = std::move(V)] {
+-    for (const ModuleDeps::DepInfo &MID : V)
+-      toJSONModuleID(JOS, MID.ID.ContextHash, MID.ID.ModuleName, MID.Exported);
++    for (const ModuleID &MID : V)
++      JOS.object([&] {
++        JOS.attribute("context-hash", StringRef(MID.ContextHash));
++        JOS.attribute("module-name", StringRef(MID.ModuleName));
++      });
+   };
+ }
+ 
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

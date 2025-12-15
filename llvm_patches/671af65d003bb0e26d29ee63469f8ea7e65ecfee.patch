@@ -1,5 +1,5 @@
 From 671af65d003bb0e26d29ee63469f8ea7e65ecfee Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 22 Sep 2023 17:31:18 +0000
 Subject: [PATCH] Revert "add_tablegen: Quick fix to reflect LLVM_TABLEGEN to
  llvm-min-tblgen"

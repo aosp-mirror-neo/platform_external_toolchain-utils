@@ -4,14 +4,17 @@
 
 """Utilities for interacting with gs://."""
 
+import contextlib
 import dataclasses
 import datetime
+import io
 import logging
 import re
 import shlex
 import shutil
 import subprocess
-from typing import List, Optional
+import tempfile
+from typing import Generator, IO
 
 
 # Determine which gsutil to use.
@@ -26,7 +29,7 @@ class GsEntry:
 
     # When this was last modified (or created). `None` if the entry is a
     # directory.
-    last_modified: Optional[datetime.datetime]
+    last_modified: datetime.datetime | None
     # The full gs:// path to the artifact.
     gs_path: str
 
@@ -38,7 +41,7 @@ def _datetime_from_gs_time(timestamp_str: str) -> datetime.datetime:
     ).replace(tzinfo=datetime.timezone.utc)
 
 
-def _parse_ls_output(stdout: str) -> List[GsEntry]:
+def _parse_ls_output(stdout: str) -> list[GsEntry]:
     """Parses output of `gsutil ls`."""
     stdout_lines = stdout.splitlines()
     # Ignore the last line, since that's always "TOTAL:"
@@ -79,7 +82,7 @@ def _parse_ls_output(stdout: str) -> List[GsEntry]:
     return results
 
 
-def ls(gs_url: str) -> List[GsEntry]:
+def ls(gs_url: str) -> list[GsEntry]:
     """Runs `gsutil ls` on the given `path`.
 
     Globs are forwarded to gs://
@@ -111,3 +114,133 @@ def ls(gs_url: str) -> List[GsEntry]:
         result.check_returncode()
         assert False, "unreachable"
     return _parse_ls_output(result.stdout)
+
+
+# Please keep this subclass around even if nothing matches on it; its name
+# is much more clear and actionable than the error that `gsutil` writes to
+# stderr if it refuses to overwrite a file.
+class GsutilOverwriteExistingFileError(subprocess.CalledProcessError):
+    """Raised if gsutil refused to overwrite a specific file."""
+
+
+@contextlib.contextmanager
+def streaming_upload_to(
+    destination: str, overwrite: bool = False
+) -> Generator[IO[bytes], None, None]:
+    """Allows you to stream a file to gs at `destination`.
+
+    If an exception is thrown while in the contextmanager, the upload is
+    aborted.
+
+    The upload is both all-or-nothing and atomic: no intermediate state is
+    ever exposed, and if the upload is aborted, clients never observe the
+    attempt to upload.
+
+    Examples:
+        >>> with streaming_upload_to("gs://bucket/does/not/exist") as stream:
+        ...   json.dump(my_object, stream)
+
+    Raises:
+        subprocess.CalledProcessError if the `gsutil` upload failed.
+        GsutilOverwriteExistingFileError if the upload failed because
+          `overwrite` is False, and the file already exists on gs://.
+    """
+    cmd = [GSUTIL]
+    if not overwrite:
+        # This flag has the command fail if we attempt to overwrite an existing
+        # file. This is in contrast to `gsutil cp -n`, which just logs a message
+        # about skipping the file & exits successfully.
+        cmd += ("-h", "x-goog-if-generation-match: 0")
+    cmd += ("cp", "-", destination)
+
+    # gs' stdout/stderr is piped to a temp file, so we don't have to worry about
+    # spawning a thread or something to buffer it.
+    with tempfile.TemporaryFile(prefix="gs_streaming_upload") as stdstreams:
+        with subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=stdstreams,
+            stderr=stdstreams,
+        ) as proc:
+            stdin = proc.stdin
+            assert stdin  # assures mypy that stdin cannot be None
+
+            try:
+                yield stdin
+            except:
+                logging.warning(
+                    "Exception caught during upload to %s; aborting upload...",
+                    destination,
+                )
+                # Kill `gs` if something was raised; we are very likely to not
+                # want to commit what was uploaded, and gs commits the upload
+                # when `stdin` gets closed.
+                proc.kill()
+                # Wait before closing stdin. If killing takes more than a few
+                # seconds, something went wrong.
+                proc.wait(timeout=5)
+                # Since there's some other error that motivated this, don't
+                # print `stdstreams`.
+                raise
+
+            stdin.close()
+            returncode = proc.wait()
+
+            # Seek is required because the child wrote to this file, which
+            # advanced our fd's file offset.
+            stdstreams.seek(0)
+            stdout_and_stderr = stdstreams.read().decode(
+                encoding="utf-8", errors="replace"
+            )
+
+            if not returncode:
+                logging.info(
+                    "gsutil upload to %s output: %s",
+                    destination,
+                    stdout_and_stderr,
+                )
+                return
+
+            if (
+                overwrite
+                # `ResumableUploadAbortException: 412` means that the
+                # precondition we specified above via `-h` failed, AKA the file
+                # exists.
+                or "ResumableUploadAbortException: 412" not in stdout_and_stderr
+            ):
+                logging.error(
+                    "gsutil upload to %s failed; output: %s",
+                    destination,
+                    stdout_and_stderr,
+                )
+                raise subprocess.CalledProcessError(
+                    returncode, cmd, stdout_and_stderr
+                )
+            # Don't write stdout_and_stderr in this case; it's likely to just
+            # add noise.
+            raise GsutilOverwriteExistingFileError(
+                returncode, cmd, stdout_and_stderr
+            )
+
+
+@contextlib.contextmanager
+def streaming_encoded_upload_to(
+    destination: str, encoding: str = "utf-8", overwrite: bool = False
+) -> Generator[IO[str], None, None]:
+    """`streaming_upload_to`, but wrapped to produce an IO[str]."""
+    with streaming_upload_to(destination, overwrite=overwrite) as sink:
+        # Subtle: this can't just be `yield io.TextIOWrapper(...)`
+        # - `io.TextIOWrapper` will `close()` the underlying stream on `__del__`
+        # - If the caller `raise`s and doesn't hold a reference to the wrapper,
+        #   this means that stdin for gs may get closed right before we
+        #   `kill()` it.
+        # - This means there's a race between the `close()` committing the gs
+        #   write, and the `kill()` aborting it.
+        #
+        # `detach()` solves these issues by keeping `close()`'s responsibility
+        # with `streaming_upload_to()`
+        w = io.TextIOWrapper(sink, encoding=encoding)
+        try:
+            yield w
+        finally:
+            w.detach()

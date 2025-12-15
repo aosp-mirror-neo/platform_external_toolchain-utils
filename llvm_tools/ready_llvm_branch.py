@@ -25,7 +25,7 @@ import logging
 from pathlib import Path
 import shlex
 import subprocess
-from typing import Callable, List
+from typing import Callable
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -100,7 +100,7 @@ def _maybe_upload_for_review(
     git_utils.upload_to_gerrit(llvm_src_dir, **kwargs)
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse passed in argv list."""
 
     parser = argparse.ArgumentParser(
@@ -209,7 +209,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return args
 
 
-def main(sys_argv: List[str]) -> None:
+def main(sys_argv: list[str]) -> None:
     """Entry point."""
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "

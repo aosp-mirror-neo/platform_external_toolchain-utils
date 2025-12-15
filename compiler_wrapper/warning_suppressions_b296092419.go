@@ -12,7 +12,7 @@ func warningSuppressionsForLLVM_b296092419(packageNameAndCategory string) []stri
 		return []string{"-Wno-error=implicit-function-declaration"}
 	case "dev-util/bazel":
 		return []string{"-Wno-implicit-function-declaration"}
-	case "media-libs/libcamera-mtkisp7", "media-libs/libcamera-upstream":
+	case "media-libs/libcamera-mtkisp7", "media-libs/libcamera-upstream", "media-libs/libcamera-reven":
 		return []string{"-Wno-vla-cxx-extension"}
 
 	// Automatically suppressed.

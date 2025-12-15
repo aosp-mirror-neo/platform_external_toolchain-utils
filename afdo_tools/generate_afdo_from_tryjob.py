@@ -11,7 +11,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import List
 
 
 _CREATE_LLVM_PROF = "create_llvm_prof"
@@ -107,7 +106,7 @@ def _tryjob_arg(tryjob_arg):
     return _GS_PREFIX + chell_path + tryjob_arg
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--perf_profile",

@@ -17,10 +17,9 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
-from typing import Dict, List
 
 
-def fetch_all_sdk_manifest_paths() -> List[str]:
+def fetch_all_sdk_manifest_paths() -> list[str]:
     """Fetches all paths of SDK manifests; newer = later in the return value."""
     results = subprocess.run(
         ["gsutil", "ls", "gs://chromiumos-sdk/cros-sdk-20??.*.Manifest"],
@@ -32,7 +31,7 @@ def fetch_all_sdk_manifest_paths() -> List[str]:
     return sorted(x.strip() for x in results.splitlines())
 
 
-def fetch_manifests_into(into_dir: Path, manifests: List[str]):
+def fetch_manifests_into(into_dir: Path, manifests: list[str]):
     # Wrap this in a `try` block because gsutil likes to print to stdout *and*
     # stderr even on success, so we silence them & only print on failure.
     try:
@@ -54,7 +53,7 @@ def fetch_manifests_into(into_dir: Path, manifests: List[str]):
         logging.exception("gsutil failed; output:\n%s", e.stdout)
 
 
-def load_manifest_versions(manifest: Path) -> Dict[str, str]:
+def load_manifest_versions(manifest: Path) -> dict[str, str]:
     with manifest.open(encoding="utf-8") as f:
         raw_versions = json.load(f)
 
@@ -64,7 +63,7 @@ def load_manifest_versions(manifest: Path) -> Dict[str, str]:
     return {k: v[0][0] for k, v in raw_versions["packages"].items()}
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -80,7 +79,7 @@ def main():
         help="Number of recent manifests to fetch info about. 0 means "
         "unlimited.",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     is_debug = args.debug
     logging.basicConfig(level=logging.DEBUG if is_debug else logging.INFO)

@@ -1,5 +1,5 @@
 From e367fc303d6998af2cd2542ca052fa9b122588de Mon Sep 17 00:00:00 2001
-From: George Burgess IV <gbiv@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 9 Apr 2025 09:31:42 -0600
 Subject: [PATCH] cros: add user-enumeration patch
 

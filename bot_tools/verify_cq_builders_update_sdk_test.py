@@ -49,14 +49,13 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
     def test_no_error_if_ignored_child_lacks_step(
         self, mock_fetch_builder_steps, mock_cq_orch_fetch
     ):
-        ignore_builder = verify_update_sdk.IGNORE_BUILDERS[0]
-
         mock_cq_orch_fetch.side_effect = [
             cros_cls.CQOrchestratorOutput(
                 status=cros_cls.BuilderStatus.SUCCESS,
                 child_builders={
                     "builder_a": 101,
-                    ignore_builder: 102,
+                    "chromite-cq": 102,
+                    "brya-bazel-lite-cq": 103,
                 },
             )
         ]
@@ -66,11 +65,12 @@ class InspectAndVerifyCqOrchestratorTests(unittest.TestCase):
                 {"name": verify_update_sdk.TARGET_STEP_NAME},
             ],
             [{"name": "other_step"}],
+            [{"name": "other_step"}],
         ]
 
         self.assertTrue(
             verify_update_sdk._inspect_and_verify_cq_orchestrator(
-                build_id=100, min_expected_child_builders=2
+                build_id=100, min_expected_child_builders=3
             )
         )
 

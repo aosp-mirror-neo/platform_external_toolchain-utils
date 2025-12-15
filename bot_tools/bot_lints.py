@@ -9,7 +9,6 @@ import datetime
 import json
 import logging
 import subprocess
-from typing import List
 
 
 UPLOAD_LINTER_FINDINGS_STEP_NAME = "upload linter findings"
@@ -33,10 +32,10 @@ class LinterBotInfo:
     """Info about a single linter bot invocation."""
 
     create_time: datetime.datetime
-    findings: List[Finding]
+    findings: list[Finding]
 
 
-def fetch_bot_findings(build_id: int) -> List[Finding]:
+def fetch_bot_findings(build_id: int) -> list[Finding]:
     """Fetches the findings associated with the given build ID.
 
     It's up to the caller to verify that the build ID _has_ findings; if not,

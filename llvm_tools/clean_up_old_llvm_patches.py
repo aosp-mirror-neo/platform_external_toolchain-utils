@@ -13,7 +13,6 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import List
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -139,7 +138,7 @@ def find_android_llvm_version(android_toolchain_tree: Path) -> int:
     return int(match.group(1))
 
 
-def get_opts(argv: List[str]) -> argparse.Namespace:
+def get_opts(argv: list[str]) -> argparse.Namespace:
     """Returns options for the script."""
 
     parser = argparse.ArgumentParser(
@@ -252,7 +251,7 @@ def get_opts(argv: List[str]) -> argparse.Namespace:
     return opts
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

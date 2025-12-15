@@ -1,0 +1,82 @@
+From 0764f65a7fb06703610b33a86ca79025fa4050a4 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Mon, 5 May 2025 17:10:32 +0200
+Subject: [PATCH] [clang] Fix nondeterminism in MemberPointerType (#137910)
+
+This commit fixes the nondeterminism issue in C++ header module enabled builds which were observed after
+https://github.com/llvm/llvm-project/pull/132401.
+
+The issue was related to the fact that the hash set operation in MemberPointerType::Profile() was triggering getMostRecentDecl(). As the latter may trigger the loading of new entities from the external AST source, this
+was presumably causing reentrant modification of data structure or some other issue that affects
+compiler's output in a nondeterministic way (likely depending on specific values hashes/pointers have).
+
+The change should otherwise be a no-op, because whether we take a "most recent" or "any" Decl shouldn't
+matter since `getCanonicalDecl()` is called on it anyway inside `MemberPointerType::Profile()`.
+
+We haven't been able to come up with a deterministic regression test for this fix.
+---
+ clang/include/clang/AST/Type.h | 11 ++++++++++-
+ clang/lib/AST/Type.cpp         | 10 +++++++---
+ 2 files changed, 17 insertions(+), 4 deletions(-)
+
+diff --git a/clang/include/clang/AST/Type.h b/clang/include/clang/AST/Type.h
+index 3e1fb05ad537..02a6fb533353 100644
+--- a/clang/include/clang/AST/Type.h
++++ b/clang/include/clang/AST/Type.h
+@@ -3602,6 +3602,9 @@ public:
+   }
+ 
+   NestedNameSpecifier *getQualifier() const { return Qualifier; }
++  /// Note: this can trigger extra deserialization when external AST sources are
++  /// used. Prefer `getCXXRecordDecl()` unless you really need the most recent
++  /// decl.
+   CXXRecordDecl *getMostRecentCXXRecordDecl() const;
+ 
+   bool isSugared() const;
+@@ -3610,7 +3613,10 @@ public:
+   }
+ 
+   void Profile(llvm::FoldingSetNodeID &ID) {
+-    Profile(ID, getPointeeType(), getQualifier(), getMostRecentCXXRecordDecl());
++    // FIXME: `getMostRecentCXXRecordDecl()` should be possible to use here,
++    // however when external AST sources are used it causes nondeterminism
++    // issues (see https://github.com/llvm/llvm-project/pull/137910).
++    Profile(ID, getPointeeType(), getQualifier(), getCXXRecordDecl());
+   }
+ 
+   static void Profile(llvm::FoldingSetNodeID &ID, QualType Pointee,
+@@ -3620,6 +3626,9 @@ public:
+   static bool classof(const Type *T) {
+     return T->getTypeClass() == MemberPointer;
+   }
++
++private:
++  CXXRecordDecl *getCXXRecordDecl() const;
+ };
+ 
+ /// Capture whether this is a normal array (e.g. int X[4])
+diff --git a/clang/lib/AST/Type.cpp b/clang/lib/AST/Type.cpp
+index 59369fba2e77..fbd09141bc54 100644
+--- a/clang/lib/AST/Type.cpp
++++ b/clang/lib/AST/Type.cpp
+@@ -5305,10 +5305,14 @@ void MemberPointerType::Profile(llvm::FoldingSetNodeID &ID, QualType Pointee,
+     ID.AddPointer(Cls->getCanonicalDecl());
+ }
+ 
++CXXRecordDecl *MemberPointerType::getCXXRecordDecl() const {
++  return dyn_cast<MemberPointerType>(getCanonicalTypeInternal())
++      ->getQualifier()
++      ->getAsRecordDecl();
++}
++
+ CXXRecordDecl *MemberPointerType::getMostRecentCXXRecordDecl() const {
+-  auto *RD = dyn_cast<MemberPointerType>(getCanonicalTypeInternal())
+-                 ->getQualifier()
+-                 ->getAsRecordDecl();
++  auto *RD = getCXXRecordDecl();
+   if (!RD)
+     return nullptr;
+   return RD->getMostRecentNonInjectedDecl();
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

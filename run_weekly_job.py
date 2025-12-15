@@ -28,7 +28,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 
 @dataclasses.dataclass(frozen=True)
@@ -36,17 +36,17 @@ class WeeklyJobState:
     """State for the weekly job runner."""
 
     # Timestamp per `time.time()`
-    last_success_timestamp: Optional[float] = None
+    last_success_timestamp: float | None = None
     consecutive_failures: int = 0
 
     @classmethod
-    def from_json(cls, data: Dict[str, Any]) -> "WeeklyJobState":
+    def from_json(cls, data: dict[str, Any]) -> "WeeklyJobState":
         return cls(
             last_success_timestamp=data.get("last_success_timestamp"),
             consecutive_failures=data.get("consecutive_failures", 0),
         )
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
 
 
@@ -68,7 +68,7 @@ def save_state(state_file_path: Path, state: WeeklyJobState) -> None:
         json.dump(state.to_json(), f)
 
 
-def get_iso_week_info(timestamp: float) -> Tuple[int, int]:
+def get_iso_week_info(timestamp: float) -> tuple[int, int]:
     """Converts a Unix timestamp to (ISO year, ISO week number)."""
     # `isocalendar` note: weeks are uniquely identified by (iso_year, iso_week),
     # and all weeks are 7 days. The year that an ISO week belongs to is the
@@ -83,7 +83,7 @@ def get_iso_week_info(timestamp: float) -> Tuple[int, int]:
     return iso_year, iso_week
 
 
-def run_wrapped_command(command_to_run: List[str]) -> int:
+def run_wrapped_command(command_to_run: list[str]) -> int:
     """Runs the wrapped command and returns its exit code."""
     logging.info("Running command: %s", shlex.join(command_to_run))
     # Do not capture stdout/stderr unless necessary for debugging,
@@ -96,7 +96,7 @@ def run_wrapped_command(command_to_run: List[str]) -> int:
     return process.returncode
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parses command line arguments."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -137,7 +137,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return opts
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     """Main entry point for the script."""
     opts = parse_args(argv)
     logging.basicConfig(
@@ -146,7 +146,7 @@ def main(argv: List[str]) -> int:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
-    command_to_run: List[str] = opts.command_to_run
+    command_to_run: list[str] = opts.command_to_run
     state_file: Path = opts.state_file
     state = load_state(state_file)
 

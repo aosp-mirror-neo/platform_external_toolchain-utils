@@ -1,5 +1,5 @@
 From bfb6d4554db6ec7329273007073556d49a21f3d6 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Jun 2024 21:25:05 +0000
 Subject: [PATCH] llvm-17.0-invocation
 

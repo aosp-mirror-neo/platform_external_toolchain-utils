@@ -1,0 +1,11 @@
+# requirements.txt revbump: 4
+# ^ Increment this to invalidate all venvs.
+
+# Used directly by scripts
+PyYAML==6.0.2
+google-genai==1.39.0
+
+# Dev dependencies (e.g., for presubmits)
+mypy==1.18.2
+pytest==8.3.3
+types-PyYAML==6.0.12.20250915

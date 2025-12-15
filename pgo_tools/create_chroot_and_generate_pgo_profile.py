@@ -14,7 +14,6 @@ from pathlib import Path
 import re
 import shlex
 import shutil
-from typing import List, Tuple
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -169,7 +168,7 @@ def determine_upload_command(
     ]
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -235,7 +234,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def get_rev_info_from_branch(branch_name: str) -> Tuple[int, str]:
+def get_rev_info_from_branch(branch_name: str) -> tuple[int, str]:
     # Note that `GetUpToDateReadOnlyLLVMRepo` prints helpful messages when it
     # goes to the network, so logging that this is happening here is redundant.
     llvm_repo = get_llvm_hash.GetCachedUpToDateReadOnlyLLVMRepo()
@@ -252,7 +251,7 @@ def get_rev_info_from_branch(branch_name: str) -> Tuple[int, str]:
     return rev, sha
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

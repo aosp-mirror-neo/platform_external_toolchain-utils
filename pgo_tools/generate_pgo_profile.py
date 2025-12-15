@@ -26,7 +26,7 @@ import subprocess
 import sys
 import tempfile
 import textwrap
-from typing import Dict, Generator, List, Optional
+from typing import Generator
 
 from pgo_tools import pgo_utils
 
@@ -181,7 +181,7 @@ def emerge_pgo_generate_llvm():
     )
 
 
-def build_profiling_env(profile_dir: Path) -> Dict[str, str]:
+def build_profiling_env(profile_dir: Path) -> dict[str, str]:
     profile_pattern = str(profile_dir / "profile-%m.profraw")
     return {
         "LLVM_PROFILE_OUTPUT_FORMAT": "profraw",
@@ -324,8 +324,8 @@ class WorkloadRunner:
     def run(
         self,
         triple: str,
-        extra_cflags: Optional[str] = None,
-        sysroot: Optional[str] = None,
+        extra_cflags: str | None = None,
+        sysroot: str | None = None,
     ):
         logging.info(
             "Running workload for triple %s, extra cflags %r",
@@ -437,7 +437,7 @@ def convert_profraw_to_pgo_profile(profraw_dir: Path) -> Path:
     return output
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

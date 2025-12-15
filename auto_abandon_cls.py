@@ -12,7 +12,6 @@ import argparse
 import enum
 import logging
 import subprocess
-from typing import List
 
 
 class GerritSearchType(enum.Enum):
@@ -26,7 +25,7 @@ class GerritSearchType(enum.Enum):
         return self is self.INTERNAL_ONLY
 
 
-def gerrit_cmd(internal: bool) -> List[str]:
+def gerrit_cmd(internal: bool) -> list[str]:
     cmd = ["gerrit"]
     if internal:
         cmd.append("--internal")
@@ -35,7 +34,7 @@ def gerrit_cmd(internal: bool) -> List[str]:
 
 def enumerate_old_cls(
     old_days: int, search_type: GerritSearchType
-) -> List[int]:
+) -> list[int]:
     """Returns CL numbers that haven't been updated in `old_days` days."""
     search_string = f"owner:me status:open age:{old_days}d"
     llvm_repo = "project:external/github.com/llvm/llvm-project"
@@ -67,7 +66,7 @@ def enumerate_old_cls(
     return sorted(int(x) for x in lines)
 
 
-def abandon_cls(cls: List[int], internal: bool) -> None:
+def abandon_cls(cls: list[int], internal: bool) -> None:
     subprocess.run(
         gerrit_cmd(internal) + ["abandon"] + [str(x) for x in cls],
         check=True,
@@ -97,7 +96,7 @@ def detect_and_abandon_cls(
     abandon_cls(old_cls, is_internal)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

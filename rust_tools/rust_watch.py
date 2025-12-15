@@ -16,7 +16,7 @@ import re
 import shutil
 import subprocess
 import time
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
+from typing import Any, Iterable, NamedTuple, Optional
 
 from cros_utils import bugs
 from cros_utils import email_sender
@@ -28,9 +28,9 @@ def gentoo_sha_to_link(sha: str) -> str:
     return f"https://gitweb.gentoo.org/repo/gentoo.git/commit?id={sha}"
 
 
-def send_email(subject: str, body: List[tiny_render.Piece]) -> None:
+def send_email(subject: str, body: list[tiny_render.Piece]) -> None:
     """Sends an email with the given title and body to... whoever cares."""
-    email_sender.EmailSender().SendX20Email(
+    email_sender.EmailSender().SendGSEmail(
         subject=subject,
         identifier="rust-watch",
         well_known_recipients=["cros-team"],
@@ -74,14 +74,14 @@ class State(NamedTuple):
     # that updates it.
     last_gentoo_sha: str
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             "last_seen_release": self.last_seen_release.to_json(),
             "last_gentoo_sha": self.last_gentoo_sha,
         }
 
     @staticmethod
-    def from_json(s: Dict[str, Any]) -> "State":
+    def from_json(s: dict[str, Any]) -> "State":
         return State(
             last_seen_release=RustReleaseVersion.from_json(
                 s["last_seen_release"]
@@ -158,7 +158,7 @@ def update_git_repo(git_dir: pathlib.Path) -> None:
 
 def get_new_gentoo_commits(
     git_dir: pathlib.Path, most_recent_sha: str
-) -> List[GitCommit]:
+) -> list[GitCommit]:
     """Gets commits to dev-lang/rust since `most_recent_sha`.
 
     Older commits come earlier in the returned list.
@@ -256,7 +256,7 @@ def file_bug(title: str, body: str) -> None:
 def maybe_compose_bug(
     old_state: State,
     newest_release: RustReleaseVersion,
-) -> Optional[Tuple[str, str]]:
+) -> tuple[str, str] | None:
     """Creates a bug to file about the new release, if doing is desired."""
     if newest_release == old_state.last_seen_release:
         return None
@@ -282,14 +282,14 @@ def maybe_compose_bug(
 
 
 def maybe_compose_email(
-    new_gentoo_commits: List[GitCommit],
-) -> Optional[Tuple[str, List[tiny_render.Piece]]]:
+    new_gentoo_commits: list[GitCommit],
+) -> Optional[tuple[str, list[tiny_render.Piece]]]:
     """Creates an email given our new state, if doing so is appropriate."""
     if not new_gentoo_commits:
         return None
 
     subject_pieces = []
-    body_pieces: List[tiny_render.Piece] = []
+    body_pieces: list[tiny_render.Piece] = []
 
     # Separate the sections a bit for prettier output.
     if body_pieces:
@@ -320,7 +320,7 @@ def maybe_compose_email(
     return subject, body_pieces
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(level=logging.INFO)
 
     parser = argparse.ArgumentParser(

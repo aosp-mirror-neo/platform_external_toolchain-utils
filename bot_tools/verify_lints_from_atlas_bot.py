@@ -10,7 +10,7 @@ import dataclasses
 import logging
 import re
 import sys
-from typing import Iterable, List, Optional
+from typing import Iterable
 
 from bot_tools import bot_lints
 from llvm_tools import cros_cls
@@ -82,7 +82,7 @@ DEFAULT_FINDING_EXPECTATIONS = (
 
 def spawn_bot_and_collect_lints(
     cls_to_apply: Iterable[cros_cls.ChangeListURL],
-) -> List[bot_lints.Finding]:
+) -> list[bot_lints.Finding]:
     build_id = cros_cls.spawn_bot(
         "chromeos/cq/atlas-linters-cq", cls=cls_to_apply
     )
@@ -96,8 +96,8 @@ def spawn_bot_and_collect_lints(
 
 
 def log_errors_with_lints(
-    lints: List[bot_lints.Finding],
-    finding_expectations: Optional[Iterable[FindingExpectations]] = None,
+    lints: list[bot_lints.Finding],
+    finding_expectations: Iterable[FindingExpectations] | None = None,
 ) -> bool:
     """Logs mismatches between the given lints and expectations.
 
@@ -161,7 +161,7 @@ def log_errors_with_lints(
     return logged_errors
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -180,7 +180,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     opts = parse_args(argv)
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
@@ -188,7 +188,7 @@ def main(argv: List[str]) -> None:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
-    build_id: Optional[int] = opts.build_id
+    build_id: int | None = opts.build_id
     if build_id:
         logging.info("Fetching lints from %s", cros_cls.builder_url(build_id))
         got_lints = bot_lints.fetch_bot_info(build_id).findings
@@ -199,7 +199,3 @@ def main(argv: List[str]) -> None:
     had_errors = log_errors_with_lints(got_lints)
     if had_errors:
         sys.exit("Lints did not match expectations; see above logs")
-
-
-if __name__ == "__main__":
-    main(sys.argv[1:])

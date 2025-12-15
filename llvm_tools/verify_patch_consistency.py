@@ -31,7 +31,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -203,7 +203,7 @@ def ref_diff(cwd: Path, ref1: str, ref2: str) -> str:
     ).stdout
 
 
-def _gerrit_inspect(cl: int, chromiumos_root: Path) -> List[Dict[str, Any]]:
+def _gerrit_inspect(cl: int, chromiumos_root: Path) -> list[dict[str, Any]]:
     """Gerrit command wrapper for easy mocking."""
     cmd = ("gerrit", "--json", "inspect", str(cl))
     return json.loads(
@@ -218,7 +218,7 @@ def _gerrit_inspect(cl: int, chromiumos_root: Path) -> List[Dict[str, Any]]:
     )
 
 
-def parse_branch(cl: int, chromiumos_root: Path) -> Tuple[int, str]:
+def parse_branch(cl: int, chromiumos_root: Path) -> tuple[int, str]:
     """Extract the LLVM synthetic revision and git ref from a CL branch."""
     json_obj = _gerrit_inspect(cl, chromiumos_root)
     branch_name = json_obj[0]["branch"]
@@ -252,7 +252,7 @@ def _verified_message(svn_revision: int, cl: str, cl_ref: str) -> str:
     )
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse passed in argv list."""
 
     parser = argparse.ArgumentParser(
@@ -329,7 +329,7 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return args
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     """Entry point."""
     args = parse_args(argv)
     svn_revision, cl_ref = parse_branch(args.cl, args.chromiumos_root)

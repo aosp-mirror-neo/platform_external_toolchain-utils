@@ -7,42 +7,27 @@
 All tests are run in parallel.
 """
 
-# NOTE: An alternative mentioned on the initial CL for this
-# https://chromium-review.googlesource.com/c/chromiumos/third_party/toolchain-utils/+/1516414
-# is pytest. It looks like that brings some complexity (and makes use outside
-# of the chroot a bit more obnoxious?), but might be worth exploring if this
-# starts to grow quite complex on its own.
-
-
 import argparse
-import collections
+import dataclasses
 import multiprocessing.pool
 import os
 import shlex
 import signal
 import subprocess
 import sys
-from typing import Optional, Tuple
+
+from cros_utils import cros_paths
 
 
-TestSpec = collections.namedtuple("TestSpec", ["directory", "command"])
+@dataclasses.dataclass(frozen=True)
+class TestSpec:
+    """Describes a test to run."""
+
+    directory: str
+    command: tuple[str | os.PathLike, ...]
 
 
-def _make_relative_to_toolchain_utils(toolchain_utils, path):
-    """Cleans & makes a path relative to toolchain_utils.
-
-    Raises if that path isn't under toolchain_utils.
-    """
-    # abspath has the nice property that it removes any markers like './'.
-    as_abs = os.path.abspath(path)
-    result = os.path.relpath(as_abs, start=toolchain_utils)
-
-    if result.startswith("../"):
-        raise ValueError("Non toolchain-utils directory found: %s" % result)
-    return result
-
-
-def _run_test(test_spec: TestSpec, timeout: int) -> Tuple[Optional[int], str]:
+def _run_test(test_spec: TestSpec, timeout: int) -> tuple[int | None, str]:
     """Runs a test.
 
     Returns a tuple indicating the process' exit code, and the combined
@@ -136,31 +121,13 @@ def _run_test_scripts(pool, all_tests, timeout, show_successful_output=False):
     return not failures
 
 
-def _compress_list(l):
-    """Removes consecutive duplicate elements from |l|.
-
-    >>> _compress_list([])
-    []
-    >>> _compress_list([1, 1])
-    [1]
-    >>> _compress_list([1, 2, 1])
-    [1, 2, 1]
-    """
-    result = []
-    for e in l:
-        if result and result[-1] == e:
-            continue
-        result.append(e)
-    return result
-
-
 def _find_go_tests(test_paths):
     """Returns TestSpecs for the go folders of the given files"""
     assert all(os.path.isabs(path) for path in test_paths)
 
-    dirs_with_gofiles = set(
+    dirs_with_gofiles = {
         os.path.dirname(p) for p in test_paths if p.endswith(".go")
-    )
+    }
     command = ("go", "test", "-vet=all")
     # Note: We sort the directories to be deterministic.
     return [
@@ -204,7 +171,14 @@ def main(argv):
         return 0
 
     tests_to_run = []
-    if any(x.endswith(".py") for x in modified_files):
+    llvm_patches_dir = str(
+        cros_paths.script_toolchain_utils_root()
+        / cros_paths.DEFAULT_PATCHES_PATH_IN_TOOLCHAIN_UTILS.parent
+    )
+    if any(
+        x.endswith(".py") or x.startswith(llvm_patches_dir)
+        for x in modified_files
+    ):
         tests_to_run.append(
             TestSpec(
                 directory=toolchain_utils,
@@ -213,11 +187,7 @@ def main(argv):
         )
 
     tests_to_run += _find_go_tests(modified_files)
-
-    # TestSpecs have lists, so we can't use a set. We'd likely want to keep them
-    # sorted for determinism anyway.
     tests_to_run = sorted(set(tests_to_run))
-
     with multiprocessing.pool.ThreadPool() as pool:
         success = _run_test_scripts(
             pool, tests_to_run, args.timeout, show_all_output

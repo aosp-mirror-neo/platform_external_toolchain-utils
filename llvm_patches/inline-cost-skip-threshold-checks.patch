@@ -1,5 +1,5 @@
 From 4a957141db9f96a449365f1d270ccfb5182bdc14 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Jun 2024 21:34:26 +0000
 Subject: [PATCH] inline-cost: skip threshold checks
 

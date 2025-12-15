@@ -1,5 +1,5 @@
 From a41d7031412c61cdf55b67830dc37e6f50985f83 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 7 Jun 2024 21:16:54 +0000
 Subject: [PATCH] Adds a allowlist of packages that have known memory leaks
 

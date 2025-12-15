@@ -11,7 +11,6 @@ on toolchain projects (llvm-project, etc.) which are public.
 from pathlib import Path
 import shutil
 import subprocess
-from typing import List, Optional, Union
 from xml.etree import ElementTree
 
 from cros_utils import cros_paths
@@ -42,7 +41,7 @@ def make_xmlparser() -> ElementTree.XMLParser:
 
 def _find_llvm_project_in_manifest_tree(
     xmlroot: ElementTree.Element,
-) -> Optional[ElementTree.Element]:
+) -> ElementTree.Element | None:
     """Returns the llvm-project `project` in `xmlroot`, if it exists."""
     for child in xmlroot:
         if (
@@ -90,7 +89,7 @@ def extract_current_llvm_hash_or_ref_from_xml(
 
 
 def update_chromeos_manifest_in_manifest_dir(
-    revision: str, manifest_dir: Path, chromeos_tree: Optional[Path] = None
+    revision: str, manifest_dir: Path, chromeos_tree: Path | None = None
 ) -> Path:
     """update_chromeos_manifest, taking the directory to manifest-interal.
 
@@ -172,11 +171,11 @@ def update_chromeos_manifest_tree(revision: str, xmlroot: ElementTree.Element):
     llvm_project_elem.attrib["revision"] = revision
 
 
-def format_manifest(repo_manifest: Path, cwd: Optional[Path] = None):
+def format_manifest(repo_manifest: Path, cwd: Path | None = None):
     """Use cros format to format the given manifest."""
     if not shutil.which("cros"):
         raise FormattingError(
             "unable to format manifest, 'cros' executable not in PATH"
         )
-    cmd: List[Union[str, Path]] = ["cros", "format", repo_manifest]
+    cmd: list[str | Path] = ["cros", "format", repo_manifest]
     subprocess.run(cmd, check=True, cwd=cwd)

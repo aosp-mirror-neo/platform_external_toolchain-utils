@@ -9,7 +9,6 @@ import logging
 import os
 import subprocess
 import textwrap
-from typing import Dict
 from unittest import mock
 
 from llvm_tools import test_helpers
@@ -23,7 +22,7 @@ class SilenceLogs:
         return False
 
 
-def create_warning_info(packages: Dict[str, int]) -> werror_logs.WarningInfo:
+def create_warning_info(packages: dict[str, int]) -> werror_logs.WarningInfo:
     """Constructs a WarningInfo conveniently in one line.
 
     Mostly useful because `WarningInfo` has a defaultdict field, and those

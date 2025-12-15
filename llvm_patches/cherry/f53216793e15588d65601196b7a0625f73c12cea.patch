@@ -1,0 +1,59 @@
+From f53216793e15588d65601196b7a0625f73c12cea Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Thu, 5 Jun 2025 20:57:12 +0200
+Subject: [PATCH] Fix an error introduced in #138518 (#142988)
+
+CXXParenListInitExpr arguments would lose casts leading to incorrect types being used (e.g. only 32 bits of a 64 bit value being initialized). See https://github.com/llvm/llvm-project/pull/138518#issuecomment-2906276916 and https://github.com/llvm/llvm-project/pull/138518#issuecomment-2944538713 for details and context.
+---
+ clang/lib/Sema/SemaExprCXX.cpp              |  4 ++++
+ clang/test/SemaCXX/paren-list-init-expr.cpp | 23 +++++++++++++++++++++
+ 2 files changed, 27 insertions(+)
+ create mode 100644 clang/test/SemaCXX/paren-list-init-expr.cpp
+
+diff --git a/clang/lib/Sema/SemaExprCXX.cpp b/clang/lib/Sema/SemaExprCXX.cpp
+index 84521a3f80ff..2546ab5c0a34 100644
+--- a/clang/lib/Sema/SemaExprCXX.cpp
++++ b/clang/lib/Sema/SemaExprCXX.cpp
+@@ -2159,6 +2159,10 @@ ExprResult Sema::BuildCXXNew(SourceRange Range, bool UseGlobal,
+     assert(InitStyle == CXXNewInitializationStyle::Parens &&
+            "paren init for non-call init");
+     Exprs = MultiExprArg(List->getExprs(), List->getNumExprs());
++  } else if (auto *List = dyn_cast_or_null<CXXParenListInitExpr>(Initializer)) {
++    assert(InitStyle == CXXNewInitializationStyle::Parens &&
++           "paren init for non-call init");
++    Exprs = List->getInitExprs();
+   }
+ 
+   // C++11 [expr.new]p15:
+diff --git a/clang/test/SemaCXX/paren-list-init-expr.cpp b/clang/test/SemaCXX/paren-list-init-expr.cpp
+new file mode 100644
+index 000000000000..c47239ed0f32
+--- /dev/null
++++ b/clang/test/SemaCXX/paren-list-init-expr.cpp
+@@ -0,0 +1,23 @@
++// RUN: %clang_cc1 -std=c++20 -fsyntax-only -ast-dump %s | FileCheck %s
++struct Node {
++  long val;
++};
++template <bool>
++void CallNew() {
++    new Node(0);
++}
++// CHECK-LABEL: FunctionTemplateDecl {{.*}} CallNew
++// CHECK: |-FunctionDecl {{.*}} CallNew 'void ()'
++// CHECK:  `-CXXNewExpr {{.*}} 'operator new'
++// CHECK:  `-CXXParenListInitExpr {{.*}} 'Node'
++// CHECK:  `-ImplicitCastExpr {{.*}} 'long' <IntegralCast>
++// CHECK:  `-IntegerLiteral {{.*}} 'int' 0
++// CHECK: `-FunctionDecl {{.*}} used CallNew 'void ()' implicit_instantiation
++// CHECK:   |-TemplateArgument integral 'true'
++// CHECK:   `-CXXNewExpr {{.*}} 'operator new'
++// CHECK:   `-CXXParenListInitExpr {{.*}} 'Node'
++// CHECK:   `-ImplicitCastExpr {{.*}} 'long' <IntegralCast>
++// CHECK:   `-IntegerLiteral {{.*}} 'int' 0
++void f() {
++    (void)CallNew<true>; 
++}
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+
