@@ -981,5 +981,19 @@
       "from": 574158,
       "until": 595389
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "LFI Support Patch for r574158"
+    },
+    "platforms": [
+      "android"
+    ],
+    "rel_patch_path": "LFI_Support-Patch-2d287f.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 574159
+    }
   }
 ]
