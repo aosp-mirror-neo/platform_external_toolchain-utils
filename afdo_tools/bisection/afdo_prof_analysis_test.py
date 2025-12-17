@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -16,20 +14,23 @@ from afdo_tools.bisection import afdo_prof_analysis as analysis
 class AfdoProfAnalysisTest(unittest.TestCase):
     """Class for testing AFDO Profile Analysis"""
 
-    bad_items = {"func_a": "1", "func_b": "3", "func_c": "5"}
-    good_items = {"func_a": "2", "func_b": "4", "func_d": "5"}
-    random.seed(13)  # 13 is an arbitrary choice. just for consistency
-    # add some extra info to make tests more reflective of real scenario
-    for num in range(128):
-        func_name = "func_extra_%d" % num
-        # 1/3 to both, 1/3 only to good, 1/3 only to bad
-        rand_val = random.randint(1, 101)
-        if rand_val < 67:
-            bad_items[func_name] = "test_data"
-        if rand_val < 34 or rand_val >= 67:
-            good_items[func_name] = "test_data"
+    def setUp(self):
+        super().setUp()
 
-    analysis.random.seed(5)  # 5 is an arbitrary choice. For consistent testing
+        self.bad_items = {"func_a": "1", "func_b": "3", "func_c": "5"}
+        self.good_items = {"func_a": "2", "func_b": "4", "func_d": "5"}
+        # add some extra info to make tests more reflective of real scenario
+        for num in range(128):
+            func_name = "func_extra_%d" % num
+            # 1/3 to both, 1/3 only to good, 1/3 only to bad
+            n = num % 3
+            if n == 0:
+                self.bad_items[func_name] = "test_data"
+                self.good_items[func_name] = "test_data"
+            elif n == 1:
+                self.good_items[func_name] = "test_data"
+            else:
+                self.bad_items[func_name] = "test_data"
 
     def test_text_to_json(self):
         test_data = io.StringIO(
@@ -77,7 +78,7 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         # save_run specified and unused b/c afdo_prof_analysis.py
         # will call with argument explicitly specified
         # pylint: disable=unused-argument
-        class DeciderClass(object):
+        class DeciderClass:
             """Class for this tests's decider."""
 
             def run(self, prof, save_run=False):
@@ -86,16 +87,19 @@ class AfdoProfAnalysisTest(unittest.TestCase):
                 return analysis.StatusEnum.GOOD_STATUS
 
         results = analysis.bisect_profiles_wrapper(
-            DeciderClass(), self.good_items, self.bad_items
+            DeciderClass(),
+            self.good_items,
+            self.bad_items,
+            rng=random.Random(42),
         )
         self.assertEqual(results["individuals"], sorted(["func_a", "func_b"]))
         self.assertEqual(results["ranges"], [])
 
     def test_range_search(self):
-        # arbitrarily chosen functions whose values in the bad profile constitute
-        # a problematic pair
+        # arbitrarily chosen functions whose values in the bad profile
+        # constitute a problematic pair
         # pylint: disable=unused-argument
-        class DeciderClass(object):
+        class DeciderClass:
             """Class for this tests's decider."""
 
             def run(self, prof, save_run=False):
@@ -120,6 +124,7 @@ class AfdoProfAnalysisTest(unittest.TestCase):
             common_funcs,
             0,
             len(common_funcs),
+            rng=random.Random(42),
         )
 
         self.assertEqual(["func_a", "func_b"], problem_range)
@@ -128,7 +133,7 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         func_in_good = "func_c"
 
         # pylint: disable=unused-argument
-        class DeciderClass(object):
+        class DeciderClass:
             """Class for this tests's decider."""
 
             def run(self, prof, save_run=False):
@@ -146,7 +151,7 @@ class AfdoProfAnalysisTest(unittest.TestCase):
         func_in_bad = "func_d"
 
         # pylint: disable=unused-argument
-        class DeciderClass(object):
+        class DeciderClass:
             """Class for this tests's decider."""
 
             def run(self, prof, save_run=False):

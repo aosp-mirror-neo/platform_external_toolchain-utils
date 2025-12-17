@@ -1,5 +1,5 @@
 From bd00e30250bdf1bd1a6a2cbf2b2a195cae82c0a5 Mon Sep 17 00:00:00 2001
-From: George Burgess IV <gbiv@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 3 Apr 2024 16:18:27 -0600
 Subject: [PATCH] Ignore inlinable calls if unrolling is forced
 

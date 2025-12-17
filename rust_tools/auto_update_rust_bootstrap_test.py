@@ -71,13 +71,13 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_version_has_prebuilt_detection_works(self):
+    def test_version_has_prebuilt_detection_works_when_disabled(self):
         ebuild_contents = textwrap.dedent(
-            """\
+            """
             # Some copyright
             FOO=bar
             # Comment about this cool var
-            THIS_VERSION_HAS_PREBUILT=     # a comment
+            THIS_VERSION_PREBUILT_NAME=    # a comment
 
             # Another comment for posterity
             """
@@ -88,41 +88,59 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_version_has_prebuilt_modification_works(self):
+    def test_version_has_prebuilt_detection_works_when_enabled(self):
         ebuild_contents = textwrap.dedent(
-            """\
+            """
             # Some copyright
             FOO=bar
             # Comment about this cool var
-            THIS_VERSION_HAS_PREBUILT=     # a comment
+            THIS_VERSION_PREBUILT_NAME=foo    # a comment
+
+            # Another comment for posterity
+            """
+        )
+        self.assertTrue(
+            auto_update_rust_bootstrap.is_rust_bootstrap_using_prebuilts(
+                ebuild_contents
+            )
+        )
+
+    def test_version_has_prebuilt_modification_works(self):
+        ebuild_contents = textwrap.dedent(
+            """
+            # Some copyright
+            FOO=bar
+            # Comment about this cool var
+            THIS_VERSION_PREBUILT_NAME=    # a comment
             # Another comment for posterity
             """
         )
         with_set_has_ebuild = (
             auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
                 ebuild_contents,
-                use_prebuilts=True,
+                prebuilt_name="foo",
             )
         )
         self.assertIn(
-            "THIS_VERSION_HAS_PREBUILT=1     # a comment\n", with_set_has_ebuild
+            "THIS_VERSION_PREBUILT_NAME=foo    # a comment\n",
+            with_set_has_ebuild,
         )
 
         with_unset_has_ebuild = (
             auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
                 ebuild_contents,
-                use_prebuilts=False,
+                prebuilt_name=None,
             )
         )
         self.assertEqual(ebuild_contents, with_unset_has_ebuild)
 
     def test_version_has_prebuilt_modification_works_without_comment(self):
         ebuild_contents = textwrap.dedent(
-            """\
+            """
             # Some copyright
             FOO=bar
             # Comment about this cool var
-            THIS_VERSION_HAS_PREBUILT=
+            THIS_VERSION_PREBUILT_NAME=
 
             # Another comment for posterity
             """
@@ -130,18 +148,18 @@ class Test(unittest.TestCase):
         with_set_has_ebuild = (
             auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
                 ebuild_contents,
-                use_prebuilts=True,
+                prebuilt_name="foo",
             )
         )
-        self.assertIn("THIS_VERSION_HAS_PREBUILT=1", with_set_has_ebuild)
+        self.assertIn("THIS_VERSION_PREBUILT_NAME=foo", with_set_has_ebuild)
 
     def test_version_has_prebuilt_unsetting_works_with_comment(self):
         ebuild_contents = textwrap.dedent(
-            """\
+            """
             # Some copyright
             FOO=bar
             # Comment about this cool var
-            THIS_VERSION_HAS_PREBUILT=" 1" # baz
+            THIS_VERSION_PREBUILT_NAME=foo.tbz2 # qux
 
             # Another comment for posterity
             """
@@ -149,10 +167,10 @@ class Test(unittest.TestCase):
         with_set_has_ebuild = (
             auto_update_rust_bootstrap.set_rust_bootstrap_prebuilt_use(
                 ebuild_contents,
-                use_prebuilts=False,
+                prebuilt_name=None,
             )
         )
-        self.assertIn("THIS_VERSION_HAS_PREBUILT= # baz", with_set_has_ebuild)
+        self.assertIn("THIS_VERSION_PREBUILT_NAME= # qux", with_set_has_ebuild)
 
     def test_set_rust_bootstrap_prior_version_works(self):
         ebuild_contents = textwrap.dedent(
@@ -254,13 +272,18 @@ class Test(unittest.TestCase):
 
         self.assertFalse(
             auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
         )
 
-    @mock.patch.object(auto_update_rust_bootstrap, "update_ebuild_manifest")
+    @mock.patch.object(
+        auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
+    )
     def test_ensure_newest_version_upgrades_rust_bootstrap_properly(
-        self, update_ebuild_manifest
+        self, update_ebuild_manifest_in_chroot
     ):
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
@@ -271,11 +294,11 @@ class Test(unittest.TestCase):
         rust_bootstrap_1_70 = rust_bootstrap / "rust-bootstrap-1.70.0-r2.ebuild"
 
         rust_bootstrap_contents = textwrap.dedent(
-            """\
+            """
             # Some copyright
             FOO=bar
 
-            THIS_VERSION_HAS_PREBUILT=1
+            THIS_VERSION_PREBUILT_NAME=foo
             PRIOR_RUST_BOOTSTRAP_VERSION="1.69.0"
             """
         )
@@ -285,10 +308,14 @@ class Test(unittest.TestCase):
 
         self.assertTrue(
             auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                tempdir, rust_bootstrap, dry_run=False, commit=False
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=False,
+                commit=False,
             )
         )
-        update_ebuild_manifest.assert_called_once()
+        update_ebuild_manifest_in_chroot.assert_called_once()
         rust_bootstrap_1_71 = rust_bootstrap / "rust-bootstrap-1.71.0.ebuild"
 
         self.assertTrue(
@@ -297,7 +324,7 @@ class Test(unittest.TestCase):
         )
         new_contents = rust_bootstrap_1_71.read_text(encoding="utf-8")
         self.assertIn(
-            "THIS_VERSION_HAS_PREBUILT=\n",
+            "THIS_VERSION_PREBUILT_NAME=\n",
             new_contents,
         )
         self.assertIn(
@@ -316,7 +343,10 @@ class Test(unittest.TestCase):
 
         self.assertFalse(
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
         )
 
@@ -333,12 +363,19 @@ class Test(unittest.TestCase):
 
         self.assertFalse(
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
         )
 
-    @mock.patch.object(auto_update_rust_bootstrap, "update_ebuild_manifest")
-    def test_version_deletion_deletes_old_files(self, update_ebuild_manifest):
+    @mock.patch.object(
+        auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
+    )
+    def test_version_deletion_deletes_old_files(
+        self, update_ebuild_manifest_in_chroot
+    ):
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -372,13 +409,14 @@ class Test(unittest.TestCase):
 
         self.assertTrue(
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir,
-                rust_bootstrap,
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
                 dry_run=False,
                 commit=False,
             )
         )
-        update_ebuild_manifest.assert_called_once()
+        update_ebuild_manifest_in_chroot.assert_called_once()
 
         self.assertFalse(bootstrap_1_68_symlink.exists())
         self.assertFalse(bootstrap_1_68_symlink_abs.exists())
@@ -403,7 +441,10 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.OldEbuildIsLinkedToError
         ):
             auto_update_rust_bootstrap.maybe_delete_old_rust_bootstrap_ebuilds(
-                tempdir, rust_bootstrap, dry_run=True
+                chromiumos_overlay=tempdir,
+                chromiumos_checkout=tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
             )
 
     def test_prebuilt_commit_message_generation_with_one_update(self):

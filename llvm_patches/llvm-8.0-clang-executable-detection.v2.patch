@@ -1,5 +1,5 @@
 From a3a1aa198d4f52d3a64fe58d6ca03b103b6f6474 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Jun 2024 21:02:42 +0000
 Subject: [PATCH] llvm-8.0-clang-executable-detection.v2
 

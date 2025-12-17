@@ -33,19 +33,7 @@ import subprocess
 import textwrap
 import threading
 import time
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    NamedTuple,
-    Optional,
-    Protocol,
-    Sequence,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from typing import Any, Callable, NamedTuple, Protocol, Sequence, TypeVar
 import urllib.request
 
 from cros_utils import cros_paths
@@ -55,8 +43,8 @@ from pgo_tools_rust import pgo_rust
 
 
 T = TypeVar("T")
-Command = Sequence[Union[str, os.PathLike]]
-PathOrStr = Union[str, os.PathLike]
+Command = Sequence[str | os.PathLike]
+PathOrStr = str | os.PathLike
 
 
 class RunStepFn(Protocol):
@@ -70,8 +58,8 @@ class RunStepFn(Protocol):
         self,
         step_name: str,
         step_fn: Callable[[], T],
-        result_from_json: Optional[Callable[[Any], T]] = None,
-        result_to_json: Optional[Callable[[T], Any]] = None,
+        result_from_json: Callable[[Any], T] | None = None,
+        result_to_json: Callable[[T], Any] | None = None,
     ) -> T: ...
 
 
@@ -136,7 +124,7 @@ class SignatureVerificationError(Exception):
         self.path = path
 
 
-def get_command_output_unchecked(command: Command) -> Tuple[str, str]:
+def get_command_output_unchecked(command: Command) -> tuple[str, str]:
     proc = subprocess.run(
         command,
         check=False,
@@ -206,7 +194,7 @@ def find_ebuild_for_package(name: str) -> str:
 
 
 def find_ebuild_path(
-    directory: Path, name: str, version: Optional[RustVersion] = None
+    directory: Path, name: str, version: RustVersion | None = None
 ) -> Path:
     """Finds an ebuild in a directory.
 
@@ -241,7 +229,7 @@ def find_ebuild_path(
     return result[0]
 
 
-def parse_commandline_args() -> argparse.Namespace:
+def parse_commandline_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -288,7 +276,7 @@ def parse_commandline_args() -> argparse.Namespace:
         help="If specified, the tool will not upload the CL for review",
     )
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.cont and args.restart:
         parser.error("Please select either --continue or --restart")
 
@@ -351,7 +339,7 @@ def update_ebuild_variable_version(
     logging.info("Rust %s updated to %s", variable_name, new_version)
 
 
-def cros_workon(start_or_stop: str, packages: List[str]) -> None:
+def cros_workon(start_or_stop: str, packages: list[str]) -> None:
     """Runs `cros-workon` on the given host packages."""
     subprocess.run(
         ["cros", "workon", "--host", start_or_stop] + packages,
@@ -361,7 +349,7 @@ def cros_workon(start_or_stop: str, packages: List[str]) -> None:
 
 
 def ebuild_actions(
-    package: str, actions: List[str], sudo: bool = False
+    package: str, actions: list[str], sudo: bool = False
 ) -> None:
     ebuild_path_inchroot = find_ebuild_for_package(package)
     cmd = ["ebuild", ebuild_path_inchroot] + actions
@@ -608,11 +596,11 @@ def unmerge_package_if_installed(pkgatom: str) -> None:
 def perform_step(
     state_file: pathlib.Path,
     tmp_state_file: pathlib.Path,
-    completed_steps: Dict[str, Any],
+    completed_steps: dict[str, Any],
     step_name: str,
     step_fn: Callable[[], T],
-    result_from_json: Optional[Callable[[Any], T]] = None,
-    result_to_json: Optional[Callable[[T], Any]] = None,
+    result_from_json: Callable[[Any], T] | None = None,
+    result_to_json: Callable[[T], Any] | None = None,
 ) -> T:
     if step_name in completed_steps:
         logging.info("Skipping previously completed step %s", step_name)
@@ -758,7 +746,7 @@ def find_ebuild_for_rust_version(version: RustVersion) -> Path:
     return find_ebuild_path(rust_path(), "rust", version)
 
 
-def rebuild_packages(workon_packages: List[str]):
+def rebuild_packages(workon_packages: list[str]):
     """Rebuild packages modified by this script."""
     try:
         run_in_chroot(
@@ -960,10 +948,10 @@ def sudo_keepalive() -> None:
     threading.Thread(target=sudo_keepalive_loop, daemon=True).start()
 
 
-def main() -> None:
+def main(argv: list[str]) -> None:
     chroot.VerifyOutsideChroot()
     logging.basicConfig(level=logging.INFO)
-    args = parse_commandline_args()
+    args = parse_commandline_args(argv)
     state_file = pathlib.Path(args.state_file)
     tmp_state_file = state_file.with_suffix(".tmp")
 
@@ -976,8 +964,8 @@ def main() -> None:
     def run_step(
         step_name: str,
         step_fn: Callable[[], T],
-        result_from_json: Optional[Callable[[Any], T]] = None,
-        result_to_json: Optional[Callable[[T], Any]] = None,
+        result_from_json: Callable[[Any], T] | None = None,
+        result_to_json: Callable[[T], Any] | None = None,
     ) -> T:
         return perform_step(
             state_file,

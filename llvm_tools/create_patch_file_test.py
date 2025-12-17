@@ -5,7 +5,6 @@
 """Tests for create_patch_file."""
 
 from pathlib import Path
-from typing import Optional
 import unittest
 
 from llvm_tools import create_patch_file
@@ -102,7 +101,7 @@ class TestCreatePatchFile(unittest.TestCase):
 
     @staticmethod
     def _make_patch_entry(
-        from_: Optional[int], until: Optional[int], title: str = "Some title"
+        from_: int | None, until: int | None, title: str = "Some title"
     ):
         return patch_utils.PatchEntry(
             workdir=Path(),

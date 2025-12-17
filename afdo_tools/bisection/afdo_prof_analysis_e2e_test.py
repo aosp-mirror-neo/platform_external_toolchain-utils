@@ -285,6 +285,8 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
                 no_resume=no_resume,
                 remove_state_on_completion=False,
                 seed=seed,
+                # Never save the problematic profiles; doing so pollutes /tmp.
+                save_problem_decider=False,
             )
         )
         actual_seed = actual.pop("seed")  # nothing to check

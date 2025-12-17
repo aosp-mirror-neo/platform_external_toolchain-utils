@@ -1,5 +1,5 @@
 From 4f2fe30c0e470993087e471838140be241e70af7 Mon Sep 17 00:00:00 2001
-From: George Burgess IV <gbiv@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 14 Jun 2024 21:19:58 +0000
 Subject: [PATCH] lld-10.0-invoke-name-v2
 

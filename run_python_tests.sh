@@ -31,7 +31,11 @@ fi
 #   a non-test script, and pytest is confused by this.
 # - py/ just has symlinks to stuff back in toolchain-utils; no point in
 #   checking that.
-PYTHONPATH="${PWD}:${PYTHONPATH:-}" pytest \
+PYTHONPATH="${PWD}:${PYTHONPATH:-}" \
+  exec \
+  ./venv_tc/venv_python3.sh \
+  -m \
+  pytest \
   -p no:hypothesispytest \
   --ignore=debug_info_test/debug_info_test.py \
   --ignore=llvm_tools/llvm-project-copy \

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2019 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -9,7 +8,6 @@ import argparse
 import dataclasses
 import datetime
 import functools
-import json
 import multiprocessing
 import multiprocessing.pool
 import os
@@ -22,17 +20,7 @@ import sys
 import textwrap
 import threading
 import traceback
-from typing import (
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    NamedTuple,
-    Optional,
-    Sequence,
-    Tuple,
-    Union,
-)
+from typing import Callable, Iterable, NamedTuple, Sequence
 
 
 # Each checker represents an independent check that's done on our sources.
@@ -51,13 +39,13 @@ CheckResult = NamedTuple(
     (
         ("ok", bool),
         ("output", str),
-        ("autofix_commands", List[List[str]]),
+        ("autofix_commands", list[list[str]]),
     ),
 )
 
 
-Command = Sequence[Union[str, os.PathLike]]
-CheckResults = Union[List[Tuple[str, CheckResult]], CheckResult]
+Command = Sequence[str | os.PathLike]
+CheckResults = list[tuple[str, CheckResult]] | CheckResult
 
 # Environment variable that's set to a nonempty value on bots. Used for
 # skipping some tasks on CI. Other presubmit checks detect whether a bot is
@@ -68,20 +56,26 @@ SWARMING_TASK_ID_ENV = "SWARMING_TASK_ID"
 # re-execing in the chroot.
 CHROOT_FORWARDED_ENV = (SWARMING_TASK_ID_ENV,)
 
-# A list of types stubs to install alongside mypy. These are only autoinstalled
-# inside of the chroot. If mypy fails outside of the chroot due to lack of
-# these, it'll print a command to allow the user to install the missing stubs.
-MYPY_TYPES_PACKAGES = ("types-PyYAML",)
-
-# Path to the script that lints changes to ${toolchain_utils}/llvm_patches.
-LINT_LLVM_PATCHES_SCRIPT = "llvm_tools/lint_llvm_patches.py"
+# (str) paths relative to toolchain-utils' root where `__name__ == "__main__"`
+# is allowed. Generally speaking, these don't work as one might expect, due to
+# how we use wrappers.
+NAME_MAIN_ALLOWLIST = (
+    # This is just mirrored from the compiler wrapper dir, so is also directly
+    # executed by users.
+    "compiler_wrapper/build.py",
+    # This is mirrored from LLVM's upstream; no point in having divergence.
+    "llvm_tools/revert_checker.py",
+    # These are directly executed by users.
+    "venv_python3_wrapper.py",
+    "venv_tc/wheels.py",
+)
 
 
 def run_command_unchecked(
     command: Command,
-    cwd: Optional[str] = None,
-    env: Optional[Dict[str, str]] = None,
-) -> Tuple[int, str]:
+    cwd: str | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[int, str]:
     """Runs a command in the given dir, returning its exit code and stdio."""
     p = subprocess.run(
         command,
@@ -102,7 +96,7 @@ def has_executable_on_path(exe: str) -> bool:
     return shutil.which(exe) is not None
 
 
-def remove_deleted_files(files: Iterable[str]) -> List[str]:
+def remove_deleted_files(files: Iterable[str]) -> list[str]:
     return [f for f in files if os.path.exists(f)]
 
 
@@ -113,7 +107,7 @@ def is_file_executable(file_path: str) -> bool:
 # As noted in our docs, some of our Python code depends on modules that sit in
 # toolchain-utils/. Add that to PYTHONPATH to ensure that things like `cros
 # lint` are kept happy.
-def env_with_pythonpath(toolchain_utils_root: str) -> Dict[str, str]:
+def env_with_pythonpath(toolchain_utils_root: str) -> dict[str, str]:
     env = dict(os.environ)
     if "PYTHONPATH" in env:
         env["PYTHONPATH"] += ":" + toolchain_utils_root
@@ -126,85 +120,18 @@ def env_with_pythonpath(toolchain_utils_root: str) -> Dict[str, str]:
 class MyPyInvocation:
     """An invocation of mypy."""
 
-    command: List[str]
+    command: list[str]
 
 
-def list_installed_pip_packages(pip: List[str]) -> List[str]:
-    list_output = subprocess.run(
-        pip + ["list", "--format=json"],
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    ).stdout
-    # This listing is just a list of {"name": x, "version": y} dicts.
-    return [x["name"] for x in json.loads(list_output)]
-
-
-def maybe_get_or_install_mypy() -> Optional[MyPyInvocation]:
-    """Finds the mypy executable and returns a command to invoke it.
-
-    If mypy cannot be found and we're inside the chroot, this
-    function installs mypy and returns a command to invoke it.
-
-    If mypy cannot be found and we're outside the chroot, this
-    returns None.
-
-    Returns:
-        An optional tuple containing:
-            - the command to invoke mypy, and
-            - any environment variables to set when invoking mypy
-    """
-    if has_executable_on_path("mypy"):
-        return MyPyInvocation(command=["mypy"])
-
-    pip = get_pip()
-    if not pip:
-        assert not is_in_chroot()
-        return None
-
-    installed_packages = set(list_installed_pip_packages(pip))
-    pip_mypy_invocation = MyPyInvocation(
+def get_mypy() -> MyPyInvocation:
+    """Returns a MyPyInvocation that can be used to run mypy."""
+    return MyPyInvocation(
         command=[
-            "python3",
+            sys.executable,
             "-m",
             "mypy",
         ],
     )
-
-    # If we're not in the chroot, don't try to install packages into the user's
-    # pip environment. If they're missing mypy, they'll get warned about that.
-    # If they're missing relevant typing packages, mypy will error out & print
-    # commands that allow the user to install those on their own.
-    if not is_in_chroot():
-        if "mypy" in installed_packages:
-            return pip_mypy_invocation
-        return None
-
-    need_packages = ("mypy",) + MYPY_TYPES_PACKAGES
-    missing_packages = [x for x in need_packages if x not in installed_packages]
-    if missing_packages:
-        subprocess.check_call(pip + ["install", "--user"] + missing_packages)
-    return pip_mypy_invocation
-
-
-def get_pip() -> Optional[List[str]]:
-    """Finds pip and returns a command to invoke it.
-
-    If pip cannot be found, this function attempts to install
-    pip and returns a command to invoke it.
-
-    If pip cannot be found, this function returns None.
-    """
-    have_pip = can_import_py_module("pip")
-    if not have_pip:
-        print("Autoinstalling `pip`...")
-        subprocess.check_call(["python", "-m", "ensurepip"])
-        have_pip = can_import_py_module("pip")
-
-    if have_pip:
-        return ["python", "-m", "pip"]
-    return None
 
 
 def get_check_result_or_catch(
@@ -300,7 +227,7 @@ def check_black(
         )
 
     black_version = stdout_and_stderr.strip()
-    black_invocation: List[str] = [str(black), "--line-length=80"]
+    black_invocation: list[str] = [str(black), "--line-length=80"]
     command = black_invocation + ["--check"] + list(python_files)
     exit_code, stdout_and_stderr = run_command_unchecked(
         command, cwd=toolchain_utils_root
@@ -458,6 +385,47 @@ def check_python_file_headers(python_files: Iterable[str]) -> CheckResult:
     )
 
 
+def check_python_name_eq_main(
+    toolchain_utils_root: str, python_files: Iterable[str]
+) -> CheckResult:
+    """Subchecker of check_py_format. Checks for no __name__ == __main__."""
+    name_main_re = re.compile(r"if\s+__name__\s+==\s+['\"]__main__['\"]:")
+    bad_files = []
+    abs_name_main_allowlist = {
+        Path(toolchain_utils_root, x) for x in NAME_MAIN_ALLOWLIST
+    }
+    bad_files = [
+        x
+        for x in (Path(x) for x in python_files)
+        if x not in abs_name_main_allowlist
+        and name_main_re.search(x.read_text(encoding="utf-8"))
+    ]
+
+    if not bad_files:
+        return CheckResult(
+            ok=True,
+            output="",
+            autofix_commands=[],
+        )
+
+    error_lines = [
+        "if __name__ == '__main__' detected in unexpected files. This does ",
+        "nothing most of the time due to our Python wrappers. Please remove ",
+        "it, or add the file to NAME_MAIN_ALLOWLIST in check-presubmit.py.",
+        "",
+        "File(s):",
+    ]
+    error_lines += (f"- {x}" for x in bad_files)
+    return CheckResult(
+        ok=False,
+        output="\n".join(error_lines),
+        # It's kind of difficult to autofix this, since we need to scrape for
+        # multiple `__name__ == "__main__"` blocks and everything indented under
+        # them. Should be simple enough for the user to handle themself.
+        autofix_commands=[],
+    )
+
+
 def check_py_format(
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
@@ -504,25 +472,23 @@ def check_py_format(
             "check_file_headers",
             thread_pool.apply_async(check_python_file_headers, (python_files,)),
         ),
+        (
+            "check_name_eq_main",
+            thread_pool.apply_async(
+                check_python_name_eq_main, (toolchain_utils_root, python_files)
+            ),
+        ),
     ]
     return [(name, get_check_result_or_catch(task)) for name, task in tasks]
 
 
 def check_py_types(
-    mypy: Optional[MyPyInvocation],
+    mypy: MyPyInvocation,
     toolchain_utils_root: str,
     thread_pool: multiprocessing.pool.ThreadPool,
     files: Iterable[str],
 ) -> CheckResults:
     """Runs static type checking for Python files."""
-    if not mypy:
-        return CheckResult(
-            ok=False,
-            output="mypy not found. Please either enter a chroot "
-            "or install mypy",
-            autofix_commands=[],
-        )
-
     to_check = [x for x in files if x.endswith(".py")]
     if not to_check:
         return CheckResult(
@@ -542,7 +508,7 @@ def check_py_types(
     return [(name, get_check_result_or_catch(task)) for name, task in tasks]
 
 
-def find_chromeos_root_directory() -> Optional[str]:
+def find_chromeos_root_directory() -> str | None:
     return os.getenv("CHROMEOS_ROOT_DIRECTORY")
 
 
@@ -564,7 +530,7 @@ def check_cros_lint(
     # We have to support users who don't have a chroot. So we either run `cros
     # lint` (if it's been made available to us), or we try a mix of
     # pylint+staticcheck.
-    def try_run_cros_lint(cros_binary: str) -> Optional[CheckResult]:
+    def try_run_cros_lint(cros_binary: str) -> CheckResult | None:
         exit_code, output = run_command_unchecked(
             [cros_binary, "lint", "--"] + fixed_files,
             toolchain_utils_root,
@@ -596,7 +562,7 @@ def check_cros_lint(
 
     tasks = []
 
-    def check_result_from_command(command: List[str]) -> CheckResult:
+    def check_result_from_command(command: list[str]) -> CheckResult:
         exit_code, output = run_command_unchecked(
             command, toolchain_utils_root, env=fixed_env
         )
@@ -778,7 +744,7 @@ def process_check_result(
     check_name: str,
     check_results: CheckResults,
     start_time: datetime.datetime,
-) -> Tuple[bool, List[List[str]]]:
+) -> tuple[bool, list[list[str]]]:
     """Prints human-readable output for the given check_results."""
     indent = "  "
 
@@ -832,7 +798,7 @@ def process_check_result(
 
 
 def try_autofix(
-    all_autofix_commands: List[List[str]], toolchain_utils_root: str
+    all_autofix_commands: list[list[str]], toolchain_utils_root: str
 ) -> None:
     """Tries to run all given autofix commands, if appropriate."""
     if not all_autofix_commands:
@@ -874,7 +840,7 @@ def try_autofix(
         )
 
 
-def find_repo_root(base_dir: str) -> Optional[str]:
+def find_repo_root(base_dir: str) -> str | None:
     current = base_dir
     while current != "/":
         if os.path.isdir(os.path.join(current, ".repo")):
@@ -888,7 +854,7 @@ def is_in_chroot() -> bool:
 
 
 def maybe_reexec_inside_chroot(
-    autofix: bool, install_deps_only: bool, infer_files: bool, files: List[str]
+    autofix: bool, infer_files: bool, files: list[str]
 ) -> None:
     if is_in_chroot():
         return
@@ -939,13 +905,17 @@ def maybe_reexec_inside_chroot(
 
     args += [
         "--",
-        rebase_path(__file__),
+        os.path.join(
+            chroot_toolchain_utils,
+            "py",
+            "bin",
+            "toolchain_utils_githooks",
+            "check-presubmit.py",
+        ),
     ]
 
     if not autofix:
         args.append("--no_autofix")
-    if install_deps_only:
-        args.append("--install_deps_only")
     if infer_files:
         args.append("--infer_files")
     args.extend(rebase_path(x) for x in files)
@@ -968,7 +938,7 @@ def can_import_py_module(module: str) -> bool:
     return exit_code == 0
 
 
-def infer_files_from_env_or_die(toolchain_utils_root: Path) -> List[str]:
+def infer_files_from_env_or_die(toolchain_utils_root: Path) -> list[str]:
     env = os.environ
 
     # If we have PRESUBMIT_FILES, use those. It's a newline-delimeted list.
@@ -1027,36 +997,7 @@ def infer_files_from_env_or_die(toolchain_utils_root: Path) -> List[str]:
     ]
 
 
-def files_that_modify_patches_checks(
-    toolchain_utils_root: str, files: List[str]
-) -> List[str]:
-    llvm_patches = os.path.join(toolchain_utils_root, "llvm_patches/")
-    return [
-        x
-        for x in files
-        if x.startswith(llvm_patches) or x.endswith(LINT_LLVM_PATCHES_SCRIPT)
-    ]
-
-
-def check_patches_subdir(
-    toolchain_utils_root: str,
-    _thread_pool: multiprocessing.pool.ThreadPool,
-    _files: Iterable[str],
-) -> CheckResult:
-    check_script = (
-        Path(toolchain_utils_root) / "py" / "bin" / LINT_LLVM_PATCHES_SCRIPT
-    )
-    return_code, stdstreams = run_command_unchecked(
-        [check_script], cwd=toolchain_utils_root
-    )
-    return CheckResult(
-        ok=return_code == 0,
-        output=stdstreams,
-        autofix_commands=[],
-    )
-
-
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--no_autofix",
@@ -1071,14 +1012,6 @@ def main(argv: List[str]) -> int:
         help="Prevent auto-entering the chroot if we're not already in it.",
     )
     parser.add_argument(
-        "--install_deps_only",
-        action="store_true",
-        help="""
-        Only install dependencies that would be required if presubmits were
-        being run, and quit. This skips all actual checking.
-        """,
-    )
-    parser.add_argument(
         "--infer_files",
         action="store_true",
         help="""
@@ -1089,42 +1022,29 @@ def main(argv: List[str]) -> int:
     parser.add_argument("files", nargs="*")
     opts = parser.parse_args(argv)
 
-    install_deps_only = opts.install_deps_only
     infer_files = opts.infer_files
     files = opts.files
 
     toolchain_utils_root = detect_toolchain_utils_root()
     if opts.enter_chroot:
-        maybe_reexec_inside_chroot(
-            opts.autofix, install_deps_only, infer_files, files
-        )
+        maybe_reexec_inside_chroot(opts.autofix, infer_files, files)
 
-    if not install_deps_only:
-        if bool(files) == infer_files:
-            parser.error(
-                "Either `--infer_files` or a list of files must be passed, "
-                "not both."
-            )
-        if infer_files:
-            files = infer_files_from_env_or_die(Path(toolchain_utils_root))
-            print(f"Inferred files to check: {files}")
-
-    mypy = maybe_get_or_install_mypy()
-    # If you ask for --no_enter_chroot, you're on your own for installing these
-    # things.
-    if is_in_chroot():
-        if install_deps_only:
-            print(
-                "Dependency installation complete & --install_deps_only "
-                "passed. Quit."
-            )
-            return 0
-    elif install_deps_only:
+    if bool(files) == infer_files:
         parser.error(
-            "--install_deps_only is meaningless if the chroot isn't entered"
+            "Either `--infer_files` or a list of files must be passed, "
+            "not both."
         )
 
-    files = [os.path.abspath(f) for f in files]
+    if infer_files:
+        files = infer_files_from_env_or_die(Path(toolchain_utils_root))
+        print(f"Inferred files to check: {files}")
+
+    mypy = get_mypy()
+
+    # Most checks shouldn't check symlinks - changes to the underlying file
+    # should already be checked appropriately.
+    files_including_symlinks = [os.path.abspath(f) for f in files]
+    files = [x for x in files_including_symlinks if not os.path.islink(x)]
 
     CheckFn = Callable[
         [str, multiprocessing.pool.ThreadPool, Iterable[str]], CheckResults
@@ -1143,7 +1063,7 @@ def main(argv: List[str]) -> int:
         else:
             style_checked_files.append(f)
 
-    checks: List[Tuple[str, CheckFn, List[str]]] = [
+    checks: list[tuple[str, CheckFn, list[str]]] = [
         ("check_cros_lint", check_cros_lint, style_checked_files),
         ("check_py_format", check_py_format, style_checked_files),
         (
@@ -1156,12 +1076,9 @@ def main(argv: List[str]) -> int:
         (
             "check_no_compiler_wrapper_changes",
             check_no_compiler_wrapper_changes,
-            files,
+            files_including_symlinks,
         ),
     ]
-
-    if x := files_that_modify_patches_checks(toolchain_utils_root, files):
-        checks.append(("check_patches_subdir", check_patches_subdir, x))
 
     # NOTE: As mentioned above, checks can block on threads they spawn in this
     # pool, so we need at least len(checks)+1 threads to avoid deadlock. Use *2
@@ -1173,8 +1090,8 @@ def main(argv: List[str]) -> int:
     spawn_print_lock = threading.RLock()
 
     def run_check(
-        arg: Tuple[str, CheckFn, Iterable[str]],
-    ) -> Optional[Tuple[str, CheckResults]]:
+        arg: tuple[str, CheckFn, Iterable[str]],
+    ) -> tuple[str, CheckResults] | None:
         name, check_fn, files = arg
         with spawn_print_lock:
             if not files:
@@ -1206,7 +1123,3 @@ def main(argv: List[str]) -> int:
     if not all_checks_ok:
         return 1
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))

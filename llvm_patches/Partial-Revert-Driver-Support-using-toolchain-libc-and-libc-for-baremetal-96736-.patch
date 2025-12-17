@@ -1,5 +1,5 @@
 From 5fa933172737b3cefca4b78965b9d8f6895965af Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 14 Nov 2024 21:14:12 +0000
 Subject: [PATCH] Partial Revert "[Driver] Support using toolchain libc and
  libc++ for baremetal (#96736)"

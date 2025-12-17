@@ -1,1 +1,1 @@
-../../../python_wrapper.py
+../../../venvless_python3_wrapper.py

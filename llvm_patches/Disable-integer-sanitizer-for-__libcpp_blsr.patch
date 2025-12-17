@@ -1,5 +1,5 @@
 From 9e7249d518d59d4c35fab13a5482c75a2648dff1 Mon Sep 17 00:00:00 2001
-From: Yi Kong <yikong@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 28 May 2025 14:53:56 +0900
 Subject: [PATCH] Disable integer sanitizer for __libcpp_blsr
 

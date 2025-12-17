@@ -21,7 +21,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
-from typing import IO, List, Optional, Union
+from typing import IO
 
 from cros_utils import cros_paths
 from pgo_tools import pgo_utils
@@ -73,7 +73,7 @@ class RunData:
         )
 
 
-ProfilePath = Union[SpecialProfile, Path]
+ProfilePath = SpecialProfile | Path
 
 
 def parse_profile_path(path: str) -> ProfilePath:
@@ -105,7 +105,7 @@ def construct_hyperfine_cmd(
     profile: ProfilePath,
     llvm_binpkg: Path,
     use_thinlto: bool,
-    export_json: Optional[Path] = None,
+    export_json: Path | None = None,
 ) -> pgo_utils.Command:
     if isinstance(profile, Path):
         if profile != LOCAL_PROFILE_LOCATION:
@@ -161,7 +161,7 @@ def construct_hyperfine_cmd(
 
 
 def validate_profiles(
-    parser: argparse.ArgumentParser, profiles: List[ProfilePath]
+    parser: argparse.ArgumentParser, profiles: list[ProfilePath]
 ):
     number_of_path_profiles = 0
     nonexistent_profiles = []
@@ -192,8 +192,8 @@ def validate_profiles(
 
 def run_benchmark(
     use_thinlto: bool,
-    profiles: List[ProfilePath],
-) -> List[RunData]:
+    profiles: list[ProfilePath],
+) -> list[RunData]:
     """Runs the PGO benchmark with the given parameters.
 
     Args:
@@ -245,7 +245,7 @@ def run_benchmark(
     return accumulated_run_data
 
 
-def main(argv: List[str]):
+def main(argv: list[str]):
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

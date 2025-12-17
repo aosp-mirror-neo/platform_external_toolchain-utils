@@ -80,6 +80,12 @@ To https://chrome-internal-review.googlesource.com/chromeos/manifest-internal
 [OK    ] manifest-internal/ DO-NOT-COMMIT
 """
 
+GERRIT_OUTPUT_WITH_ANDROID_INTERNAL_CL = r"""
+remote: SUCCESS
+remote:
+remote:   https://googleplex-android-review.git.corp.google.com/c/platform/art/+/36999324 foo bar [WIP] [NEW]
+"""
+
 
 class Test(test_helpers.TempDirTestCase):
     """Tests for git_utils."""
@@ -122,6 +128,14 @@ class Test(test_helpers.TempDirTestCase):
                 GERRIT_OUTPUT_WITH_INTERNAL_CL
             ),
             [7190037],
+        )
+
+    def test_cl_parsing_works_with_internal_android_cl(self):
+        self.assertEqual(
+            git_utils._parse_cls_from_upload_output(
+                GERRIT_OUTPUT_WITH_ANDROID_INTERNAL_CL
+            ),
+            [36999324],
         )
 
     def test_parse_message_metadata(self):
@@ -268,12 +282,13 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
             ["subfile1"],
         )
 
+        contents = git_utils.maybe_list_dir_contents_at_commit(
+            temp_dir, "HEAD", "dir"
+        )
+        if not contents:
+            self.fail("'contents' was empty, but it should not have been")
         self.assertEqual(
-            sorted(
-                git_utils.maybe_list_dir_contents_at_commit(
-                    temp_dir, "HEAD", "dir"
-                )
-            ),
+            sorted(contents),
             ["subdir/", "subfile1", "subfile2"],
         )
 
@@ -281,6 +296,23 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
             git_utils.maybe_list_dir_contents_at_commit(
                 temp_dir, "HEAD", "file"
             )
+
+    def test_gerrit_cmd_wip(self):
+        cmd = git_utils.generate_upload_to_gerrit_cmd(
+            remote="cros",
+            branch="main",
+            reviewers=("some-reviewer@chromium.org",),
+            wip=True,
+        )
+        self.assertEqual(
+            tuple(cmd),
+            (
+                "git",
+                "push",
+                "cros",
+                "HEAD:refs/for/main%r=some-reviewer@chromium.org,wip",
+            ),
+        )
 
 
 class FormatPatchTest(test_helpers.TempDirTestCase):

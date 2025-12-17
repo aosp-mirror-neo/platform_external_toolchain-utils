@@ -1,5 +1,5 @@
 From a76cf062a57097ad7971325551854bd5f3d38d94 Mon Sep 17 00:00:00 2001
-From: Florian Mayer <fmayer@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Thu, 8 May 2025 14:02:30 -0700
 Subject: [PATCH] [HWASan] fix missing BTI attribute on personality function
  thunks (#139138)

@@ -4,17 +4,23 @@
 
 """Tests for nightly_revert_checker."""
 
+import subprocess
 import textwrap
 import time
 import unittest
 from unittest import mock
 
 from cros_utils import tiny_render
+from llvm_tools import git_llvm_rev
 from llvm_tools import nightly_revert_checker
-from llvm_tools import revert_checker
 
 
 # pylint: disable=protected-access
+
+ARBITRARY_LLVM_CONFIG = git_llvm_rev.LLVMConfig(
+    remote="/remote/that/does/not/exist",
+    dir="/dir/that/does/not/exist",
+)
 
 
 class Test(unittest.TestCase):
@@ -34,8 +40,9 @@ class Test(unittest.TestCase):
             prettify_sha=prettify_sha,
             get_sha_description=get_sha_description,
             new_reverts=[
-                revert_checker.Revert(
-                    sha="${revert_sha}", reverted_sha="${reverted_sha}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha}",
+                    reverted_shas=["${reverted_sha}"],
                 )
             ],
         )
@@ -55,7 +62,7 @@ class Test(unittest.TestCase):
                         [
                             "pretty_${revert_sha}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha}",
+                            ["pretty_${reverted_sha}"],
                             "): ",
                             "subject_${revert_sha}",
                         ]
@@ -82,15 +89,18 @@ class Test(unittest.TestCase):
             prettify_sha=prettify_sha,
             get_sha_description=get_sha_description,
             new_reverts=[
-                revert_checker.Revert(
-                    sha="${revert_sha1}", reverted_sha="${reverted_sha1}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha1}",
+                    reverted_shas=["${reverted_sha1}"],
                 ),
-                revert_checker.Revert(
-                    sha="${revert_sha2}", reverted_sha="${reverted_sha2}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha2}",
+                    reverted_shas=["${reverted_sha2a}", "${reverted_sha2b}"],
                 ),
                 # Keep this out-of-order to check that we sort based on SHAs
-                revert_checker.Revert(
-                    sha="${revert_sha0}", reverted_sha="${reverted_sha0}"
+                nightly_revert_checker.MultiRevert(
+                    revert_sha="${revert_sha0}",
+                    reverted_shas=["${reverted_sha0}"],
                 ),
             ],
         )
@@ -110,21 +120,25 @@ class Test(unittest.TestCase):
                         [
                             "pretty_${revert_sha0}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha0}",
+                            ["pretty_${reverted_sha0}"],
                             "): ",
                             "subject_${revert_sha0}",
                         ],
                         [
                             "pretty_${revert_sha1}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha1}",
+                            ["pretty_${reverted_sha1}"],
                             "): ",
                             "subject_${revert_sha1}",
                         ],
                         [
                             "pretty_${revert_sha2}",
                             " (appears to revert ",
-                            "pretty_${reverted_sha2}",
+                            [
+                                "pretty_${reverted_sha2a}",
+                                ", ",
+                                "pretty_${reverted_sha2b}",
+                            ],
                             "): ",
                             "subject_${revert_sha2}",
                         ],
@@ -313,6 +327,62 @@ class Test(unittest.TestCase):
             want_message,
         )
 
+    def test_update_new_state_head_info(self):
+        now = 1_000_000_000
+        old_state = nightly_revert_checker.State(
+            heads={
+                "dropped": nightly_revert_checker.HeadInfo(
+                    last_sha="sha_dropped",
+                    first_seen_timestamp=now - 100,
+                    next_notification_timestamp=now + 100,
+                ),
+                "kept": nightly_revert_checker.HeadInfo(
+                    last_sha="sha_kept",
+                    first_seen_timestamp=now - 200,
+                    next_notification_timestamp=now + 200,
+                ),
+                "updated": nightly_revert_checker.HeadInfo(
+                    last_sha="sha_updated_old",
+                    first_seen_timestamp=now - 300,
+                    next_notification_timestamp=now + 300,
+                ),
+            }
+        )
+        interesting_shas = [
+            ("kept", "sha_kept"),
+            ("updated", "sha_updated_new"),
+            ("added", "sha_added"),
+        ]
+        new_state = nightly_revert_checker.State()
+
+        nightly_revert_checker.update_new_state_head_info(
+            now=now,
+            interesting_shas=interesting_shas,
+            old_state=old_state,
+            new_state=new_state,
+        )
+
+        self.assertNotIn("dropped", new_state.heads)
+        self.assertEqual(new_state.heads["kept"], old_state.heads["kept"])
+        self.assertEqual(
+            new_state.heads["updated"],
+            nightly_revert_checker.HeadInfo(
+                last_sha="sha_updated_new",
+                first_seen_timestamp=now,
+                next_notification_timestamp=now
+                + nightly_revert_checker.HEAD_STALENESS_ALERT_INITIAL_SECS,
+            ),
+        )
+        self.assertEqual(
+            new_state.heads["added"],
+            nightly_revert_checker.HeadInfo(
+                last_sha="sha_added",
+                first_seen_timestamp=now,
+                next_notification_timestamp=now
+                + nightly_revert_checker.HEAD_STALENESS_ALERT_INITIAL_SECS,
+            ),
+        )
+
     def test_appending_footers_when_last_paragraph_is_tricky(self):
         base_message = textwrap.dedent(
             """\
@@ -340,4 +410,47 @@ class Test(unittest.TestCase):
                 ("foo: bar",),
             ),
             want_message,
+        )
+
+
+@mock.patch.object(git_llvm_rev, "translate_sha_to_rev", autospec=True)
+class RevertsOldCommitTest(unittest.TestCase):
+    """Tests for reverts_old_commit."""
+
+    def test_sha_translation_failure(self, mock_translate_sha_to_rev):
+        mock_translate_sha_to_rev.side_effect = subprocess.CalledProcessError(
+            1, "git"
+        )
+        self.assertFalse(
+            nightly_revert_checker.reverts_old_commit(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
+        )
+
+    def test_simple_true_case(self, mock_translate_sha_to_rev):
+        mock_translate_sha_to_rev.side_effect = [
+            git_llvm_rev.Rev(branch="main", number=100_000),
+            git_llvm_rev.Rev(branch="main", number=50_000),
+        ]
+        self.assertTrue(
+            nightly_revert_checker.reverts_old_commit(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
+        )
+
+    def test_simple_false_case(self, mock_translate_sha_to_rev):
+        mock_translate_sha_to_rev.side_effect = [
+            git_llvm_rev.Rev(branch="main", number=100_000),
+            git_llvm_rev.Rev(branch="main", number=90_000),
+        ]
+        self.assertFalse(
+            nightly_revert_checker.reverts_old_commit(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
         )

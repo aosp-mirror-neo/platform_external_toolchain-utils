@@ -1,11 +1,10 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
 """Tests for ensure_pgo_is_a_win."""
 
-from typing import Tuple
+
 import unittest
 
 from pgo_tools import benchmark_pgo_profiles
@@ -14,7 +13,7 @@ from pgo_tools import ensure_pgo_is_a_win
 
 def synthesize_run_data(
     no_profile_user_time: float, profile_user_time: float
-) -> Tuple[benchmark_pgo_profiles.RunData, benchmark_pgo_profiles.RunData]:
+) -> tuple[benchmark_pgo_profiles.RunData, benchmark_pgo_profiles.RunData]:
     return (
         benchmark_pgo_profiles.RunData(
             tag=str(ensure_pgo_is_a_win.NO_PROFILE),

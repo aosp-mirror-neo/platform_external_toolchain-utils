@@ -1,6 +1,0 @@
-#!/bin/bash
-
-DIRECTORY=$(cd "$(dirname "$0")" && pwd)
-export PYTHONPATH="${DIRECTORY}:${PYTHONPATH}"
-
-"$@"

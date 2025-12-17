@@ -16,7 +16,6 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import List, Optional, Tuple
 
 
 ABIS = (
@@ -43,19 +42,19 @@ _COLOR_GREEN = "\033[92m"
 _COLOR_RESET = "\033[0m"
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
         level=logging.INFO,
     )
-    args = parse_args()
+    args = parse_args(argv)
 
     version = args.version
     if not version:
         version = _autodetect_latest_llvm_next_sdk_version()
 
-    errors: List[Tuple[str, Exception]] = []
+    errors: list[tuple[str, Exception]] = []
     for abi in ABIS:
         res = check_abi(args.bucket_prefix, abi, version)
         if res:
@@ -78,7 +77,7 @@ def main() -> int:
 
 def check_abi(
     bucket_prefix: str, abi: str, version: Version
-) -> Optional[Exception]:
+) -> Exception | None:
     """Verify that a given ABI target triplet is okay."""
     year, month, _ = _split_version(version)
     toolchain_name = f"{abi}-{version}.tar.xz"
@@ -186,7 +185,7 @@ def _autodetect_latest_llvm_next_sdk_version() -> str:
     return version
 
 
-def _split_version(version: Version) -> Tuple[str, str, str]:
+def _split_version(version: Version) -> tuple[str, str, str]:
     y, m, rest = version.split(".", 2)
     return y, m, rest
 
@@ -196,7 +195,7 @@ def _verify_version(version: str) -> Version:
     return version
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     """Parse arguments."""
     parser = argparse.ArgumentParser(
         "check_portable_toolchains", description=__doc__
@@ -217,4 +216,4 @@ def parse_args() -> argparse.Namespace:
         default=GS_PREFIX,
         help="Top level gs:// path. (default: %(default)s)",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)

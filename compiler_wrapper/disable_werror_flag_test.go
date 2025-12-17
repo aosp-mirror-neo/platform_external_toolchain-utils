@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -272,6 +274,37 @@ func TestForwardStdoutAndStderrWhenDoubleBuildFails(t *testing.T) {
 	})
 }
 
+func TestStderrRedirectedToStdoutOnAndroidWerrorSuppression(t *testing.T) {
+	withAndroidTestContext(t, func(ctx *testContext) {
+		ctx.cfg.useLlvmNext = true
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				return newExitCodeError(1)
+			case 2:
+				fmt.Fprint(stdout, "retry_stdout")
+				fmt.Fprint(stderr, "retry_stderr")
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		stdout := ctx.stdoutString()
+		if !strings.Contains(stdout, "retry_stdout") {
+			t.Errorf("stdout missing retry stdout: %q", stdout)
+		}
+		if !strings.Contains(stdout, "retry_stderr") {
+			t.Errorf("stdout missing retry stderr: %q", stdout)
+		}
+		if stderr := ctx.stderrString(); stderr != "" {
+			t.Errorf("stderr should be empty, got: %q", stderr)
+		}
+	})
+}
+
 func TestForwardStdinFromDoubleBuild(t *testing.T) {
 	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
@@ -513,6 +546,15 @@ func newWerrorCommandBuilderOrDie(t *testing.T, ctx *testContext, opts commandBu
 	return b
 }
 
+func mustProcessForceDisableWerrorFlag(t *testing.T, ctx *testContext, builder *commandBuilder) forceDisableWerrorConfig {
+	t.Helper()
+	config, err := processForceDisableWerrorFlag(ctx, ctx.cfg, builder)
+	if err != nil {
+		t.Fatalf("processForceDisableWerrorFlag failed unexpectedly: %v", err)
+	}
+	return config
+}
+
 func TestAndroidDisableWerror(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		ctx.cfg.isAndroidWrapper = true
@@ -521,13 +563,15 @@ func TestAndroidDisableWerror(t *testing.T) {
 
 		// Disable werror ON
 		ctx.cfg.useLlvmNext = true
-		if !processForceDisableWerrorFlag(ctx, ctx.cfg, builder).enabled {
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
+		if !werrorConfig.enabled {
 			t.Errorf("disable Werror not enabled for Android with useLlvmNext")
 		}
 
 		// Disable werror OFF
 		ctx.cfg.useLlvmNext = false
-		if processForceDisableWerrorFlag(ctx, ctx.cfg, builder).enabled {
+		werrorConfig = mustProcessForceDisableWerrorFlag(t, ctx, builder)
+		if werrorConfig.enabled {
 			t.Errorf("disable-Werror enabled for Android without useLlvmNext")
 		}
 	})
@@ -536,7 +580,8 @@ func TestAndroidDisableWerror(t *testing.T) {
 func TestChromeOSNoForceDisableWerror(t *testing.T) {
 	withTestContext(t, func(ctx *testContext) {
 		builder := newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{})
-		if processForceDisableWerrorFlag(ctx, ctx.cfg, builder).enabled {
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
+		if werrorConfig.enabled {
 			t.Errorf("disable Werror enabled for ChromeOS without FORCE_DISABLE_WERROR set")
 		}
 	})
@@ -546,13 +591,47 @@ func TestChromeOSForceDisableWerrorOnlyAppliesToClang(t *testing.T) {
 	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
 		ctx.env = append(ctx.env, "FORCE_DISABLE_WERROR=1")
 		builder := newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{})
-		if !processForceDisableWerrorFlag(ctx, ctx.cfg, builder).enabled {
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
+		if !werrorConfig.enabled {
 			t.Errorf("Disable -Werror should be enabled for clang.")
 		}
 
 		builder = newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{isGcc: true})
-		if processForceDisableWerrorFlag(ctx, ctx.cfg, builder).enabled {
+		werrorConfig = mustProcessForceDisableWerrorFlag(t, ctx, builder)
+		if werrorConfig.enabled {
 			t.Errorf("Disable -Werror should be disabled for gcc.")
+		}
+	})
+}
+
+func TestAndroidForceDisableWerrorWorksAsFlag(t *testing.T) {
+	withAndroidTestContext(t, func(ctx *testContext) {
+		builder := newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{
+			cflags: []string{"-D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout"},
+		})
+
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
+		if !werrorConfig.enabled {
+			t.Fatalf("Disable -Werror should be enabled by flag.")
+		}
+
+		if !werrorConfig.reportToStdout {
+			t.Errorf("Stdout reporting should be enabled on Android")
+		} else if werrorConfig.reportDir != "" {
+			t.Errorf("Report location should be empty, got %q", werrorConfig.reportDir)
+		}
+	})
+}
+
+func TestAndroidForceDisableWerrorErrorsForBadFlagValues(t *testing.T) {
+	withAndroidTestContext(t, func(ctx *testContext) {
+		builder := newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{
+			cflags: []string{"-D_ANDROID_FORCE_DISABLE_WERROR=1"},
+		})
+
+		_, err := processForceDisableWerrorFlag(ctx, ctx.cfg, builder)
+		if err == nil {
+			t.Errorf("Invalid flag passed to force disable -Werror, but no error reported")
 		}
 	})
 }
@@ -562,7 +641,7 @@ func TestChromeOSForceDisableWerrorWorksAsFlag(t *testing.T) {
 		builder := newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{
 			cflags: []string{"-D_CROSTC_FORCE_DISABLE_WERROR=/foo"},
 		})
-		werrorConfig := processForceDisableWerrorFlag(ctx, ctx.cfg, builder)
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
 		if !werrorConfig.enabled {
 			t.Fatalf("Disable -Werror should be enabled by flag.")
 		}
@@ -581,7 +660,7 @@ func TestChromeOSForceDisableWerrorIsSuppressedInSrcConfigure(t *testing.T) {
 		builder := newWerrorCommandBuilderOrDie(t, ctx, commandBuilderOpts{
 			cflags: []string{"-D_CROSTC_FORCE_DISABLE_WERROR=/foo"},
 		})
-		werrorConfig := processForceDisableWerrorFlag(ctx, ctx.cfg, builder)
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
 		if werrorConfig.enabled {
 			t.Fatalf("Disable -Werror should be disabled during src_configure.")
 		}
@@ -598,7 +677,7 @@ func TestChromeOSForceDisableWerrorRemovesClangFlags(t *testing.T) {
 				"-D_CROSTC_FORCE_DISABLE_WERROR=/baz",
 			},
 		})
-		werrorConfig := processForceDisableWerrorFlag(ctx, ctx.cfg, builder)
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
 		if !werrorConfig.enabled {
 			t.Fatalf("Disable -Werror should be enabled by flag.")
 		}
@@ -627,7 +706,7 @@ func TestChromeOSForceDisableWerrorRemovesGCCFlagsButDoesNotEnableFeature(t *tes
 			},
 		})
 		builder.target.compilerType = gccType
-		werrorConfig := processForceDisableWerrorFlag(ctx, ctx.cfg, builder)
+		werrorConfig := mustProcessForceDisableWerrorFlag(t, ctx, builder)
 		if werrorConfig.enabled {
 			t.Fatalf("Disable -Werror should not be enabled for GCC.")
 		}
@@ -775,6 +854,124 @@ func TestProcPidStatParsingWorksAsIntended(t *testing.T) {
 
 		if tc.expected.parent != parent {
 			t.Errorf("Got parent=%v when parsing %q; expected %v", parent, tc.input, tc.expected.parent)
+		}
+	}
+}
+
+func TestDoubleBuildWithErrorLimitRerunsForLogs(t *testing.T) {
+	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
+		const unlimitedStderr = "unlimited " + arbitraryWerrorStderr
+		const errorFromSecondAttempt = "error: bar [-Wbar]"
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				// Original build. Fails with limited output.
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				fmt.Fprint(stderr, "\nfatal error: too many errors emitted, stopping now")
+				return newExitCodeError(1)
+			case 2:
+				// Rerun with -ferror-limit for better logs.
+				if err := verifyArgCount(cmd, 1, unlimitedErrorsFlag); err != nil {
+					return err
+				}
+				fmt.Fprintf(stderr, "%s\n%s", unlimitedStderr, errorFromSecondAttempt)
+				return newExitCodeError(1)
+			case 3:
+				// Generally, -Wno-error is expected, but also check for -Wno-bar,
+				// since that's the error that was only dislosed in `case 2`, and
+				// needs an explicit `-Wno-error=bar`.
+				if err := verifyArgCount(cmd, 1, "-Wno-error"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-Wno-error=bar"); err != nil {
+					return err
+				}
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		if ctx.cmdCount != 3 {
+			t.Errorf("expected 3 calls. Got: %d", ctx.cmdCount)
+		}
+		loggedWarnings := readLoggedWarnings(ctx)
+		if loggedWarnings == nil {
+			t.Fatal("expected logged warnings")
+		}
+		if !strings.Contains(loggedWarnings.Stdout, unlimitedStderr) {
+			t.Errorf("logged stdout/stderr is %q; expected to see %q in it", loggedWarnings.Stdout, unlimitedStderr)
+		}
+		if !slices.Contains(loggedWarnings.Command, unlimitedErrorsFlag) {
+			t.Errorf("logged command is %#v; expected to see %s in it", loggedWarnings.Command, unlimitedErrorsFlag)
+		}
+	})
+}
+
+func TestDoubleBuildWithoutErrorLimitDoesNotRerunForLogs(t *testing.T) {
+	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				// Original build. Fails.
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				return newExitCodeError(1)
+			case 2:
+				// Rerun with -Wno-error. Succeeds.
+				if err := verifyArgCount(cmd, 1, "-Wno-error"); err != nil {
+					return err
+				}
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, mainCc)))
+		if ctx.cmdCount != 2 {
+			t.Errorf("expected 2 calls. Got: %d", ctx.cmdCount)
+		}
+		loggedWarnings := readLoggedWarnings(ctx)
+		if loggedWarnings == nil {
+			t.Fatal("expected logged warnings")
+		}
+		if !strings.Contains(loggedWarnings.Stdout, arbitraryWerrorStderr) {
+			t.Errorf("logged stdout/stderr is %q; expected to see %q in it", loggedWarnings.Stdout, arbitraryWerrorStderr)
+		}
+		if slices.Contains(loggedWarnings.Command, unlimitedErrorsFlag) {
+			t.Errorf("logged command is %#v; did not expect to see -ferror-limit in it", loggedWarnings.Command)
+		}
+	})
+}
+
+func TestTrimRightSpacesInPlace(t *testing.T) {
+	t.Parallel()
+	testCases := []struct {
+		input    string
+		expected string
+	}{
+		{
+			input:    "",
+			expected: "",
+		},
+		{
+			input:    " \t\n",
+			expected: "",
+		},
+		{
+			input:    " hello world\t\n",
+			expected: " hello world",
+		},
+	}
+
+	buf := &bytes.Buffer{}
+	for _, tc := range testCases {
+		buf.Reset()
+		buf.WriteString(tc.input)
+		trimRightSpacesInPlace(buf)
+		if got := buf.String(); got != tc.expected {
+			t.Errorf("trimRightSpacesInPlace(%q) = %q; want %q", tc.input, got, tc.expected)
 		}
 	}
 }

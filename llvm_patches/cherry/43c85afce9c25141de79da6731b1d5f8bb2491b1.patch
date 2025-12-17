@@ -1,0 +1,133 @@
+From 43c85afce9c25141de79da6731b1d5f8bb2491b1 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Thu, 28 Aug 2025 19:13:53 -0700
+Subject: [PATCH] ThinLTOBitcodeWriter: Split modules with __cfi_check and no
+ type metadata.
+
+Eli Friedman found a case that was not handled correctly by #154833 where
+we failed to split the module if it contained a __cfi_check function but
+no type metadata. Handle this case correctly by checking for __cfi_check
+when deciding whether to split.
+
+Reviewers: teresajohnson, efriedma-quic
+
+Reviewed By: efriedma-quic
+
+Pull Request: https://github.com/llvm/llvm-project/pull/155930
+---
+ .../Transforms/IPO/ThinLTOBitcodeWriter.cpp   | 28 ++++++++++---------
+ .../cfi-check-no-metadata.ll                  | 18 ++++++++++++
+ 2 files changed, 33 insertions(+), 13 deletions(-)
+ create mode 100644 llvm/test/Transforms/ThinLTOBitcodeWriter/cfi-check-no-metadata.ll
+
+diff --git a/llvm/lib/Transforms/IPO/ThinLTOBitcodeWriter.cpp b/llvm/lib/Transforms/IPO/ThinLTOBitcodeWriter.cpp
+index 838f97c8f49af..2340fe5565388 100644
+--- a/llvm/lib/Transforms/IPO/ThinLTOBitcodeWriter.cpp
++++ b/llvm/lib/Transforms/IPO/ThinLTOBitcodeWriter.cpp
+@@ -269,6 +269,12 @@ static bool enableUnifiedLTO(Module &M) {
+ }
+ #endif
+ 
++bool mustEmitToMergedModule(const GlobalValue *GV) {
++  // The __cfi_check definition is filled in by the CrossDSOCFI pass which
++  // runs only in the merged module.
++  return GV->getName() == "__cfi_check";
++}
++
+ // If it's possible to split M into regular and thin LTO parts, do so and write
+ // a multi-module bitcode file with the two parts to OS. Otherwise, write only a
+ // regular LTO bitcode file to OS.
+@@ -350,19 +356,13 @@ void splitAndWriteThinLTOBitcode(
+       });
+     }
+ 
+-  auto MustEmitToMergedModule = [](const GlobalValue *GV) {
+-    // The __cfi_check definition is filled in by the CrossDSOCFI pass which
+-    // runs only in the merged module.
+-    return GV->getName() == "__cfi_check";
+-  };
+-
+   ValueToValueMapTy VMap;
+   std::unique_ptr<Module> MergedM(
+       CloneModule(M, VMap, [&](const GlobalValue *GV) -> bool {
+         if (const auto *C = GV->getComdat())
+           if (MergedMComdats.count(C))
+             return true;
+-        if (MustEmitToMergedModule(GV))
++        if (mustEmitToMergedModule(GV))
+           return true;
+         if (auto *F = dyn_cast<Function>(GV))
+           return EligibleVirtualFns.count(F);
+@@ -380,7 +380,7 @@ void splitAndWriteThinLTOBitcode(
+   cloneUsedGlobalVariables(M, *MergedM, /*CompilerUsed*/ true);
+ 
+   for (Function &F : *MergedM)
+-    if (!F.isDeclaration() && !MustEmitToMergedModule(&F)) {
++    if (!F.isDeclaration() && !mustEmitToMergedModule(&F)) {
+       // Reset the linkage of all functions eligible for virtual constant
+       // propagation. The canonical definitions live in the thin LTO module so
+       // that they can be imported.
+@@ -406,7 +406,7 @@ void splitAndWriteThinLTOBitcode(
+     if (const auto *C = GV->getComdat())
+       if (MergedMComdats.count(C))
+         return false;
+-    if (MustEmitToMergedModule(GV))
++    if (mustEmitToMergedModule(GV))
+       return false;
+     return true;
+   });
+@@ -529,11 +529,13 @@ bool enableSplitLTOUnit(Module &M) {
+   return EnableSplitLTOUnit;
+ }
+ 
+-// Returns whether this module needs to be split because it uses type metadata.
+-bool hasTypeMetadata(Module &M) {
++// Returns whether this module needs to be split (if splitting is enabled).
++bool requiresSplit(Module &M) {
+   for (auto &GO : M.global_objects()) {
+     if (GO.hasMetadata(LLVMContext::MD_type))
+       return true;
++    if (mustEmitToMergedModule(&GO))
++      return true;
+   }
+   return false;
+ }
+@@ -543,9 +545,9 @@ bool writeThinLTOBitcode(raw_ostream &OS, raw_ostream *ThinLinkOS,
+                          Module &M, const ModuleSummaryIndex *Index,
+                          const bool ShouldPreserveUseListOrder) {
+   std::unique_ptr<ModuleSummaryIndex> NewIndex = nullptr;
+-  // See if this module has any type metadata. If so, we try to split it
++  // See if this module needs to be split. If so, we try to split it
+   // or at least promote type ids to enable WPD.
+-  if (hasTypeMetadata(M)) {
++  if (requiresSplit(M)) {
+     if (enableSplitLTOUnit(M)) {
+       splitAndWriteThinLTOBitcode(OS, ThinLinkOS, AARGetter, M,
+                                   ShouldPreserveUseListOrder);
+diff --git a/llvm/test/Transforms/ThinLTOBitcodeWriter/cfi-check-no-metadata.ll b/llvm/test/Transforms/ThinLTOBitcodeWriter/cfi-check-no-metadata.ll
+new file mode 100644
+index 0000000000000..20b253231cd4d
+--- /dev/null
++++ b/llvm/test/Transforms/ThinLTOBitcodeWriter/cfi-check-no-metadata.ll
+@@ -0,0 +1,18 @@
++; RUN: opt -thinlto-bc -thinlto-split-lto-unit -o %t %s
++; RUN: llvm-modextract -b -n 0 -o - %t | llvm-dis | FileCheck --check-prefix=M0 %s
++; RUN: llvm-modextract -b -n 1 -o - %t | llvm-dis | FileCheck --check-prefix=M1 %s
++
++; Check that __cfi_check is emitted on the full LTO side with
++; attributes preserved, even if nothing has !type metadata
++; on the ThinLTO side.
++
++; M0: @g = global i32 0
++@g = global i32 0
++
++; M1: define void @__cfi_check() #0
++define void @__cfi_check() #0 {
++  ret void
++}
++
++; M1: attributes #0 = { "branch-target-enforcement" }
++attributes #0 = { "branch-target-enforcement" }
+-- 
+2.51.0.355.g5224444f11-goog
+

@@ -17,7 +17,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from typing import Iterator, Optional, Tuple, Union
+from typing import Iterator
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -26,7 +26,6 @@ from llvm_tools import cros_llvm_repo
 from llvm_tools import git_llvm_rev
 from llvm_tools import llvm_next
 from llvm_tools import manifest_utils
-from llvm_tools import subprocess_helpers
 
 
 _LLVM_GIT_URL = (
@@ -42,7 +41,7 @@ KNOWN_HASH_SOURCES = (
 )
 
 
-def GetVersionFrom(src_dir: Union[Path, str], git_hash: str) -> int:
+def GetVersionFrom(src_dir: Path | str, git_hash: str) -> int:
     """Obtain an SVN-style version number based on the LLVM git hash passed in.
 
     Args:
@@ -61,7 +60,7 @@ def GetVersionFrom(src_dir: Union[Path, str], git_hash: str) -> int:
     return version.number
 
 
-def GetGitHashFrom(src_dir: Union[Path, str], version: int) -> str:
+def GetGitHashFrom(src_dir: Path | str, version: int) -> str:
     """Finds the commit hash(es) of the LLVM version in the git log history.
 
     Args:
@@ -81,7 +80,7 @@ def GetGitHashFrom(src_dir: Union[Path, str], version: int) -> str:
     )
 
 
-def ParseLLVMMajorVersion(cmakelist: str) -> Optional[str]:
+def ParseLLVMMajorVersion(cmakelist: str) -> str | None:
     """Reads CMakeList.txt file contents for LLVMMajor Version.
 
     Args:
@@ -99,7 +98,7 @@ def ParseLLVMMajorVersion(cmakelist: str) -> Optional[str]:
 
 
 @functools.lru_cache(maxsize=1)
-def GetLLVMMajorVersion(git_hash: Optional[str] = None) -> str:
+def GetLLVMMajorVersion(git_hash: str | None = None) -> str:
     """Reads llvm/CMakeList.txt file contents for LLVMMajor Version.
 
     Args:
@@ -335,11 +334,11 @@ def GetGoogle3LLVMVersion(stable: bool) -> int:
             "installs/llvm/git_origin_rev_id",
         ),
     ]
-    git_hash = subprocess_helpers.check_output(cmd).rstrip()
+    git_hash = subprocess.check_output(cmd, encoding="utf-8").rstrip()
     return GetCachedUpToDateReadOnlyLLVMRepo().GetRevisionFromHash(git_hash)
 
 
-def IsSvnOption(svn_option: str) -> Union[int, str]:
+def IsSvnOption(svn_option: str) -> int | str:
     """Validates whether the argument (string) is a git hash option.
 
     The argument is used to find the git hash of LLVM.
@@ -373,8 +372,8 @@ def IsSvnOption(svn_option: str) -> Union[int, str]:
 
 
 def GetLLVMHashAndVersionFromSVNOption(
-    svn_option: Union[int, str],
-) -> Tuple[str, int]:
+    svn_option: int | str,
+) -> tuple[str, int]:
     """Gets the LLVM hash and LLVM version based off of the svn option.
 
     Args:
@@ -510,8 +509,9 @@ class LLVMHash:
         """Gets the latest git hash from top of trunk of LLVM."""
 
         path_to_main_branch = "refs/heads/main"
-        llvm_tot_git_hash = subprocess_helpers.check_output(
-            ["git", "ls-remote", _LLVM_GIT_URL, path_to_main_branch]
+        llvm_tot_git_hash = subprocess.check_output(
+            ["git", "ls-remote", _LLVM_GIT_URL, path_to_main_branch],
+            encoding="utf-8",
         )
         return llvm_tot_git_hash.rstrip().split()[0]
 
@@ -519,7 +519,7 @@ class LLVMHash:
 def DetectLatestLLVMBranch(
     chromiumos_tree: Path,
     rev: int,
-) -> Optional[str]:
+) -> str | None:
     """Returns the latest llvm-next branch for `rev`.
 
     If no branches exist for `rev`, returns None.
@@ -558,7 +558,7 @@ def DetectLatestLLVMBranch(
     return most_recent_branch
 
 
-def main() -> None:
+def main(argv: list[str]) -> None:
     """Prints the git hash of LLVM.
 
     Parses the command line for the optional command line
@@ -589,7 +589,7 @@ def main() -> None:
     )
 
     # Parse command-line arguments.
-    args_output = parser.parse_args()
+    args_output = parser.parse_args(argv)
 
     cur_llvm_version = args_output.llvm_version
     chromeos_tree = args_output.chromeos_tree

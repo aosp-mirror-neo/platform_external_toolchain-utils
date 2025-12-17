@@ -6,33 +6,14 @@
 
 
 import base64
-import contextlib
 import datetime
-from email import encoders as Encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-import getpass
 import json
 import os
-import smtplib
-import subprocess
-import tempfile
+
+from cros_utils import gs
 
 
-X20_PATH = "/google/data/rw/teams/c-compiler-chrome/prod_emails"
-
-
-@contextlib.contextmanager
-def AtomicallyWriteFile(file_path):
-    temp_path = file_path + ".in_progress"
-    try:
-        with open(temp_path, "w", encoding="utf-8") as f:
-            yield f
-        os.rename(temp_path, file_path)
-    except:
-        os.remove(temp_path)
-        raise
+GS_PATH = "gs://crostc-chrotomation-dev-artifacts/prod_emails"
 
 
 class EmailSender:
@@ -45,7 +26,7 @@ class EmailSender:
             self.name = name
             self.content = content
 
-    def SendX20Email(
+    def SendGSEmail(
         self,
         subject,
         identifier,
@@ -54,13 +35,10 @@ class EmailSender:
         text_body=None,
         html_body=None,
     ):
-        """Enqueues an email in our x20 outbox.
+        """Enqueues an email in our gs outbox.
 
         These emails ultimately get sent by the machinery in
         //depot/google3/googleclient/chrome/chromeos_toolchain/mailer/mail.go.
-        This kind of sending is intended for accounts that don't have smtp or
-        gmr access (e.g., role accounts), but can be used by anyone with x20
-        access.
 
         All emails are sent from
         `mdb.c-compiler-chrome+${identifier}@google.com`.
@@ -139,171 +117,9 @@ class EmailSender:
         now = datetime.datetime.utcnow().isoformat("T", "seconds") + "Z"
         entropy = base64.urlsafe_b64encode(os.getrandom(8))
         entropy_str = entropy.rstrip(b"=").decode("utf-8")
-        result_path = os.path.join(X20_PATH, now + "_" + entropy_str + ".json")
+        result_path = os.path.join(GS_PATH, now + "_" + entropy_str + ".json")
 
-        with AtomicallyWriteFile(result_path) as f:
-            json.dump(email_json, f)
-
-    def SendEmail(
-        self,
-        email_to,
-        subject,
-        text_to_send,
-        email_cc=None,
-        email_bcc=None,
-        email_from=None,
-        msg_type="plain",
-        attachments=None,
-    ):
-        """Choose appropriate email method and call it."""
-        if os.path.exists("/usr/bin/sendgmr"):
-            self.SendGMREmail(
-                email_to,
-                subject,
-                text_to_send,
-                email_cc,
-                email_bcc,
-                email_from,
-                msg_type,
-                attachments,
-            )
-        else:
-            self.SendSMTPEmail(
-                email_to,
-                subject,
-                text_to_send,
-                email_cc,
-                email_bcc,
-                email_from,
-                msg_type,
-                attachments,
-            )
-
-    def SendSMTPEmail(
-        self,
-        email_to,
-        subject,
-        text_to_send,
-        email_cc,
-        email_bcc,
-        email_from,
-        msg_type,
-        attachments,
-    ):
-        """Send email via standard smtp mail."""
-        # Email summary to the current user.
-        msg = MIMEMultipart()
-
-        if not email_from:
-            email_from = os.path.basename(__file__)
-
-        msg["To"] = ",".join(email_to)
-        msg["Subject"] = subject
-
-        if email_from:
-            msg["From"] = email_from
-        if email_cc:
-            msg["CC"] = ",".join(email_cc)
-            email_to += email_cc
-        if email_bcc:
-            msg["BCC"] = ",".join(email_bcc)
-            email_to += email_bcc
-
-        msg.attach(MIMEText(text_to_send, msg_type))
-        if attachments:
-            for attachment in attachments:
-                part = MIMEBase("application", "octet-stream")
-                part.set_payload(attachment.content)
-                Encoders.encode_base64(part)
-                part.add_header(
-                    "Content-Disposition",
-                    'attachment; filename="%s"' % attachment.name,
-                )
-                msg.attach(part)
-
-        # Send the message via our own SMTP server, but don't include the
-        # envelope header.
-        s = smtplib.SMTP("localhost")
-        s.sendmail(email_from, email_to, msg.as_string())
-        s.quit()
-
-    def SendGMREmail(
-        self,
-        email_to,
-        subject,
-        text_to_send,
-        email_cc,
-        email_bcc,
-        email_from,
-        msg_type,
-        attachments,
-    ):
-        """Send email via sendgmr program."""
-        if not email_from:
-            email_from = getpass.getuser() + "@google.com"
-
-        to_list = ",".join(email_to)
-
-        if not text_to_send:
-            text_to_send = "Empty message body."
-
-        to_be_deleted = []
-        try:
-            with tempfile.NamedTemporaryFile(
-                "w", encoding="utf-8", delete=False
-            ) as f:
-                f.write(text_to_send)
-                f.flush()
-            to_be_deleted.append(f.name)
-
-            # Fix single-quotes inside the subject. In bash, to escape a single
-            # quote (e.g 'don't') you need to replace it with '\'' (e.g.
-            # 'don'\''t'). To make Python read the backslash as a backslash
-            # rather than an escape character, you need to double it. So...
-            subject = subject.replace("'", "'\\''")
-
-            command = [
-                "sendgmr",
-                f"--to={to_list}",
-                f"--from={email_from}",
-                f"--subject={subject}",
-            ]
-            if msg_type == "html":
-                command += [f"--html_file={f.name}", "--body_file=/dev/null"]
-            else:
-                command.append(f"--body_file={f.name}")
-
-            if email_cc:
-                cc_list = ",".join(email_cc)
-                command.append(f"--cc={cc_list}")
-            if email_bcc:
-                bcc_list = ",".join(email_bcc)
-                command.append(f"--bcc={bcc_list}")
-
-            if attachments:
-                attachment_files = []
-                for attachment in attachments:
-                    if "<html>" in attachment.content:
-                        report_suffix = "_report.html"
-                    else:
-                        report_suffix = "_report.txt"
-                    with tempfile.NamedTemporaryFile(
-                        "w",
-                        encoding="utf-8",
-                        delete=False,
-                        suffix=report_suffix,
-                    ) as f:
-                        f.write(attachment.content)
-                        f.flush()
-                    attachment_files.append(f.name)
-                files = ",".join(attachment_files)
-                command.append(f"--attachment_files={files}")
-                to_be_deleted += attachment_files
-
-            # Send the message via our own GMR server.
-            completed_process = subprocess.run(command, check=False)
-            return completed_process.returncode
-
-        finally:
-            for f in to_be_deleted:
-                os.remove(f)
+        # Note that gs writes are all-or-nothing and atomic; no need for
+        # tempfiles.
+        with gs.streaming_encoded_upload_to(result_path) as sink:
+            json.dump(email_json, sink)

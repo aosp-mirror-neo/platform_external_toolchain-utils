@@ -130,7 +130,3 @@ class LogErrorsWithLintsTest(unittest.TestCase):
                 lints=lints, finding_expectations=expectations
             )
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -21,7 +21,6 @@ import re
 import shlex
 import subprocess
 import textwrap
-from typing import Dict, List, Optional
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -49,7 +48,7 @@ class GsProfileCache:
            `cache.insert_profile(123, suffix="foo")`.
     """
 
-    def __init__(self, profiles: Dict[int, List[str]]):
+    def __init__(self, profiles: dict[int, list[str]]):
         """Constructs an object.
 
         Args:
@@ -127,7 +126,7 @@ class GsProfileCache:
         return cls(profiles)
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -266,7 +265,7 @@ def maybe_upload_new_llvm_next_profile(
 
 
 def overwrite_llvm_pgo_listing(
-    chromiumos_overlay: Path, profile_names: List[str]
+    chromiumos_overlay: Path, profile_names: list[str]
 ) -> bool:
     ebuild = chromiumos_overlay / LLVM_EBUILD_SUBPATH
     contents = ebuild.read_text(encoding="utf-8")
@@ -307,7 +306,7 @@ def create_llvm_pgo_ebuild_update(
     chromiumos_overlay: Path,
     profile_cache: GsProfileCache,
     dry_run: bool,
-) -> Optional[str]:
+) -> str | None:
     current_llvm_sha = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(
         chromeos_root
     )
@@ -365,7 +364,7 @@ def create_llvm_pgo_ebuild_update(
     )
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     my_dir = Path(__file__).resolve().parent
 
     pgo_utils.exit_if_in_chroot()

@@ -1,0 +1,60 @@
+From efa28338d858e1ea2bf705d50a0404bc602c8fe1 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 16 May 2025 21:04:08 +0200
+Subject: [PATCH] [Clang] Fix a regression introduced by #140073 (#140288)
+
+Pointer to data member don't decay, assuming they do caused an assertion
+failure.
+---
+ clang/include/clang/Sema/Overload.h           |  3 ++-
+ ...overload-resolution-deferred-templates.cpp | 23 +++++++++++++++++++
+ 2 files changed, 25 insertions(+), 1 deletion(-)
+
+diff --git a/clang/include/clang/Sema/Overload.h b/clang/include/clang/Sema/Overload.h
+index e88f764a0a60..a70335bef9dd 100644
+--- a/clang/include/clang/Sema/Overload.h
++++ b/clang/include/clang/Sema/Overload.h
+@@ -435,7 +435,8 @@ class Sema;
+ 
+           // A function pointer type can be resolved to a member function type,
+           // which is still an identity conversion.
+-          if (auto *N = T->getAs<MemberPointerType>())
++          if (auto *N = T->getAs<MemberPointerType>();
++              N && N->isMemberFunctionPointer())
+             T = C.getDecayedType(N->getPointeeType());
+           return T;
+         };
+diff --git a/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp b/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp
+index d559fb23ca04..4c5ac5dcbbd0 100644
+--- a/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp
++++ b/clang/test/SemaCXX/overload-resolution-deferred-templates.cpp
+@@ -251,3 +251,26 @@ void f() {
+   e.g(&N::f);
+ }
+ }
++
++#if __cplusplus >= 201402
++namespace PointerToMemData {
++struct N {
++  int field;
++};
++template <typename It, typename T>
++struct B {
++  B(It, T);
++  template <typename It2>
++  B(B<It2, T>);
++};
++template <typename T>
++struct C {
++  auto g() { return B<int, T>(0, T{}); }
++};
++void f() {
++  using T = decltype(C<decltype(&N::field)>{}.g());
++}
++
++}
++
++#endif
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

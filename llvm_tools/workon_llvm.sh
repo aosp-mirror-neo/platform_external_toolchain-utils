@@ -51,6 +51,8 @@ workon_host() {
     done
   done
 
+  # The command can take a while, so print it before running it.
+  set -x
   cros workon --host start \
     sys-devel/llvm \
     sys-libs/libcxx \
@@ -58,6 +60,7 @@ workon_host() {
     sys-libs/scudo \
     dev-util/lldb-server \
     "${cross_compile_combination[@]}"
+  { set +x; } 2>/dev/null
 }
 
 workon_board() {

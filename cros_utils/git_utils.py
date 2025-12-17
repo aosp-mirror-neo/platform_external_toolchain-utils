@@ -13,12 +13,16 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Dict, Generator, Iterable, List, Optional, Union
+from typing import Generator, Iterable, Sequence
 
 
 # Email address used to tag the detective/mage as a reviewer.
 REVIEWER_DETECTIVE = "c-compiler-chrome@google.com"
 REVIEWER_MAGE = "chromeos-toolchain-mage@google.com"
+
+# Default git naming conventions throughout Android.
+ANDROID_INTERNAL_REMOTE = "goog"
+ANDROID_MAIN_BRANCH = "main"
 
 # Default git naming conventions throughout ChromeOS.
 CROS_EXTERNAL_REMOTE = "cros"
@@ -62,7 +66,7 @@ class ChannelBranch:
     branch_name: str
 
 
-def autodetect_cros_channels(git_repo: Path) -> Dict[Channel, ChannelBranch]:
+def autodetect_cros_channels(git_repo: Path) -> dict[Channel, ChannelBranch]:
     """Autodetects the current ChromeOS channels from a git repo.
 
     Returns:
@@ -113,11 +117,11 @@ def autodetect_cros_channels(git_repo: Path) -> Dict[Channel, ChannelBranch]:
     }
 
 
-def _parse_cls_from_upload_output(upload_output: str) -> List[int]:
+def _parse_cls_from_upload_output(upload_output: str) -> list[int]:
     """Returns the CL number in the given upload output."""
     id_regex = re.compile(
         r"^remote:\s+https://"
-        r"(?:chromium|chrome-internal)"
+        r"(?:chromium|chrome-internal|googleplex-android)"
         r"-review\S+/\+/(\d+)\s",
         re.MULTILINE,
     )
@@ -156,8 +160,9 @@ def generate_upload_to_gerrit_cmd(
     reviewers: Iterable[str] = (),
     cc: Iterable[str] = (),
     ref: str = "HEAD",
-    topic: Optional[str] = None,
-) -> List[str]:
+    topic: str | None = None,
+    wip: bool = False,
+) -> list[str]:
     """Create a git push CLI command to upload to Gerrit.
 
     This is similar to `upload_to_gerrit`, but doesn't actually
@@ -172,6 +177,7 @@ def generate_upload_to_gerrit_cmd(
         ref: The ref (generally a SHA) to upload. Note that any parents of this
             that Gerrit does not recognize will be uploaded.
         topic: Gerrit topic to add the change to.
+        wip: Whether to upload the CL as WIP
 
     Returns:
         A list representing the command line args to push to the gerrit
@@ -181,6 +187,8 @@ def generate_upload_to_gerrit_cmd(
     # for more info on the `%` params.
     option_list = [f"r={x}" for x in reviewers]
     option_list += (f"cc={x}" for x in cc)
+    if wip:
+        option_list.append("wip")
     if topic is not None:
         option_list.append(f"topic={topic}")
     if option_list:
@@ -203,8 +211,9 @@ def upload_to_gerrit(
     reviewers: Iterable[str] = (),
     cc: Iterable[str] = (),
     ref: str = "HEAD",
-    topic: Optional[str] = None,
-) -> List[int]:
+    topic: str | None = None,
+    wip: bool = False,
+) -> list[int]:
     """Uploads `ref` to gerrit, optionally adding reviewers/CCs.
 
     Args:
@@ -216,6 +225,7 @@ def upload_to_gerrit(
         ref: The ref (generally a SHA) to upload. Note that any parents of this
             that Gerrit does not recognize will be uploaded.
         topic: Gerrit topic to add the change to.
+        wip: Whether to upload the CL as WIP
 
     Returns:
         A list of CL numbers uploaded.
@@ -227,6 +237,7 @@ def upload_to_gerrit(
         cc,
         ref,
         topic,
+        wip,
     )
     run_result = subprocess.run(
         cmd,
@@ -319,8 +330,8 @@ def set_autoreview_topic_and_labels(cwd: Path, cl_id: int) -> None:
 @contextlib.contextmanager
 def create_worktree(
     git_directory: Path,
-    in_dir: Optional[Path] = None,
-    commitish: Optional[str] = None,
+    in_dir: Path | None = None,
+    commitish: str | None = None,
 ) -> Generator[Path, None, None]:
     """Creates a temp worktree of `git_directory`, yielding the result.
 
@@ -342,7 +353,7 @@ def create_worktree(
         logging.info(
             "Establishing worktree of %s in %s", git_directory, tempdir
         )
-        cmd: List[Union[str, os.PathLike]] = [
+        cmd: list[str | os.PathLike] = [
             "git",
             "worktree",
             "add",
@@ -394,7 +405,45 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
     ).stdout.strip()
 
 
-def commit_all_changes(git_dir: Path, message: str) -> str:
+def stage_all_unstaged_changes(git_dir: Path, quiet: bool = False) -> None:
+    """Runs `git add -A` to stage all changes."""
+    subprocess.run(
+        ("git", "add", "-A"),
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE if quiet else None,
+        stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8",
+        errors="replace",
+    )
+
+
+def _add_all_files_and_commit(
+    git_dir: Path, quiet: bool, extra_commit_flags: tuple[str, ...]
+) -> str:
+    """Stage all changes to this repo, and run a commit.
+
+    Returns:
+        SHA of the new commit.
+    """
+    # Explicitly add`, since that stages all unstaged changes & adds any files
+    # that aren't tracked. `git commit -a` skips adding untracked files.
+    stage_all_unstaged_changes(git_dir, quiet)
+    subprocess.run(
+        ("git", "commit") + extra_commit_flags,
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE if quiet else None,
+        stderr=subprocess.STDOUT if quiet else None,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return resolve_ref(git_dir, "HEAD")
+
+
+def commit_all_changes(git_dir: Path, message: str, quiet: bool = False) -> str:
     """Commits all changes in `git_dir`, with the given commit message.
 
     This also commits any untracked files in `git_dir`.
@@ -403,30 +452,27 @@ def commit_all_changes(git_dir: Path, message: str) -> str:
         git_dir: Anywhere in the git directory in which changes should be
             committed.
         message: Message of the commit message.
+        quiet: silence all stdout/stderr. If this is True and an operation
+          fails, the exception object will carry the combined stdout/stderr in
+          the `stdout` member.
 
     Returns:
         The SHA of the committed change.
     """
-    # Explicitly add using `git add -A`, since that stages all unstaged changes
-    # & adds any files that aren't tracked. `git commit -a` skips adding
-    # untracked files.
-    subprocess.run(
-        ["git", "add", "-A"],
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
+    return _add_all_files_and_commit(
+        git_dir, quiet, extra_commit_flags=("-m", message)
     )
-    subprocess.run(
-        ["git", "commit", "-m", message],
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
+
+
+def amend_head_with_all_changes(git_dir: Path, quiet: bool = False) -> str:
+    """`commit_all_changes`, but with `--amend --no-edit`."""
+    return _add_all_files_and_commit(
+        git_dir, quiet, extra_commit_flags=("--amend", "--no-edit")
     )
-    return resolve_ref(git_dir, "HEAD")
 
 
 def fetch(
-    git_dir: Path, remote: Optional[str] = None, branch: Optional[str] = None
+    git_dir: Path, remote: str | None = None, branch: str | None = None
 ) -> None:
     """Runs `git fetch`.
 
@@ -452,10 +498,30 @@ def fetch(
     )
 
 
-def checkout(git_dir: Path, ref: str) -> None:
-    """Runs `git checkout ${ref}."""
+def checkout(
+    git_dir: Path, ref: str | None, paths: Sequence[str | os.PathLike] = ()
+) -> None:
+    """Runs `git checkout ${ref}`.
+
+    If `ref` is specified, the given ref is targeted for the checkout.
+    Otherwise, it's Git's standard "HEAD plus staged changes."
+
+    If `paths` is specified, only the given paths are checked out.
+    """
+    if not ref and not paths:
+        raise ValueError("`git checkout` makes no sense without paths or a ref")
+
+    cmd: list[str | os.PathLike] = ["git", "checkout"]
+
+    if ref:
+        cmd.append(ref)
+
+    if paths:
+        cmd.append("--")
+        cmd += paths
+
     subprocess.run(
-        ("git", "checkout", ref),
+        cmd,
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -505,7 +571,7 @@ def discard_changes_and_checkout(git_dir: Path, ref: str):
 
 def maybe_show_file_at_commit(
     git_dir: Path, ref: str, path_from_git_root: str
-) -> Optional[str]:
+) -> str | None:
     """Returns the given file's contents at `ref`.
 
     Args:
@@ -546,7 +612,7 @@ def maybe_show_file_at_commit(
 
 def maybe_list_dir_contents_at_commit(
     git_dir: Path, ref: str, path_from_git_root: str
-) -> Optional[List[str]]:
+) -> list[str] | None:
     """Returns files contained in the given directory at the given commit.
 
     Args:
@@ -636,10 +702,21 @@ def format_patch(git_dir: Path, ref: str) -> str:
     return contents
 
 
+def apply_patch_contents(git_dir: Path, patch_contents: str):
+    """Applies the given patch contents to the given git repo."""
+    subprocess.run(
+        ("git", "apply"),
+        check=True,
+        cwd=git_dir,
+        input=patch_contents,
+        encoding="utf-8",
+    )
+
+
 def get_message_subject(git_dir: Path, ref: str) -> str:
     """Return the commit message's subject line."""
     return subprocess.run(
-        ["git", "show", "--format=%s", "-s", ref],
+        ("git", "show", "--format=%s", "-s", ref),
         cwd=git_dir,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
@@ -648,7 +725,20 @@ def get_message_subject(git_dir: Path, ref: str) -> str:
     ).stdout.strip()
 
 
-def get_commit_message_metadata(git_dir: Path, ref: str) -> Dict[str, str]:
+def get_commit_timestamp(git_dir: Path, ref: str) -> int:
+    """Return the commit message's commit-time as a UNIX timeestamp."""
+    stdout = subprocess.run(
+        ("git", "show", "--format=%ct", "-s", ref),
+        cwd=git_dir,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        check=True,
+    ).stdout.strip()
+    return int(stdout)
+
+
+def get_commit_message_metadata(git_dir: Path, ref: str) -> dict[str, str]:
     """Return footer information for a given commit."""
     commit_msg = (
         subprocess.run(
@@ -665,7 +755,7 @@ def get_commit_message_metadata(git_dir: Path, ref: str) -> Dict[str, str]:
     return parse_message_metadata(commit_msg)
 
 
-def parse_message_metadata(message_lines: Iterable[str]) -> Dict[str, str]:
+def parse_message_metadata(message_lines: Iterable[str]) -> dict[str, str]:
     """Return a dictionary of commit message lines' directives."""
     regex = re.compile(r"([-\w.]+):(.+)")
     result = {}
@@ -678,19 +768,21 @@ def parse_message_metadata(message_lines: Iterable[str]) -> Dict[str, str]:
     return result
 
 
-def merge_base(git_dir: Path, refs: List[str]) -> Optional[str]:
+def merge_base(git_dir: Path, refs: Sequence[str]) -> str | None:
     """Return the git merge-base --octopus between branches.
 
     Args:
         git_dir: Root directory for a given local git repository.
-        refs: List of commit refs to find the merge base of.
+        refs: Sequence of commit refs to find the merge base of.
 
     Returns:
         An Optional string which is the git SHA of the merge base.
         If no merge-base exists or there was an error, return None.
     """
+    cmd = ["git", "merge-base", "--octopus"]
+    cmd += refs
     proc = subprocess.run(
-        ["git", "merge-base", "--octopus"] + refs,
+        cmd,
         check=False,
         cwd=git_dir,
         encoding="utf-8",
@@ -702,7 +794,7 @@ def merge_base(git_dir: Path, refs: List[str]) -> Optional[str]:
     return None
 
 
-def branch_list(git_dir: Path, glob: Optional[str] = None) -> List[str]:
+def branch_list(git_dir: Path, glob: str | None = None) -> list[str]:
     """List branches, optionally matching a given glob."""
     addendum = [glob] if glob else []
     return (
@@ -734,8 +826,8 @@ def commit_author_email(git_dir: Path, ref: str) -> str:
 def log(
     git_dir: Path,
     head: str,
-    stop_at: Optional[str] = None,
-    log_format: Optional[str] = None,
+    stop_at: str | None = None,
+    log_format: str | None = None,
 ) -> str:
     """Runs `git log` between `head` and `stop_at`.
 
@@ -763,7 +855,7 @@ def log(
     ).stdout
 
 
-def query_gerrit(chromeos_root: Path, query: str) -> List[int]:
+def query_gerrit(chromeos_root: Path, query: str) -> list[int]:
     """Returns CLs that match the given `query`."""
     results = subprocess.run(
         ("gerrit", "--raw", "search", query),
@@ -774,3 +866,101 @@ def query_gerrit(chromeos_root: Path, query: str) -> List[int]:
         encoding="utf-8",
     ).stdout
     return [int(x) for x in results.split()]
+
+
+def list_shas_between(git_dir: Path, from_ref: str, to_ref: str) -> list[str]:
+    """Lists all SHAs between `from_ref` and `to_ref` in parent-to-child order.
+
+    That is, given this in `/git_repo/`:
+    ```
+    $ git log --oneline -n3 HEAD
+    abc123 child child commit
+    def456 parent child commit
+    ghi789 parent parent commit
+    ```
+
+    >>> list_shas_between(Path("/git_repo"), "ghi789", "abc123")
+    ['ghi789', 'def456', 'abc123']
+
+    Raises:
+        CalledProcessError if `from_ref` is not a parent commit of `to_ref`.
+    """
+    sha_list = subprocess.run(
+        ("git", "rev-list", f"{from_ref}~..{to_ref}"),
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    results = [x.strip() for x in sha_list.splitlines()]
+    # Git prints newest first, so reverse the list.
+    results.reverse()
+    return results
+
+
+def _list_files_changed(
+    git_dir: Path, ref_start: str | None, ref_end: str | None
+) -> list[str]:
+    cmd = ["git", "diff", "--name-only"]
+    if ref_start:
+        cmd.append(ref_start)
+    if ref_end:
+        cmd.append(ref_end)
+
+    file_list = subprocess.run(
+        cmd,
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+    return [x.strip() for x in file_list.splitlines()]
+
+
+def list_uncommitted_files_changed(git_dir: Path) -> list[str]:
+    """Returns a list of files that a diff from `HEAD`."""
+    return _list_files_changed(git_dir, ref_start="HEAD", ref_end=None)
+
+
+def list_unstaged_files_changed(git_dir: Path) -> list[str]:
+    """Returns a list of files that have unstaged changes."""
+    return _list_files_changed(git_dir, ref_start=None, ref_end=None)
+
+
+def list_files_changed_by_commit(git_dir: Path, ref: str) -> list[str]:
+    """Returns a list of files changed by `ref`.
+
+    'Changed' might mean added, removed, moved, or modified.
+    """
+    return _list_files_changed(git_dir, ref_start=f"{ref}~", ref_end=ref)
+
+
+def diff(
+    git_dir: Path,
+    *,
+    ref_start: str,
+    ref_end: str | None = None,
+    only_files: Sequence[str | os.PathLike] = (),
+) -> str:
+    """Returns the diff of commit `ref`.
+
+    If `only_files` is passed, the diff is scoped to the given files.
+    """
+    cmd: list[str | os.PathLike] = ["git", "diff", ref_start]
+    if ref_end:
+        cmd.append(ref_end)
+
+    if only_files:
+        cmd.append("--")
+        cmd += only_files
+
+    return subprocess.run(
+        cmd,
+        check=True,
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout

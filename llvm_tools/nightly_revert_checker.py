@@ -9,7 +9,9 @@ fires off an email. All LLVM SHAs to monitor are autodetected.
 """
 
 import argparse
+import collections
 import dataclasses
+import datetime
 import json
 import logging
 import os
@@ -18,11 +20,12 @@ import pprint
 import re
 import subprocess
 import time
-from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Tuple
+from typing import Any, Callable, Iterable, NamedTuple
 
 from cros_utils import email_sender
 from cros_utils import git_utils
 from cros_utils import tiny_render
+from llvm_tools import gemini_revert_checker
 from llvm_tools import get_llvm_hash
 from llvm_tools import git_llvm_rev
 from llvm_tools import patch_utils
@@ -38,6 +41,13 @@ HEAD_STALENESS_ALERT_INITIAL_SECS = 60 * ONE_DAY_SECS
 # removed. This is useful, since it keeps us from re-alerting about reverts if
 # an llvm-next roll has to be reverted.
 REVERT_LIST_GC_TIMEOUT = 14 * ONE_DAY_SECS
+
+REPLACEMENT_AUTHOR_NAME = "crostc-worker"
+REPLACEMENT_AUTHOR_EMAIL = (
+    "crostc-worker@crostc-chrotomation.iam.gserviceaccount.com"
+)
+# Author to replace the true author of a revert commit. This is to prevent them
+# from being spammed with emails every time we upload revert commits to Gerrit.
 
 
 # Not frozen, as `next_notification_timestamp` may be mutated.
@@ -65,15 +75,15 @@ class State:
     """Persistent state for this script."""
 
     # Mapping of LLVM SHA -> List of reverts that have been seen for it
-    seen_reverts: Dict[str, List[str]] = dataclasses.field(default_factory=dict)
+    seen_reverts: dict[str, list[str]] = dataclasses.field(default_factory=dict)
     # A mapping of LLVM SHA -> the last timestamp at which it was considered
     # 'interesting'.
-    last_seen_llvm_shas: Dict[str, int] = dataclasses.field(
+    last_seen_llvm_shas: dict[str, int] = dataclasses.field(
         default_factory=dict
     )
     # Mapping of friendly HEAD name (e.g., main-legacy) to last-known info
     # about it.
-    heads: Dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
+    heads: dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_json(cls, json_object: Any) -> "State":
@@ -92,9 +102,17 @@ class State:
         return result
 
 
+@dataclasses.dataclass(frozen=True)
+class MultiRevert:
+    """Describes the SHAs that a SHA reverts."""
+
+    revert_sha: str
+    reverted_shas: list[str]
+
+
 def _find_interesting_android_shas(
     android_llvm_toolchain_dir: str,
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     llvm_project = Path(android_llvm_toolchain_dir) / "toolchain/llvm-project"
     android_main_sha = git_utils.resolve_ref(llvm_project, "goog/main")
     merge_base = subprocess.check_output(
@@ -114,11 +132,11 @@ def _find_interesting_android_shas(
 
 def _find_interesting_chromeos_shas(
     chromeos_path: Path,
-) -> List[Tuple[str, str]]:
+) -> list[tuple[str, str]]:
     llvm_hash = get_llvm_hash.LLVMHash()
 
     current_llvm = llvm_hash.GetCrOSCurrentLLVMHash(chromeos_path)
-    results: List[Tuple[str, str]] = [("llvm", current_llvm)]
+    results: list[tuple[str, str]] = [("llvm", current_llvm)]
     next_llvm = llvm_hash.GetCrOSLLVMNextHash()
     if current_llvm != next_llvm:
         results.append(("llvm-next", next_llvm))
@@ -140,7 +158,7 @@ def _generate_revert_email(
     sha: str,
     prettify_sha: Callable[[str], tiny_render.Piece],
     get_sha_description: Callable[[str], tiny_render.Piece],
-    new_reverts: List[revert_checker.Revert],
+    new_reverts: list[MultiRevert],
 ) -> _Email:
     email_pieces = [
         "It looks like there may be %s across %s ("
@@ -156,14 +174,20 @@ def _generate_revert_email(
     ]
 
     revert_listing = []
-    for revert in sorted(new_reverts, key=lambda r: r.sha):
+    for revert in sorted(new_reverts, key=lambda r: r.revert_sha):
+        prettified_shas: list[tiny_render.Piece] = []
+        for s in revert.reverted_shas:
+            if prettified_shas:
+                prettified_shas.append(", ")
+            prettified_shas.append(prettify_sha(s))
+
         revert_listing.append(
             [
-                prettify_sha(revert.sha),
+                prettify_sha(revert.revert_sha),
                 " (appears to revert ",
-                prettify_sha(revert.reverted_sha),
+                prettified_shas,
                 "): ",
-                get_sha_description(revert.sha),
+                get_sha_description(revert.revert_sha),
             ]
         )
 
@@ -186,14 +210,14 @@ def _generate_revert_email(
 _EmailRecipients = NamedTuple(
     "_EmailRecipients",
     [
-        ("well_known", List[str]),
-        ("direct", List[str]),
+        ("well_known", list[str]),
+        ("direct", list[str]),
     ],
 )
 
 
 def _send_revert_email(recipients: _EmailRecipients, email: _Email) -> None:
-    email_sender.EmailSender().SendX20Email(
+    email_sender.EmailSender().SendGSEmail(
         subject=email.subject,
         identifier="revert-checker",
         well_known_recipients=recipients.well_known,
@@ -241,48 +265,108 @@ class NewRevertInfo:
 
     friendly_name: str
     sha: str
-    new_reverts: List[revert_checker.Revert]
+    new_reverts: list[MultiRevert]
 
 
-def locate_new_reverts_across_shas(
-    llvm_config: git_llvm_rev.LLVMConfig,
-    upstream_main_branch: str,
-    interesting_shas: List[Tuple[str, str]],
-    state: State,
-) -> Tuple[State, List[NewRevertInfo]]:
-    """Locates and returns yet-unseen reverts across `interesting_shas`."""
-    new_state = State()
-    revert_infos = []
+def infer_reverts_with_gemini(
+    gemini_state: gemini_revert_checker.GeminiState,
+    sha: str,
+    commit_message: str,
+) -> revert_checker.CommitMessageReverts:
+    empty_result = lambda: revert_checker.CommitMessageReverts(
+        potential_shas=[],
+        potential_pr_numbers=[],
+    )
 
-    now = int(time.time())
-    for friendly_name, sha in interesting_shas:
-        logging.info("Finding reverts across %s (%s)", friendly_name, sha)
-        all_reverts = revert_checker.find_reverts(
-            str(llvm_config.dir),
-            sha,
-            root=f"{llvm_config.remote}/{upstream_main_branch}",
-        )
+    gemini_result = gemini_state.cached_inference_result_for(sha)
+    if not gemini_result:
+        logging.warning("Commit %s not found precached by Gemini", sha)
+    elif gemini_result.is_reland:
         logging.info(
-            "Detected the following revert(s) across %s:\n%s",
-            friendly_name,
-            pprint.pformat(all_reverts),
+            "Skipping reporting of commit %s - Gemini notes it's a reland.", sha
         )
+        return empty_result()
 
-        new_state.seen_reverts[sha] = [r.sha for r in all_reverts]
+    non_gemini_result = revert_checker.try_parse_reverts_from_commit_message(
+        commit_message
+    )
+    if (
+        non_gemini_result.potential_shas
+        or non_gemini_result.potential_pr_numbers
+    ):
+        return non_gemini_result
 
-        if sha not in state.seen_reverts:
-            logging.info("SHA %s is new to me", sha)
-            existing_reverts = set()
-        else:
-            existing_reverts = set(state.seen_reverts[sha])
+    if not gemini_result:
+        return empty_result()
 
-        new_reverts = [r for r in all_reverts if r.sha not in existing_reverts]
-        if not new_reverts:
-            logging.info("...All of which have been reported.")
-            continue
+    if not gemini_result.is_revert:
+        return empty_result()
 
+    return revert_checker.CommitMessageReverts(
+        potential_shas=list(gemini_result.reverted_shas),
+        potential_pr_numbers=list(gemini_result.reverted_prs),
+    )
+
+
+class LLVMRevFailedException(Exception):
+    """Raised if git_llvm_rev.translate_sha_to_rev fails.
+
+    Only intended to be used with `reverts_old_commit`.
+    """
+
+
+def reverts_old_commit(
+    llvm_config: git_llvm_rev.LLVMConfig,
+    revert_sha: str,
+    reverted_shas: list[str],
+) -> bool:
+    """Returns True if the given reverted CL is too old for us to care about."""
+
+    # Generally speaking, the longer a CL sits in-tree, the more likely that
+    # it's fine for us to hold on to.
+    #
+    # Initial data from
+    # https://chromium-review.googlesource.com/c/chromiumos/third_party/toolchain-utils/+/7138097/comment/f3fb2bd8_66946ed0/
+    # suggests that we should check back a decent distance, but we've seen some
+    # CLs that claim to revert many-years-old functionality. Those seem
+    # extremely unlikely to be helpful.
+    rev_limit = 50_000
+
+    def translate_sha_to_rev(sha: str) -> int:
+        try:
+            return git_llvm_rev.translate_sha_to_rev(llvm_config, sha).number
+        except subprocess.CalledProcessError:
+            logging.exception("Translating SHA %s to rev failed", sha)
+            raise LLVMRevFailedException()
+
+    try:
+        main_rev = translate_sha_to_rev(revert_sha)
+        newest_revert_rev = max(translate_sha_to_rev(x) for x in reverted_shas)
+        should_ignore = main_rev - rev_limit >= newest_revert_rev
+        return should_ignore
+    except LLVMRevFailedException:
+        logging.warning("Revert-ignoring heuristics failed; see above logs")
+        return False
+
+
+def update_new_state_head_info(
+    # Require kwargs because this takes two states, and messing up order can be
+    # subtle.
+    *,
+    now: int,
+    interesting_shas: list[tuple[str, str]],
+    old_state: State,
+    new_state: State,
+):
+    """Modifies `new_state` to take `interesting_shas` into account.
+
+    HEADs in `old_state.heads` get updated if their SHAs change. Otherwise, they
+    either get dropped (if they're no longer mentioned in `interesting_shas`),
+    or they remain unaltered.
+    """
+    for friendly_name, sha in interesting_shas:
         new_head_info = None
-        if old_head_info := state.heads.get(friendly_name):
+        if old_head_info := old_state.heads.get(friendly_name):
             if old_head_info.last_sha == sha:
                 new_head_info = old_head_info
 
@@ -295,13 +379,92 @@ def locate_new_reverts_across_shas(
             )
         new_state.heads[friendly_name] = new_head_info
 
-        revert_infos.append(
-            NewRevertInfo(
-                friendly_name=friendly_name,
-                sha=sha,
-                new_reverts=new_reverts,
-            )
+
+def locate_new_reverts_across_shas(
+    llvm_config: git_llvm_rev.LLVMConfig,
+    upstream_main_branch: str,
+    interesting_shas: list[tuple[str, str]],
+    state: State,
+    gemini_state: gemini_revert_checker.GeminiState | None,
+) -> tuple[State, list[NewRevertInfo]]:
+    """Locates and returns yet-unseen reverts across `interesting_shas`."""
+    new_state = State()
+    revert_infos = []
+
+    if gemini_state:
+        infer_reverts = lambda sha, msg: infer_reverts_with_gemini(
+            gemini_state, sha, msg
         )
+    else:
+        infer_reverts = None
+
+    now = int(time.time())
+    for friendly_name, sha in interesting_shas:
+        logging.info("Finding reverts across %s (%s)", friendly_name, sha)
+        # NOTE: `all_reverts` may contain multiple of the same revert SHA.
+        # e.g., if commit abc123 reverts def456 and aaa999, this list will
+        # contains two entries for it: `('abc123', 'def456')`, and `('abc123',
+        # 'aaa999').
+        all_reverts = revert_checker.find_reverts(
+            str(llvm_config.dir),
+            sha,
+            root=f"{llvm_config.remote}/{upstream_main_branch}",
+            infer_reverts=infer_reverts,
+        )
+        logging.info(
+            "Detected the following revert(s) across %s:\n%s",
+            friendly_name,
+            pprint.pformat(all_reverts),
+        )
+
+        all_reverts_grouped: dict[str, list[str]] = collections.defaultdict(
+            list
+        )
+        for reverting_sha, reverted_sha in all_reverts:
+            all_reverts_grouped[reverting_sha].append(reverted_sha)
+
+        new_state.seen_reverts[sha] = sorted(all_reverts_grouped.keys())
+        if sha not in state.seen_reverts:
+            logging.info("SHA %s is new to me", sha)
+            existing_reverts = set()
+        else:
+            existing_reverts = set(state.seen_reverts[sha])
+
+        # Do not sort this, since we ideally want to report SHAs in the order
+        # reported by `revert_checker` (that is, oldest first). Python
+        # guarantees dicts iterate in insertion order.
+        new_reverts = [
+            MultiRevert(k, v)
+            for k, v in all_reverts_grouped.items()
+            if k not in existing_reverts
+        ]
+
+        if not new_reverts:
+            logging.info("...All of which have been reported.")
+            continue
+
+        filtered_new_reverts = []
+        for x in new_reverts:
+            if reverts_old_commit(llvm_config, x.revert_sha, x.reverted_shas):
+                logging.info("Heuristics say to ignore revert %s", x.revert_sha)
+            else:
+                filtered_new_reverts.append(x)
+
+        if filtered_new_reverts:
+            revert_infos.append(
+                NewRevertInfo(
+                    friendly_name=friendly_name,
+                    sha=sha,
+                    new_reverts=filtered_new_reverts,
+                )
+            )
+
+    update_new_state_head_info(
+        now=now,
+        interesting_shas=interesting_shas,
+        old_state=state,
+        new_state=new_state,
+    )
 
     for head in new_state.seen_reverts:
         new_state.last_seen_llvm_shas[head] = now
@@ -344,14 +507,16 @@ def detect_latest_cros_llvm_branch(
 
 
 def do_cherrypick(
+    *,
     chromeos_path: Path,
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
     repository: str,
-    interesting_shas: List[Tuple[str, str]],
+    interesting_shas: list[tuple[str, str]],
     state: State,
-    reviewers: List[str],
-    cc: List[str],
+    reviewers: list[str],
+    cc: list[str],
+    gemini_state: gemini_revert_checker.GeminiState | None,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -359,7 +524,11 @@ def do_cherrypick(
 
     new_state = State()
     new_state, new_revert_infos = locate_new_reverts_across_shas(
-        llvm_config, upstream_main_branch, interesting_shas, state
+        llvm_config,
+        upstream_main_branch,
+        interesting_shas,
+        state,
+        gemini_state=gemini_state,
     )
     llvm_config_dir = Path(llvm_config.dir)
 
@@ -383,16 +552,16 @@ def do_cherrypick(
             # Note that it's possible that we see the same SHA in multiple
             # iterations of this loop. Since we're committing to separate
             # branches, we need to upload separate patches.
-            for sha, reverted_sha in revert_info.new_reverts:
+            for multi_revert in revert_info.new_reverts:
                 # Always `checkout` the branch's original HEAD, so we don't
                 # create a patch stack on Gerrit. Often the reviewer will want
                 # to keep/drop certain patches; stacking them adds complexity
                 # for questionable benefit.
                 git_utils.discard_changes_and_checkout(worktree, branch_head)
                 _upload_revert_cherry_pick(
-                    sha=sha,
+                    sha=multi_revert.revert_sha,
                     branch_without_remote=branch_without_remote,
-                    reverted_sha=reverted_sha,
+                    reverted_shas=multi_revert.reverted_shas,
                     llvm_config=llvm_config,
                     llvm_worktree=worktree,
                     reviewers=reviewers,
@@ -443,11 +612,11 @@ def _append_footers_to_commit_message(
 def _upload_revert_cherry_pick(
     sha: str,
     branch_without_remote: str,
-    reverted_sha: str,
+    reverted_shas: list[str],
     llvm_config: git_llvm_rev.LLVMConfig,
     llvm_worktree: Path,
-    reviewers: List[str],
-    cc: List[str],
+    reviewers: list[str],
+    cc: list[str],
 ):
     """Mockable helper to create and upload patches."""
     cherry_pick_returncode = subprocess.run(
@@ -495,16 +664,6 @@ def _upload_revert_cherry_pick(
     else:
         is_cl_a_merge_conflict = False
 
-    footer_lines = patch_utils.generate_chromiumos_llvm_footer(
-        is_cherry=True,
-        apply_from=git_llvm_rev.translate_sha_to_rev(
-            llvm_config, reverted_sha
-        ).number,
-        apply_until=git_llvm_rev.translate_sha_to_rev(llvm_config, sha).number,
-        original_sha=sha,
-        platforms=("chromiumos",),
-        info=None,
-    )
     commit_message = subprocess.run(
         ["git", "log", "-n1", "--format=%B", sha],
         check=True,
@@ -513,7 +672,31 @@ def _upload_revert_cherry_pick(
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
     ).stdout
+    author = subprocess.run(
+        ["git", "log", "-n1", "--format=%an <%ae>"],
+        check=True,
+        cwd=llvm_worktree,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+    ).stdout.strip()
 
+    # If multiple commits are reverted by a single SHA, the SHA only becomes
+    # applicable after the most recent reverted commit.
+    apply_from = max(
+        git_llvm_rev.translate_sha_to_rev(llvm_config, x).number
+        for x in reverted_shas
+    )
+
+    footer_lines = patch_utils.generate_chromiumos_llvm_footer(
+        is_cherry=True,
+        apply_from=apply_from,
+        apply_until=git_llvm_rev.translate_sha_to_rev(llvm_config, sha).number,
+        original_sha=sha,
+        platforms=("chromiumos",),
+        info=None,
+        author=author,
+    )
     new_commit_message = _append_footers_to_commit_message(
         commit_message, footer_lines
     )
@@ -521,7 +704,14 @@ def _upload_revert_cherry_pick(
         new_commit_message = f"MERGE CONFLICT: {new_commit_message}"
 
     subprocess.run(
-        ["git", "commit", "--amend", "-m", new_commit_message],
+        [
+            "git",
+            "commit",
+            "--amend",
+            "-m",
+            new_commit_message,
+            f"--author={REPLACEMENT_AUTHOR_NAME} <{REPLACEMENT_AUTHOR_EMAIL}>",
+        ],
         check=True,
         cwd=llvm_worktree,
         stdin=subprocess.DEVNULL,
@@ -535,6 +725,7 @@ def _upload_revert_cherry_pick(
         branch=branch_without_remote,
         reviewers=reviewers,
         cc=cc,
+        topic="revert-checker",
     )
     if is_cl_a_merge_conflict:
         # Set V-1 for more visibility.
@@ -608,7 +799,7 @@ def maybe_email_about_stale_heads(
         )
 
     shas_are = "SHAs are" if len(stale_listings) > 1 else "SHA is"
-    email_body = [
+    email_body: list[tiny_render.Piece] = [
         "Hi! This is a friendly notification that the current upstream LLVM "
         f"{shas_are} being tracked by the LLVM revert checker:",
         tiny_render.UnorderedList(stale_listings),
@@ -634,13 +825,15 @@ def maybe_email_about_stale_heads(
 
 
 def do_email(
+    *,
     is_dry_run: bool,
     llvm_config: git_llvm_rev.LLVMConfig,
     upstream_main_branch: str,
     repository: str,
-    interesting_shas: List[Tuple[str, str]],
+    interesting_shas: list[tuple[str, str]],
     state: State,
     recipients: _EmailRecipients,
+    gemini_state: gemini_revert_checker.GeminiState | None,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -654,7 +847,11 @@ def do_email(
         ).strip()
 
     new_state, new_reverts = locate_new_reverts_across_shas(
-        llvm_config, upstream_main_branch, interesting_shas, state
+        llvm_config,
+        upstream_main_branch,
+        interesting_shas,
+        state,
+        gemini_state=gemini_state,
     )
 
     for revert_info in new_reverts:
@@ -683,7 +880,50 @@ def do_email(
     return new_state
 
 
-def parse_args(argv: List[str]) -> argparse.Namespace:
+def _load_up_to_date_gemini_state(
+    gemini_state_file: Path,
+    gemini_endpoint: gemini_revert_checker.GeminiEndpoint,
+    llvm_config: git_llvm_rev.LLVMConfig,
+    upstream_main_branch: str,
+    interesting_shas: list[str],
+) -> gemini_revert_checker.GeminiState:
+    """Loads Gemini state, populates it, and discards old entries."""
+    gemini_state = gemini_revert_checker.read_gemini_state_or_default(
+        gemini_state_file
+    )
+    main_ref = f"{llvm_config.remote}/{upstream_main_branch}"
+    llvm_dir = Path(llvm_config.dir)
+
+    prepopulated_all = gemini_revert_checker.ensure_state_populated_for(
+        gemini_endpoint=gemini_endpoint,
+        gemini_state=gemini_state,
+        llvm_dir=llvm_dir,
+        main_ref=main_ref,
+        prepopulate_parent_shas=interesting_shas,
+    )
+
+    # Only remove old SHAs if Gemini is properly functioning. If something went
+    # wrong, there's no harm in keeping older data around until that's fixed.
+    if prepopulated_all:
+        gemini_revert_checker.discard_old_shas(
+            gemini_state,
+            interesting_shas,
+            now=datetime.datetime.now(),
+            llvm_dir=llvm_dir,
+            main_ref=main_ref,
+        )
+
+    # Always write the updated state back. It's guaranteed to be well-formed,
+    # and we may incorrectly discard many inference results otherwise:
+    # b/436267619#comment23.
+    gemini_revert_checker.write_gemini_state(gemini_state_file, gemini_state)
+
+    if not prepopulated_all:
+        raise ValueError("Gemini failed to fully prepopulate all state")
+    return gemini_state
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -696,6 +936,40 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--state_file", required=True, help="File to store persistent state in."
+    )
+
+    auth_group = parser.add_mutually_exclusive_group()
+    auth_group.add_argument(
+        "--gemini_api_key",
+        help="""
+        Gemini API key, used to check reverts with. In order to use Gemini,
+        either this or --gcp-project and --gcp-location must be passed.
+        """,
+    )
+
+    vertex_group = auth_group.add_argument_group()
+    vertex_group.add_argument(
+        "--gcp_project",
+        help="""
+        GCP project to use for Vertex AI. If passed, you must also pass
+        --gcp-location.
+        """,
+    )
+    vertex_group.add_argument(
+        "--gcp_location",
+        help="""
+        GCP location to use for Vertex AI. If passed, you must also pass
+        --gcp-project.
+        """,
+    )
+
+    parser.add_argument(
+        "--gemini_state_file",
+        type=Path,
+        help="""
+        Gemini state file location. Must be provided if --gemini-api-key is
+        provided. If the state file does not exist, it is created with defaults.
+        """,
     )
     parser.add_argument(
         "--llvm_dir", required=True, help="Up-to-date LLVM directory to use."
@@ -738,10 +1012,15 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         help="Up-to-date android-llvm-toolchain directory to use.",
     )
 
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+    if bool(opts.gcp_project) != bool(opts.gcp_location):
+        parser.error("--gcp-project must be specified with --gcp-location")
+    if (opts.gemini_api_key or opts.gcp_project) and not opts.gemini_state_file:
+        parser.error("Gemini usage requires --gemini-state-file.")
+    return opts
 
 
-def main(argv: List[str]) -> int:
+def main(argv: list[str]) -> int:
     opts = parse_args(argv)
 
     logging.basicConfig(
@@ -790,6 +1069,24 @@ def main(argv: List[str]) -> int:
     state = _read_state(state_file)
     logging.info("Loaded state\n%s", pprint.pformat(state))
 
+    if opts.gemini_api_key or opts.gcp_project:
+        # There is logic in flag parsing to guarantee this.
+        assert opts.gemini_state_file, "need gemini_state_file if key is passed"
+        gemini_endpoint = gemini_revert_checker.GeminiEndpoint(
+            gemini_api_key=opts.gemini_api_key,
+            gcp_project=opts.gcp_project,
+            gcp_location=opts.gcp_location,
+        )
+        gemini_state = _load_up_to_date_gemini_state(
+            gemini_state_file=opts.gemini_state_file,
+            gemini_endpoint=gemini_endpoint,
+            llvm_config=llvm_config,
+            upstream_main_branch=upstream_main_branch,
+            interesting_shas=[sha for _, sha in interesting_shas],
+        )
+    else:
+        gemini_state = None
+
     # We want to be as free of obvious side-effects as possible in case
     # something above breaks. Hence, action as late as possible.
     if action == "cherry-pick":
@@ -807,6 +1104,7 @@ def main(argv: List[str]) -> int:
             state=state,
             reviewers=reviewers,
             cc=cc,
+            gemini_state=gemini_state,
         )
     else:
         new_state = do_email(
@@ -817,6 +1115,7 @@ def main(argv: List[str]) -> int:
             repository=repository,
             state=state,
             recipients=recipients,
+            gemini_state=gemini_state,
         )
 
     _write_state(state_file, new_state)

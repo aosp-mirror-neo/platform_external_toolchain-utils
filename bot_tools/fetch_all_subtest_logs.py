@@ -14,10 +14,10 @@ from pathlib import Path
 import re
 import shlex
 import subprocess
-from typing import Any, Dict, Iterable, List
+from typing import Any, Iterable
 
 
-def get_bb_output(subcmd: List[str]):
+def get_bb_output(subcmd: list[str]):
     return subprocess.run(
         ["bb"] + subcmd,
         check=True,
@@ -69,8 +69,8 @@ def find_cros_test_platform_child_of_cq_orchestrator(
     )
 
 
-def find_gs_links_in_test_log(log: Dict[str, Any]) -> List[str]:
-    empty_dict: Dict[Any, Any] = {}
+def find_gs_links_in_test_log(log: dict[str, Any]) -> list[str]:
+    empty_dict: dict[Any, Any] = {}
     results = []
     for result_sets in log.values():
         for result_set in result_sets:
@@ -88,7 +88,7 @@ def find_gs_links_in_test_log(log: Dict[str, Any]) -> List[str]:
     return results
 
 
-def find_all_gs_log_test_links(cq_orchestrator_id: int) -> List[str]:
+def find_all_gs_log_test_links(cq_orchestrator_id: int) -> list[str]:
     cros_test_platform_id = find_cros_test_platform_child_of_cq_orchestrator(
         cq_orchestrator_id
     )
@@ -105,7 +105,7 @@ def find_all_gs_log_test_links(cq_orchestrator_id: int) -> List[str]:
 
 
 def download_gs_logs_to(
-    output_dir: Path, gs_logs: List[str], dry_run: bool = False
+    output_dir: Path, gs_logs: list[str], dry_run: bool = False
 ):
     gsutil_command = ["gsutil", "-m", "cp", "-r"] + gs_logs + [str(output_dir)]
     logging.info("Running `%s`...", shlex.join(gsutil_command))
@@ -115,7 +115,7 @@ def download_gs_logs_to(
         subprocess.run(gsutil_command, check=True)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

@@ -17,7 +17,6 @@ import os
 import shutil
 import subprocess
 import textwrap
-from typing import Dict, List, Tuple
 
 from cros_utils import bugs
 
@@ -64,7 +63,7 @@ def _build_llvm(llvm_dir: str, build_dir: str) -> None:
 
 def _collect_available_diagnostics(
     llvm_dir: str, build_dir: str
-) -> Dict[str, List[str]]:
+) -> dict[str, list[str]]:
     _build_llvm(llvm_dir, build_dir)
 
     clang_tidy = os.path.join(os.path.abspath(build_dir), "bin", "clang-tidy")
@@ -94,8 +93,8 @@ def _collect_available_diagnostics(
 
 
 def _process_new_diagnostics(
-    old: Dict[str, List[str]], new: Dict[str, List[str]]
-) -> Tuple[Dict[str, List[str]], Dict[str, List[str]]]:
+    old: dict[str, list[str]], new: dict[str, list[str]]
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
     """Determines the set of new diagnostics that we should file bugs for.
 
     old: The previous state that this function returned as `new_state_file`, or
@@ -131,7 +130,7 @@ def _process_new_diagnostics(
     return new_state_file, new_diagnostics
 
 
-def _file_bugs_for_new_diags(new_diags: Dict[str, List[str]]):
+def _file_bugs_for_new_diags(new_diags: dict[str, list[str]]):
     for tool, diags in sorted(new_diags.items()):
         for diag in diags:
             bugs.CreateNewBug(
@@ -150,7 +149,7 @@ def _file_bugs_for_new_diags(new_diags: Dict[str, List[str]]):
             )
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

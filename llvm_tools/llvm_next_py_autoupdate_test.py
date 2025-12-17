@@ -9,7 +9,7 @@ import dataclasses
 import json
 import subprocess
 import textwrap
-from typing import Dict, Iterable
+from typing import Iterable
 from unittest import mock
 
 from llvm_tools import cros_cls
@@ -183,7 +183,7 @@ class Test(test_helpers.TempDirTestCase):
     @contextlib.contextmanager
     def mock_fetch_cl_info(
         self,
-        mock_cl_info: Dict[
+        mock_cl_info: dict[
             cros_cls.ChangeListURL, llvm_next_py_autoupdate.GerritCLInfo
         ],
     ):
@@ -311,7 +311,7 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = ()
+                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ()
 
                 # Some other comment
                 """
@@ -327,7 +327,7 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 f"""\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = (
+                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
                 {repr(str(ARBITRARY_CL_URL))},
                 )
 
@@ -344,7 +344,7 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = (
+                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
                 "some CL URL",
                 )
 
@@ -361,7 +361,7 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = (
+                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
 
 
                 )
@@ -379,7 +379,7 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = ("some CL URL")
+                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ("some CL URL")
 
                 # Some other comment
                 """
@@ -394,7 +394,7 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: Iterable[str] = (
+                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
 
                 )
 

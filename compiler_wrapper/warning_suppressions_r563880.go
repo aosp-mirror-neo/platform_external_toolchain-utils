@@ -6,25 +6,13 @@ package main
 
 func warningSuppressionsForLLVM_r563880(packageNameAndCategory string) []string {
 	switch packageNameAndCategory {
-	// Observed and suppressed on 51 builders during testing.
-	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8715339992245735889.
-	case "chromeos-base/chromeos-login":
-		return []string{"-Wno-unused-private-field"}
 	// Observed and suppressed on 3 builders during testing.
 	// e.g., fatcat-cq: https://ci.chromium.org/b/8715339982079177585.
 	case "chromeos-base/intel-openvino":
 		return []string{"-Wno-deprecated-literal-operator"}
-	// Observed and suppressed on 18 builders during testing.
-	// e.g., betty-fuzzer-cq: https://ci.chromium.org/b/8715339980373199665.
-	case "chromeos-base/modemfwd":
-		return []string{"-Wno-unused-private-field"}
 	// Observed and suppressed on 7 builders during testing.
 	// e.g., brox-cq: https://ci.chromium.org/b/8715339980931440017.
 	case "chromeos-base/odml":
-		return []string{"-Wno-unused-private-field"}
-	// Observed and suppressed on 43 builders during testing.
-	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8715339992245735889.
-	case "chromeos-base/secagentd":
 		return []string{"-Wno-unused-private-field"}
 	// Observed and suppressed on 1 builder during testing.
 	// e.g., arm-generic-cq: https://ci.chromium.org/b/8715339977521747697.

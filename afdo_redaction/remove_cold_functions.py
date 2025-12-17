@@ -135,12 +135,14 @@ def run(input_stream, output_stream, goal, cwp=None, benchmark=None):
             common_num_after,
         ) = analyze_functions(records, cwp_records, benchmark_records)
         print(
-            "Retained %d/%d (%.1f%%) functions only appear in the CWP profile"
+            "Retained %d/%d (%.1f%%) functions only appear in "
+            "the CWP profile"
             % (cwp_num_after, cwp_num, 100.0 * cwp_num_after / cwp_num),
             file=sys.stderr,
         )
         print(
-            "Retained %d/%d (%.1f%%) functions only appear in the benchmark profile"
+            "Retained %d/%d (%.1f%%) functions only appear in "
+            "the benchmark profile"
             % (
                 benchmark_num_after,
                 benchmark_num,
@@ -160,7 +162,7 @@ def run(input_stream, output_stream, goal, cwp=None, benchmark=None):
         )
 
 
-def main():
+def main(argv: list[str]):
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -188,21 +190,22 @@ def main():
         "--benchmark",
         help="Textualized benchmark profile, used for further analysis",
     )
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if not args.number:
         parser.error("It's invalid to remove the number of functions to 0.")
 
-    if (args.cwp and not args.benchmark) or (not args.cwp and args.benchmark):
+    if bool(args.cwp) != bool(args.benchmark):
         parser.error("Please specify both --cwp and --benchmark")
 
-    with open(args.input) as stdin:
-        with open(args.output, "w") as stdout:
+    with open(args.input, encoding="utf-8") as stdin:
+        with open(args.output, "w", encoding="utf-8") as stdout:
             # When user specify textualized cwp and benchmark profiles, perform
-            # the analysis. Otherwise, just trim the cold functions from profile.
+            # the analysis. Otherwise, just trim the cold functions from
+            # profile.
             if args.cwp and args.benchmark:
-                with open(args.cwp) as cwp:
-                    with open(args.benchmark) as benchmark:
+                with open(args.cwp, encoding="utf-8") as cwp:
+                    with open(args.benchmark, encoding="utf-8") as benchmark:
                         run(stdin, stdout, args.number, cwp, benchmark)
             else:
                 run(stdin, stdout, args.number)

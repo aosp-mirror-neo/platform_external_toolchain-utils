@@ -19,7 +19,7 @@ import json
 import logging
 from pathlib import Path
 import subprocess
-from typing import Iterable, List, Optional, Set, Tuple
+from typing import Iterable
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -36,7 +36,7 @@ class GerritCLInfo:
     most_recent_patch_set: int
 
 
-def parse_direct_owners_from_file(file_contents: str) -> List[str]:
+def parse_direct_owners_from_file(file_contents: str) -> list[str]:
     """Parses unrestricted OWNERS emails from the given file contents."""
     results = []
     for line in file_contents.splitlines():
@@ -64,7 +64,7 @@ class LazyToolchainOwners:
                 f"Handed path to nonexistent OWNERS file: {owners_file}"
             )
         self._owners_file = owners_file
-        self._owners: Optional[Set[str]] = None
+        self._owners: set[str] | None = None
 
     def contains(self, email: str) -> bool:
         """Loads OWNERS, and returns if `email` is directly mentioned in it.
@@ -146,7 +146,7 @@ def fetch_cl_info(
 def update_testing_url_list(
     toolchain_owners: LazyToolchainOwners,
     current_list: Iterable[str],
-) -> Optional[Tuple[str, List[str]]]:
+) -> tuple[str, list[str]] | None:
     new_list = []
     change_descriptions = []
 
@@ -194,9 +194,9 @@ def update_testing_url_list(
     return "\n".join(f"- {x}" for x in change_descriptions), new_list
 
 
-def write_url_list(llvm_next_py_file_path: Path, new_url_list: List[str]):
+def write_url_list(llvm_next_py_file_path: Path, new_url_list: list[str]):
     llvm_next_py = llvm_next_py_file_path.read_text(encoding="utf-8")
-    var_start_string = "\nLLVM_NEXT_TESTING_CL_URLS: Iterable[str] = ("
+    var_start_string = "\nLLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ("
     testing_cl_urls_start = llvm_next_py.index(var_start_string)
 
     # In a `cros format`'ed file, are two cases to handle here when finding the
@@ -229,7 +229,7 @@ def write_url_list(llvm_next_py_file_path: Path, new_url_list: List[str]):
     )
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

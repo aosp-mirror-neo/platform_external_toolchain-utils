@@ -10,7 +10,6 @@ from pathlib import Path
 import re
 import subprocess
 import textwrap
-from typing import List
 import unittest
 from unittest import mock
 
@@ -45,7 +44,7 @@ def arbitrary_chrome_gs_profile() -> monitor_chrome_afdo.ChromeGsProfile:
 
 def increasing_chrome_gs_profile_sequence(
     count: int,
-) -> List[monitor_chrome_afdo.ChromeGsProfile]:
+) -> list[monitor_chrome_afdo.ChromeGsProfile]:
     """Returns an iterable of successive Chrome GS profiles.
 
     They're all successive in that:

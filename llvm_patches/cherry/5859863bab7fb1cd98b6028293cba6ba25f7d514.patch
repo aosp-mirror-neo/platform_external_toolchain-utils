@@ -1,0 +1,63 @@
+From 5859863bab7fb1cd98b6028293cba6ba25f7d514 Mon Sep 17 00:00:00 2001
+From: Fangrui Song <i@maskray.me>
+Date: Wed, 28 May 2025 20:56:13 -0700
+Subject: [PATCH] [ELF] Postpone ASSERT error
+
+assignAddresses is executed more than once. When an ASSERT expression
+evaluates to zero, we should only report an error for the last
+assignAddresses. Make a change similar to #66854 and #96361.
+
+This change might help https://github.com/ClangBuiltLinux/linux/issues/2094
+---
+ lld/ELF/ScriptParser.cpp                                   | 4 ++--
+ .../ELF/linkerscript/locationcountererr-arm-exidx.test     | 7 ++++---
+ 2 files changed, 6 insertions(+), 5 deletions(-)
+
+diff --git a/lld/ELF/ScriptParser.cpp b/lld/ELF/ScriptParser.cpp
+index 528c372250e27..593d5636f2455 100644
+--- a/lld/ELF/ScriptParser.cpp
++++ b/lld/ELF/ScriptParser.cpp
+@@ -900,9 +900,9 @@ Expr ScriptParser::readAssert() {
+   StringRef msg = readName();
+   expect(")");
+ 
+-  return [=, s = ctx.script, &ctx = ctx]() -> ExprValue {
++  return [=, s = ctx.script]() -> ExprValue {
+     if (!e().getValue())
+-      Err(ctx) << msg;
++      s->recordError(msg);
+     return s->getDot();
+   };
+ }
+diff --git a/lld/test/ELF/linkerscript/locationcountererr-arm-exidx.test b/lld/test/ELF/linkerscript/locationcountererr-arm-exidx.test
+index 7a18015cfcab4..e7a732ffbec7d 100644
+--- a/lld/test/ELF/linkerscript/locationcountererr-arm-exidx.test
++++ b/lld/test/ELF/linkerscript/locationcountererr-arm-exidx.test
+@@ -2,14 +2,15 @@
+ # RUN: rm -rf %t && split-file %s %t && cd %t
+ # RUN: llvm-mc -filetype=obj -triple=armv7-linux-gnueabi a.s -o a.o
+ 
+-## If we don't merge adjacent duplicate entries, __code_size will be negative and
+-## . += __code_size will trigger a "move location counter backward" error.
++## If we don't merge adjacent duplicate entries, code_size will be negative (huge uint64_t value).
++## The ASSERT will fail and . += code_size will trigger a "move location counter backward" error.
+ ## LLD may report more errors further down, but there is only one "move location counter backward" error.
+ # RUN: not ld.lld -z norelro -z max-page-size=4096 -T a.t a.o --no-merge-exidx-entries 2>&1 | \
+ # RUN:   FileCheck %s --check-prefix=ERR --implicit-check-not=error:
+ 
+ # ERR:      error: a.t:9: unable to move location counter (0x1000) backward to 0xf6c for section 'dummy1'
+ # ERR-NEXT: error: a.t:10: unable to move location counter (0x2000) backward to 0x1f6c for section 'dummy2'
++# ERR-NEXT: error: assert failed
+ # ERR-NEXT: error: a.t:14: unable to move location counter (0x4104) backward to 0x4070 for section 'code.unused_space'
+ # ERR-NEXT: error: section '.ARM.exidx' will not fit in region 'CODE': overflowed by 148 bytes
+ # ERR-NEXT: error: section dummy1 at 0x1000 of size 0xffffffffffffff6c exceeds available address space
+@@ -62,5 +63,5 @@ SECTIONS {
+   .text : { *(.text .text.*) } > CODE
+   .ARM.exidx : { *(.ARM.exidx .ARM.exidx.*) } > CODE
+   code_size = code_end - .;
+-  code.unused_space (NOLOAD) : { . += code_size; } > CODE
++  code.unused_space (NOLOAD) : { ASSERT(code_size < 16, "assert failed"); . += code_size; } > CODE
+ }
+-- 
+2.51.1.851.g4ebd6896fd-goog
+

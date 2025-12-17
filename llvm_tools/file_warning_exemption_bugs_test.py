@@ -9,8 +9,7 @@ import json
 from pathlib import Path
 import subprocess
 import textwrap
-from typing import Dict, Iterable, List
-import unittest
+from typing import Iterable
 from unittest import mock
 
 # Short name so we don't have tons of unnecessarily long lines.
@@ -188,8 +187,8 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
         tempdir: Path,
         package: warning_exemption.Package,
         ebuild_contents: str,
-        remote_to_local_map: Dict[str, str],
-    ) -> List[Path]:
+        remote_to_local_map: dict[str, str],
+    ) -> list[Path]:
         ebuild_path = (
             tempdir
             / "overlay"
@@ -389,7 +388,3 @@ class FindEbuildDirMetadataTest(test_helpers.TempDirTestCase):
                 overlay / "foo",
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

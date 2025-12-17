@@ -1,5 +1,5 @@
 From d83201605cdb869ac3741fa03d199b9689053ac9 Mon Sep 17 00:00:00 2001
-From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Wed, 12 Jun 2024 21:41:58 +0000
 Subject: [PATCH] clang-12.0-asan-default-path
 

@@ -6,7 +6,6 @@
 
 from pathlib import Path
 import subprocess
-from typing import Optional
 
 
 # Git remote to query/fetch for upstream.
@@ -15,7 +14,7 @@ UPSTREAM_REMOTE = "cros"
 UPSTREAM_MAIN = "upstream/main"
 
 
-def try_get_path() -> Optional[Path]:
+def try_get_path() -> Path | None:
     """Returns the path to the CrOS LLVM Repository, if it exists."""
     llvm_project = (
         Path(__file__).resolve().parent.parent.parent / "llvm-project"

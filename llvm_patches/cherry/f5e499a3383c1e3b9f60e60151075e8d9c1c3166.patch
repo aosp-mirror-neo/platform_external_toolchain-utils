@@ -1,0 +1,517 @@
+From f5e499a3383c1e3b9f60e60151075e8d9c1c3166 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Mon, 9 Jun 2025 17:18:49 -0500
+Subject: [PATCH] Revert "[HIP] use offload wrapper for non-device-only non-rdc
+ (#132869)" (#143432)
+
+This breaks a lot of new driver HIP compilation. We should probably
+revert this for now until we can make a fixed version.
+
+```c++
+
+static __global__ void print() { printf("%s\n", "foo"); }
+
+void b();
+
+int main() {
+  hipLaunchKernelGGL(print, dim3(1), dim3(1), 0, 0);
+  auto y = hipDeviceSynchronize();
+  b();
+}
+```
+```c++
+
+static __global__ void print() { printf("%s\n", "bar"); }
+
+void b() {
+  hipLaunchKernelGGL(print, dim3(1), dim3(1), 0, 0);
+  auto y = hipDeviceSynchronize();
+}
+```
+```console
+$ clang++ a.hip b.hip --offload-arch=gfx1030 --offload-new-driver
+$ ./a.out
+foo
+foo
+```
+```console
+$ clang++ a.hip b.hip --offload-arch=gfx1030 --offload-new-driver -flto
+<crash>
+```
+
+This reverts commit d54c28b9c1396fa92d9347ac1135da7907121cb8.
+---
+ clang/lib/CodeGen/CGCUDANV.cpp             |  3 +-
+ clang/lib/Driver/Driver.cpp                | 59 +++++-----------
+ clang/lib/Driver/ToolChains/Clang.cpp      | 18 +----
+ clang/test/Driver/hip-binding.hip          |  6 +-
+ clang/test/Driver/hip-phases.hip           | 51 ++++++--------
+ clang/test/Driver/hip-toolchain-no-rdc.hip | 81 +++++++++-------------
+ 6 files changed, 76 insertions(+), 142 deletions(-)
+
+diff --git a/clang/lib/CodeGen/CGCUDANV.cpp b/clang/lib/CodeGen/CGCUDANV.cpp
+index dd26be74e561..38f514304df5 100644
+--- a/clang/lib/CodeGen/CGCUDANV.cpp
++++ b/clang/lib/CodeGen/CGCUDANV.cpp
+@@ -1280,8 +1280,7 @@ llvm::Function *CGNVCUDARuntime::finalizeModule() {
+     return nullptr;
+   }
+   if (CGM.getLangOpts().OffloadViaLLVM ||
+-      (CGM.getLangOpts().OffloadingNewDriver &&
+-       (CGM.getLangOpts().HIP || RelocatableDeviceCode)))
++      (CGM.getLangOpts().OffloadingNewDriver && RelocatableDeviceCode))
+     createOffloadingEntries();
+   else
+     return makeModuleCtorFunction();
+diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
+index 73ff7757c3b0..80728daca03c 100644
+--- a/clang/lib/Driver/Driver.cpp
++++ b/clang/lib/Driver/Driver.cpp
+@@ -4424,10 +4424,6 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
+                    options::OPT_no_offload_new_driver,
+                    C.isOffloadingHostKind(Action::OFK_Cuda));
+ 
+-  bool HIPNoRDC =
+-      C.isOffloadingHostKind(Action::OFK_HIP) &&
+-      !Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc, false);
+-
+   // Builder to be used to build offloading actions.
+   std::unique_ptr<OffloadingActionBuilder> OffloadBuilder =
+       !UseNewOffloadingDriver
+@@ -4561,7 +4557,7 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
+     // Check if this Linker Job should emit a static library.
+     if (ShouldEmitStaticLibrary(Args)) {
+       LA = C.MakeAction<StaticLibJobAction>(LinkerInputs, types::TY_Image);
+-    } else if ((UseNewOffloadingDriver && !HIPNoRDC) ||
++    } else if (UseNewOffloadingDriver ||
+                Args.hasArg(options::OPT_offload_link)) {
+       LA = C.MakeAction<LinkerWrapperJobAction>(LinkerInputs, types::TY_Image);
+       LA->propagateHostOffloadInfo(C.getActiveOffloadKinds(),
+@@ -4872,28 +4868,10 @@ Action *Driver::BuildOffloadingActions(Compilation &C,
+                                        const InputTy &Input, StringRef CUID,
+                                        Action *HostAction) const {
+   // Don't build offloading actions if explicitly disabled or we do not have a
+-  // valid source input.
+-  if (offloadHostOnly() || !types::isSrcFile(Input.first))
+-    return HostAction;
+-
+-  bool HIPNoRDC =
+-      C.isOffloadingHostKind(Action::OFK_HIP) &&
+-      !Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc, false);
+-
+-  // For HIP non-rdc non-device-only compilation, create a linker wrapper
+-  // action for each host object to link, bundle and wrap device files in
+-  // it.
+-  if (isa<AssembleJobAction>(HostAction) && HIPNoRDC && !offloadDeviceOnly()) {
+-    ActionList AL{HostAction};
+-    HostAction = C.MakeAction<LinkerWrapperJobAction>(AL, types::TY_Object);
+-    HostAction->propagateHostOffloadInfo(C.getActiveOffloadKinds(),
+-                                         /*BoundArch=*/nullptr);
+-    return HostAction;
+-  }
+-
+-  // Don't build offloading actions if we do not have a compile action. If
+-  // preprocessing only ignore embedding.
+-  if (!(isa<CompileJobAction>(HostAction) ||
++  // valid source input and compile action to embed it in. If preprocessing only
++  // ignore embedding.
++  if (offloadHostOnly() || !types::isSrcFile(Input.first) ||
++      !(isa<CompileJobAction>(HostAction) ||
+         getFinalPhase(Args) == phases::Preprocess))
+     return HostAction;
+ 
+@@ -4989,12 +4967,12 @@ Action *Driver::BuildOffloadingActions(Compilation &C,
+       }
+     }
+ 
+-    // Compiling HIP in device-only non-RDC mode requires linking each action
+-    // individually.
++    // Compiling HIP in non-RDC mode requires linking each action individually.
+     for (Action *&A : DeviceActions) {
+       if ((A->getType() != types::TY_Object &&
+            A->getType() != types::TY_LTO_BC) ||
+-          !HIPNoRDC || !offloadDeviceOnly())
++          Kind != Action::OFK_HIP ||
++          Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc, false))
+         continue;
+       ActionList LinkerInput = {A};
+       A = C.MakeAction<LinkJobAction>(LinkerInput, types::TY_Image);
+@@ -5018,12 +4996,12 @@ Action *Driver::BuildOffloadingActions(Compilation &C,
+     }
+   }
+ 
+-  // HIP code in device-only non-RDC mode will bundle the output if it invoked
+-  // the linker.
++  // HIP code in non-RDC mode will bundle the output if it invoked the linker.
+   bool ShouldBundleHIP =
+-      HIPNoRDC && offloadDeviceOnly() &&
++      C.isOffloadingHostKind(Action::OFK_HIP) &&
+       Args.hasFlag(options::OPT_gpu_bundle_output,
+                    options::OPT_no_gpu_bundle_output, true) &&
++      !Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc, false) &&
+       !llvm::any_of(OffloadActions,
+                     [](Action *A) { return A->getType() != types::TY_Image; });
+ 
+@@ -5043,9 +5021,11 @@ Action *Driver::BuildOffloadingActions(Compilation &C,
+         C.MakeAction<LinkJobAction>(OffloadActions, types::TY_CUDA_FATBIN);
+     DDep.add(*FatbinAction, *C.getSingleOffloadToolChain<Action::OFK_Cuda>(),
+              nullptr, Action::OFK_Cuda);
+-  } else if (HIPNoRDC && offloadDeviceOnly()) {
+-    // If we are in device-only non-RDC-mode we just emit the final HIP
+-    // fatbinary for each translation unit, linking each input individually.
++  } else if (C.isOffloadingHostKind(Action::OFK_HIP) &&
++             !Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc,
++                           false)) {
++    // If we are not in RDC-mode we just emit the final HIP fatbinary for each
++    // translation unit, linking each input individually.
+     Action *FatbinAction =
+         C.MakeAction<LinkJobAction>(OffloadActions, types::TY_HIP_FATBIN);
+     DDep.add(*FatbinAction, *C.getSingleOffloadToolChain<Action::OFK_HIP>(),
+@@ -5198,11 +5178,8 @@ Action *Driver::ConstructPhaseAction(
+         (((Input->getOffloadingToolChain() &&
+            Input->getOffloadingToolChain()->getTriple().isAMDGPU()) ||
+           TargetDeviceOffloadKind == Action::OFK_HIP) &&
+-         ((Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc,
+-                        false) ||
+-           (Args.hasFlag(options::OPT_offload_new_driver,
+-                         options::OPT_no_offload_new_driver, false) &&
+-            !offloadDeviceOnly())) ||
++         (Args.hasFlag(options::OPT_fgpu_rdc, options::OPT_fno_gpu_rdc,
++                       false) ||
+           TargetDeviceOffloadKind == Action::OFK_OpenMP))) {
+       types::ID Output =
+           Args.hasArg(options::OPT_S) &&
+diff --git a/clang/lib/Driver/ToolChains/Clang.cpp b/clang/lib/Driver/ToolChains/Clang.cpp
+index 65f101ddf1d0..d85cc4104389 100644
+--- a/clang/lib/Driver/ToolChains/Clang.cpp
++++ b/clang/lib/Driver/ToolChains/Clang.cpp
+@@ -7821,7 +7821,7 @@ void Clang::ConstructJob(Compilation &C, const JobAction &JA,
+     CmdArgs.push_back("-fcuda-include-gpubinary");
+     CmdArgs.push_back(CudaDeviceInput->getFilename());
+   } else if (!HostOffloadingInputs.empty()) {
+-    if (IsCuda && !IsRDCMode) {
++    if ((IsCuda || IsHIP) && !IsRDCMode) {
+       assert(HostOffloadingInputs.size() == 1 && "Only one input expected");
+       CmdArgs.push_back("-fcuda-include-gpubinary");
+       CmdArgs.push_back(HostOffloadingInputs.front().getFilename());
+@@ -9368,20 +9368,8 @@ void LinkerWrapper::ConstructJob(Compilation &C, const JobAction &JA,
+   // Add the linker arguments to be forwarded by the wrapper.
+   CmdArgs.push_back(Args.MakeArgString(Twine("--linker-path=") +
+                                        LinkCommand->getExecutable()));
+-
+-  // We use action type to differentiate two use cases of the linker wrapper.
+-  // TY_Image for normal linker wrapper work.
+-  // TY_Object for HIP fno-gpu-rdc embedding device binary in a relocatable
+-  // object.
+-  assert(JA.getType() == types::TY_Object || JA.getType() == types::TY_Image);
+-  if (JA.getType() == types::TY_Object) {
+-    CmdArgs.append({"-o", Output.getFilename()});
+-    for (auto Input : Inputs)
+-      CmdArgs.push_back(Input.getFilename());
+-    CmdArgs.push_back("-r");
+-  } else
+-    for (const char *LinkArg : LinkCommand->getArguments())
+-      CmdArgs.push_back(LinkArg);
++  for (const char *LinkArg : LinkCommand->getArguments())
++    CmdArgs.push_back(LinkArg);
+ 
+   addOffloadCompressArgs(Args, CmdArgs);
+ 
+diff --git a/clang/test/Driver/hip-binding.hip b/clang/test/Driver/hip-binding.hip
+index d8b3f1e24201..57e57194ec87 100644
+--- a/clang/test/Driver/hip-binding.hip
++++ b/clang/test/Driver/hip-binding.hip
+@@ -93,7 +93,7 @@
+ // RUN:        -nogpulib -nogpuinc -foffload-lto --offload-arch=gfx90a --offload-arch=gfx908 -c %s 2>&1 \
+ // RUN: | FileCheck -check-prefix=LTO-NO-RDC %s
+ //      LTO-NO-RDC: # "amdgcn-amd-amdhsa" - "clang", inputs: ["[[INPUT:.+]]"], output: "[[LTO_908:.+]]"
++// LTO-NO-RDC-NEXT: # "amdgcn-amd-amdhsa" - "AMDGCN::Linker", inputs: ["[[LTO_908]]"], output: "[[OBJ_908:.+]]"
+ // LTO-NO-RDC-NEXT: # "amdgcn-amd-amdhsa" - "clang", inputs: ["[[INPUT]]"], output: "[[LTO_90A:.+]]"
+-// LTO-NO-RDC-NEXT: # "x86_64-unknown-linux-gnu" - "Offload::Packager", inputs: ["[[LTO_908]]", "[[LTO_90A]]"], output: "[[PKG:.+]]"
+-// LTO-NO-RDC-NEXT: # "x86_64-unknown-linux-gnu" - "clang", inputs: ["[[INPUT]]", "[[PKG]]"], output: "[[OBJ:.+]]"
+-// LTO-NO-RDC-NEXT: # "x86_64-unknown-linux-gnu" - "Offload::Linker", inputs: ["[[OBJ]]"], output: "hip-binding.o"
++// LTO-NO-RDC-NEXT: # "amdgcn-amd-amdhsa" - "AMDGCN::Linker", inputs: ["[[LTO_90A]]"], output: "[[OBJ_90A:.+]]"
++// LTO-NO-RDC-NEXT: # "amdgcn-amd-amdhsa" - "AMDGCN::Linker", inputs: ["[[OBJ_908]]", "[[OBJ_90A]]"], output: "[[HIPFB:.+]]"
+diff --git a/clang/test/Driver/hip-phases.hip b/clang/test/Driver/hip-phases.hip
+index 996d72e58755..5fd2c0216ccc 100644
+--- a/clang/test/Driver/hip-phases.hip
++++ b/clang/test/Driver/hip-phases.hip
+@@ -8,50 +8,39 @@
+ //
+ // RUN: %clang -x hip --target=x86_64-unknown-linux-gnu -ccc-print-phases \
+ // RUN: --no-offload-new-driver --cuda-gpu-arch=gfx803 %s 2>&1 \
+-// RUN: | FileCheck -check-prefixes=BIN,OLD,OLDN %s
++// RUN: | FileCheck -check-prefixes=BIN,NRD,OLD %s
+ // RUN: %clang -x hip --target=x86_64-unknown-linux-gnu -ccc-print-phases \
+ // RUN: --offload-new-driver --cuda-gpu-arch=gfx803 %s 2>&1 \
+-// RUN: | FileCheck -check-prefixes=BIN,NEW,NEWN %s
++// RUN: | FileCheck -check-prefixes=BIN,NRD,NEW %s
+ //
+ // RUN: %clang -x hip --target=x86_64-unknown-linux-gnu -ccc-print-phases \
+ // RUN: --no-offload-new-driver --cuda-gpu-arch=gfx803 -fgpu-rdc %s 2>&1 \
+-// RUN: | FileCheck -check-prefixes=BIN,OLD,OLDR %s
+-// RUN: %clang -x hip --target=x86_64-unknown-linux-gnu -ccc-print-phases \
+-// RUN: --offload-new-driver --cuda-gpu-arch=gfx803 -fgpu-rdc %s 2>&1 \
+-// RUN: | FileCheck -check-prefixes=BIN,NEW,NEWR %s
++// RUN: | FileCheck -check-prefixes=BIN,RDC %s
+ //
+ // BIN-DAG: [[P0:[0-9]+]]: input, "{{.*}}hip-phases.hip", [[T:hip]], (host-[[T]])
+ // BIN-DAG: [[P1:[0-9]+]]: preprocessor, {[[P0]]}, [[T]]-cpp-output, (host-[[T]])
+ // BIN-DAG: [[P2:[0-9]+]]: compiler, {[[P1]]}, ir, (host-[[T]])
+-// OLDR-DAG: [[P12:[0-9]+]]: backend, {[[P2]]}, assembler, (host-[[T]])
+-// OLDR-DAG: [[P13:[0-9]+]]: assembler, {[[P12]]}, object, (host-[[T]])
++// RDC-DAG: [[P12:[0-9]+]]: backend, {[[P2]]}, assembler, (host-[[T]])
++// RDC-DAG: [[P13:[0-9]+]]: assembler, {[[P12]]}, object, (host-[[T]])
+ 
+ // BIN-DAG: [[P3:[0-9]+]]: input, "{{.*}}hip-phases.hip", [[T]], (device-[[T]], [[ARCH:gfx803]])
+ // BIN-DAG: [[P4:[0-9]+]]: preprocessor, {[[P3]]}, [[T]]-cpp-output, (device-[[T]], [[ARCH]])
+ // BIN-DAG: [[P5:[0-9]+]]: compiler, {[[P4]]}, ir, (device-[[T]], [[ARCH]])
+-// OLDN-DAG: [[P6:[0-9]+]]: backend, {[[P5]]}, assembler, (device-[[T]], [[ARCH]])
+-// NEW-DAG: [[P6:[0-9]+]]: backend, {[[P5]]}, ir, (device-[[T]], [[ARCH]])
+-// OLDN-DAG: [[P7:[0-9]+]]: assembler, {[[P6]]}, object, (device-[[T]], [[ARCH]])
+-// OLDR-DAG: [[P7:[0-9]+]]: backend, {[[P5]]}, ir, (device-[[T]], [[ARCH]])
+-// OLD-DAG: [[P8:[0-9]+]]: linker, {[[P7]]}, image, (device-[[T]], [[ARCH]])
+-// OLD-DAG: [[P9:[0-9]+]]: offload, "device-[[T]] (amdgcn-amd-amdhsa:[[ARCH]])" {[[P8]]}, image
+-// NEW-DAG: [[P9:[0-9]+]]: offload, "device-[[T]] (amdgcn-amd-amdhsa:[[ARCH]])" {[[P6]]}, ir
+-// OLDN-DAG: [[P10:[0-9]+]]: linker, {[[P9]]}, hip-fatbin, (device-[[T]])
+-// NEW-DAG: [[P10:[0-9]+]]: clang-offload-packager, {[[P9]]}, image, (device-[[T]])
+-// OLDR-DAG: [[P10:[0-9]+]]: linker, {[[P9]]}, object, (device-[[T]])
+-
+-// OLDN-DAG: [[P11:[0-9]+]]: offload, "host-[[T]] (x86_64-unknown-linux-gnu)" {[[P2]]}, "device-[[T]] (amdgcn-amd-amdhsa)" {[[P10]]}, ir
+-// NEW-DAG: [[P11:[0-9]+]]: offload, "host-[[T]] (x86_64-unknown-linux-gnu)" {[[P2]]}, "device-[[T]] (x86_64-unknown-linux-gnu)" {[[P10]]}, ir
+-// OLDR-DAG: [[P11:[0-9]+]]: offload, "device-[[T]] (amdgcn-amd-amdhsa)" {[[P10]]}, object
+-// OLDN-DAG: [[P12:[0-9]+]]: backend, {[[P11]]}, assembler, (host-[[T]])
+-// OLDN-DAG: [[P13:[0-9]+]]: assembler, {[[P12]]}, object, (host-[[T]])
+-// NEW-DAG: [[P12:[0-9]+]]: backend, {[[P11]]}, assembler, (host-[[T]])
+-// NEW-DAG: [[P13:[0-9]+]]: assembler, {[[P12]]}, object, (host-[[T]])
+-// OLDN-DAG: [[P14:[0-9]+]]: linker, {[[P13]]}, image, (host-[[T]])
+-// NEWN-DAG: [[P14:[0-9]+]]: clang-linker-wrapper, {[[P13]]}, object, (host-[[T]])
+-// OLDR-DAG: [[P14:[0-9]+]]: linker, {[[P13]], [[P11]]}, image, (host-[[T]])
+-// NEWR-DAG: [[P14:[0-9]+]]: clang-linker-wrapper, {[[P13]]}, image, (host-[[T]])
+-// NEWN-DAG: [[P15:[0-9]+]]: linker, {[[P14]]}, image
++// NRD-DAG: [[P6:[0-9]+]]: backend, {[[P5]]}, assembler, (device-[[T]], [[ARCH]])
++// NRD-DAG: [[P7:[0-9]+]]: assembler, {[[P6]]}, object, (device-[[T]], [[ARCH]])
++// RDC-DAG: [[P7:[0-9]+]]: backend, {[[P5]]}, ir, (device-[[T]], [[ARCH]])
++// BIN-DAG: [[P8:[0-9]+]]: linker, {[[P7]]}, image, (device-[[T]], [[ARCH]])
++// BIN-DAG: [[P9:[0-9]+]]: offload, "device-[[T]] (amdgcn-amd-amdhsa:[[ARCH]])" {[[P8]]}, image
++// NRD-DAG: [[P10:[0-9]+]]: linker, {[[P9]]}, hip-fatbin, (device-[[T]])
++// RDC-DAG: [[P10:[0-9]+]]: linker, {[[P9]]}, object, (device-[[T]])
++
++// NRD-DAG: [[P11:[0-9]+]]: offload, "host-[[T]] (x86_64-unknown-linux-gnu)" {[[P2]]}, "device-[[T]] (amdgcn-amd-amdhsa)" {[[P10]]}, ir
++// RDC-DAG: [[P11:[0-9]+]]: offload, "device-[[T]] (amdgcn-amd-amdhsa)" {[[P10]]}, object
++// NRD-DAG: [[P12:[0-9]+]]: backend, {[[P11]]}, assembler, (host-[[T]])
++// NRD-DAG: [[P13:[0-9]+]]: assembler, {[[P12]]}, object, (host-[[T]])
++// OLD-DAG: [[P14:[0-9]+]]: linker, {[[P13]]}, image, (host-[[T]])
++// NEW-DAG: [[P14:[0-9]+]]: clang-linker-wrapper, {[[P13]]}, image, (host-[[T]])
++// RDC-DAG: [[P14:[0-9]+]]: linker, {[[P13]], [[P11]]}, image, (host-[[T]])
+ 
+ //
+ // Test single gpu architecture up to the assemble phase.
+diff --git a/clang/test/Driver/hip-toolchain-no-rdc.hip b/clang/test/Driver/hip-toolchain-no-rdc.hip
+index ddd251b67cc5..6c69d1d51a26 100644
+--- a/clang/test/Driver/hip-toolchain-no-rdc.hip
++++ b/clang/test/Driver/hip-toolchain-no-rdc.hip
+@@ -7,7 +7,7 @@
+ // RUN:   -fuse-ld=lld -B%S/Inputs/lld -nogpuinc \
+ // RUN:   %S/Inputs/hip_multiple_inputs/a.cu \
+ // RUN:   %S/Inputs/hip_multiple_inputs/b.hip \
+-// RUN: 2>&1 | FileCheck -check-prefixes=CHECK,LINK,OLD %s
++// RUN: 2>&1 | FileCheck -check-prefixes=CHECK,LINK %s
+ 
+ // RUN: %clang -### --target=x86_64-linux-gnu -fno-gpu-rdc \
+ // RUN:   -x hip --cuda-gpu-arch=gfx803 --cuda-gpu-arch=gfx900 \
+@@ -17,7 +17,7 @@
+ // RUN:   -fuse-ld=lld -B%S/Inputs/lld -nogpuinc -c \
+ // RUN:   %S/Inputs/hip_multiple_inputs/a.cu \
+ // RUN:   %S/Inputs/hip_multiple_inputs/b.hip \
+-// RUN: 2>&1 | FileCheck -check-prefixes=CHECK,OLD %s
++// RUN: 2>&1 | FileCheck -check-prefixes=CHECK %s
+ 
+ // RUN: %clang -### --target=x86_64-linux-gnu -fno-gpu-rdc \
+ // RUN:   -x hip --cuda-gpu-arch=gfx803 --cuda-gpu-arch=gfx900 \
+@@ -27,7 +27,7 @@
+ // RUN:   -fuse-ld=lld -B%S/Inputs/lld -nogpuinc --offload-new-driver -c \
+ // RUN:   %S/Inputs/hip_multiple_inputs/a.cu \
+ // RUN:   %S/Inputs/hip_multiple_inputs/b.hip \
+-// RUN: 2>&1 | FileCheck -check-prefixes=CHECK,NEW %s
++// RUN: 2>&1 | FileCheck -check-prefixes=CHECK %s
+ 
+ // RUN: touch %t/a.o %t/b.o
+ // RUN: %clang -### --target=x86_64-linux-gnu \
+@@ -47,23 +47,22 @@
+ 
+ // CHECK: [[CLANG:".*clang.*"]] "-cc1" "-triple" "amdgcn-amd-amdhsa"
+ // CHECK-SAME: "-aux-triple" "x86_64-unknown-linux-gnu"
+-// OLD-SAME: "-emit-obj"
+-// NEW-SAME: "-emit-llvm-bc"
++// CHECK-SAME: "-emit-obj"
+ // CHECK-SAME: {{.*}} "-main-file-name" "a.cu"
+ // CHECK-SAME: "-fcuda-is-device" "-fno-threadsafe-statics" "-mllvm" "-amdgpu-internalize-symbols"
+ // CHECK-SAME: "-fcuda-allow-variadic-functions" "-fvisibility=hidden"
+ // CHECK-SAME: "-fapply-global-visibility-to-externs"
+ // CHECK-SAME: "{{.*}}lib1.bc" "{{.*}}lib2.bc"
+ // CHECK-SAME: "-target-cpu" "gfx803"
+-// CHECK-SAME: {{.*}} "-o" "[[OBJ_DEV_A_803:.*(o|bc)]]" "-x" "hip"
++// CHECK-SAME: {{.*}} "-o" [[OBJ_DEV_A_803:".*o"]] "-x" "hip"
+ // CHECK-SAME: {{.*}} [[A_SRC:".*a.cu"]]
+ 
+ // CHECK-NOT: {{".*llvm-link"}}
+ // CHECK-NOT: {{".*opt"}}
+ // CHECK-NOT: {{".*llc"}}
+ 
+-// OLD: [[LLD: ".*lld.*"]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
+-// OLD-SAME: "-o" "[[IMG_DEV_A_803:.*out]]" "[[OBJ_DEV_A_803]]"
++// CHECK: [[LLD: ".*lld.*"]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
++// CHECK-SAME: "-o" "[[IMG_DEV_A_803:.*out]]" [[OBJ_DEV_A_803]]
+ 
+ //
+ // Compile device code in a.cu to code object for gfx900.
+@@ -71,71 +70,62 @@
+ 
+ // CHECK: [[CLANG:".*clang.*"]] "-cc1" "-triple" "amdgcn-amd-amdhsa"
+ // CHECK-SAME: "-aux-triple" "x86_64-unknown-linux-gnu"
+-// CHECK-SAME: "-emit-{{(obj|llvm-bc)}}"
++// CHECK-SAME: "-emit-obj"
+ // CHECK-SAME: {{.*}} "-main-file-name" "a.cu"
+ // CHECK-SAME: "-fcuda-is-device" "-fno-threadsafe-statics" "-mllvm" "-amdgpu-internalize-symbols"
+ // CHECK-SAME: "-fcuda-allow-variadic-functions" "-fvisibility=hidden"
+ // CHECK-SAME: "-fapply-global-visibility-to-externs"
+ // CHECK-SAME: "{{.*}}lib1.bc" "{{.*}}lib2.bc"
+ // CHECK-SAME: "-target-cpu" "gfx900"
+-// CHECK-SAME: {{.*}} "-o" "[[OBJ_DEV_A_900:.*(o|bc)]]" "-x" "hip"
++// CHECK-SAME: {{.*}} "-o" [[OBJ_DEV_A_900:".*o"]] "-x" "hip"
+ // CHECK-SAME: {{.*}} [[A_SRC]]
+ 
+ // CHECK-NOT: {{".*llvm-link"}}
+ // CHECK-NOT: {{".*opt"}}
+ // CHECK-NOT: {{".*llc"}}
+ 
+-// OLD: [[LLD]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
+-// OLD-SAME: "-o" "[[IMG_DEV_A_900:.*out]]" "[[OBJ_DEV_A_900]]"
++// CHECK: [[LLD]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
++// CHECK-SAME: "-o" "[[IMG_DEV_A_900:.*out]]" [[OBJ_DEV_A_900]]
+ 
+ //
+ // Bundle and embed device code in host object for a.cu.
+ //
+ 
+-// OLD: [[BUNDLER:".*clang-offload-bundler"]] "-type=o"
+-// OLD-SAME: "-bundle-align=4096"
+-// OLD-SAME: "-targets={{.*}},hipv4-amdgcn-amd-amdhsa--gfx803,hipv4-amdgcn-amd-amdhsa--gfx900"
+-// OLD-SAME: "-input={{.*}}" "-input=[[IMG_DEV_A_803]]" "-input=[[IMG_DEV_A_900]]" "-output=[[BUNDLE_A:.*hipfb]]"
+-
+-// NEW: [[PACKAGER:".*clang-offload-packager"]] "-o" "[[PACKAGE_A:.*.out]]"
+-// NEW-SAME: "--image=file=[[OBJ_DEV_A_803]],triple=amdgcn-amd-amdhsa,arch=gfx803,kind=hip"
+-// NEW-SAME: "--image=file=[[OBJ_DEV_A_900]],triple=amdgcn-amd-amdhsa,arch=gfx900,kind=hip"
++// CHECK: [[BUNDLER:".*clang-offload-bundler"]] "-type=o"
++// CHECK-SAME: "-bundle-align=4096"
++// CHECK-SAME: "-targets={{.*}},hipv4-amdgcn-amd-amdhsa--gfx803,hipv4-amdgcn-amd-amdhsa--gfx900"
++// CHECK-SAME: "-input={{.*}}" "-input=[[IMG_DEV_A_803]]" "-input=[[IMG_DEV_A_900]]" "-output=[[BUNDLE_A:.*hipfb]]"
+ 
+ // CHECK: [[CLANG]] "-cc1" "-triple" "x86_64-unknown-linux-gnu"
+ // CHECK-SAME: "-aux-triple" "amdgcn-amd-amdhsa"
+ // CHECK-SAME: "-emit-obj"
+ // CHECK-SAME: {{.*}} "-main-file-name" "a.cu"
+-// OLD-SAME: {{.*}} "-fcuda-include-gpubinary" "[[BUNDLE_A]]"
+-// NEW-SAME: {{.*}} "-fembed-offload-object=[[PACKAGE_A]]"
+-// OLD-SAME: {{.*}} "-o" [[A_OBJ_HOST:".*o"]] "-x" "hip"
+-// NEW-SAME: {{.*}} "-o" [[A_OBJ_HOST_TMP:".*o"]] "-x" "hip"
++// CHECK-SAME: {{.*}} "-fcuda-include-gpubinary" "[[BUNDLE_A]]"
++// CHECK-SAME: {{.*}} "-o" [[A_OBJ_HOST:".*o"]] "-x" "hip"
+ // CHECK-SAME: {{.*}} [[A_SRC]]
+ 
+-// NEW: [[WRAPPER:".*clang-linker-wrapper]]" {{.*}}"--host-triple=x86_64-unknown-linux-gnu"
+-// NEW:   "--linker-path={{.*}}" "-o" [[A_OBJ_HOST:".*o"]] [[A_OBJ_HOST_TMP]] "-r"
+-
+ //
+ // Compile device code in b.hip to code object for gfx803.
+ //
+ 
+ // CHECK: [[CLANG:".*clang.*"]] "-cc1" "-triple" "amdgcn-amd-amdhsa"
+ // CHECK-SAME: "-aux-triple" "x86_64-unknown-linux-gnu"
+-// CHECK-SAME: "-emit-{{(obj|llvm-bc)}}"
++// CHECK-SAME: "-emit-obj"
+ // CHECK-SAME: {{.*}} "-main-file-name" "b.hip"
+ // CHECK-SAME: "-fcuda-is-device" "-fno-threadsafe-statics" "-mllvm" "-amdgpu-internalize-symbols"
+ // CHECK-SAME: "-fcuda-allow-variadic-functions" "-fvisibility=hidden"
+ // CHECK-SAME: "-fapply-global-visibility-to-externs"
+ // CHECK-SAME: "{{.*}}lib1.bc" "{{.*}}lib2.bc"
+ // CHECK-SAME: "-target-cpu" "gfx803"
+-// CHECK-SAME: {{.*}} "-o" "[[OBJ_DEV_B_803:.*(o|bc)]]" "-x" "hip"
++// CHECK-SAME: {{.*}} "-o" [[OBJ_DEV_B_803:".*o"]] "-x" "hip"
+ // CHECK-SAME: {{.*}} [[B_SRC:".*b.hip"]]
+ 
+ // CHECK-NOT: {{".*llvm-link"}}
+ // CHECK-NOT: {{".*opt"}}
+ // CHECK-NOT: {{".*llc"}}
+ 
+-// OLD: [[LLD]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
+-// OLD-SAME: "-o" "[[IMG_DEV_B_803:.*out]]" "[[OBJ_DEV_B_803]]"
++// CHECK: [[LLD]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
++// CHECK-SAME: "-o" "[[IMG_DEV_B_803:.*out]]" [[OBJ_DEV_B_803]]
+ 
+ //
+ // Compile device code in b.hip to code object for gfx900.
+@@ -143,49 +133,40 @@
+ 
+ // CHECK: [[CLANG:".*clang.*"]] "-cc1" "-triple" "amdgcn-amd-amdhsa"
+ // CHECK-SAME: "-aux-triple" "x86_64-unknown-linux-gnu"
+-// CHECK-SAME: "-emit-{{(obj|llvm-bc)}}"
++// CHECK-SAME: "-emit-obj"
+ // CHECK-SAME: {{.*}} "-main-file-name" "b.hip"
+ // CHECK-SAME: "-fcuda-is-device" "-fno-threadsafe-statics" "-mllvm" "-amdgpu-internalize-symbols"
+ // CHECK-SAME: "-fcuda-allow-variadic-functions" "-fvisibility=hidden"
+ // CHECK-SAME: "-fapply-global-visibility-to-externs"
+ // CHECK-SAME: "{{.*}}lib1.bc" "{{.*}}lib2.bc"
+ // CHECK-SAME: "-target-cpu" "gfx900"
+-// CHECK-SAME: {{.*}} "-o" "[[OBJ_DEV_B_900:.*(o|bc)]]" "-x" "hip"
++// CHECK-SAME: {{.*}} "-o" [[OBJ_DEV_B_900:".*o"]] "-x" "hip"
+ // CHECK-SAME: {{.*}} [[B_SRC]]
+ 
+ // CHECK-NOT: {{".*llvm-link"}}
+ // CHECK-NOT: {{".*opt"}}
+ // CHECK-NOT: {{".*llc"}}
+ 
+-// OLD: [[LLD]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
+-// OLD-SAME: "-o" "[[IMG_DEV_B_900:.*out]]" "[[OBJ_DEV_B_900]]"
++// CHECK: [[LLD]] "-flavor" "gnu" "-m" "elf64_amdgpu" "--no-undefined" "-shared"
++// CHECK-SAME: "-o" "[[IMG_DEV_B_900:.*out]]" [[OBJ_DEV_B_900]]
+ 
+ //
+ // Bundle and embed device code in host object for b.hip.
+ //
+ 
+-// OLD: [[BUNDLER:".*clang-offload-bundler"]] "-type=o"
+-// OLD-SAME: "-bundle-align=4096"
+-// OLD-SAME: "-targets={{.*}},hipv4-amdgcn-amd-amdhsa--gfx803,hipv4-amdgcn-amd-amdhsa--gfx900"
+-// OLD-SAME: "-input={{.*}}" "-input=[[IMG_DEV_B_803]]" "-input=[[IMG_DEV_B_900]]" "-output=[[BUNDLE_B:.*hipfb]]"
+-
+-// NEW: [[PACKAGER:".*clang-offload-packager"]] "-o" "[[PACKAGE_B:.*.out]]"
+-// NEW-SAME: "--image=file=[[OBJ_DEV_B_803]],triple=amdgcn-amd-amdhsa,arch=gfx803,kind=hip"
+-// NEW-SAME: "--image=file=[[OBJ_DEV_B_900]],triple=amdgcn-amd-amdhsa,arch=gfx900,kind=hip"
++// CHECK: [[BUNDLER:".*clang-offload-bundler"]] "-type=o"
++// CHECK-SAME: "-bundle-align=4096"
++// CHECK-SAME: "-targets={{.*}},hipv4-amdgcn-amd-amdhsa--gfx803,hipv4-amdgcn-amd-amdhsa--gfx900"
++// CHECK-SAME: "-input={{.*}}" "-input=[[IMG_DEV_B_803]]" "-input=[[IMG_DEV_B_900]]" "-output=[[BUNDLE_A:.*hipfb]]"
+ 
+ // CHECK: [[CLANG]] "-cc1" "-triple" "x86_64-unknown-linux-gnu"
+ // CHECK-SAME: "-aux-triple" "amdgcn-amd-amdhsa"
+ // CHECK-SAME: "-emit-obj"
+ // CHECK-SAME: {{.*}} "-main-file-name" "b.hip"
+-// OLD-SAME: {{.*}} "-fcuda-include-gpubinary" "[[BUNDLE_B]]"
+-// NEW-SAME: {{.*}} "-fembed-offload-object=[[PACKAGE_B]]"
+-// OLD-SAME: {{.*}} "-o" [[B_OBJ_HOST:".*o"]] "-x" "hip"
+-// NEW-SAME: {{.*}} "-o" [[B_OBJ_HOST_TMP:".*o"]] "-x" "hip"
++// CHECK-SAME: {{.*}} "-fcuda-include-gpubinary" "[[BUNDLE_A]]"
++// CHECK-SAME: {{.*}} "-o" [[B_OBJ_HOST:".*o"]] "-x" "hip"
+ // CHECK-SAME: {{.*}} [[B_SRC]]
+ 
+-// NEW: [[WRAPPER:".*clang-linker-wrapper]]" {{.*}}"--host-triple=x86_64-unknown-linux-gnu"
+-// NEW:   "--linker-path={{.*}}" "-o" [[B_OBJ_HOST:".*o"]] [[B_OBJ_HOST_TMP]] "-r"
+-
+ //
+ // Link host objects.
+ //
+-- 
+2.50.0.727.gbf7dc18ff4-goog
+

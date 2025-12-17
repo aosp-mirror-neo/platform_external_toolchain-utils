@@ -7,7 +7,6 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import List
 
 from cros_utils import cros_paths
 from cros_utils import email_sender
@@ -17,7 +16,7 @@ from cros_utils import git_utils
 def count_outstanding_cls(chromeos_root: Path) -> int:
     query = " ".join(
         (
-            "owner:mobiletc-prebuild@google.com",
+            "owner:crostc-worker@crostc-chrotomation.iam.gserviceaccount.com",
             "topic:crostc-auto-cl",
             "status:open",
             "-is:wip",
@@ -32,7 +31,7 @@ def count_outstanding_cls(chromeos_root: Path) -> int:
     return len(cls)
 
 
-def main(argv: List[str]) -> None:
+def main(argv: list[str]) -> None:
     # This is meant to be run from a ChromeOS tree for simplicity.
     chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
 
@@ -84,7 +83,7 @@ def main(argv: List[str]) -> None:
         logging.info("Body: %s", body)
         return
 
-    email_sender.EmailSender().SendX20Email(
+    email_sender.EmailSender().SendGSEmail(
         subject=subject,
         identifier="cl-pings",
         text_body=body,

@@ -22,7 +22,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Optional
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -61,7 +60,7 @@ class CommandResult:
         self,
         error_string: str,
         llvm_hash: str,
-        log_dir: Optional[Path] = None,
+        log_dir: Path | None = None,
     ):
         """Exit program with error code based on result."""
         if self.success():
@@ -110,8 +109,8 @@ class LLVMRepo:
 
     REPO_PATH = cros_paths.CHROOT_SOURCE_ROOT / cros_paths.LLVM_PROJECT
 
-    def __init__(self):
-        self.workon: Optional[bool] = None
+    def __init__(self) -> None:
+        self.workon: bool | None = None
 
     def get_current_hash(self) -> str:
         try:
@@ -219,7 +218,7 @@ def abort(never_abort: bool):
         sys.exit(EXIT_ABORT)
 
 
-def get_args() -> argparse.Namespace:
+def get_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Simple LLVM Bisection Script for use with llvm-9999."
     )
@@ -285,7 +284,7 @@ def get_args() -> argparse.Namespace:
         ),
     )
 
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def run(opts: argparse.Namespace):
@@ -334,10 +333,10 @@ def run(opts: argparse.Namespace):
     test_result.exit_assert(opts.search_error, llvm_hash, log_dir)
 
 
-def main():
+def main(argv: list[str]):
     logging.basicConfig(level=logging.INFO)
     chroot.VerifyInsideChroot()
-    opts = get_args()
+    opts = get_args(argv)
     try:
         run(opts)
     except AbortingException:

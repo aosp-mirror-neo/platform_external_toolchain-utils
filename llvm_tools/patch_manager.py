@@ -8,13 +8,24 @@ import argparse
 import enum
 import os
 from pathlib import Path
+import subprocess
 import sys
-from typing import Callable, Iterable, List, Optional, Tuple
+from typing import Callable, Iterable
 
-from llvm_tools import failure_modes
 from llvm_tools import get_llvm_hash
 from llvm_tools import patch_utils
-from llvm_tools import subprocess_helpers
+
+
+class FailureModes(enum.Enum):
+    """Different modes for the patch manager when handling a failed patch."""
+
+    FAIL = "fail"
+    CONTINUE = "continue"
+    DISABLE_PATCHES = "disable_patches"
+    BISECT_PATCHES = "bisect_patches"
+
+    # Only used by 'bisect_patches'.
+    INTERNAL_BISECTION = "internal_bisection"
 
 
 class GitBisectionCode(enum.IntEnum):
@@ -32,7 +43,7 @@ class GitBisectionCode(enum.IntEnum):
     SKIP = 125
 
 
-def GetCommandLineArgs(sys_argv: Optional[List[str]]):
+def GetCommandLineArgs(sys_argv: list[str] | None):
     """Get the required arguments from the command line."""
 
     # Create parser and add optional command-line arguments.
@@ -67,8 +78,8 @@ def GetCommandLineArgs(sys_argv: Optional[List[str]]):
     # applicable patches.
     parser.add_argument(
         "--failure_mode",
-        default=failure_modes.FailureModes.FAIL,
-        type=failure_modes.FailureModes,
+        default=FailureModes.FAIL,
+        type=FailureModes,
         help="the mode of the patch manager when handling failed patches "
         "(default: %(default)s)",
     )
@@ -102,8 +113,8 @@ def GetCommandLineArgs(sys_argv: Optional[List[str]]):
 
 def GetHEADSVNVersion(src_path):
     """Gets the SVN version of HEAD in the src tree."""
-    git_hash = subprocess_helpers.check_output(
-        ["git", "-C", src_path, "rev-parse", "HEAD"]
+    git_hash = subprocess.check_output(
+        ["git", "-C", src_path, "rev-parse", "HEAD"], encoding="utf-8"
     )
     return get_llvm_hash.GetVersionFrom(src_path, git_hash.rstrip())
 
@@ -171,8 +182,8 @@ def ApplyPatchAndPrior(
     src_dir: Path,
     patch_entries: Iterable[patch_utils.PatchEntry],
     rel_patch_path: str,
-    patch_cmd: Optional[Callable] = None,
-) -> Tuple[bool, List[patch_utils.PatchEntry], List[patch_utils.PatchEntry]]:
+    patch_cmd: Callable | None = None,
+) -> tuple[bool, list[patch_utils.PatchEntry], list[patch_utils.PatchEntry]]:
     """Apply a patch, and all patches that apply before it in the patch stack.
 
     Patches which did not attempt to apply (because their version range didn't
@@ -189,7 +200,7 @@ def ApplyPatchAndPrior(
             [2]: List of failing patches, potentially containing the patch of
             interest.
     """
-    failed_patches: List[patch_utils.PatchEntry] = []
+    failed_patches: list[patch_utils.PatchEntry] = []
     applied_patches = []
     # We have to apply every patch up to the one we care about,
     # as patches can stack.
@@ -219,7 +230,7 @@ def ApplyPatchAndPrior(
                 # Broke before we reached the patch we cared about. Stop.
                 failed_patches.append(pe)
                 return False, applied_patches, failed_patches
-    raise ValueError(f"Did not find patch {rel_patch_path}. " "Does it exist?")
+    raise ValueError(f"Did not find patch {rel_patch_path}. Does it exist?")
 
 
 def PrintPatchResults(patch_info: patch_utils.PatchInfo):
@@ -262,7 +273,7 @@ def PrintPatchResults(patch_info: patch_utils.PatchInfo):
             print("%s" % os.path.basename(cur_patch_path))
 
 
-def main(sys_argv: List[str]):
+def main(sys_argv: list[str]):
     """Applies patches to the source tree and takes action on a failed patch."""
 
     args_output = GetCommandLineArgs(sys_argv)
@@ -291,8 +302,7 @@ def main(sys_argv: List[str]):
             llvm_src_dir=llvm_src_dir,
             patches_json_fp=patches_json_fp,
             patch_cmd=patch_cmd,
-            continue_on_failure=args.failure_mode
-            == failure_modes.FailureModes.CONTINUE,
+            continue_on_failure=args.failure_mode == FailureModes.CONTINUE,
         )
         PrintPatchResults(result)
 
@@ -304,7 +314,7 @@ def main(sys_argv: List[str]):
     def _test_single(args):
         if not args.test_patch:
             raise ValueError(
-                "Running with bisect_patches requires the " "--test_patch flag."
+                "Running with bisect_patches requires the --test_patch flag."
             )
         svn_version = GetHEADSVNVersion(llvm_src_dir)
         error_code = CheckPatchApplies(
@@ -318,10 +328,10 @@ def main(sys_argv: List[str]):
         sys.exit(int(error_code))
 
     dispatch_table = {
-        failure_modes.FailureModes.FAIL: _apply_all,
-        failure_modes.FailureModes.CONTINUE: _apply_all,
-        failure_modes.FailureModes.DISABLE_PATCHES: _disable,
-        failure_modes.FailureModes.BISECT_PATCHES: _test_single,
+        FailureModes.FAIL: _apply_all,
+        FailureModes.CONTINUE: _apply_all,
+        FailureModes.DISABLE_PATCHES: _disable,
+        FailureModes.BISECT_PATCHES: _test_single,
     }
 
     if args_output.failure_mode in dispatch_table:

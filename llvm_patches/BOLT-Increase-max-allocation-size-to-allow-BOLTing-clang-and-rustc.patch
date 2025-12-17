@@ -1,5 +1,5 @@
 From 28972d5fb13a36b9258b48244ed61ec91778e069 Mon Sep 17 00:00:00 2001
-From: Yi Kong <yikong@google.com>
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
 Date: Fri, 3 Jun 2022 02:06:19 +0800
 Subject: [PATCH] [BOLT] Increase max allocation size to allow BOLTing clang and
  rustc
