@@ -6,6 +6,7 @@
 
 import argparse
 import collections
+import dataclasses
 import itertools
 import logging
 from pathlib import Path
@@ -13,6 +14,7 @@ import re
 import shlex
 import sys
 
+from android_tools import find_owners
 from android_tools import parse_and_apply_warning_exemptions
 from cros_utils import bugs
 
@@ -53,6 +55,19 @@ def get_git_repo_root(known_git_repos: set[Path], target: str) -> Path:
     return git_repo
 
 
+def convert_target_to_android_bp(target: str) -> Path:
+    """Infers an Android.bp file path from a target."""
+    target_match = TARGET_DIR_RE.match(target)
+    if not target_match:
+        raise ValueError(f"Target {target!r} doesn't match {TARGET_DIR_RE}")
+
+    # This match ends up being e.g., `bionic/libc` when given the target
+    # `bionic/libc:libc`. `:libc` says "the libc target in the Android.bp
+    # existing in `bionic/libc`.
+    target_dir = Path(target_match.group(1))
+    return target_dir / "Android.bp"
+
+
 def format_bug_body(
     git_repo_relative_path: Path,
     targets_and_warnings: dict[str, list[str]],
@@ -89,10 +104,98 @@ def format_bug_body(
     return "\n".join(lines)
 
 
+@dataclasses.dataclass(frozen=True)
+class ProcessTargetsResult:
+    """Holds the results of processing targets."""
+
+    # A dict of git repos mapping to targets in that repo. All of these are
+    # relative to Android's root.
+    targets_by_repo: dict[Path, list[str]]
+    # A dict of git repos mapping to Android.bps in the repo. All of these are
+    # relative to Android's root.
+    android_bp_files_by_repo: dict[Path, list[Path]]
+
+
+def process_targets(
+    known_git_repos: set[Path], targets: list[str]
+) -> ProcessTargetsResult:
+    """Groups targets by their git repo and finds their Android.bp files."""
+    targets_by_repo = collections.defaultdict(list)
+    android_bp_files_by_repo = collections.defaultdict(set)
+
+    for target in targets:
+        git_repo = get_git_repo_root(known_git_repos, target)
+        targets_by_repo[git_repo].append(target)
+
+        android_bp = convert_target_to_android_bp(target)
+        android_bp_files_by_repo[git_repo].add(android_bp)
+
+    # Sort for consistency in output.
+    for v in targets_by_repo.values():
+        v.sort()
+
+    deduped_android_bps = {
+        k: sorted(v) for k, v in android_bp_files_by_repo.items()
+    }
+
+    return ProcessTargetsResult(
+        targets_by_repo=targets_by_repo,
+        android_bp_files_by_repo=deduped_android_bps,
+    )
+
+
+def lookup_owners_for_git_repos(
+    android_tree: Path, android_bp_files_by_repo: dict[Path, list[Path]]
+) -> dict[Path, str]:
+    """Looks up OWNERS for the given git repos.
+
+    Args:
+        android_tree: Path to the root of an Android repo.
+        android_bp_files_by_repo: A mapping of
+            `{git_repo_root: list_of_android_bps_owners_are_needed_for}`.
+            The `git_repo_root` should be relative to `android_tree`.
+    """
+    logging.info(
+        "Looking up OWNERS mappings for %d repo(s)...",
+        len(android_bp_files_by_repo),
+    )
+    repo_cache = find_owners.RepoCache.create_from_manifest(
+        android_tree / find_owners.ANDROID_MANIFEST_XML_FROM_ROOT
+    )
+
+    check_files = {}
+    for git_repo, android_bps in android_bp_files_by_repo.items():
+        modified_files = sorted(
+            {str(x.relative_to(git_repo)) for x in android_bps}
+        )
+        check_files[str(git_repo)] = modified_files
+
+    all_results = find_owners.fetch_all_likely_relevant_code_owners(
+        repo_cache,
+        find_owners.INTERNAL_GERRIT_HOST,
+        check_files,
+    )
+    resolved_owners = {
+        Path(k): v for k, v in all_results.items() if v is not None
+    }
+    logging.info(
+        "Successfully resolved %d specific OWNERS; failed to resolve %d",
+        len(resolved_owners),
+        len(all_results) - len(resolved_owners),
+    )
+    return resolved_owners
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--android-tree",
+        type=Path,
+        required=True,
+        help="Path to the Android source tree",
     )
     parser.add_argument(
         "--debug", action="store_true", help="Enable debug logging."
@@ -148,21 +251,25 @@ def main(argv: list[str]) -> None:
     )
 
     # Mapping of git repo to warnings observed per target.
-    repo_to_targets: dict[Path, dict[str, list[str]]] = collections.defaultdict(
-        dict
-    )
-
     logging.info("Grouping targets by git repo...")
     known_git_repos = set(summary.git_dirs)
-    for target, warnings in summary.updated_targets.items():
-        git_repo = get_git_repo_root(known_git_repos, target)
-        repo_to_targets[git_repo][target] = warnings
+    processed_targets = process_targets(
+        known_git_repos, list(summary.updated_targets.keys())
+    )
 
-    logging.info("Found %d git repos with suppressions.", len(repo_to_targets))
+    logging.info(
+        "Found %d git repos with suppressions.",
+        len(processed_targets.targets_by_repo),
+    )
+
+    repo_owners = lookup_owners_for_git_repos(
+        opts.android_tree, processed_targets.android_bp_files_by_repo
+    )
 
     generated_bugs = []
 
-    for git_repo, targets_dict in sorted(repo_to_targets.items()):
+    for git_repo, targets in sorted(processed_targets.targets_by_repo.items()):
+        targets_dict = {t: summary.updated_targets[t] for t in targets}
         body = format_bug_body(
             git_repo_relative_path=git_repo,
             targets_and_warnings=targets_dict,
@@ -176,10 +283,7 @@ def main(argv: list[str]) -> None:
             title=title,
             body=body,
             component=bugs.INTERNAL_ANDROID_COMPONENT,
-            # TODO(b/467371906): use code OWNERS location functionality. Doing
-            # that mapping adds some complexity, so just set to `opts.contact`
-            # for now to keep reviews smaller.
-            assignee=opts.contact,
+            assignee=repo_owners.get(git_repo, opts.contact),
             parent=opts.parent_bug,
         )
         generated_bugs.append(bug_content)

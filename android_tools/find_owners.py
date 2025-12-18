@@ -25,6 +25,7 @@ from llvm_tools import manifest_utils
 
 
 ANDROID_MANIFEST_XML_FROM_ROOT = Path(".repo") / "manifests" / "default.xml"
+INTERNAL_GERRIT_HOST = "https://googleplex-android-review.git.corp.google.com"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -401,7 +402,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--gerrit-host",
-        default="https://googleplex-android-review.git.corp.google.com",
+        default=INTERNAL_GERRIT_HOST,
         help="Gerrit host to query",
     )
     parser.add_argument(
