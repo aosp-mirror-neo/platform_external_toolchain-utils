@@ -9,7 +9,7 @@ from pathlib import Path
 import textwrap
 from typing import Any
 
-from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
+from android_tools import parse_and_apply_warning_exemptions as pa
 from llvm_tools import test_helpers
 from llvm_tools import warning_exemption
 
@@ -66,7 +66,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "bionic/libc/bionic/sigprocmask.c",
         ]
         self.assertEqual(
-            parse_and_apply.infer_target_from_cmdline(cmd),
+            pa.infer_target_from_cmdline(cmd),
             "//bionic/libc:libc_bionic",
         )
 
@@ -75,7 +75,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "clang",
             "bionic/libc/bionic/sigprocmask.c",
         ]
-        self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
+        self.assertIsNone(pa.infer_target_from_cmdline(cmd))
 
     def test_infer_target_from_cmdline_no_soong_prefix(self) -> None:
         cmd = [
@@ -84,7 +84,7 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             EXAMPLE_OUT_FILE.replace("/soong/", "/not-soong/", 1),
             "bionic/libc/bionic/sigprocmask.c",
         ]
-        self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
+        self.assertIsNone(pa.infer_target_from_cmdline(cmd))
 
     def test_infer_target_from_cmdline_no_obj_dir(self) -> None:
         cmd = [
@@ -93,14 +93,14 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             EXAMPLE_OUT_FILE.replace("/obj/", "/", 1),
             "bionic/libc/bionic/sigprocmask.c",
         ]
-        self.assertIsNone(parse_and_apply.infer_target_from_cmdline(cmd))
+        self.assertIsNone(pa.infer_target_from_cmdline(cmd))
 
 
 class TestParseOneWarningReport(test_helpers.TempDirTestCase):
     """Tests for parse_one_warning_report."""
 
     def test_parse_one_warning_report_success(self) -> None:
-        parse_result = parse_and_apply.parse_one_warning_report(
+        parse_result = pa.parse_one_warning_report(
             EXAMPLE_WARNING_REPORT, report_line_number=1
         )
         # Use `assert` to appease mypy.
@@ -127,7 +127,7 @@ class TestParseWarningReports(test_helpers.TempDirTestCase):
             encoding="utf-8",
         )
 
-        result = parse_and_apply.parse_warning_reports(log_path)
+        result = pa.parse_warning_reports(log_path)
 
         parsed_result = example_warning_report_expected_result()
         self.assertEqual(
@@ -154,7 +154,7 @@ class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
                 ("libutils", "//system/core:libutils")
             ],
         }
-        result = parse_and_apply.group_targets_by_bp_file(targets)
+        result = pa.group_targets_by_bp_file(targets)
         # Sort these for consistent ordering.
         for v in result.values():
             v.sort()
@@ -163,11 +163,11 @@ class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
         self.assertEqual(result, expected)
 
     def test_group_targets_by_bp_file_empty_input(self) -> None:
-        self.assertEqual(parse_and_apply.group_targets_by_bp_file([]), {})
+        self.assertEqual(pa.group_targets_by_bp_file([]), {})
 
     def test_group_targets_by_bp_file_invalid_target(self) -> None:
         with self.assertRaises(ValueError):
-            parse_and_apply.group_targets_by_bp_file(["//bionic/libc"])
+            pa.group_targets_by_bp_file(["//bionic/libc"])
 
 
 class TestUpdateHunkHeaderForAddedLines(test_helpers.TempDirTestCase):
@@ -175,30 +175,28 @@ class TestUpdateHunkHeaderForAddedLines(test_helpers.TempDirTestCase):
 
     def test_update_hunk_header_docstring_example(self) -> None:
         header = "@@ -5,12 +5,18 @@"
-        new_header = parse_and_apply.update_hunk_header_for_added_lines(
+        new_header = pa.update_hunk_header_for_added_lines(
             header, added_lines=2, preexisting_added_lines=4
         )
         self.assertEqual(new_header, "@@ -5,12 +9,20 @@")
 
     def test_update_hunk_header_no_changes(self) -> None:
         header = "@@ -1,1 +1,1 @@"
-        new_header = parse_and_apply.update_hunk_header_for_added_lines(
+        new_header = pa.update_hunk_header_for_added_lines(
             header, added_lines=0, preexisting_added_lines=0
         )
         self.assertEqual(new_header, "@@ -1,1 +1,1 @@")
 
     def test_update_hunk_header_with_added_lines(self) -> None:
         header = "@@ -10,5 +10,5 @@"
-        new_header = parse_and_apply.update_hunk_header_for_added_lines(
+        new_header = pa.update_hunk_header_for_added_lines(
             header, added_lines=3, preexisting_added_lines=0
         )
         self.assertEqual(new_header, "@@ -10,5 +10,8 @@")
 
     def test_update_hunk_header_invalid_header(self) -> None:
         with self.assertRaises(ValueError):
-            parse_and_apply.update_hunk_header_for_added_lines(
-                "invalid header", 1, 1
-            )
+            pa.update_hunk_header_for_added_lines("invalid header", 1, 1)
 
 
 class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
@@ -218,7 +216,7 @@ class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
              cc_library {
                  name: "libbar",
             +    cflags: ["-Wno-bar"],
-             }"""
+             } """
         )
         expected_diff = textwrap.dedent(
             """
@@ -235,9 +233,9 @@ class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
                  name: "libbar",
             +// Temporarily suppressed for b/12345
             +    cflags: ["-Wno-bar"],
-             }"""
+             } """
         )
-        result = parse_and_apply.add_suppression_comments_to_diff(
+        result = pa.add_suppression_comments_to_diff(
             12345, diff, ['"-Wno-foo"', '"-Wno-bar"']
         )
         self.assertEqual(result, expected_diff)
@@ -251,25 +249,55 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         summary_file = temp_dir / "summary.json"
         summary_content: dict[str, Any] = {
             "bug_number": 12345,
-            "git_dirs": ["/foo/bar", "/baz/qux"],
-            "updated_targets": {
-                "//foo:bar": ["unused-variable"],
-                "//baz:qux": ["unused-function"],
+            "exemptions": {
+                "/foo/bar": {
+                    "updated_files": {
+                        "foo/bar/Android.bp": {
+                            "per_target_warnings": {
+                                "//foo:bar": ["unused-variable"]
+                            }
+                        }
+                    },
+                },
+                "/baz/qux": {
+                    "updated_files": {
+                        "baz/qux/Android.bp": {
+                            "per_target_warnings": {
+                                "//baz:qux": ["unused-function"]
+                            }
+                        }
+                    },
+                },
             },
         }
         with summary_file.open("w", encoding="utf-8") as f:
             json.dump(summary_content, f)
 
-        summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+        summary = pa.ExemptionSummary.from_file(summary_file)
 
         self.assertEqual(
             summary,
-            parse_and_apply.ExemptionSummary(
+            pa.ExemptionSummary(
                 bug_number=12345,
-                git_dirs=[Path("/foo/bar"), Path("/baz/qux")],
-                updated_targets={
-                    "//foo:bar": ["unused-variable"],
-                    "//baz:qux": ["unused-function"],
+                exemptions={
+                    "/foo/bar": pa.RepoExemptionSummary(
+                        updated_files={
+                            "foo/bar/Android.bp": pa.BpExemptionSummary(
+                                per_target_warnings={
+                                    "//foo:bar": ["unused-variable"]
+                                }
+                            )
+                        },
+                    ),
+                    "/baz/qux": pa.RepoExemptionSummary(
+                        updated_files={
+                            "baz/qux/Android.bp": pa.BpExemptionSummary(
+                                per_target_warnings={
+                                    "//baz:qux": ["unused-function"]
+                                }
+                            )
+                        },
+                    ),
                 },
             ),
         )
@@ -279,57 +307,130 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
         summary_file = temp_dir / "summary.json"
         summary_content: dict[str, Any] = {
             "bug_number": 123,
-            "git_dirs": [],
-            "updated_targets": {},
+            "exemptions": {},
         }
         with summary_file.open("w", encoding="utf-8") as f:
             json.dump(summary_content, f)
 
-        summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+        summary = pa.ExemptionSummary.from_file(summary_file)
 
         self.assertEqual(
             summary,
-            parse_and_apply.ExemptionSummary(
+            pa.ExemptionSummary(
                 bug_number=123,
-                git_dirs=[],
-                updated_targets={},
+                exemptions={},
             ),
         )
 
     def test_uploaded_cls_round_trip(self) -> None:
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"
-        summary = parse_and_apply.ExemptionSummary(
+        summary = pa.ExemptionSummary(
             bug_number=12345,
-            git_dirs=[Path("/foo/bar")],
-            updated_targets={"//foo:bar": ["unused-variable"]},
-            uploaded_cls={"platform/foo/bar": "ag/12345"},
-        )
-
-        summary.write_to_file(summary_file)
-
-        read_summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
-        self.assertEqual(read_summary, summary)
-
-    def test_write_to_file(self) -> None:
-        temp_dir = self.make_tempdir()
-        summary_file = temp_dir / "summary.json"
-        summary = parse_and_apply.ExemptionSummary(
-            bug_number=987,
-            git_dirs=[Path("/foo/bar"), Path("/baz/qux")],
-            updated_targets={
-                "//foo:bar": ["unused-variable"],
-                "//baz:qux": ["unused-function"],
+            exemptions={
+                "/foo/bar": pa.RepoExemptionSummary(
+                    updated_files={
+                        "foo/bar/Android.bp": pa.BpExemptionSummary(
+                            per_target_warnings={
+                                "//foo:bar": ["unused-variable"]
+                            }
+                        )
+                    },
+                    uploaded_cl="ag/12345",
+                )
             },
         )
 
         summary.write_to_file(summary_file)
 
-        read_summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+        read_summary = pa.ExemptionSummary.from_file(summary_file)
+        self.assertEqual(read_summary, summary)
 
-        expected_summary = parse_and_apply.ExemptionSummary(
+    def test_write_to_file(self) -> None:
+        temp_dir = self.make_tempdir()
+        summary_file = temp_dir / "summary.json"
+        summary = pa.ExemptionSummary(
             bug_number=987,
-            git_dirs=sorted(summary.git_dirs),
-            updated_targets=summary.updated_targets,
+            exemptions={
+                "/foo/bar": pa.RepoExemptionSummary(
+                    updated_files={
+                        "foo/bar/Android.bp": pa.BpExemptionSummary(
+                            per_target_warnings={
+                                "//foo:bar": ["unused-variable"]
+                            }
+                        )
+                    }
+                ),
+                "/baz/qux": pa.RepoExemptionSummary(
+                    updated_files={
+                        "baz/qux/Android.bp": pa.BpExemptionSummary(
+                            per_target_warnings={
+                                "//baz:qux": ["unused-function"]
+                            }
+                        )
+                    }
+                ),
+            },
         )
-        self.assertEqual(read_summary, expected_summary)
+
+        summary.write_to_file(summary_file)
+
+        read_summary = pa.ExemptionSummary.from_file(summary_file)
+
+        self.assertEqual(read_summary, summary)
+
+
+class TestPopulateAndWriteSummary(test_helpers.TempDirTestCase):
+    """Tests for populate_and_write_summary."""
+
+    def test_populate_and_write_summary(self) -> None:
+        summary_file = self.make_tempdir() / "summary.json"
+        bug_number = 12345
+        updated_targets = {
+            "//foo/bar:bar": ["unused-variable"],
+            "//baz/qux:qux": ["unused-function"],
+        }
+        uploaded_cls = {
+            Path("foo/bar"): "ag/111",
+            Path("baz/qux"): "ag/222",
+        }
+        file_to_repo = {
+            Path("foo/bar/Android.bp"): Path("foo/bar"),
+            Path("baz/qux/Android.bp"): Path("baz/qux"),
+        }
+
+        pa.populate_and_write_summary(
+            bug_number,
+            summary_file,
+            updated_targets,
+            uploaded_cls,
+            file_to_repo,
+        )
+
+        summary = pa.ExemptionSummary.from_file(summary_file)
+        expected_summary = pa.ExemptionSummary(
+            bug_number=bug_number,
+            exemptions={
+                "foo/bar": pa.RepoExemptionSummary(
+                    updated_files={
+                        "foo/bar/Android.bp": pa.BpExemptionSummary(
+                            per_target_warnings={
+                                "//foo/bar:bar": ["unused-variable"]
+                            }
+                        )
+                    },
+                    uploaded_cl="ag/111",
+                ),
+                "baz/qux": pa.RepoExemptionSummary(
+                    updated_files={
+                        "baz/qux/Android.bp": pa.BpExemptionSummary(
+                            per_target_warnings={
+                                "//baz/qux:qux": ["unused-function"]
+                            }
+                        )
+                    },
+                    uploaded_cl="ag/222",
+                ),
+            },
+        )
+        self.assertEqual(summary, expected_summary)

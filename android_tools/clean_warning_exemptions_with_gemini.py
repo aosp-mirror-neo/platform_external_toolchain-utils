@@ -766,7 +766,7 @@ def main(argv: list[str]) -> None:
         summary_file = parse_and_apply.ExemptionSummary.from_file(
             summary_file_path
         )
-        repos_to_run_on = summary_file.git_dirs
+        repos_to_run_on = [Path(x) for x in summary_file.exemptions]
 
     bpfmt_path = parse_and_apply.bpfmt_path(android_tree)
     if not bpfmt_path.exists():
