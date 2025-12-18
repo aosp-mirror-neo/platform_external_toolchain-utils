@@ -71,6 +71,7 @@ def convert_target_to_android_bp(target: str) -> Path:
 def format_bug_body(
     git_repo_relative_path: Path,
     targets_and_warnings: dict[str, list[str]],
+    cl_link: str | None,
     contact: str,
     original_bug: int,
 ) -> str:
@@ -87,6 +88,12 @@ def format_bug_body(
         for w in sorted(warnings):
             lines.append(f"  - `-W{w}`")
         lines.append("")
+
+    if cl_link:
+        lines += (
+            "",
+            f"Warning suppresions for these were probably landed in {cl_link}.",
+        )
 
     lines += (
         "",
@@ -273,6 +280,7 @@ def main(argv: list[str]) -> None:
         body = format_bug_body(
             git_repo_relative_path=git_repo,
             targets_and_warnings=targets_dict,
+            cl_link=summary.uploaded_cls.get(str(git_repo)),
             contact=opts.contact,
             original_bug=summary.bug_number,
         )

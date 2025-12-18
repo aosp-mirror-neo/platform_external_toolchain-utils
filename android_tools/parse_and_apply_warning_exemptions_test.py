@@ -296,6 +296,21 @@ class TestExemptionSummary(test_helpers.TempDirTestCase):
             ),
         )
 
+    def test_uploaded_cls_round_trip(self) -> None:
+        temp_dir = self.make_tempdir()
+        summary_file = temp_dir / "summary.json"
+        summary = parse_and_apply.ExemptionSummary(
+            bug_number=12345,
+            git_dirs=[Path("/foo/bar")],
+            updated_targets={"//foo:bar": ["unused-variable"]},
+            uploaded_cls={"platform/foo/bar": "ag/12345"},
+        )
+
+        summary.write_to_file(summary_file)
+
+        read_summary = parse_and_apply.ExemptionSummary.from_file(summary_file)
+        self.assertEqual(read_summary, summary)
+
     def test_write_to_file(self) -> None:
         temp_dir = self.make_tempdir()
         summary_file = temp_dir / "summary.json"

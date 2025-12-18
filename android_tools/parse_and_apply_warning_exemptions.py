@@ -257,6 +257,7 @@ class ExemptionSummary:
     updated_targets: dict[str, list[str]] = dataclasses.field(
         default_factory=dict
     )
+    uploaded_cls: dict[str, str] = dataclasses.field(default_factory=dict)
 
     @classmethod
     def from_file(cls, path: Path) -> "ExemptionSummary":
@@ -267,6 +268,10 @@ class ExemptionSummary:
             bug_number=content["bug_number"],
             git_dirs=[Path(x) for x in content["git_dirs"]],
             updated_targets=content["updated_targets"],
+            # Note that while it's optional for a user to upload CLs, we
+            # unconditionally emit it as a property, so can depend on the key
+            # existing here.
+            uploaded_cls=content["uploaded_cls"],
         )
 
     def write_to_file(self, path: Path) -> None:
@@ -277,6 +282,7 @@ class ExemptionSummary:
                     "bug_number": self.bug_number,
                     "git_dirs": sorted(str(x) for x in self.git_dirs),
                     "updated_targets": self.updated_targets,
+                    "uploaded_cls": self.uploaded_cls,
                 },
                 f,
                 sort_keys=True,
@@ -645,11 +651,13 @@ def upload_all_new_exemptions(
     thread_pool: concurrent.futures.ThreadPoolExecutor,
     topic: str,
     repos_to_upload: list[Path],
-) -> list[Path]:
+) -> tuple[list[Path], dict[Path, str]]:
     """Uploads all new warning exemptions.
 
     Returns:
-        A list of git repos where uploading failed.
+        A tuple of (failed_repos, successful_repos_with_cls).
+        failed_repos is a list of git repos where uploading failed.
+        successful_repos_with_cls is a dict mapping repo path to the CL string.
     """
     # Gerrit has some pretty strict rate-limits, but uploading two repos at a
     # time should _hopefully_ not hit those. Even with a limit as low as two,
@@ -685,13 +693,13 @@ def upload_all_new_exemptions(
         thread_pool.submit(upload_one_repo, x) for x in repos_to_upload
     ]
 
-    num_success = 0
+    successful_uploads = {}
     exceptions = []
     for repo, upload_result in zip(repos_to_upload, upload_futures):
         if e := upload_result.exception():
             exceptions.append((repo, e))
         else:
-            num_success += 1
+            successful_uploads[repo] = f"ag/{upload_result.result()}"
 
     # List exceptions after all threads are done executing for clarity.
     for repo, e in exceptions:
@@ -699,7 +707,7 @@ def upload_all_new_exemptions(
             "Exception caught uploading changes to %s", repo, exc_info=e
         )
 
-    return [x for x, _ in exceptions]
+    return [x for x, _ in exceptions], successful_uploads
 
 
 def write_update_summary_file(
@@ -707,11 +715,13 @@ def write_update_summary_file(
     bug_number: int,
     updated_repos: list[Path],
     updated_targets: dict[str, list[str]],
+    uploaded_cls: dict[Path, str],
 ) -> None:
     summary = ExemptionSummary(
         bug_number=bug_number,
         git_dirs=updated_repos,
         updated_targets=updated_targets,
+        uploaded_cls={str(k): v for k, v in uploaded_cls.items()},
     )
     summary.write_to_file(target)
 
@@ -910,18 +920,17 @@ def main(argv: list[str]) -> None:
             "Successfully made commits in %d repos", len(repos_with_commit)
         )
 
+        uploaded_cls: dict[Path, str] = {}
         had_failures = bool(apply_results.update_failures)
         if upload_with_topic:
-            failed_uploads = upload_all_new_exemptions(
+            failed_uploads, uploaded_cls = upload_all_new_exemptions(
                 android_tree,
                 thread_pool,
                 upload_with_topic,
                 repos_with_commit,
             )
 
-            num_successful_uploads = len(repos_with_commit) - len(
-                failed_uploads
-            )
+            num_successful_uploads = len(uploaded_cls)
             logging.info(
                 "Uploaded %d CLs with topic %s",
                 num_successful_uploads,
@@ -946,6 +955,7 @@ def main(argv: list[str]) -> None:
                 bug_number,
                 updated_repos=repos_with_commit,
                 updated_targets=apply_results.updated_targets,
+                uploaded_cls=uploaded_cls,
             )
             logging.info("Wrote summary file to %s", update_summary_file)
 
