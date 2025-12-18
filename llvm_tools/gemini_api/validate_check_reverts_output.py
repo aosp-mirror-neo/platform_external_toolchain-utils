@@ -13,11 +13,11 @@ import subprocess
 import sys
 import tempfile
 
+from cros_utils import cros_paths
 from llvm_tools.gemini_api import check_reverts
 
 
 def run_gemini_on_goldens(
-    my_dir: Path,
     gemini_api_key: str,
     llvm_dir: Path,
     jobs: int | None,
@@ -29,7 +29,6 @@ def run_gemini_on_goldens(
     """Runs Gemini on GOLDEN_SHAs, returning the results.
 
     Args:
-        my_dir: Directory of the currently-running script.
         gemini_api_key: API key for Gemini invocations.
         llvm_dir: Up-to-date LLVM directory (with `.git`).
         jobs: Maximum concurrent jobs to execute; defaults to what
@@ -67,8 +66,12 @@ def run_gemini_on_goldens(
         tested_all_shas = True
 
     check_reverts_command: list[str | Path] = [
-        sys.executable,
-        my_dir / "check_reverts.py",
+        cros_paths.script_toolchain_utils_root()
+        / "py"
+        / "bin"
+        / "llvm_tools"
+        / "gemini_api"
+        / "check_reverts.py",
         f"--gemini-api-key={gemini_api_key}",
         f"--llvm-dir={llvm_dir}",
     ]
@@ -113,6 +116,10 @@ def run_gemini_on_goldens(
                 )
                 results[sha] = gemini_result
     maybe_shas_tested = None if tested_all_shas else shas_to_test
+    if len(results) != len(shas_to_test):
+        raise ValueError(
+            f"Expected {len(shas_to_test)} results; got {len(results)}"
+        )
     return results, maybe_shas_tested
 
 
@@ -200,7 +207,6 @@ def main(argv: list[str]) -> None:
     )
 
     actual_results, maybe_tested_shas = run_gemini_on_goldens(
-        my_dir,
         opts.gemini_api_key,
         opts.llvm_dir,
         opts.jobs,
@@ -223,7 +229,9 @@ def main(argv: list[str]) -> None:
     if opts.update_golden:
         golden_shas_set = set(GOLDEN_SHAS)
         results_to_write = {
-            sha: v for sha, v in compare_against if sha in golden_shas_set
+            sha: v
+            for sha, v in compare_against.items()
+            if sha in golden_shas_set
         }
         for k, v in actual_results.items():
             if cmp := results_to_write.get(k):
