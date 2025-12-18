@@ -8,10 +8,10 @@ While this code reads and edits the internal manifest, it should only operate
 on toolchain projects (llvm-project, etc.) which are public.
 """
 
-import unittest
 from xml.etree import ElementTree
 
 from llvm_tools import manifest_utils
+from llvm_tools import test_helpers
 
 
 MANIFEST_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
@@ -48,8 +48,20 @@ MANIFEST_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
 </manifest>
 """
 
+# A simpler manifest fixture for testing project mappings specifically.
+PROJECT_MAPPINGS_FIXTURE = """<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <project path="path/to/project1" name="name_of_project1" />
+  <project path="path/to/project2" name="name_of_project2" revision="1234" />
+  <project path="path/without/name" />
+  <project name="name/without/path" />
+  <!-- A non-project tag -->
+  <default revision="refs/heads/main" remote="cros" />
+</manifest>
+"""
 
-class TestManifestUtils(unittest.TestCase):
+
+class TestManifestUtils(test_helpers.TempDirTestCase):
     """Test manifest_utils."""
 
     def test_update_chromeos_manifest(self) -> None:
@@ -85,3 +97,21 @@ class TestManifestUtils(unittest.TestCase):
             manifest_utils.extract_current_llvm_hash_or_ref_from_xml(root),
             "abcd",
         )
+
+    def test_read_manifest_project_mappings(self) -> None:
+        tempdir = self.make_tempdir()
+        temp_manifest_path = tempdir / "test_manifest.xml"
+        temp_manifest_path.write_text(
+            PROJECT_MAPPINGS_FIXTURE, encoding="utf-8"
+        )
+
+        mappings = list(
+            manifest_utils.read_manifest_project_mappings(temp_manifest_path)
+        )
+        self.assertEqual(len(mappings), 2)
+
+        self.assertEqual(mappings[0].project_path, "path/to/project1")
+        self.assertEqual(mappings[0].project_name, "name_of_project1")
+
+        self.assertEqual(mappings[1].project_path, "path/to/project2")
+        self.assertEqual(mappings[1].project_name, "name_of_project2")

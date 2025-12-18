@@ -8,9 +8,11 @@ While this code reads and edits the internal manifest, it should only operate
 on toolchain projects (llvm-project, etc.) which are public.
 """
 
+import dataclasses
 from pathlib import Path
 import shutil
 import subprocess
+from typing import Iterable
 from xml.etree import ElementTree
 
 from cros_utils import cros_paths
@@ -39,17 +41,58 @@ def make_xmlparser() -> ElementTree.XMLParser:
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class ManifestProjectMapping:
+    """Mapping between a project's path and its name."""
+
+    # Path of the project relative to the root of a repo checkout.
+    project_path: str
+    # Name of the project on repo remotes.
+    project_name: str
+    node: ElementTree.Element
+
+
+def _read_manifest_project_mappings_from_root(
+    xmlroot: ElementTree.Element,
+) -> Iterable[ManifestProjectMapping]:
+    """Yields ManifestProjectMappings in the given manifest xmlroot."""
+    if xmlroot.tag != "manifest":
+        raise ManifestParseError(
+            f"Root tag is {xmlroot.tag}; should be `manifest`."
+        )
+
+    for child in xmlroot:
+        if child.tag != "project":
+            continue
+
+        path = child.attrib.get("path")
+        name = child.attrib.get("name")
+        if path and name:
+            yield ManifestProjectMapping(
+                project_path=path,
+                project_name=name,
+                node=child,
+            )
+
+
+def read_manifest_project_mappings(
+    manifest_xml_file: Path,
+) -> Iterable[ManifestProjectMapping]:
+    """Yields ManifestProjectMappings in the given manifest file."""
+    xmlroot = ElementTree.parse(
+        manifest_xml_file, parser=make_xmlparser()
+    ).getroot()
+    return _read_manifest_project_mappings_from_root(xmlroot)
+
+
 def _find_llvm_project_in_manifest_tree(
     xmlroot: ElementTree.Element,
 ) -> ElementTree.Element | None:
     """Returns the llvm-project `project` in `xmlroot`, if it exists."""
-    for child in xmlroot:
-        if (
-            child.tag == "project"
-            and child.attrib.get("path") == LLVM_PROJECT_PATH
-        ):
-            return child
-    return None
+    mappings = _read_manifest_project_mappings_from_root(xmlroot)
+    return next(
+        (x.node for x in mappings if x.project_path == LLVM_PROJECT_PATH), None
+    )
 
 
 def extract_current_llvm_hash_or_ref(src_tree: Path) -> str:
@@ -72,11 +115,6 @@ def extract_current_llvm_hash_or_ref_from_xml(
     Raises:
         ManifestParseError if the manifest didn't have the expected contents.
     """
-    if xmlroot.tag != "manifest":
-        raise ManifestParseError(
-            f"Root tag is {xmlroot.tag}; should be `manifest`."
-        )
-
     llvm_project = _find_llvm_project_in_manifest_tree(xmlroot)
     if llvm_project is None:
         raise ManifestParseError("No llvm-project `project` found in manifest.")
