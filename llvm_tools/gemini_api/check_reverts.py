@@ -294,9 +294,7 @@ def process_one_sha(
     # the increment is handled manually.
     while True:
         response = client.models.generate_content(
-            # TODO(b/445908427): Maybe try gemini flash or flash-lite once the
-            # revert checker is known to work well enough.
-            model="gemini-2.5-pro",
+            model="gemini-3-flash-preview",
             contents=commit_info,
             config=types.GenerateContentConfig(
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(

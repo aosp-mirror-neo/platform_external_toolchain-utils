@@ -809,6 +809,16 @@
       "reverted_shas": [
         "ed940d7228aec95e994be848f1e42eab2a7fa7f3"
       ]
+    },
+    {
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        149618
+      ],
+      "reverted_shas": [
+        "ed940d7228aec95e994be848f1e42eab2a7fa7f3"
+      ]
     }
   ],
   "6cd6de5bc0c8b09b3a252bfb8a62870c1cdede4c": [
@@ -882,6 +892,12 @@
       "reverted_prs": [
         149425
       ],
+      "reverted_shas": []
+    },
+    {
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
@@ -1217,6 +1233,12 @@
     {
       "is_reland": false,
       "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    },
+    {
+      "is_reland": false,
+      "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1755,6 +1777,12 @@
       "reverted_prs": [
         151472
       ],
+      "reverted_shas": []
+    },
+    {
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
