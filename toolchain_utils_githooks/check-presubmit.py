@@ -67,6 +67,7 @@ NAME_MAIN_ALLOWLIST = (
     "llvm_tools/revert_checker.py",
     # These are directly executed by users.
     "venv_python3_wrapper.py",
+    "venvless_python3_wrapper.py",
     "venv_tc/wheels.py",
 )
 
