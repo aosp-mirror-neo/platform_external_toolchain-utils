@@ -117,6 +117,10 @@ def populate_wheels_subdir_with_pip(venv_dir: Path, wheel_dir: Path) -> None:
                 "-m",
                 "pip",
                 "download",
+                # Sometimes, local configuration may lead to fetching from other
+                # package repositories. We always want to use Python's default
+                # here.
+                "--index-url=https://pypi.org/simple/",
                 # Require binary downloads for all packages. That is, don't
                 # allow `tgz` packages that require build-time tools like
                 # `setuptools`, `cpython`, `wheel`, etc.
