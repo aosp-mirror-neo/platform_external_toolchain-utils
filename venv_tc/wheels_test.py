@@ -150,7 +150,9 @@ class WheelsTest(test_helpers.TempDirTestCase):
         ]
         self.mock_fetch.side_effect = None
 
-        wheels.update_wheels_and_manifest(self.venv_dir, upload=False)
+        wheels.update_wheels_and_manifest(
+            self.venv_dir, upload=False, upload_certified=False
+        )
 
         self.mock_populate.assert_called_once_with(
             self.venv_dir, self.wheel_dir
@@ -170,7 +172,9 @@ class WheelsTest(test_helpers.TempDirTestCase):
         self.mock_list_gs.return_value = []
         self.mock_upload.side_effect = None
 
-        wheels.update_wheels_and_manifest(self.venv_dir, upload=True)
+        wheels.update_wheels_and_manifest(
+            self.venv_dir, upload=True, upload_certified=True
+        )
 
         self.mock_populate.assert_called_once_with(
             self.venv_dir, self.wheel_dir
@@ -178,6 +182,32 @@ class WheelsTest(test_helpers.TempDirTestCase):
         self.mock_list_gs.assert_called_once()
         self.mock_fetch.assert_not_called()
         self.mock_upload.assert_called_once_with(self.wheel_dir)
+
+    def test_update_wheels_and_manifest_upload_uncertified(self) -> None:
+        def fake_populate(_: object, wheel_dir: Path) -> None:
+            wheel_dir.mkdir()
+            (wheel_dir / "wheel.whl").touch()
+
+        self.mock_populate.side_effect = fake_populate
+        self.mock_list_gs.side_effect = None
+        self.mock_list_gs.return_value = []
+        self.mock_upload.side_effect = None
+
+        with self.assertRaises(SystemExit) as e:
+            wheels.update_wheels_and_manifest(
+                self.venv_dir, upload=True, upload_certified=False
+            )
+
+        self.assertIn(
+            "--i-have-verified-the-wheels not passed", str(e.exception)
+        )
+
+        self.mock_populate.assert_called_once_with(
+            self.venv_dir, self.wheel_dir
+        )
+        self.mock_list_gs.assert_called_once()
+        self.mock_fetch.assert_not_called()
+        self.mock_upload.assert_not_called()
 
     def test_ensure_downloaded_all_valid(self) -> None:
         wheel_name = "wheel.whl"

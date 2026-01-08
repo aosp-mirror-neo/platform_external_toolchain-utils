@@ -40,9 +40,7 @@ all wheels that are currently needed for the venv.
 
 ### How do I add/update/remove a dependency?
 
-Update requirements.txt accordingly, and run
-`./wheels.py update-wheels-and-manifest`. If you're adding a dependency, you'll
-need to pass `--upload` to this script, as well.
+See go/crostc-venv-updates.
 
 ## Why `venv_tc/`?
 
