@@ -11,6 +11,7 @@ import datetime
 import json
 import os
 from pathlib import Path
+import textwrap
 from typing import Any
 from unittest import mock
 
@@ -243,3 +244,50 @@ class Tests(test_helpers.TempDirTestCase):
         bugs.AppendToExistingBug(1, "body", local_directory=tempdir)
         json_files = list(tempdir.glob("*.json"))
         self.assertEqual(len(json_files), 1, json_files)
+
+    def test_format_bug_works(self) -> None:
+        b = bugs.format_bug(
+            title="[title]",
+            body="[body]",
+            component=123,
+            assignee="[assignee]",
+            parent=321,
+            priority=1,
+        )
+        expected_body = textwrap.dedent(
+            """\
+            [title]
+
+            [body]
+
+            COMPONENT=123
+            TYPE=INTERNAL_CLEANUP
+            PRIORITY=P1
+            SEVERITY=S2
+            ASSIGNEE=[assignee]
+            PARENT+=321
+            """
+        )
+        self.assertEqual(b, expected_body)
+
+    def test_format_bug_defaults(self) -> None:
+        b = bugs.format_bug(
+            title="[title]",
+            body="[body]",
+            component=123,
+            parent=321,
+        )
+        expected_body = textwrap.dedent(
+            """\
+            [title]
+
+            [body]
+
+            COMPONENT=123
+            TYPE=INTERNAL_CLEANUP
+            PRIORITY=P2
+            SEVERITY=S2
+            PARENT+=321
+            """
+        )
+        self.assertEqual(b, expected_body)

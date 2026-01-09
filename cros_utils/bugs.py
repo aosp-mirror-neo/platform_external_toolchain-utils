@@ -14,6 +14,8 @@ from typing import Any
 from cros_utils import gs
 
 
+# Android > Android OS & Apps > Toolchain > LLVM
+INTERNAL_ANDROID_COMPONENT = 117395
 # ChromeOS > Infra > Toolchain
 INTERNAL_CROSTC_COMPONENT = 1034879
 
@@ -212,3 +214,30 @@ def SendCronjobLog(
         json_object["parent_bug"] = parent_bug
 
     _WriteBugJSONFile("CronjobUpdate", json_object, local_directory)
+
+
+def format_bug(
+    title: str,
+    body: str,
+    component: int,
+    parent: int,
+    assignee: str | None = None,
+    priority: int = 2,
+    severity: int = 2,
+) -> str:
+    """Turns args into a `bugged`-compatible bug report."""
+    bug_pieces = [title, "\n\n", body, "\n\n"]
+    metadata = [
+        ("COMPONENT", str(component)),
+        ("TYPE", "INTERNAL_CLEANUP"),
+        ("PRIORITY", f"P{priority}"),
+        ("SEVERITY", f"S{severity}"),
+    ]
+
+    if assignee:
+        metadata.append(("ASSIGNEE", assignee))
+
+    bug_pieces.extend(f"{key}={val}\n" for key, val in metadata)
+    # PARENT does not support `=`, only `+=` and `-=`. Handle that here.
+    bug_pieces.append(f"PARENT+={parent}\n")
+    return "".join(bug_pieces)

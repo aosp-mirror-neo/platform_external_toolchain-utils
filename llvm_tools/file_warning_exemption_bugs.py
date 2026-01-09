@@ -178,33 +178,6 @@ def format_warning_bug_body(
     return "".join(pieces)
 
 
-def format_bug(
-    *,
-    title: str,
-    body: str,
-    component: int,
-    assignee: str | None,
-    parent: int,
-    priority: int = 2,
-) -> str:
-    """Turns args into a `bugged`-compatible bug report."""
-    bug_pieces = [title, "\n\n", body, "\n\n"]
-    metadata = [
-        ("COMPONENT", str(component)),
-        ("TYPE", "INTERNAL_CLEANUP"),
-        ("PRIORITY", f"P{priority}"),
-        ("SEVERITY", "S2"),
-    ]
-
-    if assignee:
-        metadata.append(("ASSIGNEE", assignee))
-
-    bug_pieces += (f"{key}={val}\n" for key, val in metadata)
-    # PARENT does not support `=`, only `+=` and `-=`. Handle that here.
-    bug_pieces.append(f"PARENT+={parent}\n")
-    return "".join(bug_pieces)
-
-
 def parse_input_yaml(input_yaml: Path) -> warning_exemption.YamlFile:
     with input_yaml.open(encoding="utf-8") as f:
         return warning_exemption.YamlFile.from_yaml(yaml.safe_load(f))
@@ -418,7 +391,7 @@ def format_bug_from_package_warnings(
         title += " is"
     title += f" being suppressed in {package}"
 
-    return format_bug(
+    return bugs.format_bug(
         title=title,
         body=format_warning_bug_body(
             exemption_file_name,
@@ -478,7 +451,7 @@ def format_bug_for_mage_followup(
         "Please follow up on these as appropriate, then close this bug out.",
     )
 
-    return format_bug(
+    return bugs.format_bug(
         title=title,
         body="\n".join(body_lines),
         component=bugs.INTERNAL_CROSTC_COMPONENT,

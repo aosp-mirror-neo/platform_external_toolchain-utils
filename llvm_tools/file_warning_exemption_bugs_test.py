@@ -80,30 +80,6 @@ class Test(test_helpers.TempDirTestCase):
 
         self.assertIsNone(fweb.scrape_component_from_dir_metadata_file(""))
 
-    def test_format_bug_golden_case(self) -> None:
-        b = fweb.format_bug(
-            title="[title]",
-            body="[body]",
-            component=123,
-            assignee="[assignee]",
-            parent=321,
-            priority=1,
-        )
-        expected_body = textwrap.dedent(
-            """            [title]
-
-            [body]
-
-            COMPONENT=123
-            TYPE=INTERNAL_CLEANUP
-            PRIORITY=P1
-            SEVERITY=S2
-            ASSIGNEE=[assignee]
-            PARENT+=321
-            """
-        )
-        self.assertEqual(b, expected_body)
-
     @mock.patch.object(subprocess, "run")
     def test_repo_list_works(self, mock_run: mock.Mock) -> None:
         mock_run.return_value = mock.MagicMock()
