@@ -681,7 +681,11 @@ def commit_new_exemptions(
 
     # Assume simple `git commit` commands won't fail. If they do, something
     # seems very wrong, and the program should simply abort.
-    thread_pool.map(do_commit, git_repos)
+    for _ in thread_pool.map(do_commit, git_repos):
+        # Iteration is necessary because `map()` is lazy: it only blocks on task
+        # completion _as elements are requested_. Note that `map` will reraise
+        # exceptions as appropriate.
+        pass
     return [x.relative_to(android_tree) for x in git_repos]
 
 
