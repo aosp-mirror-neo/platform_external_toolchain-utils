@@ -817,6 +817,14 @@ def main(argv: list[str]) -> None:
     keep_going: bool = opts.keep_going
     upload_with_topic: str | None = opts.upload_with_topic
 
+    # This script heavily uses `android_tree`'s textual representation (e.g.,
+    # via `x.relative_to(android_tree)`. This may lead to failures if
+    # `android_tree` has elements like symlinks, and if `x` has been
+    # `resolve()`d. Resolve the Android tree early for simplicity and
+    # consistency.
+    if android_tree:
+        android_tree = android_tree.resolve()
+
     with concurrent.futures.ThreadPoolExecutor() as thread_pool:
         autobuild_future: concurrent.futures.Future | None = None
         if not dry_run and android_tree and need_autobuild(android_tree):
