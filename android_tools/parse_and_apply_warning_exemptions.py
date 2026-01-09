@@ -629,7 +629,7 @@ def map_files_to_git_repos(
             ("git", "rev-parse", "--show-toplevel"),
             cwd=(android_tree / f).parent,
         ).strip()
-        return Path(toplevel)
+        return Path(toplevel).relative_to(android_tree)
 
     # These `--show-toplevel` invocations are pretty fast, but we already have a
     # thread pool anyway, so use it.
@@ -650,7 +650,8 @@ def commit_new_exemptions(
     Returns:
         A list of Git repos where a commit was made, relative to android_tree.
     """
-    git_repos = sorted({file_to_repo[f] for f in updated_android_bp_files})
+    rel_git_repos = sorted({file_to_repo[f] for f in updated_android_bp_files})
+    git_repos = [android_tree / x for x in rel_git_repos]
 
     exemption_commit_message = textwrap.dedent(
         f"""\
