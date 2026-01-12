@@ -306,7 +306,7 @@ def GetUpToDateReadOnlyLLVMRepo() -> ReadOnlyLLVMRepo:
     return repo
 
 
-@functools.lru_cache(1)
+@functools.cache
 def GetCachedUpToDateReadOnlyLLVMRepo() -> ReadOnlyLLVMRepo:
     """GetUpToDateReadOnlyLLVMRepo, but will cache the result."""
     return GetUpToDateReadOnlyLLVMRepo()

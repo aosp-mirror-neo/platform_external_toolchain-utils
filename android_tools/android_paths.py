@@ -17,7 +17,7 @@ BUILD_SOONG_SUBDIR = Path("build") / "soong"
 script_toolchain_utils_root = cros_paths.script_toolchain_utils_root
 
 
-@functools.lru_cache(1)
+@functools.cache
 def script_android_checkout() -> Path | None:
     """Returns the absolute path to the Android checkout this script resides in.
 
