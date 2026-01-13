@@ -15,7 +15,7 @@ from cros_utils import cros_paths
 class Test(unittest.TestCase):
     """Tests for venvless scripts."""
 
-    def test_venvless_scripts_have_no_external_deps(self):
+    def test_venvless_scripts_have_no_external_deps(self) -> None:
         toolchain_utils_root = cros_paths.script_toolchain_utils_root()
         py_bin = toolchain_utils_root / "py" / "bin"
         wrapper_path = toolchain_utils_root / "venvless_python3_wrapper.py"
