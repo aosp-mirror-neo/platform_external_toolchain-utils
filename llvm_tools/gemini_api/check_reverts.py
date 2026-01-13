@@ -263,14 +263,12 @@ def process_one_sha(
 
     logging.info("Processing commit %s...", sha)
 
-    # It's rare for requests to use more than 2,000 tokens (thinking and output
-    # combined). That said, setting _some kind of limit_, even if it's generous,
-    # seems prudent.
-    #
-    # thinking_budget is set to `-1` to cause Gemini to determine how much
-    # thinking is useful; there's an implicit limit of ~60K tokens, per
-    # https://ai.google.dev/gemini-api/docs/thinking
-    thinking_budget = -1
+    # gemini-3-flash experimentally sees meaningfully lower quality answers with
+    # the `low` thinking level. When trying `medium`, genai 1.54.0 reports API
+    # warnings about an invalid thinking level (despite docs saying that
+    # `medium` exists for gemini-3-flash). Use `high` since that gives the best
+    # results for now.
+    thinking_level = types.ThinkingLevel.HIGH
 
     # Output which is separate from thinking budgets, generally are just a few
     # hundred tokens.
@@ -306,7 +304,7 @@ def process_one_sha(
                 response_schema=GeminiRevertInference,
                 thinking_config=types.ThinkingConfig(
                     include_thoughts=True,
-                    thinking_budget=thinking_budget,
+                    thinking_level=thinking_level,
                 ),
                 max_output_tokens=output_token_budget,
                 # Minimize randomness; just pick the best answer possible.
