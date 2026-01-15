@@ -252,7 +252,7 @@ def process_one_sha(
 ) -> GeminiRevertInference:
     """Queries the given genai client for revert info"""
     commit_info = subprocess.run(
-        ("git", "log", "-n1", sha),
+        ("git", "log", "-n1", "--name-status", sha),
         check=True,
         cwd=llvm_dir,
         stdin=subprocess.DEVNULL,
