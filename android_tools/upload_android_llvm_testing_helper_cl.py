@@ -141,7 +141,7 @@ def main(argv: list[str]) -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--android-root",
+        "--android-tree",
         type=Path,
         help="""
         The root of the Android source tree to consult. Defaults to this
@@ -164,17 +164,17 @@ def main(argv: list[str]) -> None:
     )
     opts = parser.parse_args(argv)
 
-    android_root: Path | None = opts.android_root
-    if not android_root:
-        inferred_root = android_paths.script_android_checkout()
-        if not inferred_root:
+    android_tree: Path | None = opts.android_tree
+    if not android_tree:
+        inferred_tree = android_paths.script_android_checkout()
+        if not inferred_tree:
             parser.error(
                 "Must run from inside an Android tree, or specify "
-                "--android-root"
+                "--android-tree"
             )
-        android_root = inferred_root
+        android_tree = inferred_tree
 
-    soong_repo = android_root / android_paths.BUILD_SOONG_SUBDIR
+    soong_repo = android_tree / android_paths.BUILD_SOONG_SUBDIR
     if not soong_repo.is_dir():
         raise ValueError(f"{soong_repo} is not a directory.")
 
