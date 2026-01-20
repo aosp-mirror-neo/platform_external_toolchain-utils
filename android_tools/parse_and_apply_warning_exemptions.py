@@ -160,8 +160,33 @@ def parse_warning_reports(
     # report files.
     werror_report_start = "<LLVM_NEXT_ERROR_REPORT>"
     werror_report_end = "</LLVM_NEXT_ERROR_REPORT>"
-    with build_log.open(encoding="utf-8") as f:
-        for line_number, line in enumerate(f, 1):
+
+    werror_report_start_bin = werror_report_start.encode()
+    werror_report_end_bin = werror_report_end.encode()
+    with build_log.open("rb") as f:
+        num_invalid_lines = 0
+        for line_number, raw_line in enumerate(f, 1):
+            try:
+                line = raw_line.decode("utf-8")
+            except UnicodeDecodeError:
+                # There are observably quite a few UTF-8 decode errors in build
+                # logs.
+                #
+                # If the line seems inconsequential, just add to a counter. If
+                # it seems consequential, log a warning.
+                if (
+                    werror_report_start_bin in raw_line
+                    or werror_report_end_bin in raw_line
+                ):
+                    logging.warning(
+                        "Dropping interesting line (line number %d) due to "
+                        "invalid UTF-8.",
+                        line_number,
+                    )
+                else:
+                    num_invalid_lines += 1
+                continue
+
             line = line.strip()
             if not line.startswith(werror_report_start):
                 continue
@@ -183,6 +208,13 @@ def parse_warning_reports(
 
             package, warnings_group = parse_result
             per_package_groups[package].add(warnings_group)
+
+    if num_invalid_lines:
+        logging.info(
+            "%d uninteresting lines dropped due to invalid UTF-8",
+            num_invalid_lines,
+        )
+
     return per_package_groups
 
 

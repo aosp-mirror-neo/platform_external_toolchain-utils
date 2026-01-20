@@ -135,6 +135,37 @@ class TestParseWarningReports(test_helpers.TempDirTestCase):
             {"//bionic/libc:libc_bionic": parsed_result},
         )
 
+    def test_parse_warning_reports_with_invalid_utf8(self) -> None:
+        json_content = EXAMPLE_WARNING_REPORT.replace("\n", " ")
+        log_path = self.make_tempdir() / "build.log"
+        log_path.write_bytes(
+            b"some text beforehand\n"
+            # A line with invalid UTF-8.
+            b"\x80\n"
+            b"<LLVM_NEXT_ERROR_REPORT>"
+            + json_content.encode("utf-8")
+            + b"</LLVM_NEXT_ERROR_REPORT>\n"
+            b"some text after\n"
+        )
+
+        result = pa.parse_warning_reports(log_path)
+
+        parsed_result = example_warning_report_expected_result()
+        self.assertEqual(
+            result,
+            {"//bionic/libc:libc_bionic": parsed_result},
+        )
+
+    def test_parse_warning_reports_with_interesting_invalid_utf8(self) -> None:
+        log_path = self.make_tempdir() / "build.log"
+        # Skip error reports with invalid utf-8.
+        invalid_utf8_line = (
+            b"<LLVM_NEXT_ERROR_REPORT>\x80</LLVM_NEXT_ERROR_REPORT>\n"
+        )
+        log_path.write_bytes(invalid_utf8_line)
+        result = pa.parse_warning_reports(log_path)
+        self.assertEqual(result, {})
+
 
 class TestGroupTargetsByBpFile(test_helpers.TempDirTestCase):
     """Tests for group_targets_by_bp_file."""
