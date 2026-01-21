@@ -26,6 +26,7 @@ import time
 from typing import Iterator
 
 from android_tools import android_paths
+from android_tools import bp_tools
 from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
 from cros_utils import git_utils
 
@@ -775,7 +776,7 @@ def main(argv: list[str]) -> None:
         )
         repos_to_run_on = [Path(x) for x in summary_file.exemptions]
 
-    bpfmt_path = parse_and_apply.bpfmt_path(android_tree)
+    bpfmt_path = bp_tools.bpfmt_path(android_tree)
     if not bpfmt_path.exists():
         sys.exit(
             f"No bpfmt found at {bpfmt_path} - are you using the tree you "

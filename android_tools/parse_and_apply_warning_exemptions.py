@@ -46,6 +46,7 @@ import threading
 from typing import DefaultDict, Iterable, Sequence
 
 from android_tools import android_paths
+from android_tools import bp_tools
 from cros_utils import git_utils
 from llvm_tools import warning_exemption
 
@@ -547,8 +548,8 @@ def apply_warning_exemptions(
         len(grouped_warnings),
         "" if len(grouped_warnings) == 1 else "s",
     )
-    bpfmt_bin = bpfmt_path(android_tree)
-    bpmodify_bin = bpmodify_path(android_tree)
+    bpfmt_bin = bp_tools.bpfmt_path(android_tree)
+    bpmodify_bin = bp_tools.bpmodify_path(android_tree)
     futures = []
     for warning_file, targets in grouped_warnings.items():
         per_target_warnings = []
@@ -601,50 +602,6 @@ def apply_warning_exemptions(
         update_failures=len(exceptions),
         updated_targets=updated_targets,
     )
-
-
-def bpmodify_path(android_tree: Path) -> Path:
-    return android_tree / "out" / "host" / "linux-x86" / "bin" / "bpmodify"
-
-
-def bpfmt_path(android_tree: Path) -> Path:
-    return android_tree / "out" / "host" / "linux-x86" / "bin" / "bpfmt"
-
-
-def need_autobuild(android_tree: Path) -> bool:
-    return not (
-        bpmodify_path(android_tree).exists()
-        and bpfmt_path(android_tree).exists()
-    )
-
-
-def autobuild_bp_tooling(android_tree: Path) -> None:
-    result = subprocess.run(
-        (
-            "bash",
-            "-c",
-            ";".join(
-                (
-                    ". ./build/envsetup.sh",
-                    "lunch aosp_cf_x86_64_phone-trunk_staging-eng",
-                    "m blueprint_tools",
-                )
-            ),
-        ),
-        check=False,
-        cwd=android_tree,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if not result.returncode:
-        logging.info("bmpodify build successful.")
-        return
-
-    logging.error("bp tooling build failed; stdout/stderr:\n%s", result.stdout)
-    result.check_returncode()
 
 
 def map_files_to_git_repos(
@@ -967,7 +924,11 @@ def main(argv: list[str]) -> None:
 
     with concurrent.futures.ThreadPoolExecutor() as thread_pool:
         autobuild_future: concurrent.futures.Future | None = None
-        if not dry_run and android_tree and need_autobuild(android_tree):
+        if (
+            not dry_run
+            and android_tree
+            and bp_tools.need_autobuild(android_tree)
+        ):
             if not opts.autobuild:
                 sys.exit(
                     textwrap.dedent(
@@ -987,7 +948,7 @@ def main(argv: list[str]) -> None:
             # bp tooling takes minutes to build. Run it concurrently with log
             # parsing to speed things up a bit.
             autobuild_future = thread_pool.submit(
-                autobuild_bp_tooling, android_tree
+                bp_tools.autobuild_bp_tooling, android_tree
             )
 
         # Larger logs (~500MB) take a dozen seconds or so to parse.
