@@ -13,6 +13,7 @@ from cros_utils import cros_paths
 
 
 BUILD_SOONG_SUBDIR = Path("build") / "soong"
+BUILD_HIDL_SUBDIR = Path("system") / "tools" / "hidl"
 
 # Reexport this function for convenience.
 script_toolchain_utils_root = cros_paths.script_toolchain_utils_root
