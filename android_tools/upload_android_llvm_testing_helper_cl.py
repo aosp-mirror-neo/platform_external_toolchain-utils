@@ -208,10 +208,15 @@ def main(argv: list[str]) -> None:
         This does nothing if `--hidl` is not specified.
         """,
     )
-    parser.add_argument(
+    upload_group = parser.add_mutually_exclusive_group()
+    upload_group.add_argument(
         "--no-upload",
         action="store_true",
         help="Commit changes, but don't actually upload them.",
+    )
+    upload_group.add_argument(
+        "--upload-with-topic",
+        help="Upload all CLs applying suppressions using the given topic name.",
     )
     parser.add_argument(
         "--tot",
@@ -304,6 +309,7 @@ def main(argv: list[str]) -> None:
         branch="main",
         ref=helper_sha,
         wip=True,
+        topic=opts.upload_with_topic,
     )
 
     if hidl_sha:
@@ -314,4 +320,5 @@ def main(argv: list[str]) -> None:
             branch="main",
             ref=hidl_sha,
             wip=True,
+            topic=opts.upload_with_topic,
         )
