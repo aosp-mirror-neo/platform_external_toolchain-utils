@@ -10,6 +10,7 @@ import textwrap
 from typing import Any
 
 from android_tools import parse_and_apply_warning_exemptions as pa
+from android_tools import warning_suppression
 from llvm_tools import test_helpers
 from llvm_tools import warning_exemption
 
@@ -94,6 +95,19 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "bionic/libc/bionic/sigprocmask.c",
         ]
         self.assertIsNone(pa.infer_target_from_cmdline(cmd))
+
+    def test_infer_target_from_cmdline_hidl(self) -> None:
+        cmd = [
+            "clang",
+            "-o",
+            EXAMPLE_OUT_FILE,
+            "some/hidl/file.cpp",
+            warning_suppression.HIDL_BUILD_MARKER_FLAG,
+        ]
+        self.assertEqual(
+            pa.infer_target_from_cmdline(cmd),
+            warning_suppression.HIDL_DEFAULTS_TARGET,
+        )
 
 
 class TestParseOneWarningReport(test_helpers.TempDirTestCase):

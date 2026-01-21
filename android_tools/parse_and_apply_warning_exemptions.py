@@ -47,6 +47,7 @@ from typing import DefaultDict, Iterable, Self, Sequence
 
 from android_tools import android_paths
 from android_tools import bp_tools
+from android_tools import warning_suppression
 from cros_utils import git_utils
 from llvm_tools import warning_exemption
 
@@ -93,6 +94,18 @@ def infer_target_from_cmdline(command: list[str]) -> str | None:
             output_file,
         )
         return None
+
+    # b/476408642#comment11 (and following comments): All HIDL builds should
+    # conform to all of the above, but the hidl `cc_library` target is
+    # synthesized to have _the same name_ as the corresponding `hidl_interface`
+    # target.
+    #
+    # `hidl_interface` targets can't have cflags added, and all of the generated
+    # code is seemingly the responsibility of the hidl maintainers, so have a
+    # special case here to return the `cc_defaults` that all hidl-synthesized
+    # `cc_library`s inherit.
+    if warning_suppression.HIDL_BUILD_MARKER_FLAG in command:
+        return warning_suppression.HIDL_DEFAULTS_TARGET
 
     target_path_and_variant = output_file[len(prefix) : obj_location]
     target_path_no_colon = os.path.dirname(target_path_and_variant)
