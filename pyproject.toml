@@ -1,3 +1,6 @@
+[tool.black]
+line-length = 80
+
 [tool.mypy]
 # These settings configure mypy to support toolchain-utils' project structure
 # (no __init__.py, PYTHONPATH pointed at the dir containing this file).
