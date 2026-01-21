@@ -21,6 +21,7 @@ import random
 import subprocess
 import urllib.parse
 
+from android_tools import android_paths
 from llvm_tools import manifest_utils
 
 
@@ -415,7 +416,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         nargs="+",
         help="Files to check ownership for, relative to the git repository",
     )
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+
+    android_paths.assert_is_valid_android_tree_root(parser, opts.android_tree)
+
+    return opts
 
 
 def main(argv: list[str]) -> None:

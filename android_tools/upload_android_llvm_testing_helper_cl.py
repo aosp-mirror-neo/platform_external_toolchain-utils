@@ -164,6 +164,11 @@ def main(argv: list[str]) -> None:
     )
     opts = parser.parse_args(argv)
 
+    if opts.android_tree:
+        android_paths.assert_is_valid_android_tree_root(
+            parser, opts.android_tree
+        )
+
     android_tree: Path | None = opts.android_tree
     if not android_tree:
         inferred_tree = android_paths.script_android_checkout()

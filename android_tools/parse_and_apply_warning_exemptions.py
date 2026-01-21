@@ -45,6 +45,7 @@ import textwrap
 import threading
 from typing import DefaultDict, Iterable, Sequence
 
+from android_tools import android_paths
 from cros_utils import git_utils
 from llvm_tools import warning_exemption
 
@@ -925,6 +926,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         """,
     )
     opts = parser.parse_args(argv)
+
+    if opts.android_tree:
+        android_paths.assert_is_valid_android_tree_root(
+            parser, opts.android_tree
+        )
 
     if not opts.dry_run and not opts.bug_number:
         parser.error(

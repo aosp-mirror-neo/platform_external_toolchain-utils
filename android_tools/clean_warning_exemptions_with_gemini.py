@@ -679,7 +679,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Do not upload changes to Gerrit.",
     )
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+
+    if opts.android_tree:
+        android_paths.assert_is_valid_android_tree_root(
+            parser, opts.android_tree
+        )
+
+    return opts
 
 
 def upload_changes(

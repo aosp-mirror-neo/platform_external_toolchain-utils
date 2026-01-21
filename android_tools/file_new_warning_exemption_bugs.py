@@ -12,6 +12,7 @@ import shlex
 import sys
 from typing import Iterable, Mapping
 
+from android_tools import android_paths
 from android_tools import find_owners
 from android_tools import parse_and_apply_warning_exemptions
 from cros_utils import bugs
@@ -173,7 +174,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         required=True,
         help="The summary file from parse_and_apply_warning_exemptions.py.",
     )
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+
+    android_paths.assert_is_valid_android_tree_root(parser, opts.android_tree)
+
+    return opts
 
 
 def main(argv: list[str]) -> None:
