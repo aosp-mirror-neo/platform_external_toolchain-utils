@@ -74,11 +74,11 @@ def autodetect_cros_channels(git_repo: Path) -> dict[Channel, ChannelBranch]:
         entry per Channel enum value.
     """
     stdout = subprocess.run(
-        [
+        (
             "git",
             "branch",
             "-r",
-        ],
+        ),
         cwd=git_repo,
         check=True,
         stdin=subprocess.DEVNULL,
@@ -148,7 +148,7 @@ def create_branch(git_repo: Path, branch_name: str) -> None:
         branch_name: The name of the branch to create.
     """
     subprocess.run(
-        ["repo", "start", branch_name, "--head"],
+        ("repo", "start", branch_name, "--head"),
         check=True,
         cwd=git_repo,
     )
@@ -378,13 +378,13 @@ def create_worktree(
             # Explicitly `git worktree remove` here, so the parent worktree's
             # metadata is cleaned up promptly.
             subprocess.run(
-                [
+                (
                     "git",
                     "worktree",
                     "remove",
                     "--force",
                     tempdir,
-                ],
+                ),
                 cwd=git_directory,
                 check=False,
                 stdin=subprocess.DEVNULL,
@@ -398,7 +398,7 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
         subprocess.CalledProcessError if resolution fails
     """
     return subprocess.run(
-        ["git", "rev-parse", ref],
+        ("git", "rev-parse", ref),
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -542,7 +542,7 @@ def fetch_and_checkout(git_dir: Path, remote: str, branch: str) -> None:
 def has_discardable_changes(git_dir: Path) -> bool:
     """Returns whether discard_changes_and_checkout will discard changes."""
     stdout = subprocess.run(
-        ["git", "status", "--porcelain"],
+        ("git", "status", "--porcelain"),
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -554,7 +554,7 @@ def has_discardable_changes(git_dir: Path) -> bool:
 def discard_changes_and_checkout(git_dir: Path, ref: str) -> None:
     """Discards local changes, and checks `ref` out."""
     subprocess.run(
-        ["git", "clean", "-fd"],
+        ("git", "clean", "-fd"),
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -563,7 +563,7 @@ def discard_changes_and_checkout(git_dir: Path, ref: str) -> None:
     # a branch. The goal isn't to update the potential branch to point to
     # `ref`.
     subprocess.run(
-        ["git", "reset", "--hard", "HEAD"],
+        ("git", "reset", "--hard", "HEAD"),
         check=True,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -586,7 +586,7 @@ def maybe_show_file_at_commit(
         File contents, or None if the file does not exist at the given ref.
     """
     result = subprocess.run(
-        ["git", "show", f"{ref}:{path_from_git_root}"],
+        ("git", "show", f"{ref}:{path_from_git_root}"),
         check=False,
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
@@ -667,7 +667,7 @@ def commits_between(git_dir: Path, from_ref: str, to_ref: str) -> Iterable[str]:
     """
     return reversed(
         subprocess.run(
-            ["git", "log", "--format=%H", f"{from_ref}..{to_ref}"],
+            ("git", "log", "--format=%H", f"{from_ref}..{to_ref}"),
             check=True,
             cwd=git_dir,
             stdout=subprocess.PIPE,
@@ -690,7 +690,7 @@ def format_patch(git_dir: Path, ref: str) -> str:
     """
     logging.debug("Formatting patch for %s^..%s", ref, ref)
     proc = subprocess.run(
-        ["git", "format-patch", "--stdout", f"{ref}^..{ref}"],
+        ("git", "format-patch", "--stdout", f"{ref}^..{ref}"),
         cwd=git_dir,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
@@ -744,7 +744,7 @@ def get_commit_message_metadata(git_dir: Path, ref: str) -> dict[str, str]:
     """Return footer information for a given commit."""
     commit_msg = (
         subprocess.run(
-            ["git", "show", "--format=%b", "-s", ref],
+            ("git", "show", "--format=%b", "-s", ref),
             cwd=git_dir,
             encoding="utf-8",
             stdin=subprocess.DEVNULL,
@@ -816,7 +816,7 @@ def branch_list(git_dir: Path, glob: str | None = None) -> list[str]:
 def commit_author_email(git_dir: Path, ref: str) -> str:
     """Return the author email of a given git ref."""
     return subprocess.run(
-        ["git", "show", "--format=%aE", ref],
+        ("git", "show", "--format=%aE", ref),
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,

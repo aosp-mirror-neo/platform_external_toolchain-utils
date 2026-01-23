@@ -221,7 +221,7 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
     def test_show_file_at_rev_works(self) -> None:
         temp_dir = self.make_tempdir()
         subprocess.run(
-            ["git", "init"],
+            ("git", "init"),
             check=True,
             cwd=temp_dir,
             stdin=subprocess.DEVNULL,
@@ -250,7 +250,7 @@ class ShowFileAtRevTest(test_helpers.TempDirTestCase):
     def test_show_dir_at_rev_works(self) -> None:
         temp_dir = self.make_tempdir()
         subprocess.run(
-            ["git", "init"],
+            ("git", "init"),
             check=True,
             cwd=temp_dir,
             stdin=subprocess.DEVNULL,
@@ -328,7 +328,7 @@ class FormatPatchTest(test_helpers.TempDirTestCase):
         # This cleans up automatically. No tearDown needed.
         self.temp_dir = self.make_tempdir()
         subprocess.run(
-            ["git", "init"],
+            ("git", "init"),
             check=True,
             cwd=self.temp_dir,
             stdin=subprocess.DEVNULL,
