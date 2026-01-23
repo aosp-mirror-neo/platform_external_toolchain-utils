@@ -197,6 +197,14 @@ def parse_opts(argv: list[str]) -> argparse.Namespace:
         passed.
         """,
     )
+    parser.add_argument(
+        "-i",
+        "--interactive",
+        action="store_true",
+        help="""
+        Have Gemini enter interactive mode after it's done with its prompt.
+        """,
+    )
     opts = parser.parse_args(argv)
 
     if not opts.chromeos_tree:
@@ -222,11 +230,16 @@ def main(argv: list[str]) -> None:
         env_with_temp_bin["PATH"] = f"{temp_bin}:" + env_with_temp_bin["PATH"]
         logging.info("Running Gemini...")
         prompt = generate_gemini_prompt(cros_checkout)
+
+        gemini_cmd = ["gemini", "--yolo"]
+        if opts.interactive:
+            gemini_cmd.append("-i")
+        gemini_cmd.append(prompt)
+
         subprocess.run(
-            ("gemini", "--yolo"),
+            gemini_cmd,
             check=True,
             cwd=cros_checkout,
-            input=prompt,
             env=env_with_temp_bin,
             encoding="utf-8",
         )
