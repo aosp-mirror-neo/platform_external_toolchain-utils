@@ -705,12 +705,12 @@ def commit_new_exemptions(
     )
 
     def do_commit(repo: Path) -> None:
-        git_utils.create_branch(repo, branch_name)
         git_utils.commit_all_changes(
             git_dir=repo,
             message=exemption_commit_message,
             quiet=True,
         )
+        git_utils.create_branch(repo, branch_name)
 
     # Assume simple `git commit` commands won't fail. If they do, something
     # seems very wrong, and the program should simply abort.
