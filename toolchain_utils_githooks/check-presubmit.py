@@ -810,7 +810,10 @@ def try_autofix(
         if output.strip():
             # A clean repo makes checking/undoing autofix commands trivial. A
             # dirty one... less so. :)
-            print("Git repo seems dirty; skipping autofix.")
+            print(
+                "Git repo seems dirty; skipping autofix. Rerun with "
+                "`--force_autofix` to autofix anyway."
+            )
             return
 
     anything_succeeded = False
