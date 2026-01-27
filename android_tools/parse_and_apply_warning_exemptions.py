@@ -628,11 +628,8 @@ def map_files_to_git_repos(
     """
 
     def get_file_toplevel(f: Path) -> Path:
-        toplevel = checked_subprocess_run(
-            ("git", "rev-parse", "--show-toplevel"),
-            cwd=(android_tree / f).parent,
-        ).strip()
-        return Path(toplevel).relative_to(android_tree)
+        toplevel = git_utils.find_git_repo_above((android_tree / f).parent)
+        return toplevel.relative_to(android_tree)
 
     # These `--show-toplevel` invocations are pretty fast, but we already have a
     # thread pool anyway, so use it.

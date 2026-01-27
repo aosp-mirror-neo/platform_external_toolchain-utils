@@ -1050,3 +1050,16 @@ def diff(
         stdout=subprocess.PIPE,
         encoding="utf-8",
     ).stdout
+
+
+def find_git_repo_above(dir_or_file: Path) -> Path:
+    """Returns the git repo containing `dir_or_file`."""
+    toplevel = subprocess.run(
+        ("git", "rev-parse", "--show-toplevel"),
+        cwd=dir_or_file,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout.strip()
+    return Path(toplevel)

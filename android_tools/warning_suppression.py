@@ -4,6 +4,9 @@
 
 """Miscellaneous utils for working with warning suppression."""
 
+from pathlib import Path
+import re
+
 from android_tools import android_paths
 
 
@@ -16,3 +19,19 @@ HIDL_MODULE_DEFAULTS_TARGET_NAME = "hidl-module-defaults"
 HIDL_DEFAULTS_TARGET = (
     f"//{android_paths.BUILD_HIDL_SUBDIR}:{HIDL_MODULE_DEFAULTS_TARGET_NAME}"
 )
+
+
+TARGET_DIR_RE = re.compile(r"//([^:]+):")
+
+
+def convert_target_to_android_bp(target: str) -> Path:
+    """Infers an Android.bp file path from a target."""
+    target_match = TARGET_DIR_RE.match(target)
+    if not target_match:
+        raise ValueError(f"Target {target!r} doesn't match {TARGET_DIR_RE}")
+
+    # This match ends up being e.g., `bionic/libc` when given the target
+    # `bionic/libc:libc`. `:libc` says "the libc target in the Android.bp
+    # existing in `bionic/libc`.
+    target_dir = Path(target_match.group(1))
+    return target_dir / "Android.bp"
