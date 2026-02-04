@@ -136,6 +136,22 @@ class GeminiRevertInference:
     whether any SHAs or PRs can be identified for it.
     """
 
+    is_amdgpu_only: bool
+    """
+    Indicates whether the commit exclusively applies to AMDGPU functionality.
+    """
+
+    is_flang_only: bool
+    """
+    Indicates whether the commit exclusively applies to Flang functionality, the
+    Fortran frontend.
+    """
+
+    is_test_only: bool
+    """
+    Indicates whether the commit exclusively modifies test-related files.
+    """
+
     @classmethod
     def from_json_checked(
         cls, json_object: dict[str, Any]
@@ -164,6 +180,15 @@ class GeminiRevertInference:
             reverted_prs=reverted_prs,
             is_revert=get_dict_elem_with_type(json_object, "is_revert", bool),
             is_reland=get_dict_elem_with_type(json_object, "is_reland", bool),
+            is_amdgpu_only=get_dict_elem_with_type(
+                json_object, "is_amdgpu_only", bool
+            ),
+            is_flang_only=get_dict_elem_with_type(
+                json_object, "is_flang_only", bool
+            ),
+            is_test_only=get_dict_elem_with_type(
+                json_object, "is_test_only", bool
+            ),
         )
 
     def to_json(self) -> Any:

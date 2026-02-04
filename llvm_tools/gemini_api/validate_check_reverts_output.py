@@ -303,8 +303,30 @@ def main(argv: list[str]) -> None:
 # This is placed near the bottom of the file, since it's a decent bit of
 # clutter. No one's likely to get value out of reading the entire listing.
 GOLDEN_SHAS: tuple[str, ...] = (
+    # AMDGPU+CUDA change.
+    "a03f82d7e582078163bce7ecaf960e8a53fb4744",
+    # A revert of said AMDGPU+CUDA change.
+    "86e114a9b24f16d7bb305a0be9cb565bca0b5224",
     # b/484082695: Gemini previously tagged this as a revert; it wasn't.
     "b8ef25aa643761233dc5b74d9fb7c38a2064d9c7",
+    "b4b8d4e5d062438289c60a832ec783d34cc31fa4",
+    "7803b4a6dda22bc33b3f239b1c2b59b52b98abd0",
+    "f190477718c18c1edf32ac37aebbbdf91b6573ab",
+    "efad3563ea461025808049e10ef6c5faff5e4b77",
+    # Flang and test-only changes.
+    "2f4cca69c7bd3db5dfb9e7b7258c1cf6e0dc476e",
+    # Flang only changes.
+    "e0d922ee20e1948b2a1a2aa9689ceb14796d2a91",
+    "c9ab97ff9569842c2bc91e140e6ab24a5fda0351",
+    "974566914c4e78d53239bfebf3c73d160bed6cc6",
+    "33cef35bfb8bb7077ba19296fd99ba5cc4c4b0cf",
+    "54381fd81b06a819276b90081672019848765748",
+    "914a233a001f67ceebf01344c66e45f00ba9f9f3",
+    # Test-only changes.
+    "22cc68ca2f384292a05271947e5138f96e734401",
+    "974b76899953e8f1b3f070c5ce8a3bbbbd29e813",
+    "e2061328a8ae51cdf80e211ad27dd13d7bba766d",
+    "3462c2b552069cd62dceb006c416ccf9f383f3af",
     # This is a reapply, but one that uses non-standard language in its commit
     # message to indicate that it's a reapply.
     "f72b3e1c07914fdea2fd367dada14b63adef731b",

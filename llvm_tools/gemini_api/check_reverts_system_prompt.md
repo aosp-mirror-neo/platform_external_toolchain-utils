@@ -6,10 +6,13 @@ The data provided is produced by `git log -n1 --name-status`.
 
 # Instructions
 
-1. Analyze the input: Carefully read the provided git commit message.
+1. Analyze the input: Carefully read the provided git commit message and the
+   list of modified files.
 2. Extract the git SHAs and GitHub PR numbers that were reverted. Be aware that
    not all reverts follow standard formats, so careful analysis is required.
 3. Determine if the revert is a reland.
+4. Analyze the file paths to determine if the change is specific to a
+   component (AMDGPU, Flang) or only affects tests.
 
 # Extraction rules
 
@@ -21,6 +24,12 @@ The data provided is produced by `git log -n1 --name-status`.
    present, refers to the commit itself. Do not include this PR number in the
    `reverted_pr`s field.
 4. Non-Reverts: If a commit is not a revert, `is_revert` should be false.
+5. `is_amdgpu_only`: This should be `true` if and only if the commit is exclusively
+   related to AMDGPU.
+5. `is_flang_only`: This should be `true` if and only if the commit is exclusively
+   related to flang.
+7. `is_test_only`: This should be `true` if and only if the commit is
+   test-specific.
 
 # Examples
 
@@ -50,7 +59,10 @@ Expected JSON Output:
   "is_revert": true,
   "reverted_shas": ["a28212173", "a2821217351179435b0351187441589414a38241"],
   "reverted_prs": [85111],
-  "is_reland": false
+  "is_reland": false,
+  "is_amdgpu_only": false,
+  "is_flang_only": false,
+  "is_test_only": false
 }
 ```
 
@@ -77,7 +89,10 @@ Expected JSON Output:
   "is_revert": true,
   "reverted_shas": [],
   "reverted_prs": [84400],
-  "is_reland": true
+  "is_reland": true,
+  "is_amdgpu_only": false,
+  "is_flang_only": false,
+  "is_test_only": false
 }
 ```
 
@@ -104,7 +119,10 @@ Expected JSON Output:
   "is_revert": false,
   "reverted_shas": [],
   "reverted_prs": [],
-  "is_reland": false
+  "is_reland": false,
+  "is_amdgpu_only": false,
+  "is_flang_only": false,
+  "is_test_only": false
 }
 ```
 
@@ -130,7 +148,10 @@ Expected JSON Output:
   "is_revert": false,
   "reverted_shas": [],
   "reverted_prs": [],
-  "is_reland": false
+  "is_reland": false,
+  "is_amdgpu_only": false,
+  "is_flang_only": false,
+  "is_test_only": false
 }
 ```
 
@@ -157,6 +178,91 @@ Expected JSON Output:
   "is_revert": true,
   "reverted_shas": [],
   "reverted_prs": [12567],
-  "is_reland": false
+  "is_reland": false,
+  "is_amdgpu_only": false,
+  "is_flang_only": false,
+  "is_test_only": false
+}
+```
+
+## 6. A test-only commit
+
+```
+commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Author: some author <some@author.com>
+Date: Mon Jan 01 00:00:00 2000 -0000
+
+fix things up
+
+M    lldb/test/foo.cpp
+M    llvm/utils/unittests/bar.cpp
+```
+
+Expected JSON Output:
+```
+{
+  "is_revert": false,
+  "reverted_shas": [],
+  "reverted_prs": [],
+  "is_reland": false,
+  "is_amdgpu_only": false,
+  "is_flang_only": false,
+  "is_test_only": true
+}
+```
+
+## 6. An AMDGPU-only _and_ test-only commit
+
+```
+commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Author: some author <some@author.com>
+Date: Mon Jan 01 00:00:00 2000 -0000
+
+add tests for new instruction support for AMDGPU
+
+A    clang/test/CodeGen/AMDGPU/foo.cpp
+A    llvm/test/Object/AMDGPU/test-object.ll
+```
+
+Expected JSON Output:
+```
+{
+  "is_revert": false,
+  "reverted_shas": [],
+  "reverted_prs": [],
+  "is_reland": false,
+  "is_amdgpu_only": true,
+  "is_flang_only": false,
+  "is_test_only": true
+}
+```
+
+## 7. A flang-only commit
+
+```
+commit aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+Author: some author <some@author.com>
+Date: Mon Jan 01 00:00:00 2000 -0000
+
+[flang] new lowering for flang instructions
+
+M    flang/include/flang/FlangInstructions.h
+M    flang/lib/Instructions.cpp
+M    llvm/lib/InstCombine.cpp
+```
+
+It's notable that a non-flang path was touched, but the commit message strongly
+indicated this change was flang-only.
+
+Expected JSON Output:
+```
+{
+  "is_revert": false,
+  "reverted_shas": [],
+  "reverted_prs": [],
+  "is_reland": false,
+  "is_amdgpu_only": false,
+  "is_flang_only": true,
+  "is_test_only": false
 }
 ```

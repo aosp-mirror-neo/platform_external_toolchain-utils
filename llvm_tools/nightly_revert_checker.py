@@ -265,6 +265,8 @@ def infer_reverts_with_gemini(
     gemini_state: gemini_revert_checker.GeminiState,
     sha: str,
     commit_message: str,
+    *,
+    is_chromeos: bool,
 ) -> revert_checker.CommitMessageReverts:
     empty_result = lambda: revert_checker.CommitMessageReverts(
         potential_shas=[],
@@ -272,11 +274,23 @@ def infer_reverts_with_gemini(
     )
 
     gemini_result = gemini_state.cached_inference_result_for(sha)
+    skip_reason: str | None = None
     if not gemini_result:
         logging.warning("Commit %s not found precached by Gemini", sha)
     elif gemini_result.is_reland:
+        skip_reason = "it's a reland"
+    elif gemini_result.is_amdgpu_only:
+        skip_reason = "it's amdgpu-only"
+    elif gemini_result.is_flang_only:
+        skip_reason = "it's flang-only"
+    elif gemini_result.is_test_only and is_chromeos:
+        skip_reason = "it's test-only"
+
+    if skip_reason:
         logging.info(
-            "Skipping reporting of commit %s - Gemini notes it's a reland.", sha
+            "Skipping reporting of commit %s - Gemini notes %s.",
+            sha,
+            skip_reason,
         )
         return empty_result()
 
@@ -379,6 +393,8 @@ def locate_new_reverts_across_shas(
     interesting_shas: list[tuple[str, str]],
     state: State,
     gemini_state: gemini_revert_checker.GeminiState | None,
+    *,
+    is_chromeos: bool,
 ) -> tuple[State, list[NewRevertInfo]]:
     """Locates and returns yet-unseen reverts across `interesting_shas`."""
     new_state = State()
@@ -386,7 +402,7 @@ def locate_new_reverts_across_shas(
 
     if gemini_state:
         infer_reverts = lambda sha, msg: infer_reverts_with_gemini(
-            gemini_state, sha, msg
+            gemini_state, sha, msg, is_chromeos=is_chromeos
         )
     else:
         infer_reverts = None
@@ -510,6 +526,7 @@ def do_cherrypick(
     reviewers: list[str],
     cc: list[str],
     gemini_state: gemini_revert_checker.GeminiState | None,
+    is_chromeos: bool,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -522,6 +539,7 @@ def do_cherrypick(
         interesting_shas,
         state,
         gemini_state=gemini_state,
+        is_chromeos=is_chromeos,
     )
     llvm_config_dir = Path(llvm_config.dir)
 
@@ -829,6 +847,7 @@ def do_email(
     state: State,
     recipients: _EmailRecipients,
     gemini_state: gemini_revert_checker.GeminiState | None,
+    is_chromeos: bool,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -847,6 +866,7 @@ def do_email(
         interesting_shas,
         state,
         gemini_state=gemini_state,
+        is_chromeos=is_chromeos,
     )
 
     for revert_info in new_reverts:
@@ -1031,7 +1051,8 @@ def main(argv: list[str]) -> int:
     reviewers = opts.reviewers if opts.reviewers else []
     cc = opts.cc if opts.cc else []
 
-    if opts.repository == "chromeos":
+    is_chromeos = opts.repository == "chromeos"
+    if is_chromeos:
         chromeos_path = opts.chromeos_dir
         interesting_shas = _find_interesting_chromeos_shas(chromeos_path)
         recipients = _EmailRecipients(well_known=["mage"], direct=cc)
@@ -1085,7 +1106,7 @@ def main(argv: list[str]) -> int:
     # We want to be as free of obvious side-effects as possible in case
     # something above breaks. Hence, action as late as possible.
     if action == "cherry-pick":
-        if repository != "chromeos":
+        if not is_chromeos:
             raise RuntimeError(
                 "only chromeos supports automatic cherry-picking."
             )
@@ -1100,6 +1121,7 @@ def main(argv: list[str]) -> int:
             reviewers=reviewers,
             cc=cc,
             gemini_state=gemini_state,
+            is_chromeos=is_chromeos,
         )
     else:
         new_state = do_email(
@@ -1111,6 +1133,7 @@ def main(argv: list[str]) -> int:
             state=state,
             recipients=recipients,
             gemini_state=gemini_state,
+            is_chromeos=is_chromeos,
         )
 
     _write_state(state_file, new_state)

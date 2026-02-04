@@ -43,6 +43,9 @@ class GeminiRevertInference:
     )
     is_revert: bool = False
     is_reland: bool = False
+    is_amdgpu_only: bool = False
+    is_flang_only: bool = False
+    is_test_only: bool = False
 
     def to_json(self) -> dict[str, Any] | None:
         # The vast majority of answers Gemini gives will be `empty`. To reduce
@@ -62,6 +65,11 @@ class GeminiRevertInference:
             reverted_prs=tuple(json_object["reverted_prs"]),
             is_revert=json_object["is_revert"],
             is_reland=json_object["is_reland"],
+            # NOTE: These are `.get`s for backwards compat. Once this has run on
+            # Chrotomation successfully, they can be converted to `[]`.
+            is_amdgpu_only=json_object.get("is_amdgpu_only", False),
+            is_flang_only=json_object.get("is_flang_only", False),
+            is_test_only=json_object.get("is_test_only", False),
         )
 
     def is_empty(self) -> bool:
@@ -70,6 +78,9 @@ class GeminiRevertInference:
             or self.is_reland
             or self.reverted_shas
             or self.reverted_prs
+            or self.is_amdgpu_only
+            or self.is_flang_only
+            or self.is_test_only
         )
 
 
@@ -324,6 +335,9 @@ def _normalize_gemini_result(
         reverted_prs=tuple(dedup_prs),
         is_revert=True,
         is_reland=inference.is_reland,
+        is_amdgpu_only=inference.is_amdgpu_only,
+        is_flang_only=inference.is_flang_only,
+        is_test_only=inference.is_test_only,
     )
 
 
