@@ -6,7 +6,10 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [],
+      "reverted_prs": [
+        143108,
+        144538
+      ],
       "reverted_shas": []
     }
   ],
@@ -115,7 +118,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -199,11 +202,11 @@
   ],
   "0bdd312b1d0d4b9d30170f384d44fa017acfb096": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -214,7 +217,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -258,7 +261,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -287,11 +290,11 @@
   ],
   "184821b63d769e48d8b89f70e8f7a5adbe429fae": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -381,7 +384,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -392,7 +395,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -403,7 +406,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -414,7 +417,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -422,7 +425,7 @@
   "2696e8c1499682f0b1f357d9035ed59f544892f8": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -447,7 +450,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -465,11 +468,11 @@
   ],
   "29cde86ecc81cfe0770bf366ddaec522d3885c75": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -505,10 +508,10 @@
   "2f4cca69c7bd3db5dfb9e7b7258c1cf6e0dc476e": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -530,14 +533,14 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "334d0be2d496af6c511d2efb183b862e7d911329": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -549,7 +552,7 @@
   "33cef35bfb8bb7077ba19296fd99ba5cc4c4b0cf": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -563,14 +566,14 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "351b38f266718d862aa122e56667d6582625c918": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -582,7 +585,7 @@
   "35f003d13bce7f1a991d6a059c9c25e72009022c": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -642,7 +645,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -734,7 +737,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -742,7 +745,7 @@
   "4394a0ca4a7c0687ea0c73cdf994bb36efbc69f2": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -757,7 +760,9 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [],
+      "reverted_prs": [
+        144913
+      ],
       "reverted_shas": []
     }
   ],
@@ -778,7 +783,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -796,7 +801,7 @@
   ],
   "469863111f217aeea98d65b30266f28c7b6c1169": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -844,7 +849,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -869,7 +874,9 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [],
+      "reverted_prs": [
+        150675
+      ],
       "reverted_shas": [
         "0844812b2e9d7f5ab005223443791c9287bcf5a2",
         "1db4c6b27500e686fad9e55bbbe7c7c68b246b7e"
@@ -904,7 +911,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -934,7 +941,7 @@
   "54381fd81b06a819276b90081672019848765748": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -1016,7 +1023,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1034,7 +1041,7 @@
   ],
   "66392a8d8d81e66ec09452d35c85147dafb07571": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1073,7 +1080,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1095,7 +1102,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1227,7 +1234,7 @@
   ],
   "72bc1bea7a28f432658967463af2104db4663156": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1242,25 +1249,25 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "7402cd6ded243972ab9a70da83845bce66e502c6": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "740f690831a2eb09ba73b4fb5456a37ae62a5051": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1321,7 +1328,7 @@
   ],
   "7803b4a6dda22bc33b3f239b1c2b59b52b98abd0": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": true,
       "is_revert": true,
@@ -1345,7 +1352,7 @@
   ],
   "7d2332391f81d44d7c9d1ca40bd5f393c59ad0df": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": true,
@@ -1359,7 +1366,7 @@
   "7d3134f6cc59f47460646a13abcf824bae05d772": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": true,
       "is_test_only": false,
@@ -1395,7 +1402,7 @@
   ],
   "81f3ddf4a2d310a78b6286cf2f5eb527194f014c": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1406,7 +1413,7 @@
   ],
   "82046c7f339a74a198ec7b17612243663732c7f7": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1432,7 +1439,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1478,7 +1485,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1511,7 +1518,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1530,7 +1537,7 @@
   "914a233a001f67ceebf01344c66e45f00ba9f9f3": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -1596,7 +1603,7 @@
   "974566914c4e78d53239bfebf3c73d160bed6cc6": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -1610,7 +1617,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1628,7 +1635,7 @@
   ],
   "9f102a90042fd3757c207112cfe64ee10182ace5": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1650,7 +1657,7 @@
   ],
   "a03f82d7e582078163bce7ecaf960e8a53fb4744": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1665,7 +1672,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1676,7 +1683,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1684,7 +1691,7 @@
   "a196281896de208fca1dde315e377a46ec9a2e66": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -1731,7 +1738,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1775,7 +1782,7 @@
   ],
   "abc22f771ebe05c2aeb8386337d9fb8d2bdd1094": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1801,7 +1808,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1812,7 +1819,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1830,7 +1837,7 @@
   ],
   "b296ea9c14af60f9b4faa26a39ecc52c1762c794": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1841,7 +1848,7 @@
   ],
   "b4b8d4e5d062438289c60a832ec783d34cc31fa4": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1867,7 +1874,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -1956,7 +1963,7 @@
   "bc814348ec0412362b062cb2928e5fc76d31bccb": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -1999,7 +2006,7 @@
   ],
   "c2eddec4ff42eca8a93e3f8a0531dfb6e60a61ca": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -2010,11 +2017,11 @@
   ],
   "c3103068b713dbed8d8ac75b165086a1a19c89e9": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -2070,7 +2077,7 @@
   "c9ab97ff9569842c2bc91e140e6ab24a5fda0351": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -2103,7 +2110,7 @@
   "cae7bebcaa41e4c459e973b9688215f5a57bcb56": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -2146,7 +2153,7 @@
   ],
   "d09dbdabb93ffdd6df25ae487c95a552f13e5e16": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -2157,7 +2164,7 @@
   ],
   "d1b6ce50dffcc70cd1610515527b4645b1136d1c": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -2191,7 +2198,7 @@
   "d7d0d7a80fc343750bbf85ea8c184737d9c70f62": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -2202,7 +2209,7 @@
   "d897355876287e410d35f1f0ac74d79955d50dd4": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -2256,7 +2263,7 @@
   ],
   "dddeb07c2ea9bc4e507d3bd34980fa6e9513ed9f": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -2317,7 +2324,7 @@
   "e0d922ee20e1948b2a1a2aa9689ceb14796d2a91": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -2364,7 +2371,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -2372,7 +2379,7 @@
   "e368b5343d037c89051097c2a87a6fb76548014e": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
@@ -2429,7 +2436,7 @@
   "eb0ddba26b6a265b44b442ae666db43b9f28b26a": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
@@ -2516,7 +2523,7 @@
   ],
   "f190477718c18c1edf32ac37aebbbdf91b6573ab": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -2531,7 +2538,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -2542,7 +2549,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -2554,17 +2561,19 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [],
+      "reverted_prs": [
+        151472
+      ],
       "reverted_shas": []
     }
   ],
   "f44d8d583c646baee12646f1609683c9afe48e33": [
     {
-      "is_amdgpu_only": false,
+      "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -2588,7 +2597,7 @@
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
-      "is_test_only": false,
+      "is_test_only": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
@@ -2610,7 +2619,7 @@
   "f73a3028c2d46928280d69d9e953ff79d2eb0fbb": [
     {
       "is_amdgpu_only": false,
-      "is_flang_only": false,
+      "is_flang_only": true,
       "is_reland": false,
       "is_revert": false,
       "is_test_only": false,
