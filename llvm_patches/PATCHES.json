@@ -299,6 +299,21 @@
     "rel_patch_path": "Partial-Revert-Driver-Support-using-toolchain-libc-and-libc-for-baremetal-96736-.patch",
     "version_range": {
       "from": 547379,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "v2: Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v2-Partial-Revert-Driver-Support-using-toolchain-libc-and-libc-for-baremetal-96736-.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },
