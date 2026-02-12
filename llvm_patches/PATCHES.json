@@ -269,6 +269,21 @@
     "rel_patch_path": "v2-libc-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTAB.patch",
     "version_range": {
       "from": 563880,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Tom Hughes <tomhughes@chromium.org>",
+      "info": [],
+      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v3-libc-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTAB.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },

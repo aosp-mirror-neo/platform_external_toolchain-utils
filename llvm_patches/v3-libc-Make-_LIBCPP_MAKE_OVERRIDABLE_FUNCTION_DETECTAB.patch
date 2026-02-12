@@ -1,0 +1,40 @@
+From f111ad3e2079385ffc6c100e8ebec338b16bcbf4 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 13 Sep 2024 16:47:06 -0700
+Subject: [PATCH] v3: Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op
+ on baremetal
+
+Baremetal targets tend to use custom linker scripts, which may not
+include the __lcxx_override section.
+
+BUG=b:363082822
+
+Change-Id: I513b202aa0504dd62b6a2eac1439d30746db6987
+---
+ libcxx/src/include/overridable_function.h | 8 +++++++-
+ 1 file changed, 7 insertions(+), 1 deletion(-)
+
+diff --git a/libcxx/src/include/overridable_function.h b/libcxx/src/include/overridable_function.h
+index 0b43f271486c..2ca9eeb0227f 100644
+--- a/libcxx/src/include/overridable_function.h
++++ b/libcxx/src/include/overridable_function.h
+@@ -63,8 +63,14 @@
+ // want to be defining special sections inside user's executables which use our headers.
+ //
+ 
+-#if defined(_LIBCPP_OBJECT_FORMAT_MACHO)
++// Baremetal targets tend to use custom linker scripts, which may not include
++// the __lcxx_override section.
++#if defined(LIBCXXABI_BAREMETAL)
+ 
++#  define _LIBCPP_CAN_DETECT_OVERRIDDEN_FUNCTION 0
++#  define _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE /* nothing */
++
++#elif defined(_LIBCPP_OBJECT_FORMAT_MACHO)
+ #  define _LIBCPP_CAN_DETECT_OVERRIDDEN_FUNCTION 1
+ #  define _LIBCPP_OVERRIDABLE_FUNCTION(type, name, arglist)                                                            \
+     __attribute__((__section__("__TEXT,__lcxx_override,regular,pure_instructions"))) _LIBCPP_WEAK type name arglist
+-- 
+2.53.0.239.g8d8fc8a987-goog
+
