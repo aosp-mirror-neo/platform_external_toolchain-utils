@@ -41,6 +41,21 @@
     "rel_patch_path": "llvm-8.0-clang-executable-detection.v2.patch",
     "version_range": {
       "from": 370808,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "Fixes crbug/591436. Force fallback to traditional executable detection"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "llvm-8.0-clang-executable-detection.v3.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },
