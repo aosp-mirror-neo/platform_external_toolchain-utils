@@ -184,6 +184,47 @@ a
                 result1 = e1.apply(src_dir, pu.git_am)
         self.assertTrue(result1.succeeded)
 
+    def test_am_chromiumos_author_rewrite(self) -> None:
+        """Test that we rewrite the author to avoid spam."""
+        src_dir = TestPatchUtils._mock_dir("somewhere/llvm-project")
+        patch_dir = TestPatchUtils._mock_dir()
+        e = pu.PatchEntry.from_dict(
+            patch_dir, TestPatchUtils._default_json_dict()
+        )
+        message_fixture = "\n".join(
+            (
+                "",
+                "patch.cherry: false",
+                "patch.platforms: a",
+                "patch.version_range.from: 4",
+                "patch.version_range.until: 9",
+            )
+        )
+        new_author = (
+            f"{pu.REPLACEMENT_AUTHOR_NAME} <{pu.REPLACEMENT_AUTHOR_EMAIL}>"
+        )
+
+        # Test that commit patch option works.
+        with mock.patch("pathlib.Path.is_file", return_value=True):
+            with mock.patch("subprocess.run", mock.MagicMock()) as run_mock:
+                result1 = e.apply(src_dir, pu.git_am_chromiumos)
+                run_mock.assert_any_call(
+                    [
+                        "git",
+                        "commit",
+                        "--amend",
+                        "-m",
+                        message_fixture,
+                        f"--author={new_author}",
+                    ],
+                    check=True,
+                    encoding="utf-8",
+                    stdin=subprocess.DEVNULL,
+                    stdout=None,
+                    cwd=src_dir,
+                )
+        self.assertTrue(result1.succeeded)
+
     def test_parse_failed_patch_output(self) -> None:
         """Test that we can call parse `patch` output."""
         fixture = """

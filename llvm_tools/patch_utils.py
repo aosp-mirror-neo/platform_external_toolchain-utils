@@ -35,6 +35,13 @@ CHROMEOS_LLVM_SUBPACKAGES = (
     "sys-libs/scudo",
 )
 
+REPLACEMENT_AUTHOR_NAME = "crostc-worker"
+REPLACEMENT_AUTHOR_EMAIL = (
+    "crostc-worker@crostc-chrotomation.iam.gserviceaccount.com"
+)
+# Author to replace the true author of a revert commit. This is to prevent them
+# from being spammed with emails every time we upload revert commits to Gerrit.
+
 
 @dataclasses.dataclass
 class Hunk:
@@ -317,7 +324,12 @@ def git_am_chromiumos(
     extra_args: list[str | Path] | None,
 ) -> PatchResult:
     """Patch a patch file using 'git am', but include footer metadata."""
-    return _git_am_chromiumos_internal(pe, root_dir, patch_path, extra_args)
+    return _git_am_chromiumos_internal(
+        pe,
+        root_dir,
+        patch_path,
+        extra_args,
+    )
 
 
 def git_am_chromiumos_quiet(
@@ -328,7 +340,11 @@ def git_am_chromiumos_quiet(
 ) -> PatchResult:
     """Same as git_am_chromiumos, but no stdout."""
     return _git_am_chromiumos_internal(
-        pe, root_dir, patch_path, extra_args, quiet=True
+        pe,
+        root_dir,
+        patch_path,
+        extra_args,
+        quiet=True,
     )
 
 
@@ -337,6 +353,7 @@ def _git_am_chromiumos_internal(
     root_dir: Path,
     patch_path: Path,
     extra_args: list[str | Path] | None,
+    use_bot_as_author: bool = True,
     quiet: bool = False,
 ) -> PatchResult:
     cmd: list[str | Path] = [
@@ -380,8 +397,18 @@ def _git_am_chromiumos_internal(
         for line in original_commit_msg_lines
         if not metadata_regex.match(line)
     ] + _chromiumos_llvm_footer(pe)
+    amend_cmd = [
+        "git",
+        "commit",
+        "--amend",
+        "-m",
+        "\n".join(new_commit_msg_lines),
+    ]
+    if use_bot_as_author:
+        new_author = f"{REPLACEMENT_AUTHOR_NAME} <{REPLACEMENT_AUTHOR_EMAIL}>"
+        amend_cmd.append(f"--author={new_author}")
     subprocess.run(
-        ["git", "commit", "--amend", "-m", "\n".join(new_commit_msg_lines)],
+        amend_cmd,
         check=True,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
