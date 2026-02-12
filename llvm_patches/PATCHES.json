@@ -856,6 +856,22 @@
     "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8-v2.patch",
     "version_range": {
       "from": 574158,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Timm Baeder <tbaeder@redhat.com>",
+      "info": [],
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8-v3.patch",
+    "version_range": {
+      "from": 584948,
       "until": 587658
     }
   },
