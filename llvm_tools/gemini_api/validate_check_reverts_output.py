@@ -304,6 +304,8 @@ def main(argv: list[str]) -> None:
 # This is placed near the bottom of the file, since it's a decent bit of
 # clutter. No one's likely to get value out of reading the entire listing.
 GOLDEN_SHAS: tuple[str, ...] = (
+    # b/484082695: Gemini previously tagged this as a revert; it wasn't.
+    "b8ef25aa643761233dc5b74d9fb7c38a2064d9c7",
     # This is a reapply, but one that uses non-standard language in its commit
     # message to indicate that it's a reapply.
     "f72b3e1c07914fdea2fd367dada14b63adef731b",
