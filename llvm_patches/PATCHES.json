@@ -116,6 +116,21 @@
     "rel_patch_path": "v7-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
       "from": 571439,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
+      "info": [],
+      "title": "v8: Crash when dereferencing nullopt for std::optional"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v8-Crash-when-dereferencing-nullopt-for-std-optional.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },
