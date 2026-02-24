@@ -13,20 +13,18 @@
 import argparse
 import collections
 import dataclasses
-import json
 import logging
 import multiprocessing.pool
 from pathlib import Path
 import random
-import subprocess
 import urllib.parse
 
 from android_tools import android_paths
+from android_tools import gerrit_utils
 from llvm_tools import manifest_utils
 
 
 ANDROID_MANIFEST_XML_FROM_ROOT = Path(".repo") / "manifests" / "default.xml"
-INTERNAL_GERRIT_HOST = "https://googleplex-android-review.git.corp.google.com"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -47,49 +45,6 @@ class RepoCache:
         return cls(repos_to_names=repos_to_names)
 
 
-def _fetch_gob_curl_body_with_retries(url: str) -> str:
-    """Runs gob-curl, returning its output as a `str`.
-
-    Retries to work around Gerrit flakes, if any.
-    """
-    max_tries = 5
-    i = 1
-    while True:
-        result = subprocess.run(
-            (
-                "gob-curl",
-                # Follow redirects.
-                "--location",
-                # Exit with nonzero code if the response code indicates failure.
-                "--fail",
-                url,
-            ),
-            check=False,
-            encoding="utf-8",
-            errors="replace",
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        if not result.returncode:
-            return result.stdout
-
-        logging.warning(
-            "Failed attempt %d/%d running gob-curl on %s; "
-            "stdout:\n%s\n\nstderr:\n%s",
-            i,
-            max_tries,
-            url,
-            result.stdout,
-            result.stderr,
-        )
-        # Reraise if we're at the limit, but make sure to log stdout/stderr
-        # above so they're not dropped.
-        if i == max_tries:
-            result.check_returncode()
-        i += 1
-
-
 @dataclasses.dataclass(frozen=True)
 class OwnersSuggestion:
     """A suggestion for an OWNER for a file."""
@@ -103,15 +58,6 @@ class OwnersSuggestion:
 def _parse_suggestions_for_googlers(
     url: str, response_body: str
 ) -> list[OwnersSuggestion]:
-    # When responding with JSON, Gerrit always responds starting with this.
-    json_response_pre = ")]}'"
-    if not response_body.startswith(json_response_pre):
-        raise ValueError(
-            f"Unexpected non-JSON Gerrit response: {response_body!r}"
-        )
-
-    response_body = response_body[len(json_response_pre) :]
-
     # We should get back a JSON object that looks like:
     # {
     #   "code_owners": [
@@ -129,7 +75,7 @@ def _parse_suggestions_for_googlers(
     #     }
     #   ],
     # }
-    owners_response = json.loads(response_body)
+    owners_response = gerrit_utils.parse_gerrit_response(response_body)
     results = []
     at_google = "@google.com"
     for owner_info in owners_response.get("code_owners", ()):
@@ -206,7 +152,7 @@ def _fetch_suggested_googler_owners_for_file(
         f"{gerrit_host}/projects/{encoded_project_name}/branches/main"
         f"/code_owners/{encoded_file_in_repo}?{encoded_params}"
     )
-    response_body = _fetch_gob_curl_body_with_retries(url)
+    response_body = gerrit_utils.fetch_gob_curl_body_with_retries(url)
     return _parse_suggestions_for_googlers(url, response_body.lstrip())
 
 
@@ -403,7 +349,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--gerrit-host",
-        default=INTERNAL_GERRIT_HOST,
+        default=gerrit_utils.INTERNAL_GERRIT_HOST,
         help="Gerrit host to query",
     )
     parser.add_argument(
