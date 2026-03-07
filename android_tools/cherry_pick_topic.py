@@ -12,6 +12,7 @@ import logging
 from pathlib import Path
 import shlex
 import subprocess
+import threading
 import urllib.parse
 
 from android_tools import gerrit_utils
@@ -24,6 +25,139 @@ class CLDetails:
 
     project: str
     cl_number: int
+
+
+def resolve_and_sort_cl_dependencies(
+    cls: list[CLDetails],
+    gerrit_host: str,
+    executor: concurrent.futures.ThreadPoolExecutor,
+) -> list[CLDetails]:
+    """Resolves and sorts all CL dependencies."""
+    # So Gerrit's relation chains list every CL with some sort of parent-child
+    # relationship to any other CL in the same relation chain.
+    #
+    # That means if we have a tree of CLs:
+    #   - A is the parent of B
+    #   - A is the parent of C
+    #   - C is the parent of D
+    #
+    # Then getting the relation chain for _any_ of these CLs will get the
+    # relation chain for _all_ of these CLs. The ordering in this list of B and
+    # C will be indeterminate, _but_ since A is the central parent, it is
+    # guaranteed to be before all of the other CLs (and C is guaranteed to be
+    # before D).
+    #
+    # The idea here is then pretty simple: grab all unique relation chains
+    # (where an empty relation chain for CL E is just a relation chain of E),
+    # chop out obviously unnecessary entries, and then return a flattened list
+    # of relation chains.
+    #
+    # The "unnecessary entries" are elements that extend past the end of any
+    # element in `cls`. So going back to the above example, if `cls` just
+    # contained C, we would capture either [A, B, C], or [A, C], depending on
+    # how Gerrit sorted it.
+    #
+    # TODO: This _does_ mean that B _may_ be included when it shouldn't, but
+    # scanning to figure that out is a bit of a pain.
+
+    # All of this state is protected by `lock`.
+    cl_map = {cl.cl_number: cl for cl in cls}
+    processed_cl_numbers = set()
+    all_chains: list[list[CLDetails]] = []
+
+    lock = threading.Lock()
+
+    def _fetch_dep_chain(cl_detail: CLDetails) -> None:
+        """Fetches the dependency chain for the given CL.
+
+        Updates captured state above appropriately.
+        """
+        with lock:
+            # As mentioned above, multiple CLs in the same chain will return the
+            # same chain. Skip this request if we've seen this CL during another
+            # request.
+            if cl_detail.cl_number in processed_cl_numbers:
+                return
+
+        chain_info = gerrit_utils.fetch_related_changes(
+            gerrit_host, cl_detail.cl_number
+        )
+
+        # Note that chains are returned in order from children to parents. For
+        # simplicity later, make it parents-first.
+        chain_info.reverse()
+
+        with lock:
+            # It could be that we had racing `fetch_related_changes` invocations
+            # for the same chain; bail if we've already processed this chain.
+            if cl_detail.cl_number in processed_cl_numbers:
+                return
+
+            if not chain_info:
+                processed_cl_numbers.add(cl_detail.cl_number)
+                all_chains.append([cl_detail])
+                return
+
+            # Truncate the chain to the child-most CL that was actually
+            # requested.
+            child_most_cl_idx = next(
+                (
+                    i
+                    for i in reversed(range(len(chain_info)))
+                    if chain_info[i].cl_number in cl_map
+                ),
+                None,
+            )
+            assert child_most_cl_idx is not None, (
+                "Could not find any of the requested CLs in the relation "
+                f"chain for {cl_detail.cl_number}."
+            )
+            del chain_info[child_most_cl_idx + 1 :]
+
+            processed_cl_numbers.update(c.cl_number for c in chain_info)
+
+            current_chain: list[CLDetails] = []
+            for related_cl_info in chain_info:
+                status = related_cl_info.status
+                if not status.is_open():
+                    logging.info(
+                        "Skipping CL %d with status %s from a relation chain.",
+                        related_cl_info.cl_number,
+                        status.value,
+                    )
+                    continue
+
+                cl_to_add = cl_map.get(related_cl_info.cl_number)
+                if not cl_to_add:
+                    logging.info(
+                        "Discovered new, unmerged CL %d from relation chain "
+                        "of %d",
+                        related_cl_info.cl_number,
+                        cl_detail.cl_number,
+                    )
+                    cl_to_add = CLDetails(
+                        project=related_cl_info.project,
+                        cl_number=related_cl_info.cl_number,
+                    )
+                    cl_map[related_cl_info.cl_number] = cl_to_add
+
+                current_chain.append(cl_to_add)
+
+            if current_chain:
+                all_chains.append(current_chain)
+
+    logging.info("Resolving CL dependencies using relation chains...")
+    futures = [executor.submit(_fetch_dep_chain, cl) for cl in cls]
+    for f in futures:
+        # `f.result()` reraises any exception the future encountered.
+        f.result()
+
+    # The chain ordering will be deterministic (sourced from Gerrit), but
+    # threads will race to add to this list. Sort by the CL number for
+    # determinism.
+    all_chains.sort(key=lambda chain: chain[0].cl_number)
+    logging.debug("Final CL chains after parent resolution: %s", all_chains)
+    return [cl for chain in all_chains for cl in chain]
 
 
 def fetch_cls_for_topic(gerrit_host: str, topic: str) -> list[CLDetails]:
@@ -298,24 +432,6 @@ def _cherry_pick_project(
         logging.warning("Project %s not found in manifest, skipping.", project)
         return False, []
 
-    # TODO(b/487030085): Our cherry-picks unfortunately don't properly
-    # recognize parent/child relationships. That is, if A is a parent of B
-    # on Gerrit, nothing's keeping us from trying to pick B before A.
-    #
-    # **Most** dev workflows should result in parents being uploaded before
-    # children, so sorting on CL number is likely to be an 80% workaround,
-    # but it's totally possible for e.g.,
-    # - Dev uploads CL A
-    # - Dev gets feedback to split things out of CL A, uploads those changes
-    #   as CL B, which they rebase CL A on
-    #
-    # To break this. In this case, the dev is just told at the end of the
-    # script "this cherry-pick failed; here's the command if you want to
-    # try," and they can run that manually.
-    cherry_picks_for_project = sorted(
-        cherry_picks_for_project, key=lambda x: x.cl_number
-    )
-
     full_path = android_tree / project_path
     any_successful_pick = False
     repo_in_bad_state = False
@@ -483,6 +599,9 @@ def main(argv: list[str]) -> int:
             logging.debug("Found project %s at path %s", name, path)
 
     cls = fetch_cls_for_topic(opts.gerrit_host, opts.topic)
+    if not cls:
+        logging.info("No open CLs found for topic %s", opts.topic)
+        return 0
 
     def fetch_command_for_change(change: CLDetails) -> CherrypickDesc | None:
         """Fetches cherry-pick for a change, returning a CherrypickDesc."""
@@ -505,12 +624,9 @@ def main(argv: list[str]) -> int:
     # mindful of Gerrit ratelimits (each thread is expected to perform at most
     # one Gerrit operation at a time).
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+        cls = resolve_and_sort_cl_dependencies(cls, opts.gerrit_host, executor)
         results = executor.map(fetch_command_for_change, cls)
-        # Sort for consistent output.
-        cherry_picks = sorted(
-            (pick for pick in results if pick),
-            key=lambda pick: pick.cherrypick_command,
-        )
+        cherry_picks = [pick for pick in results if pick]
 
         if not cherry_picks:
             logging.info(
