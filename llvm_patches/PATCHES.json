@@ -289,21 +289,6 @@
   },
   {
     "metadata": {
-      "author": "Tom Hughes <tomhughes@chromium.org>",
-      "info": [],
-      "title": "[libc++] Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "v3-libc-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTAB.patch",
-    "version_range": {
-      "from": 584947,
-      "until": null
-    }
-  },
-  {
-    "metadata": {
       "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
       "info": [],
       "title": "Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\""
