@@ -378,7 +378,15 @@ def _execute_cherry_pick_commands(
             android_tree,
             tag_or_branch,
         ): project
-        for project, picks in projects_to_cherry_picks.items()
+        # While not all cherry-picks take the same time, generally
+        # speaking, projects with more cherries to pick will take longer to
+        # execute on those. `submit` those first in hopes it makes better use of
+        # our executor.
+        for project, picks in sorted(
+            projects_to_cherry_picks.items(),
+            key=lambda x: len(x[1]),
+            reverse=True,
+        )
     }
 
     failures = []
