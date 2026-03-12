@@ -7,8 +7,8 @@
 from llvm_tools import cros_cls
 
 
-LLVM_NEXT_HASH = "2d287f51eff2a5fbf84458a33f7fb2493cf67965"
-LLVM_NEXT_REV = 574158
+LLVM_NEXT_HASH = "d4d2d7d7856258d5d781c4a912046fc7777122e2"
+LLVM_NEXT_REV = 584947
 
 # NOTE: Always specify patch-sets for CLs. We don't want uploads by untrusted
 # users to turn into bot invocations w/ untrusted input.
@@ -16,7 +16,10 @@ LLVM_NEXT_REV = 574158
 # Please note that these are (somewhat) automatically curated. See
 # llvm_next_py_autoupdate.py.
 # pylint: disable=line-too-long
-LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ()
+LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
+    "https://chrome-internal-review.git.corp.google.com/c/chromeos/manifest-internal/+/9088380/2",
+    "https://chromium-review.git.corp.google.com/c/chromiumos/overlays/chromiumos-overlay/+/7649966/1",
+)
 # A list of CLs that constitute the current llvm-next roll.
 # This is taken as the set of CLs that will be landed simultaneously in order
 # to make llvm-next go live.
