@@ -1042,5 +1042,51 @@
       "from": 574158,
       "until": 595389
     }
+  },
+  {
+    "metadata": {
+      "author": "",
+      "info": [],
+      "title": "[AArch64][SME] Disable tail calls for callees that require saving ZT0"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ed465b33492cbc6a696fa2962fd4f0ec568e7de1.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 595389
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "Revert \"v3: Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Revert-v3-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE-a-no-op-on-baremetal-.patch",
+    "version_range": {
+      "from": 584947,
+      "until": 584949
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION a no-op on baremetal"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION-a-no-op-on-baremetal.patch",
+    "version_range": {
+      "from": 584947,
+      "until": null
+    }
   }
 ]
