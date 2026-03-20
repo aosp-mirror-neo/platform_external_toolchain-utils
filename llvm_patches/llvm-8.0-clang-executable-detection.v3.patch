@@ -1,0 +1,28 @@
+From a3a1aa198d4f52d3a64fe58d6ca03b103b6f6474 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 14 Jun 2024 21:02:42 +0000
+Subject: [PATCH] llvm-8.0-clang-executable-detection.v3
+
+This is to fix crbug/591436, which is a blocker on using clang for
+simple-chrome.
+
+---
+ llvm/lib/Support/Unix/Path.inc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/llvm/lib/Support/Unix/Path.inc b/llvm/lib/Support/Unix/Path.inc
+index ef17cbbaa7ba..c061ed6b2df0 100644
+--- a/llvm/lib/Support/Unix/Path.inc
++++ b/llvm/lib/Support/Unix/Path.inc
+@@ -252,7 +252,7 @@ std::string getMainExecutable(const char *argv0, void *MainAddr) {
+     defined(__managarm__)
+   char exe_path[PATH_MAX];
+   const char *aPath = "/proc/self/exe";
+-  if (sys::fs::exists(aPath)) {
++  if (false && sys::fs::exists(aPath)) {
+     // /proc is not always mounted under Linux (chroot for example).
+     ssize_t len = readlink(aPath, exe_path, sizeof(exe_path));
+     if (len < 0)
+-- 
+2.45.2.627.g7a2c4fd464-goog
+

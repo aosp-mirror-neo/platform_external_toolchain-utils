@@ -102,7 +102,8 @@ class CrosWorkonState:
 
     @contextlib.contextmanager
     def temporarily_set_workon(
-        self, value: bool
+        self,
+        value: bool,
     ) -> Generator[None, None, None]:
         initial_workon_bit = self.is_workoned
         self.set_workon(value)
@@ -132,7 +133,7 @@ def restore_llvm_binpkg() -> None:
         pgo_utils.run(pgo_utils.generate_quickpkg_restoration_command(pkg))
 
 
-def ensure_toolchain_is_up_to_date():
+def ensure_toolchain_is_up_to_date() -> None:
     """Ensures that all toolchain/cross-compiler packages are up-to-date."""
     logging.info("Updating all toolchain packages to the new toolchain")
     # Using the command from go/crostc-mage-misc#using-the-new-toolchain
@@ -146,7 +147,7 @@ def ensure_toolchain_is_up_to_date():
     )
 
 
-def emerge_pgo_generate_llvm():
+def emerge_pgo_generate_llvm() -> None:
     """Emerges a sys-devel/llvm with PGO instrumentation enabled."""
     force_use = (
         "llvm_pgo_generate -llvm_pgo_use"
@@ -189,7 +190,9 @@ def build_profiling_env(profile_dir: Path) -> dict[str, str]:
     }
 
 
-def ensure_clang_invocations_generate_profiles(clang_bin: str, tmpdir: Path):
+def ensure_clang_invocations_generate_profiles(
+    clang_bin: str, tmpdir: Path
+) -> None:
     """Raises an exception if clang doesn't generate profraw files.
 
     Args:
@@ -214,10 +217,10 @@ def ensure_clang_invocations_generate_profiles(clang_bin: str, tmpdir: Path):
 
 def write_unified_cmake_file(
     into_dir: Path, absl_subdir: Path, gtest_subdir: Path
-):
+) -> None:
     (into_dir / "CMakeLists.txt").write_text(
         textwrap.dedent(
-            f"""\
+            f"""
             cmake_minimum_required(VERSION 3.10)
 
             project(generate_pgo)
@@ -229,7 +232,7 @@ def write_unified_cmake_file(
     )
 
 
-def patch_absl(absl_dir: Path):
+def patch_absl(absl_dir: Path) -> None:
     """Patches absl's sources."""
     # b/366159701#comment7: the current absl has a bug in its cmake files. This
     # is fixed by cl/675148126. Since the diff is a single line, patch it
@@ -238,7 +241,7 @@ def patch_absl(absl_dir: Path):
     # If you've upgraded absl, this patching logic can probably be safely
     # removed.
     patch_text = textwrap.dedent(
-        """\
+        """
         --- a/absl/base/CMakeLists.txt
         +++ b/absl/base/CMakeLists.txt
         @@ -534,6 +534,7 @@ absl_cc_test(
@@ -259,7 +262,7 @@ def patch_absl(absl_dir: Path):
     )
 
 
-def fetch_workloads_into(target_dir: Path):
+def fetch_workloads_into(target_dir: Path) -> None:
     """Fetches PGO generation workloads into `target_dir`."""
     # The workload here is absl and gtest. The reasoning behind that selection
     # was essentially a mix of:
@@ -271,7 +274,7 @@ def fetch_workloads_into(target_dir: Path):
     # writing.
     target_dir.mkdir(parents=True)
 
-    def fetch_and_extract(gs_url: str, into_dir: Path):
+    def fetch_and_extract(gs_url: str, into_dir: Path) -> None:
         tgz_full = target_dir / os.path.basename(gs_url)
         pgo_utils.run(
             [
@@ -326,7 +329,7 @@ class WorkloadRunner:
         triple: str,
         extra_cflags: str | None = None,
         sysroot: str | None = None,
-    ):
+    ) -> None:
         logging.info(
             "Running workload for triple %s, extra cflags %r",
             triple,
@@ -437,7 +440,7 @@ def convert_profraw_to_pgo_profile(profraw_dir: Path) -> Path:
     return output
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

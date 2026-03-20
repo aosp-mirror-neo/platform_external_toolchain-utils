@@ -83,7 +83,7 @@ def parse_profile_path(path: str) -> ProfilePath:
     return Path(path).resolve()
 
 
-def ensure_hyperfine_is_installed():
+def ensure_hyperfine_is_installed() -> None:
     if CHROOT_HYPERFINE.exists():
         return
 
@@ -162,7 +162,7 @@ def construct_hyperfine_cmd(
 
 def validate_profiles(
     parser: argparse.ArgumentParser, profiles: list[ProfilePath]
-):
+) -> None:
     number_of_path_profiles = 0
     nonexistent_profiles = []
     seen_profile_at_local_profile_location = False
@@ -245,7 +245,7 @@ def run_benchmark(
     return accumulated_run_data
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

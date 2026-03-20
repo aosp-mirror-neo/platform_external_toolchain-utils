@@ -129,7 +129,7 @@ class ChangeListURL:
         """Returns an identifier for this CL for use with the 'gerrit' tool."""
         return f"*{self.cl_id}" if self.internal else f"{self.cl_id}"
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"https://{self.crrev_url_without_http()}"
 
 
@@ -157,11 +157,11 @@ class BuilderStatus(enum.StrEnum):
         return self in (self.SCHEDULED, self.STARTED)
 
     @property
-    def is_success(self):
+    def is_success(self) -> bool:
         return self == self.SUCCESS
 
     @property
-    def is_failure(self):
+    def is_failure(self) -> bool:
         return not (self.is_running or self.is_success)
 
 

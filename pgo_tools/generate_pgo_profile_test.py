@@ -14,7 +14,7 @@ from pgo_tools import pgo_utils
 class Test(test_helpers.TempDirTestCase):
     """Tests for generate_pgo_profile."""
 
-    def test_read_exactly_one_dirent_works(self):
+    def test_read_exactly_one_dirent_works(self) -> None:
         tempdir = self.make_tempdir()
         ent = tempdir / "one-ent"
         ent.touch()
@@ -23,12 +23,12 @@ class Test(test_helpers.TempDirTestCase):
             generate_pgo_profile.read_exactly_one_dirent(tempdir), ent
         )
 
-    def test_read_exactly_one_dirent_fails_when_no_ents(self):
+    def test_read_exactly_one_dirent_fails_when_no_ents(self) -> None:
         tempdir = self.make_tempdir()
         with self.assertRaisesRegex(ValueError, "^Expected exactly one"):
             generate_pgo_profile.read_exactly_one_dirent(tempdir)
 
-    def test_read_exactly_one_dirent_fails_when_multiple_ents(self):
+    def test_read_exactly_one_dirent_fails_when_multiple_ents(self) -> None:
         tempdir = self.make_tempdir()
         (tempdir / "a").touch()
         (tempdir / "b").touch()
@@ -36,7 +36,7 @@ class Test(test_helpers.TempDirTestCase):
             generate_pgo_profile.read_exactly_one_dirent(tempdir)
 
     @mock.patch.object(pgo_utils, "run")
-    def test_profraw_conversion_works(self, mock_run):
+    def test_profraw_conversion_works(self, mock_run: mock.MagicMock) -> None:
         tempdir = self.make_tempdir()
         profiles = [
             tempdir / "profile-foo.profraw",

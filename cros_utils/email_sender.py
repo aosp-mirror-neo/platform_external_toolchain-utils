@@ -6,9 +6,11 @@
 
 
 import base64
+from collections.abc import Sequence
 import datetime
 import json
 import os
+from typing import Any
 
 from cros_utils import gs
 
@@ -22,19 +24,19 @@ class EmailSender:
     class Attachment:
         """Small class to keep track of attachment info."""
 
-        def __init__(self, name, content):
+        def __init__(self, name: str, content: str) -> None:
             self.name = name
             self.content = content
 
     def SendGSEmail(
         self,
-        subject,
-        identifier,
-        well_known_recipients=(),
-        direct_recipients=(),
-        text_body=None,
-        html_body=None,
-    ):
+        subject: str,
+        identifier: str,
+        well_known_recipients: Sequence[str] = (),
+        direct_recipients: Sequence[str] = (),
+        text_body: str | None = None,
+        html_body: str | None = None,
+    ) -> None:
         """Enqueues an email in our gs outbox.
 
         These emails ultimately get sent by the machinery in
@@ -92,7 +94,7 @@ class EmailSender:
                 "either `text_body` or `html_body` must be specified"
             )
 
-        email_json = {
+        email_json: dict[str, Any] = {
             "email_identifier": identifier,
             "subject": subject,
         }

@@ -9,7 +9,7 @@ import dataclasses
 import json
 import subprocess
 import textwrap
-from typing import Iterable
+from typing import Iterable, Iterator
 from unittest import mock
 
 from llvm_tools import cros_cls
@@ -36,7 +36,9 @@ class Test(test_helpers.TempDirTestCase):
         return self.toolchain_owners_with_listing(())
 
     @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_works_with_new_cl(self, mock_subprocess_run):
+    def test_fetch_cl_info_works_with_new_cl(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         mock_run_return_value = mock.MagicMock()
         mock_run_return_value.stdout = json.dumps(
             [
@@ -61,7 +63,9 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_works_with_closed_cl(self, mock_subprocess_run):
+    def test_fetch_cl_info_works_with_closed_cl(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         mock_run_return_value = mock.MagicMock()
         mock_subprocess_run.return_value = mock_run_return_value
 
@@ -89,8 +93,8 @@ class Test(test_helpers.TempDirTestCase):
 
     @mock.patch.object(subprocess, "run")
     def test_fetch_cl_info_determines_googler_is_googler(
-        self, mock_subprocess_run
-    ):
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         mock_run_return_value = mock.MagicMock()
         mock_run_return_value.stdout = json.dumps(
             [
@@ -119,8 +123,8 @@ class Test(test_helpers.TempDirTestCase):
 
     @mock.patch.object(subprocess, "run")
     def test_fetch_cl_info_determines_chromium_isnt_googler(
-        self, mock_subprocess_run
-    ):
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         mock_run_return_value = mock.MagicMock()
         mock_run_return_value.stdout = json.dumps(
             [
@@ -149,8 +153,8 @@ class Test(test_helpers.TempDirTestCase):
 
     @mock.patch.object(subprocess, "run")
     def test_fetch_cl_info_determines_chromium_owner_is_googler(
-        self, mock_subprocess_run
-    ):
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         mock_run_return_value = mock.MagicMock()
         mock_run_return_value.stdout = json.dumps(
             [
@@ -186,7 +190,7 @@ class Test(test_helpers.TempDirTestCase):
         mock_cl_info: dict[
             cros_cls.ChangeListURL, llvm_next_py_autoupdate.GerritCLInfo
         ],
-    ):
+    ) -> Iterator[mock.MagicMock]:
         """Mocks `fetch_cl_info` to return `mock_cl_info` entries."""
 
         def fetch_cl_info_side_effect(
@@ -203,7 +207,7 @@ class Test(test_helpers.TempDirTestCase):
             mock_fetch_cl_info.side_effect = fetch_cl_info_side_effect
             yield mock_fetch_cl_info
 
-    def test_update_empty_urls(self):
+    def test_update_empty_urls(self) -> None:
         with self.mock_fetch_cl_info(mock_cl_info={}):
             self.assertIsNone(
                 llvm_next_py_autoupdate.update_testing_url_list(
@@ -211,7 +215,7 @@ class Test(test_helpers.TempDirTestCase):
                 )
             )
 
-    def test_merged_cl_is_removed_by_update(self):
+    def test_merged_cl_is_removed_by_update(self) -> None:
         mock_cl_info = {
             ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
                 is_abandoned_or_merged=True,
@@ -220,23 +224,24 @@ class Test(test_helpers.TempDirTestCase):
             )
         }
         with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
-            (
-                messages,
-                new_list,
-            ) = llvm_next_py_autoupdate.update_testing_url_list(
+            update_result = llvm_next_py_autoupdate.update_testing_url_list(
                 self.empty_toolchain_owners(), [str(ARBITRARY_CL_URL)]
             )
+            assert update_result is not None
+            messages, new_list = update_result
             mocked_fetch.assert_called_once()
-
         self.assertEqual(new_list, [])
         self.assertNotEqual(messages, "")
 
-    def test_update_is_nop_if_no_CLs_changed(self):
+    def test_update_is_nop_if_no_CLs_changed(self) -> None:
+        patch_set = ARBITRARY_CL_URL.patch_set
+        # Placate mypy.
+        assert patch_set is not None
         mock_cl_info = {
             ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
                 is_abandoned_or_merged=False,
                 is_uploader_a_googler=True,
-                most_recent_patch_set=ARBITRARY_CL_URL.patch_set,
+                most_recent_patch_set=patch_set,
             ),
         }
         with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
@@ -247,8 +252,11 @@ class Test(test_helpers.TempDirTestCase):
             )
             mocked_fetch.assert_called_once()
 
-    def test_update_happens_if_patch_set_changed(self):
-        new_patch_set = ARBITRARY_CL_URL.patch_set + 1
+    def test_update_happens_if_patch_set_changed(self) -> None:
+        patch_set = ARBITRARY_CL_URL.patch_set
+        # Placate mypy.
+        assert patch_set is not None
+        new_patch_set = patch_set + 1
         mock_cl_info = {
             ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
                 is_abandoned_or_merged=False,
@@ -257,12 +265,11 @@ class Test(test_helpers.TempDirTestCase):
             ),
         }
         with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
-            (
-                messages,
-                new_list,
-            ) = llvm_next_py_autoupdate.update_testing_url_list(
+            update_result = llvm_next_py_autoupdate.update_testing_url_list(
                 self.empty_toolchain_owners(), [str(ARBITRARY_CL_URL)]
             )
+            assert update_result is not None
+            messages, new_list = update_result
             mocked_fetch.assert_called_once()
 
         self.assertEqual(
@@ -278,8 +285,11 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertNotEqual(messages, "")
 
-    def test_update_skipped_if_patch_set_changed_by_non_googler(self):
-        new_patch_set = ARBITRARY_CL_URL.patch_set + 1
+    def test_update_skipped_if_patch_set_changed_by_non_googler(self) -> None:
+        patch_set = ARBITRARY_CL_URL.patch_set
+        # Placate mypy.
+        assert patch_set is not None
+        new_patch_set = patch_set + 1
         mock_cl_info = {
             ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
                 is_abandoned_or_merged=False,
@@ -297,7 +307,7 @@ class Test(test_helpers.TempDirTestCase):
 
     def assert_only_call_is_cros_format(
         self, mock_subprocess_run: mock.MagicMock
-    ):
+    ) -> None:
         mock_subprocess_run.assert_called_once()
         self.assertEqual(
             mock_subprocess_run.call_args[0][0][:2],
@@ -305,7 +315,9 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_updating_empty_cl_list(self, mock_subprocess_run):
+    def test_updating_empty_cl_list(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         llvm_next_py = self.make_tempdir() / "llvm_next.py"
         llvm_next_py.write_text(
             textwrap.dedent(
@@ -338,7 +350,9 @@ class Test(test_helpers.TempDirTestCase):
         self.assert_only_call_is_cros_format(mock_subprocess_run)
 
     @mock.patch.object(subprocess, "run")
-    def test_updating_cl_list_to_be_empty(self, mock_subprocess_run):
+    def test_updating_cl_list_to_be_empty(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         llvm_next_py = self.make_tempdir() / "llvm_next.py"
         llvm_next_py.write_text(
             textwrap.dedent(
@@ -373,7 +387,9 @@ class Test(test_helpers.TempDirTestCase):
         self.assert_only_call_is_cros_format(mock_subprocess_run)
 
     @mock.patch.object(subprocess, "run")
-    def test_same_line_cl_paren_works(self, mock_subprocess_run):
+    def test_same_line_cl_paren_works(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
         llvm_next_py = self.make_tempdir() / "llvm_next.py"
         llvm_next_py.write_text(
             textwrap.dedent(
@@ -404,7 +420,7 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assert_only_call_is_cros_format(mock_subprocess_run)
 
-    def test_owners_file_parsing_functions(self):
+    def test_owners_file_parsing_functions(self) -> None:
         contents = textwrap.dedent(
             """\
             foo@chromium.org
@@ -414,7 +430,7 @@ class Test(test_helpers.TempDirTestCase):
         owners = llvm_next_py_autoupdate.parse_direct_owners_from_file(contents)
         self.assertEqual(owners, ["foo@chromium.org", "bar@google.com"])
 
-    def test_owners_file_parsing_ignores_exciting_patterns(self):
+    def test_owners_file_parsing_ignores_exciting_patterns(self) -> None:
         contents = textwrap.dedent(
             """\
             # Some commentary

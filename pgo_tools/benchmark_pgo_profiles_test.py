@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -14,7 +13,7 @@ from pgo_tools import benchmark_pgo_profiles
 class Test(unittest.TestCase):
     """Tests for benchmark_pgo_profiles."""
 
-    def test_run_data_parsing_succeeds(self):
+    def test_run_data_parsing_succeeds(self) -> None:
         run_data = benchmark_pgo_profiles.RunData.from_json(
             "foo",
             io.StringIO(
@@ -40,7 +39,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_special_profile_parsing_succeeds(self):
+    def test_special_profile_parsing_succeeds(self) -> None:
         for profile in benchmark_pgo_profiles.SpecialProfile:
             self.assertIs(
                 profile, benchmark_pgo_profiles.parse_profile_path(str(profile))

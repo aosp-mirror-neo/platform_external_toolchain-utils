@@ -29,12 +29,14 @@ def mock_run_results(returncode: int, stderr: bytes) -> mock.MagicMock:
 class TestGetLLVMHash(test_helpers.TempDirTestCase):
     """The LLVMHash test class."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         # We mock out quite a bit. Ensure every test is self-contained.
         get_llvm_hash.GetLLVMMajorVersion.cache_clear()
 
     @mock.patch.object(subprocess, "run")
-    def testCloneRepoSucceedsWhenGitSucceeds(self, run_mock):
+    def testCloneRepoSucceedsWhenGitSucceeds(
+        self, run_mock: mock.MagicMock
+    ) -> None:
         run_mock.return_value = mock_run_results(returncode=0, stderr=b"")
         llvm_hash = get_llvm_hash.LLVMHash()
 
@@ -47,7 +49,7 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def testCloneRepoFailsWhenGitFails(self, run_mock):
+    def testCloneRepoFailsWhenGitFails(self, run_mock: mock.MagicMock) -> None:
         run_mock.return_value = mock_run_results(
             returncode=1, stderr=b"some stderr"
         )
@@ -56,7 +58,7 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
             get_llvm_hash.LLVMHash().CloneLLVMRepo("/tmp/tmp1")
 
     @mock.patch.object(get_llvm_hash, "GetGitHashFrom")
-    def testGetGitHashWorks(self, mock_get_git_hash):
+    def testGetGitHashWorks(self, mock_get_git_hash: mock.MagicMock) -> None:
         mock_get_git_hash.return_value = "a13testhash2"
 
         self.assertEqual(
@@ -68,8 +70,10 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
     @mock.patch.object(get_llvm_hash.LLVMHash, "GetLLVMHash")
     @mock.patch.object(get_llvm_hash, "GetGoogle3LLVMVersion")
     def testReturnGoogle3LLVMHash(
-        self, mock_google3_llvm_version, mock_get_llvm_hash
-    ):
+        self,
+        mock_google3_llvm_version: mock.MagicMock,
+        mock_get_llvm_hash: mock.MagicMock,
+    ) -> None:
         mock_get_llvm_hash.return_value = "a13testhash3"
         mock_google3_llvm_version.return_value = 1000
         self.assertEqual(
@@ -80,8 +84,10 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
     @mock.patch.object(get_llvm_hash.LLVMHash, "GetLLVMHash")
     @mock.patch.object(get_llvm_hash, "GetGoogle3LLVMVersion")
     def testReturnGoogle3UnstableLLVMHash(
-        self, mock_google3_llvm_version, mock_get_llvm_hash
-    ):
+        self,
+        mock_google3_llvm_version: mock.MagicMock,
+        mock_get_llvm_hash: mock.MagicMock,
+    ) -> None:
         mock_get_llvm_hash.return_value = "a13testhash3"
         mock_google3_llvm_version.return_value = 1000
         self.assertEqual(
@@ -91,14 +97,16 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
         mock_get_llvm_hash.assert_called_once_with(1000)
 
     @mock.patch.object(subprocess, "check_output")
-    def testSuccessfullyGetGitHashFromToTOfLLVM(self, mock_check_output):
+    def testSuccessfullyGetGitHashFromToTOfLLVM(
+        self, mock_check_output: mock.MagicMock
+    ) -> None:
         mock_check_output.return_value = "a123testhash1 path/to/main\n"
         self.assertEqual(
             get_llvm_hash.LLVMHash().GetTopOfTrunkGitHash(), "a123testhash1"
         )
         mock_check_output.assert_called_once()
 
-    def testParseLLVMMajorVersion(self):
+    def testParseLLVMMajorVersion(self) -> None:
         cmakelist_42 = (
             "set(CMAKE_BUILD_WITH_INSTALL_NAME_DIR ON)\n"
             "if(NOT DEFINED LLVM_VERSION_MAJOR)\n"
@@ -109,7 +117,7 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
             get_llvm_hash.ParseLLVMMajorVersion(cmakelist_42), "42"
         )
 
-    def testParseLLVMMajorVersionInvalid(self):
+    def testParseLLVMMajorVersionInvalid(self) -> None:
         invalid_cmakelist = "invalid cmakelist.txt contents"
         self.assertIsNone(
             get_llvm_hash.ParseLLVMMajorVersion(invalid_cmakelist)
@@ -119,9 +127,9 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
     @mock.patch.object(git_utils, "maybe_show_file_at_commit")
     def testGetLLVMMajorVersionWithOldPath(
         self,
-        mock_show_file_at_commit,
-        mock_get_up_to_date_repo,
-    ):
+        mock_show_file_at_commit: mock.MagicMock,
+        mock_get_up_to_date_repo: mock.MagicMock,
+    ) -> None:
         src_dir = self.make_tempdir()
         mock_get_up_to_date_repo.return_value = get_llvm_hash.ReadOnlyLLVMRepo(
             path=src_dir,
@@ -148,9 +156,9 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
     @mock.patch.object(git_utils, "maybe_show_file_at_commit")
     def testGetLLVMMajorVersionWithNewPath(
         self,
-        mock_show_file_at_commit,
-        mock_get_up_to_date_repo,
-    ):
+        mock_show_file_at_commit: mock.MagicMock,
+        mock_get_up_to_date_repo: mock.MagicMock,
+    ) -> None:
         src_dir = self.make_tempdir()
         mock_get_up_to_date_repo.return_value = get_llvm_hash.ReadOnlyLLVMRepo(
             path=src_dir,
@@ -182,7 +190,7 @@ class TestGetLLVMHash(test_helpers.TempDirTestCase):
         mock_show_file_at_commit.side_effect = show_file_at_commit
         self.assertEqual(get_llvm_hash.GetLLVMMajorVersion(), "12345")
 
-    def testGetLLVMNextHash(self):
+    def testGetLLVMNextHash(self) -> None:
         self.assertEqual(
             get_llvm_hash.LLVMHash().GetCrOSLLVMNextHash(),
             llvm_next.LLVM_NEXT_HASH,

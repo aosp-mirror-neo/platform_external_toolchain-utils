@@ -129,13 +129,13 @@ def is_in_chroot() -> bool:
     return Path("/etc/cros_chroot_version").exists()
 
 
-def exit_if_not_in_chroot():
+def exit_if_not_in_chroot() -> None:
     """Calls sys.exit if this script was not run inside of the chroot."""
     if not is_in_chroot():
         sys.exit("Run me inside of the chroot.")
 
 
-def exit_if_in_chroot():
+def exit_if_in_chroot() -> None:
     """Calls sys.exit if this script was run inside of the chroot."""
     if is_in_chroot():
         sys.exit("Run me outside of the chroot.")

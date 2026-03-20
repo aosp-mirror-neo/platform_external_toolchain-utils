@@ -18,7 +18,9 @@ class Test(unittest.TestCase):
     """Tests for fetch_all_subtest_logs."""
 
     @mock.patch.object(subprocess, "run")
-    def test_log_downloading_doesnt_crash(self, subprocess_run_mock):
+    def test_log_downloading_doesnt_crash(
+        self, subprocess_run_mock: mock.MagicMock
+    ) -> None:
         main.download_gs_logs_to(
             Path("/path/does/not/exist"), gs_logs=["gs://foo", "gs://bar"]
         )
@@ -26,8 +28,8 @@ class Test(unittest.TestCase):
 
     @mock.patch.object(main, "get_bb_json_output")
     def test_find_cros_test_platform_raises_if_none_found(
-        self, get_bb_json_output_mock
-    ):
+        self, get_bb_json_output_mock: mock.MagicMock
+    ) -> None:
         get_bb_json_output_mock.return_value = {"steps": []}
         with self.assertRaisesRegex(ValueError, "No `check test results`.*"):
             main.find_cros_test_platform_child_of_cq_orchestrator(
@@ -35,7 +37,9 @@ class Test(unittest.TestCase):
             )
 
     @mock.patch.object(main, "get_bb_json_output")
-    def test_find_cros_test_platform_works(self, get_bb_json_output_mock):
+    def test_find_cros_test_platform_works(
+        self, get_bb_json_output_mock: mock.MagicMock
+    ) -> None:
         summary_md = "[foo](https://cr-buildbucket.appspot.com/build/123)"
         get_bb_json_output_mock.return_value = {
             "steps": [
@@ -53,11 +57,11 @@ class Test(unittest.TestCase):
         )
         self.assertEqual(result, 123)
 
-    def test_gs_link_finding_fails_if_none_found(self):
+    def test_gs_link_finding_fails_if_none_found(self) -> None:
         with self.assertRaisesRegex(ValueError, "No gs_urls.*"):
             main.find_gs_links_in_test_log({})
 
-    def test_gs_link_finding_finds_links(self):
+    def test_gs_link_finding_finds_links(self) -> None:
         results = main.find_gs_links_in_test_log(
             {
                 "suite-name-1": [

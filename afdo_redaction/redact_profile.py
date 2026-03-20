@@ -26,12 +26,13 @@ to stdout. A summary of what the script actually did is printed to stderr.
 import collections
 import re
 import sys
+from typing import Generator, IO, Iterable
 
 
 DEFAULT_DEDUP_MAX_REPEATS = 100
 
 
-def _count_samples(samples):
+def _count_samples(samples: Iterable[str]) -> tuple[int, int]:
     """Count the total number of samples in a function."""
     line_re = re.compile(r"^(\s*)\d+(?:\.\d+)?: (\d+)\s*$")
 
@@ -85,7 +86,7 @@ ProfileRecord = collections.namedtuple(
 )
 
 
-def _normalize_samples(samples):
+def _normalize_samples(samples: Iterable[str]) -> tuple[str, ...]:
     """Normalizes the samples in the given function body.
 
     Normalization just means that we redact inlined function names. This is
@@ -122,13 +123,15 @@ def _normalize_samples(samples):
     return tuple(result)
 
 
-def _read_textual_afdo_profile(stream):
+def _read_textual_afdo_profile(
+    stream: Iterable[str],
+) -> Generator[ProfileRecord, None, None]:
     """Parses an AFDO profile from a line stream into ProfileRecords."""
     # ProfileRecords are actually nested, due to inlining. For the purpose of
     # this script, that doesn't matter.
     lines = (line.rstrip() for line in stream)
     function_line = None
-    samples = []
+    samples: list[str] = []
     for line in lines:
         if not line:
             continue
@@ -162,8 +165,10 @@ def _read_textual_afdo_profile(stream):
 # Non-nm based approaches are superior because they don't require any prior
 # build artifacts; just an AFDO profile.
 def dedup_records(
-    profile_records, summary_file, max_repeats=DEFAULT_DEDUP_MAX_REPEATS
-):
+    profile_records: Iterable[ProfileRecord],
+    summary_file: IO,
+    max_repeats: int = DEFAULT_DEDUP_MAX_REPEATS,
+) -> Generator[ProfileRecord, None, None]:
     """Removes heavily duplicated records from profile_records.
 
     profile_records is expected to be an iterable of ProfileRecord.
@@ -229,7 +234,11 @@ def dedup_records(
     )
 
 
-def run(profile_input_file, summary_output_file, profile_output_file):
+def run(
+    profile_input_file: Iterable[str],
+    summary_output_file: IO,
+    profile_output_file: IO,
+) -> None:
     profile_records = _read_textual_afdo_profile(profile_input_file)
 
     # Sort this so we get deterministic output. AFDO doesn't care what order
@@ -243,7 +252,7 @@ def run(profile_input_file, summary_output_file, profile_output_file):
         print("\n".join(samples), file=profile_output_file)
 
 
-def main():
+def main() -> None:
     run(
         profile_input_file=sys.stdin,
         summary_output_file=sys.stderr,

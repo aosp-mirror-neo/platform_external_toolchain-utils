@@ -34,7 +34,7 @@ DEFAULT_CHROOT_TMPDIR_IN_OUT = Path("tmp")
 # very cheap & the results should never change in production.
 
 
-@functools.lru_cache(1)
+@functools.cache
 def _script_path() -> Path:
     return Path(__file__).resolve()
 
@@ -44,7 +44,7 @@ def script_toolchain_utils_root() -> Path:
     return _script_path().parent.parent
 
 
-@functools.lru_cache(1)
+@functools.cache
 def script_chromiumos_checkout() -> Path | None:
     """Returns the absolute path to the CrOS checkout this script resides in.
 

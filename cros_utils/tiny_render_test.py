@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 # Copyright 2020 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -19,8 +17,8 @@ from cros_utils import tiny_render
 class Test(unittest.TestCase):
     """Tests for tiny_render."""
 
-    def test_bold(self):
-        pieces = [
+    def test_bold(self) -> None:
+        pieces: list[tiny_render.Piece] = [
             tiny_render.Bold("hello"),
             ", ",
             tiny_render.Bold(["world", "!"]),
@@ -36,8 +34,8 @@ class Test(unittest.TestCase):
             "<b>hello</b>, <b>world!</b>",
         )
 
-    def test_line_break(self):
-        pieces = [
+    def test_line_break(self) -> None:
+        pieces: list[tiny_render.Piece] = [
             "hello",
             tiny_render.line_break,
             ["world", "!"],
@@ -53,8 +51,8 @@ class Test(unittest.TestCase):
             "hello<br />\nworld!",
         )
 
-    def test_linkification(self):
-        pieces = [
+    def test_linkification(self) -> None:
+        pieces: list[tiny_render.Piece] = [
             "hello ",
             tiny_render.Link(href="https://google.com", inner="world!"),
         ]
@@ -69,8 +67,8 @@ class Test(unittest.TestCase):
             'hello <a href="https://google.com">world!</a>',
         )
 
-    def test_unordered_list(self):
-        pieces = [
+    def test_unordered_list(self) -> None:
+        pieces: list[tiny_render.Piece] = [
             "hello:",
             tiny_render.UnorderedList(
                 [
@@ -104,8 +102,8 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_nested_unordered_list(self):
-        pieces = [
+    def test_nested_unordered_list(self) -> None:
+        pieces: list[tiny_render.Piece] = [
             "hello:",
             tiny_render.UnorderedList(
                 [
@@ -146,13 +144,16 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_switch(self):
-        pieces = ["hello ", tiny_render.Switch(text="text", html="html")]
+    def test_switch(self) -> None:
+        pieces: list[tiny_render.Piece] = [
+            "hello ",
+            tiny_render.Switch(text="text", html="html"),
+        ]
         self.assertEqual(tiny_render.render_text_pieces(pieces), "hello text")
         self.assertEqual(tiny_render.render_html_pieces(pieces), "hello html")
 
-    def test_golden(self):
-        pieces = [
+    def test_golden(self) -> None:
+        pieces: list[tiny_render.Piece] = [
             "hello",
             tiny_render.UnorderedList(
                 [

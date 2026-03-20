@@ -17,7 +17,7 @@ def get_svn_revision():
 class Test(test_helpers.TempDirTestCase):
     """Tests for clean_up_old_llvm_patches"""
 
-    def test_android_version_autodetection(self):
+    def test_android_version_autodetection(self) -> None:
         android_root = self.make_tempdir()
         android_version_py = (
             android_root
@@ -37,7 +37,7 @@ class Test(test_helpers.TempDirTestCase):
             654321,
         )
 
-    def test_chromeos_version_autodetection(self):
+    def test_chromeos_version_autodetection(self) -> None:
         chromiumos_overlay = self.make_tempdir()
         llvm = chromiumos_overlay / "sys-devel" / "llvm"
         llvm.mkdir(parents=True)

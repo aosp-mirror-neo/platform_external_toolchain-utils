@@ -4,20 +4,19 @@
 
 """Helper functions for unit testing."""
 
-import contextlib
 import inspect
 import json
-import os
 from pathlib import Path
 import shutil
 import tempfile
+from typing import Any, Callable, IO
 import unittest
 
 
 class ArgsOutputTest:
     """Testing class to simulate a argument parser object."""
 
-    def __init__(self, svn_option="google3"):
+    def __init__(self, svn_option: str = "google3"):
         self.chromeos_path = "/abs/path/to/chroot"
         self.last_tested = "/abs/path/to/last_tested_file.json"
         self.llvm_version = svn_option
@@ -27,7 +26,9 @@ class ArgsOutputTest:
 
 
 # FIXME: Migrate modules with similar helper to use this module.
-def CallCountsToMockFunctions(mock_function):
+def CallCountsToMockFunctions(
+    mock_function: Callable[..., Any],
+) -> Callable[..., Any]:
     """A decorator that passes a call count to the function it decorates.
 
     Examples:
@@ -42,7 +43,7 @@ def CallCountsToMockFunctions(mock_function):
 
     counter = [0]
 
-    def Result(*args, **kwargs):
+    def Result(*args: Any, **kwargs: Any) -> Any:
         # For some values of `counter`, the mock function would simulate
         # raising an exception, so let the test case catch the exception via
         # `unittest.TestCase.assertRaises()` and to also handle recursive
@@ -57,37 +58,15 @@ def CallCountsToMockFunctions(mock_function):
     return Result
 
 
-def WritePrettyJsonFile(file_name, json_object):
-    """Writes the contents of the file to the json object.
+def WritePrettyJsonFile(data: Any, json_file: IO[str]) -> None:
+    """Writes a JSON object to a file.
 
     Args:
-        file_name: The file that has contents to be used for the json object.
-        json_object: The json object to write to.
+        data: The JSON object to write.
+        json_file: The file to write to.
     """
 
-    json.dump(file_name, json_object, indent=4, separators=(",", ": "))
-
-
-def CreateTemporaryJsonFile():
-    """Makes a temporary .json file."""
-
-    return CreateTemporaryFile(suffix=".json")
-
-
-@contextlib.contextmanager
-def CreateTemporaryFile(suffix=""):
-    """Makes a temporary file."""
-
-    fd, temp_file_path = tempfile.mkstemp(suffix=suffix)
-
-    os.close(fd)
-
-    try:
-        yield temp_file_path
-
-    finally:
-        if os.path.isfile(temp_file_path):
-            os.remove(temp_file_path)
+    json.dump(data, json_file, indent=4, separators=(",", ": "))
 
 
 class TempDirTestCase(unittest.TestCase):

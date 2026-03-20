@@ -14,6 +14,8 @@ from typing import Any
 from cros_utils import gs
 
 
+# Android > Android OS & Apps > Toolchain > LLVM
+INTERNAL_ANDROID_COMPONENT = 117395
 # ChromeOS > Infra > Toolchain
 INTERNAL_CROSTC_COMPONENT = 1034879
 
@@ -55,13 +57,13 @@ class _FileNameGenerator:
     # we add to it in `generate_json_file_name`.
     _ENTROPY_STR_SIZE = len(str(2 * _MAX_OS_ENTROPY_VALUE))
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self._entropy = int.from_bytes(
             os.getrandom(self._RANDOM_BYTES), byteorder="little", signed=False
         )
 
-    def generate_json_file_name(self, now: datetime.datetime):
+    def generate_json_file_name(self, now: datetime.datetime) -> str:
         with self._lock:
             my_entropy = self._entropy
             self._entropy += 1
@@ -79,7 +81,7 @@ def _WriteBugJSONFile(
     object_type: str,
     json_object: dict[str, Any],
     local_directory: os.PathLike | str | None,
-):
+) -> str:
     """Writes a JSON file to `directory` with the given bug-ish object.
 
     Args:
@@ -119,7 +121,7 @@ def _WriteBugJSONFile(
 
 def AppendToExistingBug(
     bug_id: int, body: str, local_directory: os.PathLike | None = None
-):
+) -> None:
     """Sends a reply to an existing bug."""
     _WriteBugJSONFile(
         "AppendToExistingBugRequest",
@@ -139,7 +141,7 @@ def CreateNewBug(
     cc: list[str] | None = None,
     local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
-):
+) -> None:
     """Sends a request to create a new bug.
 
     Args:
@@ -181,7 +183,7 @@ def SendCronjobLog(
     turndown_time_hours: int = 0,
     local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
-):
+) -> None:
     """Sends the record of a cronjob to our bug infra.
 
     Args:
@@ -212,3 +214,30 @@ def SendCronjobLog(
         json_object["parent_bug"] = parent_bug
 
     _WriteBugJSONFile("CronjobUpdate", json_object, local_directory)
+
+
+def format_bug(
+    title: str,
+    body: str,
+    component: int,
+    parent: int,
+    assignee: str | None = None,
+    priority: int = 2,
+    severity: int = 2,
+) -> str:
+    """Turns args into a `bugged`-compatible bug report."""
+    bug_pieces = [title, "\n\n", body, "\n\n"]
+    metadata = [
+        ("COMPONENT", str(component)),
+        ("TYPE", "INTERNAL_CLEANUP"),
+        ("PRIORITY", f"P{priority}"),
+        ("SEVERITY", f"S{severity}"),
+    ]
+
+    if assignee:
+        metadata.append(("ASSIGNEE", assignee))
+
+    bug_pieces.extend(f"{key}={val}\n" for key, val in metadata)
+    # PARENT does not support `=`, only `+=` and `-=`. Handle that here.
+    bug_pieces.append(f"PARENT+={parent}\n")
+    return "".join(bug_pieces)

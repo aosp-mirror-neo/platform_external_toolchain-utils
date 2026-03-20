@@ -18,7 +18,7 @@ from llvm_tools import check_clang_diags
 class Test(unittest.TestCase):
     """Test class."""
 
-    def test_process_new_diagnostics_ignores_new_tools(self):
+    def test_process_new_diagnostics_ignores_new_tools(self) -> None:
         new_state, new_diags = check_clang_diags._process_new_diagnostics(
             old={},
             new={"clang": ["-Wone", "-Wtwo"]},
@@ -26,7 +26,7 @@ class Test(unittest.TestCase):
         self.assertEqual(new_state, {"clang": ["-Wone", "-Wtwo"]})
         self.assertEqual(new_diags, {})
 
-    def test_process_new_diagnostics_is_a_nop_when_no_changes(self):
+    def test_process_new_diagnostics_is_a_nop_when_no_changes(self) -> None:
         new_state, new_diags = check_clang_diags._process_new_diagnostics(
             old={"clang": ["-Wone", "-Wtwo"]},
             new={"clang": ["-Wone", "-Wtwo"]},
@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
         self.assertEqual(new_state, {"clang": ["-Wone", "-Wtwo"]})
         self.assertEqual(new_diags, {})
 
-    def test_process_new_diagnostics_ignores_removals_and_readds(self):
+    def test_process_new_diagnostics_ignores_removals_and_readds(self) -> None:
         new_state, new_diags = check_clang_diags._process_new_diagnostics(
             old={"clang": ["-Wone", "-Wtwo"]},
             new={"clang": ["-Wone"]},
@@ -47,7 +47,9 @@ class Test(unittest.TestCase):
         self.assertEqual(new_state, {"clang": ["-Wone", "-Wtwo"]})
         self.assertEqual(new_diags, {})
 
-    def test_process_new_diagnostics_complains_when_warnings_are_added(self):
+    def test_process_new_diagnostics_complains_when_warnings_are_added(
+        self,
+    ) -> None:
         new_state, new_diags = check_clang_diags._process_new_diagnostics(
             old={"clang": ["-Wone"]},
             new={"clang": ["-Wone", "-Wtwo"]},
@@ -56,7 +58,9 @@ class Test(unittest.TestCase):
         self.assertEqual(new_diags, {"clang": ["-Wtwo"]})
 
     @mock.patch.object(bugs, "CreateNewBug")
-    def test_bugs_are_created_as_expected(self, create_new_bug_mock):
+    def test_bugs_are_created_as_expected(
+        self, create_new_bug_mock: mock.MagicMock
+    ) -> None:
         check_clang_diags._file_bugs_for_new_diags(
             {
                 "clang": ["-Wone"],

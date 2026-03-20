@@ -22,7 +22,7 @@ class Test(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tempdir)
         return Path(tempdir)
 
-    def test_sha_state_file_handles_file_not_existing(self):
+    def test_sha_state_file_handles_file_not_existing(self) -> None:
         tempdir = self.make_tempdir()
         self.assertIsNone(
             update_packages_and_run_tests.read_last_tried_sha(
@@ -30,7 +30,7 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_sha_state_file_round_trips(self):
+    def test_sha_state_file_round_trips(self) -> None:
         tempdir = self.make_tempdir()
         state_file = tempdir / "state.json"
         sha = "a" * 40
@@ -40,7 +40,9 @@ class Test(unittest.TestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_gerrit_cq_dry_run_runs_correct_gerrit_commands(self, mock_run):
+    def test_gerrit_cq_dry_run_runs_correct_gerrit_commands(
+        self, mock_run: mock.Mock
+    ) -> None:
         chromeos_tree = self.make_tempdir()
         update_packages_and_run_tests.cq_dry_run_cls(
             chromeos_tree,
@@ -65,8 +67,8 @@ class Test(unittest.TestCase):
 
     @mock.patch.object(subprocess, "run")
     def test_gerrit_cq_dry_run_only_runs_one_command_if_necessary(
-        self, mock_run
-    ):
+        self, mock_run: mock.Mock
+    ) -> None:
         chromeos_tree = self.make_tempdir()
         update_packages_and_run_tests.cq_dry_run_cls(
             chromeos_tree,

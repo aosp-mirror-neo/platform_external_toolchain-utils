@@ -42,7 +42,7 @@ def remove_old_patches(toolchain_utils: Path, min_revision: int) -> bool:
     return True
 
 
-def commit_changes(cros_overlay: Path, min_rev: int):
+def commit_changes(cros_overlay: Path, min_rev: int) -> None:
     commit_msg = textwrap.dedent(
         f"""
         llvm: remove old patches

@@ -89,7 +89,7 @@ def update_package_provided_file(
     return True
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     """Main entry point."""
     cros_checkout = cros_paths.script_chromiumos_checkout_or_exit()
 

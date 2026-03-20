@@ -75,14 +75,14 @@ def find_reverts(branch: str) -> list[Revert]:
     return [Revert.from_dict(d) for d in json.loads(reverts)]
 
 
-def write_reverts_as_csv(write_to: TextIO, reverts: list[Revert]):
+def write_reverts_as_csv(write_to: TextIO, reverts: list[Revert]) -> None:
     writer = csv.writer(write_to, quoting=csv.QUOTE_ALL)
     # Write the header.
     writer.writerow(("Status", "URI", "Subject", "Notes"))
     writer.writerows((x.status, x.url, x.subject) for x in reverts)
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

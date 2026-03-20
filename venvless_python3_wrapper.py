@@ -22,7 +22,7 @@ import typing
 from typing import Callable
 
 
-def find_file_to_execute(argv0: str) -> Path:
+def find_file_to_execute(argv0: str) -> tuple[Path, Path]:
     symlink_path = Path(os.getcwd(), argv0)
     symlink_parent = symlink_path.parent.resolve()
     me = (symlink_parent / symlink_path.name).resolve()
@@ -40,11 +40,84 @@ def find_file_to_execute(argv0: str) -> Path:
     result = toolchain_utils / target_script
     if not result.exists():
         sys.exit(f"No script found at {target_script} - can't execute")
-    return result
+    return result, toolchain_utils
+
+
+def check_imports(toolchain_utils_root: Path) -> None:
+    """Verifies that all loaded modules are either local or stdlib.
+
+    We need verification _on top of_ just checking "does the import work with
+    this wrapper?" since the system Python installation this is invoked against
+    may have globally-installed 3p packages like `requests`, `yaml`, etc. This
+    wrapper provides no real isolation from those.
+    """
+    # Identify obvious third-party locations.
+    # This is a heuristic, but "venvless" scripts are expected to be simple.
+    ignored_modules = (
+        # _distutils_hack is distributed with Python, so can be safely ignored.
+        "_distutils_hack",
+    )
+
+    all_stdlib_modules = sys.stdlib_module_names | set(sys.builtin_module_names)
+
+    violations = []
+    # NOTE: best practice recommended by Python's docs is to always take
+    # `tuple(sys.modules)` to avoid modifications while we iterate.
+    for module_name, module in tuple(sys.modules.items()):
+        if module_name in ignored_modules:
+            continue
+
+        # If this starts with a stdlib path name, assume it's OK. This can
+        # technically be evaded (e.g., by creating an `os.toolchain_utils` pip
+        # package, but the intent of this isn't to guard against pathological
+        # cases.
+        root_pkg = module_name.split(".")[0]
+        if root_pkg in all_stdlib_modules:
+            continue
+
+        if module_file := getattr(module, "__file__", None):
+            module_file_path = Path(module_file).resolve()
+            if module_file_path.is_relative_to(toolchain_utils_root):
+                continue
+
+            violations.append(
+                f"Module '{module_name}' is loaded from '{module_file_path}'"
+            )
+            continue
+
+        # If this module has __path__ and no __file__, it's a namespace package.
+        # Note that `__path__` is a list of relevant paths.
+        if module_paths := getattr(module, "__path__", None):
+            for module_path in module_paths:
+                module_file_path = Path(module_path).resolve()
+                if not module_file_path.is_relative_to(toolchain_utils_root):
+                    violations.append(
+                        f"Namespace package '{module_name}' is loaded from "
+                        f"'{module_paths}'"
+                    )
+                    break
+
+            continue
+
+        violations.append(
+            f"Package '{module_name}' has no load point, but "
+            "isn't from stdlib?"
+        )
+
+    if not violations:
+        return
+
+    violations.sort()
+    sys.exit(
+        "Error: The following modules appear to be third-party dependencies:\n"
+        + "\n".join(violations)
+        + "\n"
+        "Venvless scripts may only depend on the stlidb and toolchain-utils."
+    )
 
 
 def main() -> None:
-    main_file = find_file_to_execute(sys.argv[0])
+    main_file, toolchain_utils = find_file_to_execute(sys.argv[0])
     module_name = main_file.with_suffix("").name
     spec = importlib.util.spec_from_file_location(
         module_name,
@@ -58,6 +131,14 @@ def main() -> None:
     # None in previous versions of Python. Assert it's non-None to assuage it.
     assert spec.loader, f"Spec for {module_name} does not have a loader"
     spec.loader.exec_module(main_module)
+
+    if os.environ.get("CROSTC_TEST_MODULE_IMPORTS"):
+        print(
+            "CROSTC_TEST_MODULE_IMPORTS found in env; testing module imports..."
+        )
+        check_imports(toolchain_utils)
+        print("Module import tests passed.")
+        return
 
     # Provide less flexibility than our venv wrapper: main must be named `main`,
     # must take `sys.argv`, and must either return an int or None (both of which

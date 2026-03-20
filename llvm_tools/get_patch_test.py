@@ -4,10 +4,11 @@
 
 """Tests for get_patch."""
 
+from collections.abc import Generator
 import json
 from pathlib import Path
 import tempfile
-from typing import Any, Generator
+from typing import Any
 import unittest
 from unittest import mock
 
@@ -40,43 +41,43 @@ JSON_FIXTURE: list[dict[str, Any]] = [
 ]
 
 
-def _mock_get_commit_subj(_, sha: str) -> str:
+def _mock_get_commit_subj(_: object, sha: str) -> str:
     gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha
     )
     return next(gen)["subject"]
 
 
-def _mock_get_commit_author(_, sha: str) -> str:
+def _mock_get_commit_author(_: object, sha: str) -> str:
     gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha
     )
     return next(gen)["author"]
 
 
-def _mock_to_rev(sha: get_patch.LLVMGitRef, _) -> git_llvm_rev.Rev:
+def _mock_to_rev(sha: get_patch.LLVMGitRef, _: object) -> git_llvm_rev.Rev:
     gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["sha"] == sha.git_ref
     )
     return git_llvm_rev.Rev("main", next(gen)["rev"])
 
 
-def _mock_from_rev(_, rev: git_llvm_rev.Rev) -> get_patch.LLVMGitRef:
+def _mock_from_rev(_: object, rev: git_llvm_rev.Rev) -> get_patch.LLVMGitRef:
     gen: Generator[dict[str, Any], None, None] = (
         fixture for fixture in COMMIT_FIXTURES if fixture["rev"] == rev.number
     )
     return get_patch.LLVMGitRef(next(gen)["sha"])
 
 
-def _mock_git_format_patch(*_) -> str:
+def _mock_git_format_patch(*_: object, **__: object) -> str:
     return "[category] This is a fake commit fixture"
 
 
-def _mock_write_patch(*_) -> None:
-    return
+def _mock_write_patch(*_: object, **__: object) -> None:
+    pass
 
 
-def _mock_get_changed_packages(*_) -> set[Path]:
+def _mock_get_changed_packages(*_: object, **__: object) -> set[Path]:
     return {get_patch.LLVM_PKG_PATH}
 
 
@@ -115,7 +116,7 @@ class TestGetPatch(unittest.TestCase):
             self.workdir / get_patch.PATCH_METADATA_FILENAME
         )
 
-        def _cleanup_workdir():
+        def _cleanup_workdir() -> None:
             # We individually clean up these directories as a guarantee
             # we aren't creating any extraneous files. We don't want to
             # use shm.rmtree here because we don't want clean up any
@@ -147,7 +148,7 @@ class TestGetPatch(unittest.TestCase):
         """Test that bad cherrypick versions raises."""
         start_sha_fixture = COMMIT_FIXTURES[0]
 
-        def _try_make_patches():
+        def _try_make_patches() -> None:
             # This fixture is the same as the start_sha.
             self.ctx.make_patches(
                 get_patch.LLVMGitRef(start_sha_fixture["sha"])
@@ -221,7 +222,9 @@ class TestGetPatch(unittest.TestCase):
         }
         self._apply_patch_to_json_helper(fixture, expected_json_entry)
 
-    def _apply_patch_to_json_helper(self, fixture, expected_json_entry) -> None:
+    def _apply_patch_to_json_helper(
+        self, fixture: dict[str, Any], expected_json_entry: dict[str, Any]
+    ) -> None:
         # We manually write and delete this file because it must have the name
         # as specified by get_patch. tempfile cannot guarantee us this name.
         self.write_json_fixture()

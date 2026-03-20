@@ -117,6 +117,10 @@ def populate_wheels_subdir_with_pip(venv_dir: Path, wheel_dir: Path) -> None:
                 "-m",
                 "pip",
                 "download",
+                # Sometimes, local configuration may lead to fetching from other
+                # package repositories. We always want to use Python's default
+                # here.
+                "--index-url=https://pypi.org/simple/",
                 # Require binary downloads for all packages. That is, don't
                 # allow `tgz` packages that require build-time tools like
                 # `setuptools`, `cpython`, `wheel`, etc.
@@ -245,7 +249,9 @@ def generate_wheel_manifest(
     return WheelManifest(manifest_dict)
 
 
-def update_wheels_and_manifest(venv_dir: Path, upload: bool):
+def update_wheels_and_manifest(
+    venv_dir: Path, upload: bool, upload_certified: bool
+) -> None:
     wheel_dir = get_wheel_dir(venv_dir)
 
     # Always start fresh, since we'll generate the Manifest based on the files
@@ -268,11 +274,22 @@ def update_wheels_and_manifest(venv_dir: Path, upload: bool):
         new_manifest = generate_wheel_manifest(wheel_dir, pool)
 
     write_wheel_manifest(venv_dir, new_manifest)
-    if upload:
-        logging.info("Uploading wheels to gs://...")
-        upload_new_wheels_to_gs(wheel_dir)
-    else:
+    if not upload:
         logging.warning("--upload not specified; not uploading wheels")
+        return
+
+    # This could be checked way earlier, but by failing _after_ setting up the
+    # local wheel environment, the user can immediately start on
+    # go/crostc-venv-updates rather than having to amend their `--upload`
+    # command & try again.
+    if not upload_certified:
+        sys.exit(
+            "--i-have-verified-the-wheels not passed; upload aborted. Please "
+            "be sure to follow the steps at go/crostc-venv-updates."
+        )
+
+    logging.info("Uploading wheels to gs://...")
+    upload_new_wheels_to_gs(wheel_dir)
 
 
 def validate_one_wheel_file(
@@ -315,7 +332,7 @@ def validate_files_against_manifest(
     return [res for res in results if res]
 
 
-def ensure_downloaded(venv_dir: Path, clean: bool):
+def ensure_downloaded(venv_dir: Path, clean: bool) -> None:
     """Ensures that wheels/ contains all wheels in the wheel-manifest.
 
     Also verifies that hashes match the manifest; if not, the local files get
@@ -381,6 +398,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Upload any new wheels to gs://.",
     )
+    update_parser.add_argument(
+        "--i-have-verified-the-wheels",
+        dest="upload_certified",
+        action="store_true",
+        help="""
+        Pass this to certify that you've followed the verification steps at
+        go/crostc-venv-updates .
+        """,
+    )
 
     return parser.parse_args(argv)
 
@@ -399,7 +425,11 @@ def main(argv: list[str]) -> None:
     if opts.subcommand == "ensure-downloaded":
         ensure_downloaded(venv_dir, clean=opts.clean)
     elif opts.subcommand == "update-wheels-and-manifest":
-        update_wheels_and_manifest(venv_dir, upload=opts.upload)
+        update_wheels_and_manifest(
+            venv_dir,
+            upload=opts.upload,
+            upload_certified=opts.upload_certified,
+        )
     else:
         # This should be unreachable.
         raise ValueError(f"Unknown subcommand {opts.subcommand}")

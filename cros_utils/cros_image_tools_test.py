@@ -51,7 +51,9 @@ class Test(unittest.TestCase):
     """Tests for cros_image_tools."""
 
     @mock.patch.object(subprocess, "run")
-    def test_find_root_partition_identifies_the_right_partition(self, run_mock):
+    def test_find_root_partition_identifies_the_right_partition(
+        self, run_mock: mock.MagicMock
+    ) -> None:
         run_mock_return = mock.Mock()
         run_mock_return.stdout = _EXAMPLE_FDISK_OUTPUT
         run_mock.return_value = run_mock_return

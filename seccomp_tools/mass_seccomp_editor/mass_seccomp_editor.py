@@ -35,7 +35,7 @@ class Policies:
         return {**self.__dict__}
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     """Run the program from cmd line"""
     args = parse_args(argv)
     if all(x is None for x in [args.all, args.b64, args.b32, args.none]):
@@ -125,7 +125,9 @@ def _make_syscall_lookup_table(args: Any) -> dict[str, list[str]]:
     return syscall_lookup_table
 
 
-def _confirm_add(fp: str, syscalls: Iterable[str], noninteractive=None):
+def _confirm_add(
+    fp: str, syscalls: Iterable[str], noninteractive: bool | None = None
+) -> None:
     """Interactive confirmation check you wish to add a syscall.
 
     Args:
@@ -160,7 +162,7 @@ def check_missing_syscalls(syscalls: list[str], fp: str) -> set[str] | None:
     return missing_syscalls
 
 
-def _update_seccomp(fp: str, missing_syscalls: list[str]):
+def _update_seccomp(fp: str, missing_syscalls: list[str]) -> None:
     """Update the seccomp of the file based on the seccomp change type."""
     with open(fp, "a", encoding="utf-8") as f:
         sorted_syscalls = sorted(missing_syscalls)
@@ -168,7 +170,7 @@ def _update_seccomp(fp: str, missing_syscalls: list[str]):
             f.write(to_write + ": 1\n")
 
 
-def _search_cmd(query: str, use_fd=True) -> list[str]:
+def _search_cmd(query: str, use_fd: bool = True) -> list[str]:
     if use_fd and shutil.which("fdfind") is not None:
         return [
             "fdfind",

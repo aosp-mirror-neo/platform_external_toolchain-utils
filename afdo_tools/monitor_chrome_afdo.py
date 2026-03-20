@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Iterable, Optional
+from typing import Iterable
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -131,7 +131,7 @@ class UpstreamChromeVersion:
     build: int
     patch: int
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.major}.{self.minor}.{self.build}.{self.patch}"
 
 
@@ -218,7 +218,7 @@ class ChromeGsProfile:
     @classmethod
     def from_full_name_if_new_enough(
         cls, last_modified: datetime.datetime, full_name: str
-    ) -> Optional["ChromeGsProfile"]:
+    ) -> "ChromeGsProfile | None":
         m = cls._FULL_NAME_RE.match(full_name)
         if not m:
             raise ValueError(f"{full_name!r} is not parseable as a profile")

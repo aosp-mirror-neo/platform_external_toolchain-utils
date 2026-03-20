@@ -102,7 +102,7 @@ class TestCreatePatchFile(unittest.TestCase):
     @staticmethod
     def _make_patch_entry(
         from_: int | None, until: int | None, title: str = "Some title"
-    ):
+    ) -> patch_utils.PatchEntry:
         return patch_utils.PatchEntry(
             workdir=Path(),
             metadata={
@@ -114,7 +114,7 @@ class TestCreatePatchFile(unittest.TestCase):
             version_range={"from": from_, "until": until},
         )
 
-    def test_find_new_patches_normal(self):
+    def test_find_new_patches_normal(self) -> None:
         """Test that we only find newer patches applied to a given branch."""
 
         llvm_rev = git_llvm_rev.Rev(git_llvm_rev.MAIN_BRANCH, 1234)
@@ -158,20 +158,20 @@ class TestCreatePatchFile(unittest.TestCase):
             new_patch_combos, branch_combos[-len(branch_version_ranges) :]
         )
 
-    def test_filter_change_id_1(self):
+    def test_filter_change_id_1(self) -> None:
         """Test filter_change_id."""
         filtered_fixture = create_patch_file.filter_change_id(COMMIT_FIXTURE_1)
         self.assertIn("Change-Id", COMMIT_FIXTURE_1)
         self.assertEqual(filtered_fixture, COMMIT_FIXTURE_1_CLEAN)
 
-    def test_filter_change_id_2(self):
+    def test_filter_change_id_2(self) -> None:
         """Test filter_change_id again."""
         fixture_line_count = COMMIT_FIXTURE_2.count("\n")
         filtered_fixture = create_patch_file.filter_change_id(COMMIT_FIXTURE_2)
         self.assertNotIn("Change-Id", filtered_fixture)
         self.assertEqual(fixture_line_count, filtered_fixture.count("\n") + 1)
 
-    def test_filter_change_id_universal(self):
+    def test_filter_change_id_universal(self) -> None:
         """Test filter_change_id again, but for universal diffs."""
         fixture_line_count = UNIVERSAL_DIFF_FIXTURE.count("\n")
         filtered_fixture = create_patch_file.filter_change_id(

@@ -81,7 +81,7 @@ class EbuildVersion:
             return self
         return dataclasses.replace(self, rev=0)
 
-    def __str__(self):
+    def __str__(self) -> str:
         result = f"{self.major}.{self.minor}.{self.patch}"
         if self.rev:
             result += f"-r{self.rev}"
@@ -305,7 +305,7 @@ def uprev_ebuild(ebuild: Path, version: EbuildVersion, dry_run: bool) -> Path:
 
 def update_ebuild_manifest_in_chroot(
     rust_bootstrap_ebuild: Path, chromiumos_checkout: Path
-):
+) -> None:
     cros_overlay = chromiumos_checkout / cros_paths.CHROMIUMOS_OVERLAY
     chroot_cros_overlay = (
         cros_paths.CHROOT_SOURCE_ROOT / cros_paths.CHROMIUMOS_OVERLAY
@@ -321,7 +321,7 @@ def update_ebuild_manifest_in_chroot(
     )
 
 
-def upload_changes(git_dir: Path):
+def upload_changes(git_dir: Path) -> None:
     logging.info("Uploading changes...")
     cl_ids = git_utils.upload_to_gerrit(
         git_repo=git_dir,
@@ -787,7 +787,7 @@ def maybe_delete_old_rust_bootstrap_ebuilds(
     return True
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     chroot.VerifyOutsideChroot()
 
     cros_checkout = cros_paths.script_chromiumos_checkout_or_exit()

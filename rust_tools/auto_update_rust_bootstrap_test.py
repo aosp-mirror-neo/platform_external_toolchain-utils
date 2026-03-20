@@ -24,7 +24,9 @@ class Test(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tempdir)
         return tempdir
 
-    def test_ebuild_linking_logic_handles_direct_relative_symlinks(self):
+    def test_ebuild_linking_logic_handles_direct_relative_symlinks(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         target = tempdir / "target.ebuild"
         target.touch()
@@ -33,7 +35,9 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_ebuild_linking_logic_handles_direct_absolute_symlinks(self):
+    def test_ebuild_linking_logic_handles_direct_absolute_symlinks(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         target = tempdir / "target.ebuild"
         target.touch()
@@ -42,7 +46,9 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_ebuild_linking_logic_handles_indirect_relative_symlinks(self):
+    def test_ebuild_linking_logic_handles_indirect_relative_symlinks(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         target = tempdir / "target.ebuild"
         target.touch()
@@ -53,7 +59,7 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_ebuild_linking_logic_handles_broken_symlinks(self):
+    def test_ebuild_linking_logic_handles_broken_symlinks(self) -> None:
         tempdir = self.make_tempdir()
         target = tempdir / "target.ebuild"
         target.touch()
@@ -62,7 +68,7 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_ebuild_linking_logic_only_steps_through_one_symlink(self):
+    def test_ebuild_linking_logic_only_steps_through_one_symlink(self) -> None:
         tempdir = self.make_tempdir()
         target = tempdir / "target.ebuild"
         target.symlink_to("doesnt_exist.ebuild")
@@ -71,7 +77,7 @@ class Test(unittest.TestCase):
             auto_update_rust_bootstrap.is_ebuild_linked_to_in_dir(target)
         )
 
-    def test_version_has_prebuilt_detection_works_when_disabled(self):
+    def test_version_has_prebuilt_detection_works_when_disabled(self) -> None:
         ebuild_contents = textwrap.dedent(
             """
             # Some copyright
@@ -88,7 +94,7 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_version_has_prebuilt_detection_works_when_enabled(self):
+    def test_version_has_prebuilt_detection_works_when_enabled(self) -> None:
         ebuild_contents = textwrap.dedent(
             """
             # Some copyright
@@ -105,7 +111,7 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_version_has_prebuilt_modification_works(self):
+    def test_version_has_prebuilt_modification_works(self) -> None:
         ebuild_contents = textwrap.dedent(
             """
             # Some copyright
@@ -134,7 +140,9 @@ class Test(unittest.TestCase):
         )
         self.assertEqual(ebuild_contents, with_unset_has_ebuild)
 
-    def test_version_has_prebuilt_modification_works_without_comment(self):
+    def test_version_has_prebuilt_modification_works_without_comment(
+        self,
+    ) -> None:
         ebuild_contents = textwrap.dedent(
             """
             # Some copyright
@@ -153,7 +161,7 @@ class Test(unittest.TestCase):
         )
         self.assertIn("THIS_VERSION_PREBUILT_NAME=foo", with_set_has_ebuild)
 
-    def test_version_has_prebuilt_unsetting_works_with_comment(self):
+    def test_version_has_prebuilt_unsetting_works_with_comment(self) -> None:
         ebuild_contents = textwrap.dedent(
             """
             # Some copyright
@@ -172,7 +180,7 @@ class Test(unittest.TestCase):
         )
         self.assertIn("THIS_VERSION_PREBUILT_NAME= # qux", with_set_has_ebuild)
 
-    def test_set_rust_bootstrap_prior_version_works(self):
+    def test_set_rust_bootstrap_prior_version_works(self) -> None:
         ebuild_contents = textwrap.dedent(
             """\
             # Some copyright
@@ -196,7 +204,9 @@ class Test(unittest.TestCase):
         )
         self.assertIn('PRIOR_RUST_BOOTSTRAP_VERSION="1.2.3"', with_update)
 
-    def test_collect_ebuilds_by_version_ignores_old_versions_and_9999(self):
+    def test_collect_ebuilds_by_version_ignores_old_versions_and_9999(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         ebuild_170 = tempdir / "rust-bootstrap-1.70.0.ebuild"
         ebuild_170.touch()
@@ -226,7 +236,7 @@ class Test(unittest.TestCase):
             ],
         )
 
-    def test_ebuild_version_parsing_works(self):
+    def test_ebuild_version_parsing_works(self) -> None:
         self.assertEqual(
             auto_update_rust_bootstrap.parse_ebuild_version(
                 "rust-bootstrap-1.70.0-r2.ebuild"
@@ -250,7 +260,7 @@ class Test(unittest.TestCase):
                 "rust-bootstrap-2.80.3_pre1234.ebuild"
             )
 
-    def test_raw_ebuild_version_parsing_works(self):
+    def test_raw_ebuild_version_parsing_works(self) -> None:
         self.assertEqual(
             auto_update_rust_bootstrap.parse_raw_ebuild_version("1.70.0-r2"),
             auto_update_rust_bootstrap.EbuildVersion(
@@ -261,7 +271,9 @@ class Test(unittest.TestCase):
         with self.assertRaises(ValueError):
             auto_update_rust_bootstrap.parse_ebuild_version("2.80.3_pre1234")
 
-    def test_ensure_newest_version_does_nothing_if_no_new_rust_version(self):
+    def test_ensure_newest_version_does_nothing_if_no_new_rust_version(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -283,8 +295,8 @@ class Test(unittest.TestCase):
         auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
     )
     def test_ensure_newest_version_upgrades_rust_bootstrap_properly(
-        self, update_ebuild_manifest_in_chroot
-    ):
+        self, update_ebuild_manifest_in_chroot: mock.MagicMock
+    ) -> None:
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -332,7 +344,9 @@ class Test(unittest.TestCase):
             new_contents,
         )
 
-    def test_version_deletion_does_nothing_if_all_versions_are_needed(self):
+    def test_version_deletion_does_nothing_if_all_versions_are_needed(
+        self,
+    ) -> None:
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -350,7 +364,7 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_version_deletion_ignores_newer_than_needed_versions(self):
+    def test_version_deletion_ignores_newer_than_needed_versions(self) -> None:
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -374,8 +388,8 @@ class Test(unittest.TestCase):
         auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
     )
     def test_version_deletion_deletes_old_files(
-        self, update_ebuild_manifest_in_chroot
-    ):
+        self, update_ebuild_manifest_in_chroot: mock.MagicMock
+    ) -> None:
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -424,7 +438,7 @@ class Test(unittest.TestCase):
         self.assertFalse(bootstrap_1_69_symlink.exists())
         self.assertTrue(needed_rust_bootstrap.exists())
 
-    def test_version_deletion_raises_when_old_file_has_dep(self):
+    def test_version_deletion_raises_when_old_file_has_dep(self) -> None:
         tempdir = self.make_tempdir()
         rust = tempdir / "rust"
         rust.mkdir()
@@ -447,7 +461,7 @@ class Test(unittest.TestCase):
                 dry_run=True,
             )
 
-    def test_prebuilt_commit_message_generation_with_one_update(self):
+    def test_prebuilt_commit_message_generation_with_one_update(self) -> None:
         msg = auto_update_rust_bootstrap.build_commit_message_for_new_prebuilts(
             [
                 (
@@ -470,7 +484,9 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_prebuilt_commit_message_generation_with_multiple_updates(self):
+    def test_prebuilt_commit_message_generation_with_multiple_updates(
+        self,
+    ) -> None:
         msg = auto_update_rust_bootstrap.build_commit_message_for_new_prebuilts(
             [
                 (

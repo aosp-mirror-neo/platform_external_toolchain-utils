@@ -14,7 +14,7 @@ from llvm_tools import atomic_write_file
 class TestAtomicWrite(unittest.TestCase):
     """Test atomic_write."""
 
-    def test_atomic_write(self):
+    def test_atomic_write(self) -> None:
         """Test that atomic write safely writes."""
         prior_contents = "This is a test written by patch_utils_unittest.py\n"
         new_contents = "I am a test written by patch_utils_unittest.py\n"
@@ -26,7 +26,7 @@ class TestAtomicWrite(unittest.TestCase):
             with filepath.open("w", encoding="utf-8") as f:
                 f.write(prior_contents)
 
-            def _t():
+            def _t() -> None:
                 with atomic_write_file.atomic_write(
                     filepath, encoding="utf-8"
                 ) as f:

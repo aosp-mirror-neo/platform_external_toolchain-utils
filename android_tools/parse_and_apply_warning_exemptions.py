@@ -45,6 +45,8 @@ import textwrap
 import threading
 from typing import DefaultDict, Iterable, Sequence
 
+from android_tools import android_paths
+from android_tools import bp_tools
 from cros_utils import git_utils
 from llvm_tools import warning_exemption
 
@@ -160,8 +162,33 @@ def parse_warning_reports(
     # report files.
     werror_report_start = "<LLVM_NEXT_ERROR_REPORT>"
     werror_report_end = "</LLVM_NEXT_ERROR_REPORT>"
-    with build_log.open(encoding="utf-8") as f:
-        for line_number, line in enumerate(f, 1):
+
+    werror_report_start_bin = werror_report_start.encode()
+    werror_report_end_bin = werror_report_end.encode()
+    with build_log.open("rb") as f:
+        num_invalid_lines = 0
+        for line_number, raw_line in enumerate(f, 1):
+            try:
+                line = raw_line.decode("utf-8")
+            except UnicodeDecodeError:
+                # There are observably quite a few UTF-8 decode errors in build
+                # logs.
+                #
+                # If the line seems inconsequential, just add to a counter. If
+                # it seems consequential, log a warning.
+                if (
+                    werror_report_start_bin in raw_line
+                    or werror_report_end_bin in raw_line
+                ):
+                    logging.warning(
+                        "Dropping interesting line (line number %d) due to "
+                        "invalid UTF-8.",
+                        line_number,
+                    )
+                else:
+                    num_invalid_lines += 1
+                continue
+
             line = line.strip()
             if not line.startswith(werror_report_start):
                 continue
@@ -183,6 +210,13 @@ def parse_warning_reports(
 
             package, warnings_group = parse_result
             per_package_groups[package].add(warnings_group)
+
+    if num_invalid_lines:
+        logging.info(
+            "%d uninteresting lines dropped due to invalid UTF-8",
+            num_invalid_lines,
+        )
+
     return per_package_groups
 
 
@@ -249,11 +283,30 @@ class ApplyWarningExemptionsResult:
 
 
 @dataclasses.dataclass(frozen=True)
+class BpExemptionSummary:
+    """A summary of exemptions for a single Android.bp file."""
+
+    per_target_warnings: dict[str, list[str]] = dataclasses.field(
+        default_factory=dict
+    )
+
+
+@dataclasses.dataclass(frozen=True)
+class RepoExemptionSummary:
+    """A summary of exemptions for a single repo."""
+
+    updated_files: dict[str, BpExemptionSummary] = dataclasses.field(
+        default_factory=dict
+    )
+    uploaded_cl: str | None = None
+
+
+@dataclasses.dataclass(frozen=True)
 class ExemptionSummary:
     """A summary of exemptions that were applied."""
 
-    git_dirs: list[Path] = dataclasses.field(default_factory=list)
-    updated_targets: dict[str, list[str]] = dataclasses.field(
+    bug_number: int
+    exemptions: dict[str, RepoExemptionSummary] = dataclasses.field(
         default_factory=dict
     )
 
@@ -262,18 +315,44 @@ class ExemptionSummary:
         """Loads an ExemptionSummary from the given file."""
         with path.open(encoding="utf-8") as f:
             content = json.load(f)
+
+        exemptions = {}
+        for repo_path, repo_data in content["exemptions"].items():
+            updated_files = {}
+            for bp_path, bp_data in repo_data["updated_files"].items():
+                updated_files[bp_path] = BpExemptionSummary(
+                    per_target_warnings=bp_data["per_target_warnings"]
+                )
+
+            exemptions[repo_path] = RepoExemptionSummary(
+                updated_files=updated_files,
+                uploaded_cl=repo_data.get("uploaded_cl"),
+            )
+
         return cls(
-            git_dirs=[Path(x) for x in content["git_dirs"]],
-            updated_targets=content["updated_targets"],
+            bug_number=content["bug_number"],
+            exemptions=exemptions,
         )
 
     def write_to_file(self, path: Path) -> None:
         """Writes this ExemptionSummary to the given file."""
+        output_exemptions = {}
+        for repo_path, summary in self.exemptions.items():
+            repo_files = {}
+            for bp_path, bp_summary in summary.updated_files.items():
+                repo_files[bp_path] = {
+                    "per_target_warnings": bp_summary.per_target_warnings
+                }
+            output_exemptions[repo_path] = {
+                "updated_files": repo_files,
+                "uploaded_cl": summary.uploaded_cl,
+            }
+
         with path.open("w", encoding="utf-8") as f:
             json.dump(
                 {
-                    "git_dirs": sorted(str(x) for x in self.git_dirs),
-                    "updated_targets": self.updated_targets,
+                    "bug_number": self.bug_number,
+                    "exemptions": output_exemptions,
                 },
                 f,
                 sort_keys=True,
@@ -462,15 +541,15 @@ def apply_warning_exemptions(
 
     assert android_tree, "android_tree should be non-None if not dry-run!"
     assert bug_number, "bug_number should be non-None if not dry-run!"
-    grouped_warnings = group_targets_by_bp_file(warnings.keys())
+    grouped_warnings = group_targets_by_bp_file(warnings)
 
     logging.info(
         "Spawning jobs to edit %d Android.bp file%s...",
         len(grouped_warnings),
         "" if len(grouped_warnings) == 1 else "s",
     )
-    bpfmt_bin = bpfmt_path(android_tree)
-    bpmodify_bin = bpmodify_path(android_tree)
+    bpfmt_bin = bp_tools.bpfmt_path(android_tree)
+    bpmodify_bin = bp_tools.bpmodify_path(android_tree)
     futures = []
     for warning_file, targets in grouped_warnings.items():
         per_target_warnings = []
@@ -525,68 +604,27 @@ def apply_warning_exemptions(
     )
 
 
-def bpmodify_path(android_tree: Path) -> Path:
-    return android_tree / "out" / "host" / "linux-x86" / "bin" / "bpmodify"
-
-
-def bpfmt_path(android_tree: Path) -> Path:
-    return android_tree / "out" / "host" / "linux-x86" / "bin" / "bpfmt"
-
-
-def need_autobuild(android_tree: Path) -> bool:
-    return not (
-        bpmodify_path(android_tree).exists()
-        and bpfmt_path(android_tree).exists()
-    )
-
-
-def autobuild_bp_tooling(android_tree: Path) -> None:
-    result = subprocess.run(
-        (
-            "bash",
-            "-c",
-            ";".join(
-                (
-                    ". ./build/envsetup.sh",
-                    "lunch aosp_cf_x86_64_phone-trunk_staging-eng",
-                    "m blueprint_tools",
-                )
-            ),
-        ),
-        check=False,
-        cwd=android_tree,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if not result.returncode:
-        logging.info("bmpodify build successful.")
-        return
-
-    logging.error("bp tooling build failed; stdout/stderr:\n%s", result.stdout)
-    result.check_returncode()
-
-
-def group_files_by_git_repo(
+def map_files_to_git_repos(
     android_tree: Path,
     thread_pool: concurrent.futures.ThreadPoolExecutor,
-    files: list[Path],
-) -> list[Path]:
-    """Returns a list of git repos containing the given files."""
+    files: Sequence[Path],
+) -> dict[Path, Path]:
+    """Returns a mapping of {file: git_repo} for the given files.
+
+    `git_repo` is relative to `android_tree`.
+    """
 
     def get_file_toplevel(f: Path) -> Path:
         toplevel = checked_subprocess_run(
             ("git", "rev-parse", "--show-toplevel"),
             cwd=(android_tree / f).parent,
         ).strip()
-        return Path(toplevel)
+        return Path(toplevel).relative_to(android_tree)
 
     # These `--show-toplevel` invocations are pretty fast, but we already have a
     # thread pool anyway, so use it.
-    toplevels = set(thread_pool.map(get_file_toplevel, files))
-    return sorted(toplevels)
+    toplevels = thread_pool.map(get_file_toplevel, files)
+    return dict(zip(files, toplevels))
 
 
 def commit_new_exemptions(
@@ -595,15 +633,15 @@ def commit_new_exemptions(
     thread_pool: concurrent.futures.ThreadPoolExecutor,
     updated_android_bp_files: list[Path],
     branch_name: str,
+    file_to_repo: dict[Path, Path],
 ) -> list[Path]:
     """Commits all new exemptions.
 
     Returns:
         A list of Git repos where a commit was made, relative to android_tree.
     """
-    git_repos = group_files_by_git_repo(
-        android_tree, thread_pool, updated_android_bp_files
-    )
+    rel_git_repos = sorted({file_to_repo[f] for f in updated_android_bp_files})
+    git_repos = [android_tree / x for x in rel_git_repos]
 
     exemption_commit_message = textwrap.dedent(
         f"""\
@@ -623,17 +661,21 @@ def commit_new_exemptions(
         """
     )
 
-    def do_commit(repo: Path):
-        git_utils.create_branch(repo, branch_name)
+    def do_commit(repo: Path) -> None:
         git_utils.commit_all_changes(
             git_dir=repo,
             message=exemption_commit_message,
             quiet=True,
         )
+        git_utils.create_branch(repo, branch_name)
 
     # Assume simple `git commit` commands won't fail. If they do, something
     # seems very wrong, and the program should simply abort.
-    thread_pool.map(do_commit, git_repos)
+    for _ in thread_pool.map(do_commit, git_repos):
+        # Iteration is necessary because `map()` is lazy: it only blocks on task
+        # completion _as elements are requested_. Note that `map` will reraise
+        # exceptions as appropriate.
+        pass
     return [x.relative_to(android_tree) for x in git_repos]
 
 
@@ -642,11 +684,13 @@ def upload_all_new_exemptions(
     thread_pool: concurrent.futures.ThreadPoolExecutor,
     topic: str,
     repos_to_upload: list[Path],
-) -> list[Path]:
+) -> tuple[list[Path], dict[Path, str]]:
     """Uploads all new warning exemptions.
 
     Returns:
-        A list of git repos where uploading failed.
+        A tuple of (failed_repos, successful_repos_with_cls).
+        failed_repos is a list of git repos where uploading failed.
+        successful_repos_with_cls is a dict mapping repo path to the CL string.
     """
     # Gerrit has some pretty strict rate-limits, but uploading two repos at a
     # time should _hopefully_ not hit those. Even with a limit as low as two,
@@ -682,13 +726,13 @@ def upload_all_new_exemptions(
         thread_pool.submit(upload_one_repo, x) for x in repos_to_upload
     ]
 
-    num_success = 0
+    successful_uploads = {}
     exceptions = []
     for repo, upload_result in zip(repos_to_upload, upload_futures):
         if e := upload_result.exception():
             exceptions.append((repo, e))
         else:
-            num_success += 1
+            successful_uploads[repo] = f"ag/{upload_result.result()}"
 
     # List exceptions after all threads are done executing for clarity.
     for repo, e in exceptions:
@@ -696,18 +740,66 @@ def upload_all_new_exemptions(
             "Exception caught uploading changes to %s", repo, exc_info=e
         )
 
-    return [x for x, _ in exceptions]
+    return [x for x, _ in exceptions], successful_uploads
 
 
 def write_update_summary_file(
     target: Path,
-    updated_repos: list[Path],
-    updated_targets: dict[str, list[str]],
+    bug_number: int,
+    exemptions: dict[str, RepoExemptionSummary],
 ) -> None:
     summary = ExemptionSummary(
-        git_dirs=updated_repos, updated_targets=updated_targets
+        bug_number=bug_number,
+        exemptions=exemptions,
     )
     summary.write_to_file(target)
+
+
+# Types to help the readability of populate_and_write_summary.
+_PerTargetDisabledWarnings = dict[str, list[str]]
+_BpPath = str
+
+
+def populate_and_write_summary(
+    bug_number: int,
+    update_summary_file: Path,
+    updated_targets: dict[str, list[str]],
+    uploaded_cls: dict[Path, str],
+    file_to_repo: dict[Path, Path],
+) -> None:
+    """Populates and writes the exemption summary file."""
+    # The type here is pretty unfortunate. The _values_ are per-target disabled
+    # warnings, and the key is git repos.
+    exemptions_per_git_repo: dict[
+        str, dict[_BpPath, _PerTargetDisabledWarnings]
+    ] = collections.defaultdict(lambda: collections.defaultdict(dict))
+    for bp_path, updated_targets_in_bp in group_targets_by_bp_file(
+        updated_targets
+    ).items():
+        repo_of_bp = str(file_to_repo[bp_path])
+        exemptions_per_git_repo[repo_of_bp][str(bp_path)] = {
+            target: updated_targets[target]
+            for _, target in updated_targets_in_bp
+        }
+
+    final_exemptions = {}
+    for repo_str, files_dict in exemptions_per_git_repo.items():
+        updated_files = {}
+        for bp_path_str, per_target_warnings in files_dict.items():
+            updated_files[bp_path_str] = BpExemptionSummary(
+                per_target_warnings=per_target_warnings
+            )
+        final_exemptions[repo_str] = RepoExemptionSummary(
+            updated_files=updated_files,
+            uploaded_cl=uploaded_cls.get(Path(repo_str)),
+        )
+
+    write_update_summary_file(
+        update_summary_file,
+        bug_number,
+        exemptions=final_exemptions,
+    )
+    logging.info("Wrote summary file to %s", update_summary_file)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -792,6 +884,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     opts = parser.parse_args(argv)
 
+    if opts.android_tree:
+        android_paths.assert_is_valid_android_tree_root(
+            parser, opts.android_tree
+        )
+
     if not opts.dry_run and not opts.bug_number:
         parser.error(
             "You must pass --bug-number if --dry-run is not specified."
@@ -817,9 +914,21 @@ def main(argv: list[str]) -> None:
     keep_going: bool = opts.keep_going
     upload_with_topic: str | None = opts.upload_with_topic
 
+    # This script heavily uses `android_tree`'s textual representation (e.g.,
+    # via `x.relative_to(android_tree)`. This may lead to failures if
+    # `android_tree` has elements like symlinks, and if `x` has been
+    # `resolve()`d. Resolve the Android tree early for simplicity and
+    # consistency.
+    if android_tree:
+        android_tree = android_tree.resolve()
+
     with concurrent.futures.ThreadPoolExecutor() as thread_pool:
         autobuild_future: concurrent.futures.Future | None = None
-        if not dry_run and android_tree and need_autobuild(android_tree):
+        if (
+            not dry_run
+            and android_tree
+            and bp_tools.need_autobuild(android_tree)
+        ):
             if not opts.autobuild:
                 sys.exit(
                     textwrap.dedent(
@@ -839,7 +948,7 @@ def main(argv: list[str]) -> None:
             # bp tooling takes minutes to build. Run it concurrently with log
             # parsing to speed things up a bit.
             autobuild_future = thread_pool.submit(
-                autobuild_bp_tooling, android_tree
+                bp_tools.autobuild_bp_tooling, android_tree
             )
 
         # Larger logs (~500MB) take a dozen seconds or so to parse.
@@ -885,29 +994,34 @@ def main(argv: list[str]) -> None:
         # never updates any files.
         assert android_tree, "Files can't be updated without an Android tree"
         assert bug_number, "Files shouldn't be updated without a bug number"
+
+        file_to_repo = map_files_to_git_repos(
+            android_tree, thread_pool, apply_results.successfully_updated_files
+        )
+
         repos_with_commit = commit_new_exemptions(
             bug_number,
             android_tree,
             thread_pool,
             updated_android_bp_files=apply_results.successfully_updated_files,
             branch_name=branch_name,
+            file_to_repo=file_to_repo,
         )
         logging.info(
             "Successfully made commits in %d repos", len(repos_with_commit)
         )
 
+        uploaded_cls: dict[Path, str] = {}
         had_failures = bool(apply_results.update_failures)
         if upload_with_topic:
-            failed_uploads = upload_all_new_exemptions(
+            failed_uploads, uploaded_cls = upload_all_new_exemptions(
                 android_tree,
                 thread_pool,
                 upload_with_topic,
                 repos_with_commit,
             )
 
-            num_successful_uploads = len(repos_with_commit) - len(
-                failed_uploads
-            )
+            num_successful_uploads = len(uploaded_cls)
             logging.info(
                 "Uploaded %d CLs with topic %s",
                 num_successful_uploads,
@@ -927,11 +1041,12 @@ def main(argv: list[str]) -> None:
             )
 
         if update_summary_file:
-            write_update_summary_file(
+            populate_and_write_summary(
+                bug_number,
                 update_summary_file,
-                updated_repos=repos_with_commit,
-                updated_targets=apply_results.updated_targets,
+                apply_results.updated_targets,
+                uploaded_cls,
+                file_to_repo,
             )
-            logging.info("Wrote summary file to %s", update_summary_file)
 
         sys.exit(1 if had_failures else 0)

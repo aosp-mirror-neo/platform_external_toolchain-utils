@@ -7,7 +7,7 @@
 import json
 from pathlib import Path
 import tempfile
-from typing import Callable
+from typing import Any, Callable
 import unittest
 from unittest import mock
 
@@ -21,7 +21,9 @@ class PatchManagerTest(unittest.TestCase):
 
     # Simulate behavior of 'os.path.isdir()' when the path is not a directory.
     @mock.patch.object(Path, "is_dir", return_value=False)
-    def testInvalidDirectoryPassedAsCommandLineArgument(self, mock_isdir):
+    def testInvalidDirectoryPassedAsCommandLineArgument(
+        self, mock_isdir: mock.Mock
+    ) -> None:
         src_dir = "/some/path/that/is/not/a/directory"
         patch_metadata_file = "/some/path/that/is/not/a/file"
 
@@ -42,8 +44,8 @@ class PatchManagerTest(unittest.TestCase):
     # does not exist.
     @mock.patch.object(Path, "is_file", return_value=False)
     def testInvalidPathToPatchMetadataFilePassedAsCommandLineArgument(
-        self, mock_isfile
-    ):
+        self, mock_isfile: mock.Mock
+    ) -> None:
         src_dir = "/some/path/that/is/not/a/directory"
         patch_metadata_file = "/some/path/that/is/not/a/file"
 
@@ -63,7 +65,9 @@ class PatchManagerTest(unittest.TestCase):
 
     @mock.patch("builtins.print")
     @mock.patch.object(patch_utils, "git_clean_context")
-    def testCheckPatchApplies(self, _, mock_git_clean_context):
+    def testCheckPatchApplies(
+        self, _: mock.Mock, mock_git_clean_context: mock.Mock
+    ) -> None:
         """Tests whether we can apply a single patch for a given svn_version."""
         mock_git_clean_context.return_value = mock.MagicMock()
         with tempfile.TemporaryDirectory(
@@ -112,7 +116,7 @@ class PatchManagerTest(unittest.TestCase):
                 version: int,
                 return_value: patch_utils.PatchResult,
                 expected: patch_manager.GitBisectionCode,
-            ):
+            ) -> None:
                 with mock.patch.object(
                     patch_utils.PatchEntry,
                     "apply",
@@ -152,7 +156,7 @@ class PatchManagerTest(unittest.TestCase):
                 version: int,
                 application_func: Callable,
                 expected: patch_manager.GitBisectionCode,
-            ):
+            ) -> None:
                 with mock.patch.object(
                     patch_utils,
                     "apply_single_patch_entry",
@@ -167,7 +171,13 @@ class PatchManagerTest(unittest.TestCase):
                     self.assertEqual(result, expected)
 
             # Check patch can apply and fail with good return codes.
-            def _apply_patch_entry_mock1(v, _, patch_entry, _func, **__):
+            def _apply_patch_entry_mock1(
+                v: int,
+                _: Any,
+                patch_entry: patch_utils.PatchEntry,
+                _func: Callable,
+                **__: Any,
+            ) -> tuple[bool, None]:
                 return patch_entry.can_patch_version(v), None
 
             _harness2(
@@ -182,7 +192,13 @@ class PatchManagerTest(unittest.TestCase):
             )
 
             # Early exit check, shouldn't apply later failing patch.
-            def _apply_patch_entry_mock2(v, _, patch_entry, _func, **__):
+            def _apply_patch_entry_mock2(
+                v: int,
+                _: Any,
+                patch_entry: patch_utils.PatchEntry,
+                _func: Callable,
+                **__: Any,
+            ) -> tuple[bool, dict[str, mock.Mock] | None]:
                 if (
                     patch_entry.can_patch_version(v)
                     and patch_entry.rel_patch_path == "patch_after.patch"
@@ -197,7 +213,13 @@ class PatchManagerTest(unittest.TestCase):
             )
 
             # Skip check, should exit early on the first patch.
-            def _apply_patch_entry_mock3(v, _, patch_entry, _func, **__):
+            def _apply_patch_entry_mock3(
+                v: int,
+                _: Any,
+                patch_entry: patch_utils.PatchEntry,
+                _func: Callable,
+                **__: Any,
+            ) -> tuple[bool, dict[str, mock.Mock] | None]:
                 if (
                     patch_entry.can_patch_version(v)
                     and patch_entry.rel_patch_path == "another.patch"

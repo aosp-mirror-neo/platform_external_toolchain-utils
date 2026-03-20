@@ -91,12 +91,12 @@ def ls(gs_url: str) -> list[GsEntry]:
         A list of GsEntrys matching `path`. If the list is entry, no paths
         matched the URL.
     """
-    cmd = [
+    cmd = (
         GSUTIL,
         "ls",
         "-l",
         gs_url,
-    ]
+    )
     result = subprocess.run(
         cmd,
         check=False,

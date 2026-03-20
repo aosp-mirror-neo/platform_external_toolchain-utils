@@ -16,7 +16,7 @@ class AutoUpdatePackageProvidedTest(test_helpers.TempDirTestCase):
     """Tests for the auto_update_package_provided script."""
 
     @mock.patch.object(subprocess, "run")
-    def test_get_rust_version_success(self, mock_run):
+    def test_get_rust_version_success(self, mock_run: mock.MagicMock) -> None:
         """Test successful rust version retrieval."""
         mock_run.return_value = subprocess.CompletedProcess(
             args=("cros_sdk", "--", "rustc", "--version"),
@@ -36,7 +36,7 @@ class AutoUpdatePackageProvidedTest(test_helpers.TempDirTestCase):
             auto_update_package_provided.rust_uprev.RustVersion(1, 80, 0),
         )
 
-    def test_update_package_provided_file(self):
+    def test_update_package_provided_file(self) -> None:
         """Test updating a package.provided file."""
         temp_file = self.make_tempdir() / "package.provided"
         # For the "broken version, should persist" strings, just let a human
@@ -79,7 +79,7 @@ class AutoUpdatePackageProvidedTest(test_helpers.TempDirTestCase):
             temp_file.read_text(encoding="utf-8"), expected_content
         )
 
-    def test_update_package_provided_file_dry_run(self):
+    def test_update_package_provided_file_dry_run(self) -> None:
         """Test updating a package.provided file with dry_run=True."""
         temp_file = self.make_tempdir() / "package.provided"
         original_content = textwrap.dedent(
@@ -106,7 +106,7 @@ class AutoUpdatePackageProvidedTest(test_helpers.TempDirTestCase):
             temp_file.read_text(encoding="utf-8"), original_content
         )
 
-    def test_update_package_provided_file_keeps_newer_versions(self):
+    def test_update_package_provided_file_keeps_newer_versions(self) -> None:
         """Test that we don't remove newer versions of rust."""
         temp_file = self.make_tempdir() / "package.provided"
         temp_file.write_text(
@@ -143,7 +143,7 @@ class AutoUpdatePackageProvidedTest(test_helpers.TempDirTestCase):
             temp_file.read_text(encoding="utf-8"), expected_content
         )
 
-    def test_update_package_provided_file_no_changes(self):
+    def test_update_package_provided_file_no_changes(self) -> None:
         """Test updating a package.provided file where no changes are needed."""
         temp_file = self.make_tempdir() / "package.provided"
         original_content = textwrap.dedent(

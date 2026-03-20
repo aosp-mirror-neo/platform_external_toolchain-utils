@@ -60,7 +60,7 @@ TEST=None
 """
 
 
-def add_force_rebuild_marker(chromiumos_overlay: Path):
+def add_force_rebuild_marker(chromiumos_overlay: Path) -> None:
     """Adds a marker to force this change to appear as a toolchain change."""
     # `touch`ing anything in `sys-devel/llvm/files` causes an LLVM revbump, and
     # causes all packages to be rebuilt.
@@ -70,7 +70,7 @@ def add_force_rebuild_marker(chromiumos_overlay: Path):
     force_rebuild_file.touch()
 
 
-def add_use_force_block(chromiumos_overlay: Path):
+def add_use_force_block(chromiumos_overlay: Path) -> None:
     use_force = chromiumos_overlay / "profiles" / "base" / "use.force"
     # If this doesn't exist, that _can_ be worked with, but it's a smoke signal
     # (since e.g., maybe the file no longer takes effect). Have someone
@@ -81,7 +81,7 @@ def add_use_force_block(chromiumos_overlay: Path):
         f.write(USE_FORCE_BLOCK)
 
 
-def add_disable_warnings_block(chromiumos_overlay: Path):
+def add_disable_warnings_block(chromiumos_overlay: Path) -> None:
     ebuild_hooks = chromiumos_overlay / "profiles" / "base" / "profile.bashrc"
     # If this doesn't exist, that _can_ be worked with, but it's a smoke signal
     # (since e.g., maybe the file no longer takes effect). Have someone

@@ -16,7 +16,7 @@ import yaml  # pylint: disable=import-error
 class Test(test_helpers.TempDirTestCase):
     """Tests for warning_exemption."""
 
-    def test_yaml_round_trips(self):
+    def test_yaml_round_trips(self) -> None:
         yaml_input = warning_exemption.YamlFile(
             exemption_go_file_name="some_file.go",
             severe_warnings=[
@@ -63,14 +63,14 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertEqual(round_tripped, yaml_input)
 
-    def test_package_parsing(self):
+    def test_package_parsing(self) -> None:
         with self.assertRaisesRegex(ValueError, ".*foo.*"):
             warning_exemption.Package.from_yaml("foo")
 
         # Shouldn't raise.
         warning_exemption.Package.from_yaml("foo/bar")
 
-    def test_warning_scraping_works(self):
+    def test_warning_scraping_works(self) -> None:
         stdout = textwrap.dedent(
             """\
             an error about flags:
@@ -114,7 +114,7 @@ class Test(test_helpers.TempDirTestCase):
             sorted(werrors),
         )
 
-    def test_warning_scraping_normalization_works(self):
+    def test_warning_scraping_normalization_works(self) -> None:
         stdout = textwrap.dedent(
             """\
             clang-2: error: flag -foo is not supported [-Wfoo]
@@ -151,7 +151,7 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(warning_exemption, "scrape_fatal_warnings_from_stdout")
-    def test_warning_file_parsing_works(self, mock_scrape):
+    def test_warning_file_parsing_works(self, mock_scrape: mock.Mock) -> None:
         mock_scrape.return_value = [("some error about [-Wfoo]", "foo")]
 
         tmpdir = self.make_tempdir()
@@ -209,7 +209,9 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(warning_exemption, "scrape_fatal_warnings_from_stdout")
-    def test_warning_file_parsing_handles_no_warnings(self, mock_scrape):
+    def test_warning_file_parsing_handles_no_warnings(
+        self, mock_scrape: mock.Mock
+    ) -> None:
         mock_scrape.return_value = []
 
         tmpdir = self.make_tempdir()
@@ -223,7 +225,7 @@ class Test(test_helpers.TempDirTestCase):
 
         self.assertIsNone(warning_exemption.parse_fatal_warnings_file(tmpfile))
 
-    def test_warning_report_enumeration_works(self):
+    def test_warning_report_enumeration_works(self) -> None:
         tmpdir = self.make_tempdir()
         warning_reports = (
             tmpdir / "foo" / "warnings_report1234.json",
@@ -244,7 +246,7 @@ class Test(test_helpers.TempDirTestCase):
             sorted(warning_reports),
         )
 
-    def test_removing_bash_style_works(self):
+    def test_removing_bash_style_works(self) -> None:
         self.assertEqual(
             warning_exemption.remove_bash_style_sequences(
                 "\x1b[31mRed text.\x1b[0m"

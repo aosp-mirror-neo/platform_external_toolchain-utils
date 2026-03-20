@@ -39,7 +39,7 @@ _SUPPRESS_WARNING_FLAG = "-D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout"
 _OPT_LEVEL_FLAG_RE = re.compile(r'^(\s+)"-O.",\s*$')
 
 
-def add_flag_after_optimization_level(file_contents: str, flag: str):
+def add_flag_after_optimization_level(file_contents: str, flag: str) -> str:
     """Adds the given flag after the optimization level in a Soong file.
 
     Nothing's particularly special about the optimization level in this case;
@@ -141,7 +141,7 @@ def main(argv: list[str]) -> None:
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
-        "--android-root",
+        "--android-tree",
         type=Path,
         help="""
         The root of the Android source tree to consult. Defaults to this
@@ -164,17 +164,22 @@ def main(argv: list[str]) -> None:
     )
     opts = parser.parse_args(argv)
 
-    android_root: Path | None = opts.android_root
-    if not android_root:
-        inferred_root = android_paths.script_android_checkout()
-        if not inferred_root:
+    if opts.android_tree:
+        android_paths.assert_is_valid_android_tree_root(
+            parser, opts.android_tree
+        )
+
+    android_tree: Path | None = opts.android_tree
+    if not android_tree:
+        inferred_tree = android_paths.script_android_checkout()
+        if not inferred_tree:
             parser.error(
                 "Must run from inside an Android tree, or specify "
-                "--android-root"
+                "--android-tree"
             )
-        android_root = inferred_root
+        android_tree = inferred_tree
 
-    soong_repo = android_root / android_paths.BUILD_SOONG_SUBDIR
+    soong_repo = android_tree / android_paths.BUILD_SOONG_SUBDIR
     if not soong_repo.is_dir():
         raise ValueError(f"{soong_repo} is not a directory.")
 
