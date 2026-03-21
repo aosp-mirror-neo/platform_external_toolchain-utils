@@ -31,7 +31,7 @@ def make_finding(
 class LogErrorsWithLintsTest(unittest.TestCase):
     """Tests for log_errors_with_lints."""
 
-    def test_lints_match_expectations(self):
+    def test_lints_match_expectations(self) -> None:
         lints = [
             make_finding(category="cat1", file_path="f1", message="msg1 indeed")
         ]
@@ -48,7 +48,7 @@ class LogErrorsWithLintsTest(unittest.TestCase):
             )
         )
 
-    def test_unexpected_lint_with_specific_expectations(self):
+    def test_unexpected_lint_with_specific_expectations(self) -> None:
         """Tests behavior with an unexpected lint and specific expectations.
 
         Expected:
@@ -74,7 +74,7 @@ class LogErrorsWithLintsTest(unittest.TestCase):
             )
         )
 
-    def test_unexpected_lint(self):
+    def test_unexpected_lint(self) -> None:
         lints = [
             make_finding(
                 category="unexpected", file_path="uf1", message="umsg1"
@@ -86,7 +86,7 @@ class LogErrorsWithLintsTest(unittest.TestCase):
             )
         )
 
-    def test_missing_expected_lint(self):
+    def test_missing_expected_lint(self) -> None:
         lints = [
             make_finding(category="cat2", file_path="f2", message="m2"),
         ]
@@ -108,7 +108,7 @@ class LogErrorsWithLintsTest(unittest.TestCase):
             )
         )
 
-    def test_mismatched_lint_message(self):
+    def test_mismatched_lint_message(self) -> None:
         lints = [
             make_finding(category="cat2", file_path="f2", message="m2"),
             make_finding(category="cat1", file_path="f1", message="wrong_msg"),

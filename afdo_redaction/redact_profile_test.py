@@ -6,6 +6,7 @@
 
 
 import io
+from typing import IO
 import unittest
 
 from afdo_redaction import redact_profile
@@ -14,7 +15,9 @@ from afdo_redaction import redact_profile
 _redact_limit = redact_profile.DEFAULT_DEDUP_MAX_REPEATS
 
 
-def _redact(input_lines, summary_to=None):
+def _redact(
+    input_lines: str | list[str], summary_to: IO[str] | None = None
+) -> str:
     if isinstance(input_lines, str):
         input_lines = input_lines.splitlines()
 
@@ -30,13 +33,15 @@ def _redact(input_lines, summary_to=None):
     return output_to.getvalue()
 
 
-def _redact_with_summary(input_lines):
+def _redact_with_summary(input_lines: str | list[str]) -> tuple[str, str]:
     summary = io.StringIO()
     result = _redact(input_lines, summary_to=summary)
     return result, summary.getvalue()
 
 
-def _generate_repeated_function_body(repeats, fn_name="_some_name"):
+def _generate_repeated_function_body(
+    repeats: int, fn_name: str = "_some_name"
+) -> list[str]:
     # Arbitrary function body ripped from a textual AFDO profile.
     function_header = fn_name + ":1234:185"
     function_body = [
@@ -65,29 +70,33 @@ def _generate_repeated_function_body(repeats, fn_name="_some_name"):
 class Tests(unittest.TestCase):
     """All of our tests for redact_profile."""
 
-    def test_no_input_works(self):
+    def test_no_input_works(self) -> None:
         self.assertEqual(_redact(""), "")
 
-    def test_single_function_works(self):
+    def test_single_function_works(self) -> None:
         lines = _generate_repeated_function_body(1)
         result_file = "\n".join(lines) + "\n"
         self.assertEqual(_redact(lines), result_file)
 
-    def test_duplicate_of_single_function_works(self):
+    def test_duplicate_of_single_function_works(self) -> None:
         lines = _generate_repeated_function_body(2)
         result_file = "\n".join(lines) + "\n"
         self.assertEqual(_redact(lines), result_file)
 
-    def test_not_too_many_duplicates_of_single_function_redacts_none(self):
+    def test_not_too_many_duplicates_of_single_function_redacts_none(
+        self,
+    ) -> None:
         lines = _generate_repeated_function_body(_redact_limit - 1)
         result_file = "\n".join(lines) + "\n"
         self.assertEqual(_redact(lines), result_file)
 
-    def test_many_duplicates_of_single_function_redacts_them_all(self):
+    def test_many_duplicates_of_single_function_redacts_them_all(self) -> None:
         lines = _generate_repeated_function_body(_redact_limit)
         self.assertEqual(_redact(lines), "")
 
-    def test_many_duplicates_of_single_function_leaves_other_functions(self):
+    def test_many_duplicates_of_single_function_leaves_other_functions(
+        self,
+    ) -> None:
         kept_lines = _generate_repeated_function_body(1, fn_name="_keep_me")
         # Something to distinguish us from the rest. Just bump a random counter.
         kept_lines[1] += "1"
@@ -106,7 +115,7 @@ class Tests(unittest.TestCase):
         self.assertEqual(_redact(lines + kept_lines + more_lines), result_file)
         self.assertEqual(_redact(lines + more_lines), "")
 
-    def test_correct_summary_is_printed_when_nothing_is_redacted(self):
+    def test_correct_summary_is_printed_when_nothing_is_redacted(self) -> None:
         lines = _generate_repeated_function_body(1)
         _, summary = _redact_with_summary(lines)
         self.assertIn("Retained 1/1 functions", summary)
@@ -115,14 +124,18 @@ class Tests(unittest.TestCase):
         # account," not "sum(entry_counts)"
         self.assertIn("Retained 335/335 top-level samples", summary)
 
-    def test_correct_summary_is_printed_when_everything_is_redacted(self):
+    def test_correct_summary_is_printed_when_everything_is_redacted(
+        self,
+    ) -> None:
         lines = _generate_repeated_function_body(_redact_limit)
         _, summary = _redact_with_summary(lines)
         self.assertIn("Retained 0/100 functions", summary)
         self.assertIn("Retained 0/82,700 samples, total", summary)
         self.assertIn("Retained 0/33,500 top-level samples", summary)
 
-    def test_correct_summary_is_printed_when_most_everything_is_redacted(self):
+    def test_correct_summary_is_printed_when_most_everything_is_redacted(
+        self,
+    ) -> None:
         kept_lines = _generate_repeated_function_body(1, fn_name="_keep_me")
         kept_lines[1] += "1"
 

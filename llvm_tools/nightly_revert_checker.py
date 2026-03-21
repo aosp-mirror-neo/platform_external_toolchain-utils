@@ -42,13 +42,6 @@ HEAD_STALENESS_ALERT_INITIAL_SECS = 60 * ONE_DAY_SECS
 # an llvm-next roll has to be reverted.
 REVERT_LIST_GC_TIMEOUT = 14 * ONE_DAY_SECS
 
-REPLACEMENT_AUTHOR_NAME = "crostc-worker"
-REPLACEMENT_AUTHOR_EMAIL = (
-    "crostc-worker@crostc-chrotomation.iam.gserviceaccount.com"
-)
-# Author to replace the true author of a revert commit. This is to prevent them
-# from being spammed with emails every time we upload revert commits to Gerrit.
-
 
 # Not frozen, as `next_notification_timestamp` may be mutated.
 @dataclasses.dataclass(frozen=False, eq=True)
@@ -357,7 +350,7 @@ def update_new_state_head_info(
     interesting_shas: list[tuple[str, str]],
     old_state: State,
     new_state: State,
-):
+) -> None:
     """Modifies `new_state` to take `interesting_shas` into account.
 
     HEADs in `old_state.heads` get updated if their SHAs change. Otherwise, they
@@ -617,7 +610,7 @@ def _upload_revert_cherry_pick(
     llvm_worktree: Path,
     reviewers: list[str],
     cc: list[str],
-):
+) -> None:
     """Mockable helper to create and upload patches."""
     cherry_pick_returncode = subprocess.run(
         ["git", "cherry-pick", sha],
@@ -703,6 +696,8 @@ def _upload_revert_cherry_pick(
     if is_cl_a_merge_conflict:
         new_commit_message = f"MERGE CONFLICT: {new_commit_message}"
 
+    replacement_author_name = patch_utils.REPLACEMENT_AUTHOR_NAME
+    replacement_author_email = patch_utils.REPLACEMENT_AUTHOR_EMAIL
     subprocess.run(
         [
             "git",
@@ -710,7 +705,7 @@ def _upload_revert_cherry_pick(
             "--amend",
             "-m",
             new_commit_message,
-            f"--author={REPLACEMENT_AUTHOR_NAME} <{REPLACEMENT_AUTHOR_EMAIL}>",
+            f"--author={replacement_author_name} <{replacement_author_email}>",
         ],
         check=True,
         cwd=llvm_worktree,

@@ -18,9 +18,10 @@ size (or worse). See crbug.com/1005023 and crbug.com/916130.
 
 import argparse
 import re
+from typing import Iterable, Iterator, TextIO
 
 
-def _remove_indirect_call_targets(lines):
+def _remove_indirect_call_targets(lines: Iterable[str]) -> Iterator[str]:
     # Lines with indirect call targets look like:
     #   1.1: 1234 foo:111 bar:122
     #
@@ -52,12 +53,12 @@ def _remove_indirect_call_targets(lines):
         yield line[:group_start].rstrip() + "\n"
 
 
-def run(input_stream, output_stream):
+def run(input_stream: Iterable[str], output_stream: TextIO) -> None:
     for line in _remove_indirect_call_targets(input_stream):
         output_stream.write(line)
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

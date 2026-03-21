@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import textwrap
-from typing import Callable
+from typing import Any, Callable
 from unittest import mock
 
 from cros_utils import git_utils
@@ -106,14 +106,18 @@ class _RunnerArgs:
 class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
     """Test verify_patch_consistency."""
 
-    def __init__(self, *nargs, **kwargs):
+    git_utils_patcher: Any | None
+    git_llvm_rev_patcher: Any | None
+    verify_patch_consistency_patcher: Any | None
+
+    def __init__(self, *nargs: Any, **kwargs: Any) -> None:
         super().__init__(*nargs, **kwargs)
         self.git_utils_patcher = None
         self.git_llvm_rev_patcher = None
         self.verify_patch_consistency_patcher = None
 
     @mock.patch.object(verify_patch_consistency, "_gerrit_inspect")
-    def test_parse_branch_simple(self, mock_gerrit_inspect):
+    def test_parse_branch_simple(self, mock_gerrit_inspect: mock.Mock) -> None:
         """Test we're extracting the llvm revision and ref from gerrit json."""
 
         mock_gerrit_inspect.return_value = [
@@ -127,7 +131,7 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
         self.assertEqual(ref, "some_remote_ref")
 
     @mock.patch.object(verify_patch_consistency, "_gerrit_inspect")
-    def test_parse_branch_complex(self, mock_gerrit_inspect):
+    def test_parse_branch_complex(self, mock_gerrit_inspect: mock.Mock) -> None:
         """Test parse_branch with a real JSON response."""
 
         mock_gerrit_inspect.return_value = json.loads(GERRIT_JSON_FIXTURE)
@@ -135,7 +139,7 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
         self.assertEqual(llvm_rev, 516547)
         self.assertEqual(ref, "refs/changes/83/5637483/1")
 
-    def _set_up_mocking(self, translate_sha: str, fetch_head_ref: str):
+    def _set_up_mocking(self, translate_sha: str, fetch_head_ref: str) -> None:
         # Patch git_utils ----------------------------------------------
         self.git_utils_patcher = mock.patch.multiple(
             git_utils,
@@ -175,7 +179,7 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
         )
         self.verify_patch_consistency_patcher.start()
 
-    def _stop_mocking(self):
+    def _stop_mocking(self) -> None:
         if self.verify_patch_consistency_patcher:
             self.verify_patch_consistency_patcher.stop()
         if self.git_llvm_rev_patcher:
@@ -185,7 +189,7 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
 
     def _run_llvm_harness(
         self, tempdir: Path, llvm_svn_revision: int, runner: Callable
-    ):
+    ) -> None:
         """Set up for full verification tests."""
 
         # Set up directories and paths.
@@ -283,12 +287,12 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
             )
         )
 
-    def test_failed_verification(self):
+    def test_failed_verification(self) -> None:
         """Test we can catch a bad patch stack."""
         tempdir = self.make_tempdir()
         svn_revision = 1234
 
-        def _runner(args: _RunnerArgs):
+        def _runner(args: _RunnerArgs) -> None:
             # Actually run the (failing) verification.
             # This fails because the "upstream" of fetch_head_ref
             # is the same as the translated_sha (which is in
@@ -313,12 +317,12 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
 
         self._run_llvm_harness(tempdir, svn_revision, _runner)
 
-    def test_successful_verification(self):
+    def test_successful_verification(self) -> None:
         """Test we can successfully verify a patch stack."""
         tempdir = self.make_tempdir()
         svn_revision = 1234
 
-        def _runner(args: _RunnerArgs):
+        def _runner(args: _RunnerArgs) -> None:
             # Actually run the verification. Notably,
             # the difference here between the fail case is the
             # fetch_head_ref is the patch_branch which acts
@@ -345,7 +349,9 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
         self._run_llvm_harness(tempdir, svn_revision, _runner)
 
     @mock.patch.object(git_utils, "log")
-    def test_cq_depend_detection_passes_if_no_cq_depend(self, git_log_mock):
+    def test_cq_depend_detection_passes_if_no_cq_depend(
+        self, git_log_mock: mock.Mock
+    ) -> None:
         # Put this in a tempdir in case it escapes the mocks somehow; we know
         # the tempdir is empty.
         tempdir = self.make_tempdir()
@@ -364,7 +370,9 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(git_utils, "log")
-    def test_cq_depend_detection_raises_if_no_log_contents(self, git_log_mock):
+    def test_cq_depend_detection_raises_if_no_log_contents(
+        self, git_log_mock: mock.Mock
+    ) -> None:
         tempdir = self.make_tempdir()
 
         git_log_mock.return_value = ""
@@ -380,7 +388,9 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
             )
 
     @mock.patch.object(git_utils, "log")
-    def test_cq_depend_detection_fails_if_cq_depend(self, git_log_mock):
+    def test_cq_depend_detection_fails_if_cq_depend(
+        self, git_log_mock: mock.Mock
+    ) -> None:
         tempdir = self.make_tempdir()
         git_log_mock.return_value = textwrap.dedent(
             """\

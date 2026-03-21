@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright 2023 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
@@ -17,7 +16,9 @@ class Test(unittest.TestCase):
     """Tests for pgo_utils."""
 
     @mock.patch.object(pgo_utils, "run")
-    def test_pgo_generate_checking_works(self, mock_run):
+    def test_pgo_generate_checking_works(
+        self, mock_run: mock.MagicMock
+    ) -> None:
         equery_u_output = textwrap.dedent(
             """\
             [ Legend : U - final flag setting for installation]
@@ -42,7 +43,9 @@ class Test(unittest.TestCase):
         self.assertFalse(pgo_utils.installed_llvm_has_pgo_generate_enabled())
 
     @mock.patch.object(pgo_utils, "run")
-    def test_pgo_generate_checking_raises_on_zero_pgo_updates(self, mock_run):
+    def test_pgo_generate_checking_raises_on_zero_pgo_updates(
+        self, mock_run: mock.MagicMock
+    ) -> None:
         mock_run.return_value.stdout = textwrap.dedent(
             """\
             [ Legend : U - final flag setting for installation]
@@ -55,7 +58,9 @@ class Test(unittest.TestCase):
             pgo_utils.installed_llvm_has_pgo_generate_enabled()
 
     @mock.patch.object(pgo_utils, "run")
-    def test_pgo_generate_checking_raises_on_many_pgo_updates(self, mock_run):
+    def test_pgo_generate_checking_raises_on_many_pgo_updates(
+        self, mock_run: mock.MagicMock
+    ) -> None:
         mock_run.return_value.stdout = textwrap.dedent(
             """\
             [ Legend : U - final flag setting for installation]
@@ -70,7 +75,9 @@ class Test(unittest.TestCase):
             pgo_utils.installed_llvm_has_pgo_generate_enabled()
 
     @mock.patch.object(pgo_utils, "run")
-    def test_pgo_generate_ignores_nonexact_use_flags(self, mock_run):
+    def test_pgo_generate_ignores_nonexact_use_flags(
+        self, mock_run: mock.MagicMock
+    ) -> None:
         mock_run.return_value.stdout = textwrap.dedent(
             """\
             [ Legend : U - final flag setting for installation]
@@ -84,7 +91,7 @@ class Test(unittest.TestCase):
         )
         self.assertTrue(pgo_utils.installed_llvm_has_pgo_generate_enabled())
 
-    def test_quickpkg_restoration_works(self):
+    def test_quickpkg_restoration_works(self) -> None:
         self.assertEqual(
             pgo_utils.generate_quickpkg_restoration_command(
                 Path("/path/to/sys-devel/llvm-1234-r1.tbz2")
@@ -92,13 +99,15 @@ class Test(unittest.TestCase):
             ["sudo", "emerge", "--usepkgonly", "=sys-devel/llvm-1234-r1"],
         )
 
-    def test_temporary_file_creation_works(self):
+    def test_temporary_file_creation_works(self) -> None:
         with pgo_utils.temporary_file("foo_bar_") as tmp:
             self.assertTrue(tmp.name.startswith("foo_bar_"), tmp.name)
             self.assertTrue(tmp.exists())
         self.assertFalse(tmp.exists())
 
-    def test_temporary_file_deletion_is_fine_if_file_does_not_exist(self):
+    def test_temporary_file_deletion_is_fine_if_file_does_not_exist(
+        self,
+    ) -> None:
         # This test ensures this `with`'s `__exit__` block doesn't `raise`.
         with pgo_utils.temporary_file("foo_bar_") as tmp:
             tmp.unlink()

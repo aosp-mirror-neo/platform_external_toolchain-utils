@@ -20,6 +20,7 @@ import contextlib
 import logging
 import subprocess
 import sys
+from typing import Iterator
 
 from cros_utils import cros_paths
 from llvm_tools import chroot
@@ -29,7 +30,7 @@ from llvm_tools import patch_utils
 
 
 @contextlib.contextmanager
-def llvm_checked_out_to(checkout_sha: str):
+def llvm_checked_out_to(checkout_sha: str) -> Iterator[None]:
     """Checks out LLVM to `checkout_sha`, if necessary.
 
     Restores LLVM to the prior SHA when exited.

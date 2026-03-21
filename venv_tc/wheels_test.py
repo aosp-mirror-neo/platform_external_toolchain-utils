@@ -6,6 +6,7 @@
 
 import hashlib
 import multiprocessing.pool
+from pathlib import Path
 from unittest import mock
 
 from llvm_tools import test_helpers
@@ -15,7 +16,7 @@ from venv_tc import wheels
 class WheelsTest(test_helpers.TempDirTestCase):
     """Tests for the wheels script."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.tempdir = self.make_tempdir()
         self.venv_dir = self.tempdir / "venv"
         self.venv_dir.mkdir()
@@ -54,7 +55,7 @@ class WheelsTest(test_helpers.TempDirTestCase):
         self.mock_populate.side_effect = called_but_not_mocked
         self.addCleanup(patcher_populate.stop)
 
-    def test_manifest_read_write(self):
+    def test_manifest_read_write(self) -> None:
         manifest = wheels.WheelManifest(
             wheel_hashes={"wheel1": "hash1", "wheel2": "hash2"}
         )
@@ -62,7 +63,7 @@ class WheelsTest(test_helpers.TempDirTestCase):
         read_manifest = wheels.read_wheel_manifest(self.venv_dir)
         self.assertEqual(manifest, read_manifest)
 
-    def test_calculate_wheel_hash(self):
+    def test_calculate_wheel_hash(self) -> None:
         wheel_file = self.wheel_dir / "mywheel.whl"
         wheel_content = b"some wheel content"
         wheel_file.write_bytes(wheel_content)
@@ -73,12 +74,12 @@ class WheelsTest(test_helpers.TempDirTestCase):
 
         self.assertEqual(wheels.calculate_wheel_hash(wheel_file), expected_hash)
 
-    def test_calculate_wheel_hash_file_not_found(self):
+    def test_calculate_wheel_hash_file_not_found(self) -> None:
         self.assertIsNone(
             wheels.calculate_wheel_hash(self.wheel_dir / "nonexistent.whl")
         )
 
-    def test_generate_wheel_manifest(self):
+    def test_generate_wheel_manifest(self) -> None:
         wheel1_file = self.wheel_dir / "wheel1.whl"
         wheel1_content = b"content1"
         wheel1_file.write_bytes(wheel1_content)
@@ -100,7 +101,7 @@ class WheelsTest(test_helpers.TempDirTestCase):
         )
         self.assertEqual(manifest, expected_manifest)
 
-    def test_validate_one_wheel_file(self):
+    def test_validate_one_wheel_file(self) -> None:
         wheel_name = "wheel.whl"
         wheel_file = self.wheel_dir / wheel_name
         wheel_content = b"content"
@@ -134,8 +135,8 @@ class WheelsTest(test_helpers.TempDirTestCase):
         # The file should be deleted
         self.assertFalse(wheel_file.exists())
 
-    def test_update_wheels_and_manifest_no_upload(self):
-        def fake_populate(_, wheel_dir):
+    def test_update_wheels_and_manifest_no_upload(self) -> None:
+        def fake_populate(_: Path, wheel_dir: Path) -> None:
             wheel_dir.mkdir()
             # Create some fake wheels
             (wheel_dir / "new_wheel.whl").touch()
@@ -149,7 +150,9 @@ class WheelsTest(test_helpers.TempDirTestCase):
         ]
         self.mock_fetch.side_effect = None
 
-        wheels.update_wheels_and_manifest(self.venv_dir, upload=False)
+        wheels.update_wheels_and_manifest(
+            self.venv_dir, upload=False, upload_certified=False
+        )
 
         self.mock_populate.assert_called_once_with(
             self.venv_dir, self.wheel_dir
@@ -159,8 +162,8 @@ class WheelsTest(test_helpers.TempDirTestCase):
             self.wheel_dir, ["existing_wheel.whl"]
         )
 
-    def test_update_wheels_and_manifest_with_upload(self):
-        def fake_populate(_, wheel_dir):
+    def test_update_wheels_and_manifest_with_upload(self) -> None:
+        def fake_populate(_: Path, wheel_dir: Path) -> None:
             wheel_dir.mkdir()
             (wheel_dir / "wheel.whl").touch()
 
@@ -169,7 +172,9 @@ class WheelsTest(test_helpers.TempDirTestCase):
         self.mock_list_gs.return_value = []
         self.mock_upload.side_effect = None
 
-        wheels.update_wheels_and_manifest(self.venv_dir, upload=True)
+        wheels.update_wheels_and_manifest(
+            self.venv_dir, upload=True, upload_certified=True
+        )
 
         self.mock_populate.assert_called_once_with(
             self.venv_dir, self.wheel_dir
@@ -178,7 +183,33 @@ class WheelsTest(test_helpers.TempDirTestCase):
         self.mock_fetch.assert_not_called()
         self.mock_upload.assert_called_once_with(self.wheel_dir)
 
-    def test_ensure_downloaded_all_valid(self):
+    def test_update_wheels_and_manifest_upload_uncertified(self) -> None:
+        def fake_populate(_: object, wheel_dir: Path) -> None:
+            wheel_dir.mkdir()
+            (wheel_dir / "wheel.whl").touch()
+
+        self.mock_populate.side_effect = fake_populate
+        self.mock_list_gs.side_effect = None
+        self.mock_list_gs.return_value = []
+        self.mock_upload.side_effect = None
+
+        with self.assertRaises(SystemExit) as e:
+            wheels.update_wheels_and_manifest(
+                self.venv_dir, upload=True, upload_certified=False
+            )
+
+        self.assertIn(
+            "--i-have-verified-the-wheels not passed", str(e.exception)
+        )
+
+        self.mock_populate.assert_called_once_with(
+            self.venv_dir, self.wheel_dir
+        )
+        self.mock_list_gs.assert_called_once()
+        self.mock_fetch.assert_not_called()
+        self.mock_upload.assert_not_called()
+
+    def test_ensure_downloaded_all_valid(self) -> None:
         wheel_name = "wheel.whl"
         wheel_file = self.wheel_dir / wheel_name
         wheel_content = b"content"
@@ -192,7 +223,7 @@ class WheelsTest(test_helpers.TempDirTestCase):
 
         self.mock_fetch.assert_not_called()
 
-    def test_ensure_downloaded_missing_and_invalid_wheels(self):
+    def test_ensure_downloaded_missing_and_invalid_wheels(self) -> None:
         # Setup manifest
         valid_wheel_name = "valid.whl"
         valid_content = b"valid"
@@ -220,7 +251,7 @@ class WheelsTest(test_helpers.TempDirTestCase):
         (self.wheel_dir / invalid_wheel_name).write_bytes(b"wrong content")
 
         # after fetch, the files should be valid
-        def fake_fetch(wheel_dir, broken_files):
+        def fake_fetch(wheel_dir: Path, broken_files: list[str]) -> None:
             self.assertIn(invalid_wheel_name, broken_files)
             self.assertIn(missing_wheel_name, broken_files)
             (wheel_dir / invalid_wheel_name).write_bytes(invalid_content)

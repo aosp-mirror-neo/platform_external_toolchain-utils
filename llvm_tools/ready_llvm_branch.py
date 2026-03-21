@@ -81,13 +81,14 @@ def _apply_patches_locally(
 def _maybe_upload_for_review(
     llvm_src_dir: Path, branch_name: str, dry_run: bool
 ) -> None:
-    kwargs = {
-        "remote": git_utils.CROS_EXTERNAL_REMOTE,
-        "branch": branch_name,
-        "topic": f"{branch_name}-patches",
-    }
+    remote = git_utils.CROS_EXTERNAL_REMOTE
+    topic = f"{branch_name}-patches"
     if dry_run:
-        cmd = git_utils.generate_upload_to_gerrit_cmd(**kwargs)
+        cmd = git_utils.generate_upload_to_gerrit_cmd(
+            remote=remote,
+            branch=branch_name,
+            topic=topic,
+        )
         upload_command_git = shlex.join(cmd)
         logging.warning(
             "Did not upload branch. You can do so manually with:"
@@ -97,7 +98,12 @@ def _maybe_upload_for_review(
         )
         return
     logging.info("Uploading branch...")
-    git_utils.upload_to_gerrit(llvm_src_dir, **kwargs)
+    git_utils.upload_to_gerrit(
+        git_repo=llvm_src_dir,
+        remote=remote,
+        branch=branch_name,
+        topic=topic,
+    )
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:

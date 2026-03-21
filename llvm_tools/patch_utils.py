@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, IO, Iterable
+from typing import Any, Callable, Generator, IO, Iterable
 
 from llvm_tools import atomic_write_file
 
@@ -34,6 +34,13 @@ CHROMEOS_LLVM_SUBPACKAGES = (
     "sys-libs/llvm-libunwind",
     "sys-libs/scudo",
 )
+
+REPLACEMENT_AUTHOR_NAME = "crostc-worker"
+REPLACEMENT_AUTHOR_EMAIL = (
+    "crostc-worker@crostc-chrotomation.iam.gserviceaccount.com"
+)
+# Author to replace the true author of a revert commit. This is to prevent them
+# from being spammed with emails every time we upload revert commits to Gerrit.
 
 
 @dataclasses.dataclass
@@ -132,7 +139,7 @@ class PatchResult:
         default_factory=dict
     )
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return self.succeeded
 
     def failure_info(self) -> str:
@@ -164,12 +171,12 @@ class PatchEntry:
     """Don't verify the workdir exists. Used for testing."""
     _parsed_hunks = None
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if self.verify_workdir and not self.workdir.is_dir():
             raise ValueError(f"workdir {self.workdir} is not a directory")
 
     @classmethod
-    def from_dict(cls, workdir: Path, data: dict[str, Any]):
+    def from_dict(cls, workdir: Path, data: dict[str, Any]) -> "PatchEntry":
         """Instatiate from a dictionary.
 
         Dictionary must have at least the following key:
@@ -317,7 +324,12 @@ def git_am_chromiumos(
     extra_args: list[str | Path] | None,
 ) -> PatchResult:
     """Patch a patch file using 'git am', but include footer metadata."""
-    return _git_am_chromiumos_internal(pe, root_dir, patch_path, extra_args)
+    return _git_am_chromiumos_internal(
+        pe,
+        root_dir,
+        patch_path,
+        extra_args,
+    )
 
 
 def git_am_chromiumos_quiet(
@@ -328,7 +340,11 @@ def git_am_chromiumos_quiet(
 ) -> PatchResult:
     """Same as git_am_chromiumos, but no stdout."""
     return _git_am_chromiumos_internal(
-        pe, root_dir, patch_path, extra_args, quiet=True
+        pe,
+        root_dir,
+        patch_path,
+        extra_args,
+        quiet=True,
     )
 
 
@@ -337,6 +353,7 @@ def _git_am_chromiumos_internal(
     root_dir: Path,
     patch_path: Path,
     extra_args: list[str | Path] | None,
+    use_bot_as_author: bool = True,
     quiet: bool = False,
 ) -> PatchResult:
     cmd: list[str | Path] = [
@@ -380,8 +397,18 @@ def _git_am_chromiumos_internal(
         for line in original_commit_msg_lines
         if not metadata_regex.match(line)
     ] + _chromiumos_llvm_footer(pe)
+    amend_cmd = [
+        "git",
+        "commit",
+        "--amend",
+        "-m",
+        "\n".join(new_commit_msg_lines),
+    ]
+    if use_bot_as_author:
+        new_author = f"{REPLACEMENT_AUTHOR_NAME} <{REPLACEMENT_AUTHOR_EMAIL}>"
+        amend_cmd.append(f"--author={new_author}")
     subprocess.run(
-        ["git", "commit", "--amend", "-m", "\n".join(new_commit_msg_lines)],
+        amend_cmd,
         check=True,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
@@ -439,7 +466,7 @@ def _run_git_applylike(
     root_dir: Path,
     cmd: list[Path | str],
     quiet: bool = False,
-):
+) -> PatchResult:
     try:
         subprocess.run(
             cmd,
@@ -541,7 +568,7 @@ class PatchInfo:
     # Can be deleted once legacy code is removed.
     modified_metadata: str | None
 
-    def _asdict(self):
+    def _asdict(self) -> dict:
         return dataclasses.asdict(self)
 
 
@@ -565,7 +592,9 @@ def json_str_to_patch_entries(workdir: Path, json_str: str) -> list[PatchEntry]:
     return [PatchEntry.from_dict(workdir, d) for d in json.loads(json_str)]
 
 
-def _print_failed_patch(pe: PatchEntry, failed_hunks: dict[str, list[Hunk]]):
+def _print_failed_patch(
+    pe: PatchEntry, failed_hunks: dict[str, list[Hunk]]
+) -> None:
     """Print information about a single failing PatchEntry.
 
     Args:
@@ -683,20 +712,16 @@ def is_git_dirty(git_root_dir: Path) -> bool:
     )
 
 
-def clean_src_tree(src_path):
+def clean_src_tree(src_path: Path) -> None:
     """Cleans the source tree of the changes made in 'src_path'."""
-
-    reset_src_tree_cmd = ["git", "-C", src_path, "reset", "HEAD", "--hard"]
-
-    subprocess.run(reset_src_tree_cmd, check=True)
-
-    clean_src_tree_cmd = ["git", "-C", src_path, "clean", "-fd"]
-
-    subprocess.run(clean_src_tree_cmd, check=True)
+    subprocess.run(
+        ("git", "-C", src_path, "reset", "HEAD", "--hard"), check=True
+    )
+    subprocess.run(("git", "-C", src_path, "clean", "-fd"), check=True)
 
 
 @contextlib.contextmanager
-def git_clean_context(git_root_dir: Path):
+def git_clean_context(git_root_dir: Path) -> Generator[None, None, None]:
     """Cleans up a git directory when the context exits."""
     if is_git_dirty(git_root_dir):
         raise RuntimeError("Cannot setup clean context; git_root_dir is dirty")
@@ -707,8 +732,8 @@ def git_clean_context(git_root_dir: Path):
 
 
 def _write_json_changes(
-    patches: list[dict[str, Any]], file_io: IO[str], indent_len=2
-):
+    patches: list[dict[str, Any]], file_io: IO[str], indent_len: int = 2
+) -> None:
     """Write JSON changes to file, does not acquire new file lock."""
     json.dump(patches, file_io, indent=indent_len, separators=(",", ": "))
     # Need to add a newline as json.dump omits it.

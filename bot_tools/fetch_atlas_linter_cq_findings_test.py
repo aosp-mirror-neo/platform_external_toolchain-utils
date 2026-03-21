@@ -29,7 +29,7 @@ ARBITRARY_FINDING = bot_lints.Finding(
 class Test(test_helpers.TempDirTestCase):
     """Tests for fetch_atlas_linter_cq_findings."""
 
-    def test_finding_grouping_works(self):
+    def test_finding_grouping_works(self) -> None:
         finding1 = dataclasses.replace(
             ARBITRARY_FINDING, category="mock category 1"
         )
@@ -70,11 +70,11 @@ class Test(test_helpers.TempDirTestCase):
             },
         )
 
-    def test_asciify_works(self):
+    def test_asciify_works(self) -> None:
         nonascii = "幸"
         self.assertEqual(fetch_findings.asciify(nonascii), "\\u5e78")
 
-    def test_grouped_findings_writing(self):
+    def test_grouped_findings_writing(self) -> None:
         out_dir = self.make_tempdir()
         fetch_findings.write_grouped_findings(
             out_dir,

@@ -4,6 +4,7 @@
 
 """Paths and helpers common to Android source trees."""
 
+import argparse
 import functools
 from pathlib import Path
 import sys
@@ -17,7 +18,7 @@ BUILD_SOONG_SUBDIR = Path("build") / "soong"
 script_toolchain_utils_root = cros_paths.script_toolchain_utils_root
 
 
-@functools.lru_cache(1)
+@functools.cache
 def script_android_checkout() -> Path | None:
     """Returns the absolute path to the Android checkout this script resides in.
 
@@ -43,3 +44,19 @@ def script_android_checkout_or_exit() -> Path:
             "residing in an Android checkout."
         )
     return result
+
+
+def is_android_tree_root(path: Path) -> bool:
+    """Returns `True` if the given path seems like a root of an Android tree.
+
+    This Android tree is specifically e.g., internal-main. This does not intend
+    to match the toolchain branch's tree.
+    """
+    return (path / ".repo").exists() and (path / "Android.bp").exists()
+
+
+def assert_is_valid_android_tree_root(
+    parser: argparse.ArgumentParser, path: Path
+) -> None:
+    if not is_android_tree_root(path):
+        parser.error(f"{path} is not a valid Android tree root.")

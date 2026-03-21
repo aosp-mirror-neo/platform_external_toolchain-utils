@@ -60,7 +60,7 @@ def detect_bootstrap_sdk_version(repo_root: Path) -> str:
 def create_fresh_chroot(
     repo_root: Path,
     chroot_info: ChrootInfo,
-):
+) -> None:
     """Creates a chroot. If it already exists, replaces it."""
     pgo_utils.run(
         [
@@ -83,7 +83,7 @@ def generate_pgo_profile(
     chroot_output_file: Path,
     sha: str,
     clean_llvm: bool,
-):
+) -> None:
     """Generates a PGO profile to `chroot_output_file`."""
     cros_sdk: pgo_utils.Command = [
         "cros_sdk",
@@ -251,7 +251,7 @@ def get_rev_info_from_branch(branch_name: str) -> tuple[int, str]:
     return rev, sha
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",

@@ -67,6 +67,7 @@ NAME_MAIN_ALLOWLIST = (
     "llvm_tools/revert_checker.py",
     # These are directly executed by users.
     "venv_python3_wrapper.py",
+    "venvless_python3_wrapper.py",
     "venv_tc/wheels.py",
 )
 
@@ -311,18 +312,6 @@ def check_mypy(
     prefix = f"Using {output.strip()}, "
 
     cmd = list(mypy.command)
-    cmd += (
-        # Suppress mypy errors in files that aren't specified on `argv`. Until
-        # toolchain-utils is overwhelmingly mypy-clean, this has to be the
-        # default.
-        "--follow-imports=silent",
-        # b/338058766: in toolchain-utils, mypy will infer that each file
-        # passed in is a package of its own. This leads to errors if one
-        # file transitively imports another. `--explicit-package-bases` causes
-        # mypy to treat $CWD (and other env var values) as the only package
-        # bases, and $CWD == toolchain_utils_root.
-        "--explicit-package-bases",
-    )
     cmd += files
     exit_code, output = run_command_unchecked(
         cmd, cwd=toolchain_utils_root, env=fixed_env
@@ -625,7 +614,11 @@ def check_cros_lint(
     return results
 
 
-def check_go_format(toolchain_utils_root, _thread_pool, files):
+def check_go_format(
+    toolchain_utils_root: str,
+    _thread_pool: multiprocessing.pool.ThreadPool,
+    files: Iterable[str],
+) -> CheckResult:
     """Runs gofmt on files to check for style bugs."""
     gofmt = "gofmt"
     if not has_executable_on_path(gofmt):
@@ -798,24 +791,30 @@ def process_check_result(
 
 
 def try_autofix(
-    all_autofix_commands: list[list[str]], toolchain_utils_root: str
+    all_autofix_commands: list[list[str]],
+    toolchain_utils_root: str,
+    force_autofix: bool,
 ) -> None:
     """Tries to run all given autofix commands, if appropriate."""
     if not all_autofix_commands:
         return
 
-    exit_code, output = run_command_unchecked(
-        ["git", "status", "--porcelain"], cwd=toolchain_utils_root
-    )
-    if exit_code != 0:
-        print("Autofix aborted: couldn't get toolchain-utils git status.")
-        return
+    if not force_autofix:
+        exit_code, output = run_command_unchecked(
+            ("git", "status", "--porcelain"), cwd=toolchain_utils_root
+        )
+        if exit_code:
+            print("Autofix aborted: couldn't get toolchain-utils git status.")
+            return
 
-    if output.strip():
-        # A clean repo makes checking/undoing autofix commands trivial. A dirty
-        # one... less so. :)
-        print("Git repo seems dirty; skipping autofix.")
-        return
+        if output.strip():
+            # A clean repo makes checking/undoing autofix commands trivial. A
+            # dirty one... less so. :)
+            print(
+                "Git repo seems dirty; skipping autofix. Rerun with "
+                "`--force_autofix` to autofix anyway."
+            )
+            return
 
     anything_succeeded = False
     for command in all_autofix_commands:
@@ -854,7 +853,10 @@ def is_in_chroot() -> bool:
 
 
 def maybe_reexec_inside_chroot(
-    autofix: bool, infer_files: bool, files: list[str]
+    autofix_allowed: bool,
+    force_autofix: bool,
+    infer_files: bool,
+    files: list[str],
 ) -> None:
     if is_in_chroot():
         return
@@ -914,8 +916,10 @@ def maybe_reexec_inside_chroot(
         ),
     ]
 
-    if not autofix:
+    if not autofix_allowed:
         args.append("--no_autofix")
+    if force_autofix:
+        args.append("--force_autofix")
     if infer_files:
         args.append("--infer_files")
     args.extend(rebase_path(x) for x in files)
@@ -997,13 +1001,19 @@ def infer_files_from_env_or_die(toolchain_utils_root: Path) -> list[str]:
     ]
 
 
-def main(argv: list[str]) -> int:
+def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
+    autofix_group = parser.add_mutually_exclusive_group()
+    autofix_group.add_argument(
         "--no_autofix",
-        dest="autofix",
+        dest="autofix_allowed",
         action="store_false",
         help="Don't run any autofix commands.",
+    )
+    autofix_group.add_argument(
+        "--force_autofix",
+        action="store_true",
+        help="Run autofix commands even if the tree is dirty.",
     )
     parser.add_argument(
         "--no_enter_chroot",
@@ -1022,17 +1032,24 @@ def main(argv: list[str]) -> int:
     parser.add_argument("files", nargs="*")
     opts = parser.parse_args(argv)
 
+    if bool(opts.files) == opts.infer_files:
+        parser.error(
+            "Either `--infer_files` or a list of files must be passed, "
+            "not both."
+        )
+    return opts
+
+
+def main(argv: list[str]) -> int:
+    opts = parse_args(argv)
+
     infer_files = opts.infer_files
     files = opts.files
 
     toolchain_utils_root = detect_toolchain_utils_root()
     if opts.enter_chroot:
-        maybe_reexec_inside_chroot(opts.autofix, infer_files, files)
-
-    if bool(files) == infer_files:
-        parser.error(
-            "Either `--infer_files` or a list of files must be passed, "
-            "not both."
+        maybe_reexec_inside_chroot(
+            opts.autofix_allowed, opts.force_autofix, infer_files, files
         )
 
     if infer_files:
@@ -1117,8 +1134,10 @@ def main(argv: list[str]) -> int:
     # - we don't collide with checkers that are running concurrently
     # - we clearly print out everything that went wrong ahead of time, in case
     #   any of these fail
-    if opts.autofix:
-        try_autofix(all_autofix_commands, toolchain_utils_root)
+    if opts.autofix_allowed:
+        try_autofix(
+            all_autofix_commands, toolchain_utils_root, opts.force_autofix
+        )
 
     if not all_checks_ok:
         return 1

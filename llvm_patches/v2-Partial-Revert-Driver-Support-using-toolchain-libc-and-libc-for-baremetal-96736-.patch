@@ -1,0 +1,83 @@
+From b314d24d005c1a74e4b203828ae6b5586889f022 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Thu, 14 Nov 2024 21:14:12 +0000
+Subject: [PATCH] v2: Partial Revert "[Driver] Support using toolchain libc and
+ libc++ for baremetal (#96736)"
+
+This reverts commit 135483bf968bc72a9544a9f2640f73f196ca8cbc.
+
+This is a partial revert, reverting only the portions of
+135483bf968bc72a9544a9f2640f73f196ca8cbc which actually break our
+embedded projects.
+
+The original commit breaks FPMCU targets because it does not respect the
+--sysroot or -isysroot clang flags, which should re-root the system
+paths. This commit introduces a new way (and order) to add system
+includes which ends up violating our sysroot, and thus causing
+mismatched headers.
+
+Upstream Commit:
+https://github.com/llvm/llvm-project/commit/135483bf968bc72a9544a9f2640f73f196ca8cbc
+
+patch.cherry: false
+patch.platforms: chromiumos
+patch.version_range.from: 584947
+patch.version_range.until: null
+
+BUG=b:377375234
+TEST=Built chromeos-base/chromeos-fpmcu-bloonchipper-unittests
+
+Change-Id: I0988eda8c514682bd2a0ebaec507d048dc0647ed
+---
+ clang/lib/Driver/ToolChains/BareMetal.cpp | 34 -----------------------
+ 1 file changed, 34 deletions(-)
+
+diff --git a/clang/lib/Driver/ToolChains/BareMetal.cpp b/clang/lib/Driver/ToolChains/BareMetal.cpp
+index 25a16fe16eea..b7271ccae088 100644
+--- a/clang/lib/Driver/ToolChains/BareMetal.cpp
++++ b/clang/lib/Driver/ToolChains/BareMetal.cpp
+@@ -448,40 +448,6 @@ void BareMetal::AddClangCXXStdlibIncludeArgs(const ArgList &DriverArgs,
+     return;
+ 
+   const Driver &D = getDriver();
+-  std::string Target = getTripleString();
+-
+-  auto AddCXXIncludePath = [&](StringRef Path) {
+-    std::string Version = detectLibcxxVersion(Path);
+-    if (Version.empty())
+-      return;
+-
+-    {
+-      // First the per-target include dir: include/<target>/c++/v1.
+-      SmallString<128> TargetDir(Path);
+-      llvm::sys::path::append(TargetDir, Target, "c++", Version);
+-      addSystemInclude(DriverArgs, CC1Args, TargetDir);
+-    }
+-
+-    {
+-      // Then the generic dir: include/c++/v1.
+-      SmallString<128> Dir(Path);
+-      llvm::sys::path::append(Dir, "c++", Version);
+-      addSystemInclude(DriverArgs, CC1Args, Dir);
+-    }
+-  };
+-
+-  switch (GetCXXStdlibType(DriverArgs)) {
+-  case ToolChain::CST_Libcxx: {
+-    SmallString<128> P(D.Dir);
+-    llvm::sys::path::append(P, "..", "include");
+-    AddCXXIncludePath(P);
+-    break;
+-  }
+-  case ToolChain::CST_Libstdcxx:
+-    addLibStdCxxIncludePaths(DriverArgs, CC1Args);
+-    break;
+-  }
+-
+   std::string SysRootDir(computeSysRoot());
+   if (SysRootDir.empty())
+     return;
+-- 
+2.53.0.239.g8d8fc8a987-goog
+

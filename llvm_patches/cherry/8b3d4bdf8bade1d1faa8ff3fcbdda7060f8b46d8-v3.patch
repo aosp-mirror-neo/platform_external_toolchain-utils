@@ -1,0 +1,64 @@
+From ad1ab719c2d1702347fccf40e41500884c77c36f Mon Sep 17 00:00:00 2001
+From: Timm Baeder <tbaeder@redhat.com>
+Date: Sat, 23 Aug 2025 08:01:48 +0200
+Subject: [PATCH] [clang] Remove hasValue() check in
+ `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)
+
+When initializing an anonymous struct via an `IndirectFieldDecl`, we
+create an `APValue` for the struct, but we leave the fields
+uninitialized. This would later cause the `CXXConstructExpr` that
+initializes the anonymous struct member to not do anything since its
+`APValue` already had a value (but the member didn't). Just remove the
+check for an `APValue` that already has a value from
+`RecordExprEvaluator::VisitCXXConstructExpr()`.
+
+Fixes #154567
+
+Change-Id: I30bc0251613fc385974ba3b5960b3bf029329f7c
+---
+ clang/lib/AST/ExprConstant.cpp                   |  4 ----
+ clang/test/SemaCXX/constant-expression-cxx11.cpp | 16 ++++++++++++++++
+ 2 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/clang/lib/AST/ExprConstant.cpp b/clang/lib/AST/ExprConstant.cpp
+index 993b64b2752e..8df82a4ee2a5 100644
+--- a/clang/lib/AST/ExprConstant.cpp
++++ b/clang/lib/AST/ExprConstant.cpp
+@@ -11011,10 +11011,6 @@ bool RecordExprEvaluator::VisitCXXConstructExpr(const CXXConstructExpr *E,
+ 
+   bool ZeroInit = E->requiresZeroInitialization();
+   if (CheckTrivialDefaultConstructor(Info, E->getExprLoc(), FD, ZeroInit)) {
+-    // If we've already performed zero-initialization, we're already done.
+-    if (Result.hasValue())
+-      return true;
+-
+     if (ZeroInit)
+       return ZeroInitialization(E, T);
+ 
+diff --git a/clang/test/SemaCXX/constant-expression-cxx11.cpp b/clang/test/SemaCXX/constant-expression-cxx11.cpp
+index 5ecb8c607f59..66912e0a5839 100644
+--- a/clang/test/SemaCXX/constant-expression-cxx11.cpp
++++ b/clang/test/SemaCXX/constant-expression-cxx11.cpp
+@@ -2615,3 +2615,19 @@ namespace DoubleCapture {
+     };
+   }
+ }
++
++namespace GH154567 {
++  struct T {
++    int i;
++  };
++
++  struct S {
++    struct { // expected-warning {{GNU extension}}
++      T val;
++    };
++    constexpr S() : val() {}
++  };
++
++  constexpr S s{};
++  static_assert(s.val.i == 0, "");
++}
+-- 
+2.51.0.710.ga91ca5db03-goog
+

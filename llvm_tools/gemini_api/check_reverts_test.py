@@ -5,6 +5,7 @@
 """Tests for check_reverts."""
 
 import re
+from typing import Any
 import unittest
 
 from llvm_tools.gemini_api import check_reverts
@@ -13,7 +14,7 @@ from llvm_tools.gemini_api import check_reverts
 class GetDictElemWithTypeTest(unittest.TestCase):
     """Tests for get_dict_elem_with_type."""
 
-    def test_success_primitive(self):
+    def test_success_primitive(self) -> None:
         d = {"a": 1, "b": "hello", "c": True}
         self.assertEqual(check_reverts.get_dict_elem_with_type(d, "a", int), 1)
         self.assertEqual(
@@ -23,7 +24,7 @@ class GetDictElemWithTypeTest(unittest.TestCase):
             check_reverts.get_dict_elem_with_type(d, "c", bool), True
         )
 
-    def test_success_list(self):
+    def test_success_list(self) -> None:
         d = {"a": ["foo", "bar"], "b": [1, 2, 3]}
         self.assertEqual(
             check_reverts.get_dict_elem_with_type(d, "a", list[str]),
@@ -33,18 +34,18 @@ class GetDictElemWithTypeTest(unittest.TestCase):
             check_reverts.get_dict_elem_with_type(d, "b", list[int]), [1, 2, 3]
         )
 
-    def test_success_empty_list(self):
-        d = {"a": []}
+    def test_success_empty_list(self) -> None:
+        d: dict[str, Any] = {"a": []}
         self.assertEqual(
             check_reverts.get_dict_elem_with_type(d, "a", list[str]), []
         )
 
-    def test_key_missing(self):
+    def test_key_missing(self) -> None:
         d = {"a": 1}
         with self.assertRaisesRegex(ValueError, "No b key in {'a': 1}"):
             check_reverts.get_dict_elem_with_type(d, "b", str)
 
-    def test_wrong_primitive_type(self):
+    def test_wrong_primitive_type(self) -> None:
         d = {"a": 1}
         with self.assertRaisesRegex(
             ValueError,
@@ -52,7 +53,7 @@ class GetDictElemWithTypeTest(unittest.TestCase):
         ):
             check_reverts.get_dict_elem_with_type(d, "a", str)
 
-    def test_bool_doesnt_pass_as_int(self):
+    def test_bool_doesnt_pass_as_int(self) -> None:
         d = {"a": True}
         with self.assertRaisesRegex(
             ValueError,
@@ -60,7 +61,7 @@ class GetDictElemWithTypeTest(unittest.TestCase):
         ):
             check_reverts.get_dict_elem_with_type(d, "a", int)
 
-    def test_not_a_list(self):
+    def test_not_a_list(self) -> None:
         d = {"a": 1}
         with self.assertRaisesRegex(
             ValueError,
@@ -68,7 +69,7 @@ class GetDictElemWithTypeTest(unittest.TestCase):
         ):
             check_reverts.get_dict_elem_with_type(d, "a", list[str])
 
-    def test_list_with_wrong_element_type(self):
+    def test_list_with_wrong_element_type(self) -> None:
         d = {"a": ["foo", 1]}
         with self.assertRaisesRegex(
             ValueError,
@@ -76,7 +77,7 @@ class GetDictElemWithTypeTest(unittest.TestCase):
         ):
             check_reverts.get_dict_elem_with_type(d, "a", list[str])
 
-    def test_list_with_bool_doesnt_pass_as_int(self):
+    def test_list_with_bool_doesnt_pass_as_int(self) -> None:
         d = {"a": [1, True, 2]}
         with self.assertRaisesRegex(
             ValueError,

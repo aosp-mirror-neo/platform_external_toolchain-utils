@@ -17,7 +17,7 @@ import subprocess
 from typing import Any, Iterable
 
 
-def get_bb_output(subcmd: list[str]):
+def get_bb_output(subcmd: list[str]) -> str:
     return subprocess.run(
         ["bb"] + subcmd,
         check=True,
@@ -27,7 +27,7 @@ def get_bb_output(subcmd: list[str]):
     ).stdout
 
 
-def get_bb_json_output(subcmd: str, args: Iterable[str]):
+def get_bb_json_output(subcmd: str, args: Iterable[str]) -> Any:
     cmd = [subcmd, "-json"]
     cmd += args
     output = get_bb_output(cmd)
@@ -106,7 +106,7 @@ def find_all_gs_log_test_links(cq_orchestrator_id: int) -> list[str]:
 
 def download_gs_logs_to(
     output_dir: Path, gs_logs: list[str], dry_run: bool = False
-):
+) -> None:
     gsutil_command = ["gsutil", "-m", "cp", "-r"] + gs_logs + [str(output_dir)]
     logging.info("Running `%s`...", shlex.join(gsutil_command))
     if dry_run:

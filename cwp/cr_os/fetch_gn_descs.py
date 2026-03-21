@@ -23,11 +23,11 @@ import json
 import logging
 import os
 import subprocess
-import sys
 import tempfile
+from typing import Any, TextIO
 
 
-def _find_chromium_root(search_from):
+def _find_chromium_root(search_from: str) -> str:
     """Finds the chromium root directory from `search_from`."""
     current = search_from
     while current != "/":
@@ -35,33 +35,33 @@ def _find_chromium_root(search_from):
             return current
         current = os.path.dirname(current)
     raise ValueError(
-        "%s doesn't appear to be a Chromium subdirectory" % search_from
+        f"{search_from} doesn't appear to be a Chromium subdirectory"
     )
 
 
-def _create_gn_args_for(arch):
+def _create_gn_args_for(arch: str) -> str:
     """Creates a `gn args` listing for the given architecture."""
     # FIXME(gbiv): is_chromeos_device = True would be nice to support, as well.
-    # Requires playing nicely with SimpleChrome though, and this should be "close
-    # enough" for now.
+    # Requires playing nicely with SimpleChrome though, and this should be
+    # "close enough" for now.
     return "\n".join(
         (
             'target_os = "chromeos"',
-            'target_cpu = "%s"' % arch,
+            f'target_cpu = "{arch}"',
             "is_official_build = true",
             "is_chrome_branded = true",
         )
     )
 
 
-def _parse_gn_desc_output(output):
+def _parse_gn_desc_output(output: TextIO) -> tuple[str, dict]:
     """Parses the output of `gn desc --format=json`.
 
     Args:
-      output: a seekable file containing the JSON output of `gn desc`.
+        output: a seekable file containing the JSON output of `gn desc`.
 
     Returns:
-      A tuple of (warnings, gn_desc_json).
+        A tuple of (warnings, gn_desc_json).
     """
     warnings = []
     desc_json = None
@@ -81,7 +81,7 @@ def _parse_gn_desc_output(output):
     return "".join(warnings).strip(), desc_json
 
 
-def _run_gn_desc(in_dir, gn_args):
+def _run_gn_desc(in_dir: str, gn_args: str) -> dict[str, Any]:
     logging.info("Running `gn gen`...")
     subprocess.check_call(["gn", "gen", ".", "--args=" + gn_args], cwd=in_dir)
 
@@ -102,7 +102,12 @@ def _run_gn_desc(in_dir, gn_args):
     return result
 
 
-def _fix_result(rename_out, out_dir, chromium_root, gn_desc):
+def _fix_result(
+    rename_out: str,
+    out_dir: str,
+    chromium_root: str,
+    gn_desc: dict[str, Any],
+) -> dict:
     """Performs postprocessing on `gn desc` JSON."""
     result = {}
 
@@ -111,7 +116,7 @@ def _fix_result(rename_out, out_dir, chromium_root, gn_desc):
     )
     rename_out = rename_out if rename_out.endswith("/") else rename_out + "/"
 
-    def fix_source_file(f):
+    def fix_source_file(f: str) -> str:
         if not f.startswith(rel_out):
             return f
         return rename_out + f[len(rel_out) + 1 :]
@@ -130,7 +135,7 @@ def _fix_result(rename_out, out_dir, chromium_root, gn_desc):
     return result
 
 
-def main(args):
+def main(args: list[str]) -> None:
     known_arches = [
         "arm",
         "arm64",
@@ -166,7 +171,9 @@ def main(args):
     opts = parser.parse_args(args)
 
     logging.basicConfig(
-        format="%(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: %(message)s",
+        format=(
+            "%(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: %(message)s"
+        ),
         level=logging.INFO,
     )
 

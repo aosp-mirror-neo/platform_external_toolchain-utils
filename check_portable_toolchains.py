@@ -16,6 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
+from typing import Any, Sequence
 
 
 ABIS = (
@@ -86,8 +87,10 @@ def check_abi(
         with tempfile.TemporaryDirectory() as tmpdir_str:
             tmpdir = Path(tmpdir_str)
 
-            def run(*args, **kwargs):
-                return subprocess.run(*args, check=True, cwd=tmpdir, **kwargs)
+            def run(
+                args: Sequence[str | Path], **kwargs: Any
+            ) -> subprocess.CompletedProcess:
+                return subprocess.run(args, check=True, cwd=tmpdir, **kwargs)
 
             logging.info(
                 "Downloading the toolchain %s into %s",
@@ -116,7 +119,7 @@ def check_abi(
             hello_world_file = tmpdir / "hello_world.cc"
             hello_world_file.write_text(HELLO_WORLD, encoding="utf-8")
             hello_world_output = tmpdir / "hello_world"
-            cmd = [
+            cmd: list[str | Path] = [
                 f"bin/{abi}-clang++",
                 "-o",
                 hello_world_output,

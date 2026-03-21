@@ -1,0 +1,26 @@
+[tool.black]
+line-length = 80
+
+[tool.mypy]
+# These settings configure mypy to support toolchain-utils' project structure
+# (no __init__.py, PYTHONPATH pointed at the dir containing this file).
+mypy_path = "$MYPY_CONFIG_FILE_DIR"
+namespace_packages = true
+explicit_package_bases = true
+
+# Don't complain about errors in `import`ed files. Until toolchain-utils is
+# overwhelmingly mypy-clean, this has to be the default.
+follow_imports = "silent"
+
+# # Disallow function definitions without types on them
+disallow_untyped_defs = true
+
+# Disallow interpreting `def foo(s: str = None):` as `def foo(s: str | None = None)`
+no_implicit_optional = true
+
+# Require equality checks to be between the same types.
+strict_equality = true
+
+# Warn on redundant operations/suppressions.
+warn_redundant_casts = true
+warn_unused_ignores = true

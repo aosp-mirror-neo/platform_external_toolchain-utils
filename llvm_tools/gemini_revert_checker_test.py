@@ -24,7 +24,7 @@ def arbitrary_time() -> datetime.datetime:
 class Test(test_helpers.TempDirTestCase):
     """Tests for the GeminiState class."""
 
-    def test_empty_gemini_state_json_round_trips(self):
+    def test_empty_gemini_state_json_round_trips(self) -> None:
         # Test with an empty revert_status
         empty_state = gemini_revert_checker.GeminiState()
         empty_json = empty_state.to_json()
@@ -33,7 +33,7 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertEqual(empty_state, new_empty_state)
 
-    def test_gemini_state_json_round_trips(self):
+    def test_gemini_state_json_round_trips(self) -> None:
         state = gemini_revert_checker.GeminiState(
             revert_status={
                 "sha123": gemini_revert_checker.GeminiRevertInference(
@@ -56,12 +56,14 @@ class Test(test_helpers.TempDirTestCase):
 class DiscardOldShasTest(test_helpers.TempDirTestCase):
     """Tests for discard_old_shas."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.llvm_dir = self.make_tempdir()
         # Don't need to init a git repo; we're mocking all git operations.
 
     @mock.patch.object(gemini_revert_checker, "_list_shas_between_all_of")
-    def test_no_shas_discards_attempted_if_not_expired(self, list_shas_mock):
+    def test_no_shas_discards_attempted_if_not_expired(
+        self, list_shas_mock: mock.Mock
+    ) -> None:
         now = arbitrary_time()
         state = gemini_revert_checker.GeminiState(
             revert_status={"a": _ARBITRARY_INFERENCE_RESULT},
@@ -89,7 +91,9 @@ class DiscardOldShasTest(test_helpers.TempDirTestCase):
     @mock.patch.object(
         gemini_revert_checker, "_list_shas_between_all_of", return_value=["c"]
     )
-    def test_shas_discarded_after_expiration(self, list_shas_mock):
+    def test_shas_discarded_after_expiration(
+        self, list_shas_mock: mock.Mock
+    ) -> None:
         now = arbitrary_time()
         state = gemini_revert_checker.GeminiState(
             revert_status={
@@ -129,7 +133,9 @@ class DiscardOldShasTest(test_helpers.TempDirTestCase):
         "_list_shas_between_all_of",
         return_value=["a", "b", "c"],
     )
-    def test_shas_in_history_of_important_shas_are_kept(self, list_shas_mock):
+    def test_shas_in_history_of_important_shas_are_kept(
+        self, list_shas_mock: mock.Mock
+    ) -> None:
         now = arbitrary_time()
         state = gemini_revert_checker.GeminiState(
             revert_status={
@@ -175,7 +181,7 @@ class DiscardOldShasTest(test_helpers.TempDirTestCase):
 class EnsureStatePopulatedForTest(test_helpers.TempDirTestCase):
     """Tests for ensure_state_populated_for."""
 
-    def setUp(self):
+    def setUp(self) -> None:
         self.llvm_dir = self.make_tempdir()
         self.gemini_endpoint = gemini_revert_checker.GeminiEndpoint(
             gemini_api_key="test-key"
@@ -187,7 +193,9 @@ class EnsureStatePopulatedForTest(test_helpers.TempDirTestCase):
         return_value=["a", "b"],
     )
     @mock.patch.object(gemini_revert_checker, "_find_commits_reverted_by")
-    def test_successful_population(self, find_commits_mock, list_shas_mock):
+    def test_successful_population(
+        self, find_commits_mock: mock.Mock, list_shas_mock: mock.Mock
+    ) -> None:
         state = gemini_revert_checker.GeminiState()
         find_commits_mock.return_value = {"a": _ARBITRARY_INFERENCE_RESULT}
         result = gemini_revert_checker.ensure_state_populated_for(
@@ -223,12 +231,17 @@ class EnsureStatePopulatedForTest(test_helpers.TempDirTestCase):
     )
     @mock.patch.object(subprocess, "run")
     def test_partial_population(
-        self, subprocess_run_mock, list_shas_mock, normalize_gemini_result_mock
-    ):
+        self,
+        subprocess_run_mock: mock.Mock,
+        list_shas_mock: mock.Mock,
+        normalize_gemini_result_mock: mock.Mock,
+    ) -> None:
         """Verifies that valid JSON entries are stored in state on failure."""
         state = gemini_revert_checker.GeminiState()
 
-        def subprocess_run_impl(command, **_):
+        def subprocess_run_impl(
+            command: list[str], **_: object
+        ) -> subprocess.CompletedProcess:
             # The first call is to establish_venv.sh, which we can ignore.
             if "establish_venv.sh" in str(command[0]):
                 return subprocess.CompletedProcess(
@@ -274,8 +287,8 @@ class EnsureStatePopulatedForTest(test_helpers.TempDirTestCase):
     @mock.patch.object(gemini_revert_checker, "_list_shas_between_all_of")
     @mock.patch.object(gemini_revert_checker, "_find_commits_reverted_by")
     def test_no_shas_to_populate_returns_true(
-        self, find_commits_mock, list_shas_mock
-    ):
+        self, find_commits_mock: mock.Mock, list_shas_mock: mock.Mock
+    ) -> None:
         state = gemini_revert_checker.GeminiState()
         list_shas_mock.return_value = []
         result = gemini_revert_checker.ensure_state_populated_for(

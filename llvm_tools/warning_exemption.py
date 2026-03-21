@@ -326,7 +326,7 @@ class FatalWarningGroup:
     # with paths normalized where available.
     warning_lines: set[str] = dataclasses.field(default_factory=set)
 
-    def add(self, other: "FatalWarningGroup"):
+    def add(self, other: "FatalWarningGroup") -> None:
         self.warning_names |= other.warning_names
         self.warning_lines |= other.warning_lines
 
@@ -419,7 +419,7 @@ def parse_all_fatal_warnings(
     return per_package_groups
 
 
-def main():
+def main() -> None:
     """Main, just exists to print an example of the yaml."""
     print("## This module is meant to be imported, but has an executable so")
     print("## people can easily see what the YAML produced by it looks like:")

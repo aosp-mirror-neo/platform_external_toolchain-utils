@@ -19,7 +19,7 @@ from cros_utils import gs
 class Test(unittest.TestCase):
     """Tests for the gs module."""
 
-    def test_gs_time_parsing(self):
+    def test_gs_time_parsing(self) -> None:
         self.assertEqual(
             gs._datetime_from_gs_time("2024-03-04T10:38:50Z"),
             datetime.datetime(
@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_ls_handles_no_matches(self, run_mock):
+    def test_ls_handles_no_matches(self, run_mock: mock.MagicMock) -> None:
         run_mock.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
@@ -46,7 +46,7 @@ class Test(unittest.TestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_ls_works_on_single_file(self, run_mock):
+    def test_ls_works_on_single_file(self, run_mock: mock.MagicMock) -> None:
         run_mock.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -70,7 +70,7 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_ls_works_on_dir(self, run_mock):
+    def test_ls_works_on_dir(self, run_mock: mock.MagicMock) -> None:
         run_mock.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -99,7 +99,7 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_ls_works_with_subdirs(self, run_mock):
+    def test_ls_works_with_subdirs(self, run_mock: mock.MagicMock) -> None:
         run_mock.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,
@@ -126,7 +126,7 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_ls_works_with_globs(self, run_mock):
+    def test_ls_works_with_globs(self, run_mock: mock.MagicMock) -> None:
         run_mock.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=0,

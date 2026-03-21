@@ -18,7 +18,7 @@ from llvm_tools import werror_logs
 class SilenceLogs:
     """Used by Test.silence_logs to ignore all logging output."""
 
-    def filter(self, _record):
+    def filter(self, _record: logging.LogRecord) -> bool:
         return False
 
 
@@ -36,13 +36,13 @@ def create_warning_info(packages: dict[str, int]) -> werror_logs.WarningInfo:
 class Test(test_helpers.TempDirTestCase):
     """Tests for werror_logs."""
 
-    def silence_logs(self):
+    def silence_logs(self) -> None:
         f = SilenceLogs()
         log = logging.getLogger()
         log.addFilter(f)
         self.addCleanup(log.removeFilter, f)
 
-    def test_clang_warning_parsing_parses_flag_errors(self):
+    def test_clang_warning_parsing_parses_flag_errors(self) -> None:
         self.assertEqual(
             werror_logs.ClangWarning.try_parse_line(
                 "clang-17: error: optimization flag -foo is not supported "
@@ -55,7 +55,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_clang_warning_parsing_doesnt_care_about_werror_order(self):
+    def test_clang_warning_parsing_doesnt_care_about_werror_order(self) -> None:
         self.assertEqual(
             werror_logs.ClangWarning.try_parse_line(
                 "clang-17: error: optimization flag -foo is not supported "
@@ -68,7 +68,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_clang_warning_parsing_parses_code_errors(self):
+    def test_clang_warning_parsing_parses_code_errors(self) -> None:
         self.assertEqual(
             werror_logs.ClangWarning.try_parse_line(
                 "/path/to/foo/bar/baz.cc:12:34: error: don't do this "
@@ -85,7 +85,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_clang_warning_parsing_parses_implicit_errors(self):
+    def test_clang_warning_parsing_parses_implicit_errors(self) -> None:
         self.assertEqual(
             werror_logs.ClangWarning.try_parse_line(
                 # N.B., "-Werror" is missing in this message
@@ -103,7 +103,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_clang_warning_parsing_canonicalizes_correctly(self):
+    def test_clang_warning_parsing_canonicalizes_correctly(self) -> None:
         canonical_forms = (
             ("/build/foo/bar/baz.cc", "/build/{board}/bar/baz.cc"),
             ("///build//foo///bar//baz.cc", "/build/{board}/bar/baz.cc"),
@@ -129,7 +129,9 @@ class Test(test_helpers.TempDirTestCase):
                 ),
             )
 
-    def test_clang_warning_parsing_doesnt_canonicalize_if_not_asked(self):
+    def test_clang_warning_parsing_doesnt_canonicalize_if_not_asked(
+        self,
+    ) -> None:
         self.assertEqual(
             werror_logs.ClangWarning.try_parse_line(
                 "/build/foo/bar/baz.cc:12:34: error: don't do this "
@@ -147,7 +149,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_clang_warning_parsing_skips_uninteresting_lines(self):
+    def test_clang_warning_parsing_skips_uninteresting_lines(self) -> None:
         self.silence_logs()
 
         pointless = (
@@ -162,7 +164,7 @@ class Test(test_helpers.TempDirTestCase):
                 werror_logs.ClangWarning.try_parse_line(line), line
             )
 
-    def test_aggregation_correctly_scrapes_warnings(self):
+    def test_aggregation_correctly_scrapes_warnings(self) -> None:
         aggregated = werror_logs.AggregatedWarnings()
         aggregated.add_report_json(
             {
@@ -226,7 +228,7 @@ class Test(test_helpers.TempDirTestCase):
             },
         )
 
-    def test_aggregation_guesses_packages_correctly(self):
+    def test_aggregation_guesses_packages_correctly(self) -> None:
         aggregated = werror_logs.AggregatedWarnings()
         cwds = (
             "/var/tmp/portage/sys-devel/llvm/foo/bar",
@@ -250,7 +252,7 @@ class Test(test_helpers.TempDirTestCase):
             warning_info, create_warning_info({"sys-devel/llvm": len(cwds)})
         )
 
-    def test_guessing_real_packages_correctly(self):
+    def test_guessing_real_packages_correctly(self) -> None:
         # pylint: disable=line-too-long
         aggregated = werror_logs.AggregatedWarnings()
         cwds = (
@@ -268,12 +270,12 @@ class Test(test_helpers.TempDirTestCase):
         warning, _ = next(iter(aggregated.warnings.items()))
         self.assertEqual(warning.name, "-Wfoo")
 
-    def test_aggregation_raises_if_package_name_cant_be_guessed(self):
+    def test_aggregation_raises_if_package_name_cant_be_guessed(self) -> None:
         aggregated = werror_logs.AggregatedWarnings()
         with self.assertRaises(werror_logs.UnknownPackageNameError):
             aggregated.add_report_json({})
 
-    def test_warning_by_flag_summarization_works_in_simple_case(self):
+    def test_warning_by_flag_summarization_works_in_simple_case(self) -> None:
         string_io = io.StringIO()
         werror_logs.summarize_warnings_by_flag(
             {
@@ -318,7 +320,9 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_warning_by_package_summarization_works_in_simple_case(self):
+    def test_warning_by_package_summarization_works_in_simple_case(
+        self,
+    ) -> None:
         string_io = io.StringIO()
         werror_logs.summarize_per_package_warnings(
             (
@@ -348,7 +352,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_cq_builder_determination_works(self):
+    def test_cq_builder_determination_works(self) -> None:
         self.assertEqual(
             werror_logs.cq_builder_name_from_werror_logs_path(
                 "gs://chromeos-image-archive/staryu-cq/"
@@ -359,7 +363,7 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_tarball_downloading_works(self, run_mock):
+    def test_tarball_downloading_works(self, run_mock: mock.MagicMock) -> None:
         tempdir = self.make_tempdir()
         unpack_dir = tempdir / "unpack"
         download_dir = tempdir / "download"
@@ -405,10 +409,14 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_tarball_downloading_fails_if_exceptions_are_raised(self, run_mock):
+    def test_tarball_downloading_fails_if_exceptions_are_raised(
+        self, run_mock: mock.MagicMock
+    ) -> None:
         self.silence_logs()
 
-        def raise_exception(*_args, check=False, **_kwargs):
+        def raise_exception(
+            *_args: object, check: bool = False, **_kwargs: object
+        ) -> None:
             self.assertTrue(check)
             raise subprocess.CalledProcessError(returncode=1, cmd=[])
 

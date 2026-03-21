@@ -11,6 +11,8 @@ import datetime
 import json
 import os
 from pathlib import Path
+import textwrap
+from typing import Any
 from unittest import mock
 
 from cros_utils import bugs
@@ -23,7 +25,7 @@ _ARBITRARY_DATETIME = datetime.datetime(2020, 1, 1, 23, 0, 0, 0)
 class Tests(test_helpers.TempDirTestCase):
     """Tests for the bugs module."""
 
-    def testWritingJSONFileSeemsToWork(self):
+    def testWritingJSONFileSeemsToWork(self) -> None:
         """Tests JSON file writing."""
         tempdir = self.make_tempdir()
 
@@ -56,7 +58,9 @@ class Tests(test_helpers.TempDirTestCase):
             )
 
     @mock.patch.object(bugs, "_WriteBugJSONFile")
-    def testAppendingToBugsSeemsToWork(self, mock_write_json_file):
+    def testAppendingToBugsSeemsToWork(
+        self, mock_write_json_file: mock.MagicMock
+    ) -> None:
         """Tests AppendToExistingBug."""
         bugs.AppendToExistingBug(1234, "hello, world!")
         mock_write_json_file.assert_called_once_with(
@@ -69,9 +73,11 @@ class Tests(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(bugs, "_WriteBugJSONFile")
-    def testBugCreationSeemsToWork(self, mock_write_json_file):
+    def testBugCreationSeemsToWork(
+        self, mock_write_json_file: mock.MagicMock
+    ) -> None:
         """Tests CreateNewBug."""
-        test_case_additions = (
+        test_case_additions: tuple[dict[str, Any], ...] = (
             {},
             {
                 "component_id": bugs.WellKnownComponents.CrOSToolchainPublic,
@@ -118,7 +124,9 @@ class Tests(test_helpers.TempDirTestCase):
             mock_write_json_file.reset_mock()
 
     @mock.patch.object(bugs, "_WriteBugJSONFile")
-    def testCronjobLogSendingSeemsToWork(self, mock_write_json_file):
+    def testCronjobLogSendingSeemsToWork(
+        self, mock_write_json_file: mock.MagicMock
+    ) -> None:
         """Tests SendCronjobLog."""
         bugs.SendCronjobLog("my_name", False, "hello, world!")
         mock_write_json_file.assert_called_once_with(
@@ -133,8 +141,8 @@ class Tests(test_helpers.TempDirTestCase):
 
     @mock.patch.object(bugs, "_WriteBugJSONFile")
     def testCronjobLogSendingSeemsToWorkWithTurndown(
-        self, mock_write_json_file
-    ):
+        self, mock_write_json_file: mock.MagicMock
+    ) -> None:
         """Tests SendCronjobLog."""
         bugs.SendCronjobLog(
             "my_name", False, "hello, world!", turndown_time_hours=42
@@ -152,8 +160,8 @@ class Tests(test_helpers.TempDirTestCase):
 
     @mock.patch.object(bugs, "_WriteBugJSONFile")
     def testCronjobLogSendingSeemsToWorkWithParentBug(
-        self, mock_write_json_file
-    ):
+        self, mock_write_json_file: mock.MagicMock
+    ) -> None:
         """Tests SendCronjobLog."""
         bugs.SendCronjobLog("my_name", False, "hello, world!", parent_bug=42)
         mock_write_json_file.assert_called_once_with(
@@ -167,14 +175,14 @@ class Tests(test_helpers.TempDirTestCase):
             None,
         )
 
-    def testFileNameGenerationProducesFileNamesInSortedOrder(self):
+    def testFileNameGenerationProducesFileNamesInSortedOrder(self) -> None:
         """Tests that _FileNameGenerator gives us sorted file names."""
         gen = bugs._FileNameGenerator()
         first = gen.generate_json_file_name(_ARBITRARY_DATETIME)
         second = gen.generate_json_file_name(_ARBITRARY_DATETIME)
         self.assertLess(first, second)
 
-    def testFileNameGenerationProtectsAgainstRipplingAdds(self):
+    def testFileNameGenerationProtectsAgainstRipplingAdds(self) -> None:
         """Tests that _FileNameGenerator gives us sorted file names."""
         gen = bugs._FileNameGenerator()
         gen._entropy = 9
@@ -192,7 +200,9 @@ class Tests(test_helpers.TempDirTestCase):
         self.assertLess(third, fourth)
 
     @mock.patch.object(os, "getpid")
-    def testForkingProducesADifferentReport(self, mock_getpid):
+    def testForkingProducesADifferentReport(
+        self, mock_getpid: mock.MagicMock
+    ) -> None:
         """Tests that _FileNameGenerator gives us sorted file names."""
         gen = bugs._FileNameGenerator()
 
@@ -206,7 +216,9 @@ class Tests(test_helpers.TempDirTestCase):
         self.assertNotEqual(parent_file, child_file)
 
     @mock.patch.object(bugs, "_WriteBugJSONFile")
-    def testCustomDirectoriesArePassedThrough(self, mock_write_json_file):
+    def testCustomDirectoriesArePassedThrough(
+        self, mock_write_json_file: mock.MagicMock
+    ) -> None:
         directory = Path("/path/to/somewhere/interesting")
         bugs.AppendToExistingBug(1, "foo", local_directory=directory)
         mock_write_json_file.assert_called_once_with(
@@ -227,8 +239,55 @@ class Tests(test_helpers.TempDirTestCase):
             mock.ANY, mock.ANY, directory
         )
 
-    def testWriteBugJSONFileWritesToGivenDirectory(self):
+    def testWriteBugJSONFileWritesToGivenDirectory(self) -> None:
         tempdir = self.make_tempdir()
         bugs.AppendToExistingBug(1, "body", local_directory=tempdir)
         json_files = list(tempdir.glob("*.json"))
         self.assertEqual(len(json_files), 1, json_files)
+
+    def test_format_bug_works(self) -> None:
+        b = bugs.format_bug(
+            title="[title]",
+            body="[body]",
+            component=123,
+            assignee="[assignee]",
+            parent=321,
+            priority=1,
+        )
+        expected_body = textwrap.dedent(
+            """\
+            [title]
+
+            [body]
+
+            COMPONENT=123
+            TYPE=INTERNAL_CLEANUP
+            PRIORITY=P1
+            SEVERITY=S2
+            ASSIGNEE=[assignee]
+            PARENT+=321
+            """
+        )
+        self.assertEqual(b, expected_body)
+
+    def test_format_bug_defaults(self) -> None:
+        b = bugs.format_bug(
+            title="[title]",
+            body="[body]",
+            component=123,
+            parent=321,
+        )
+        expected_body = textwrap.dedent(
+            """\
+            [title]
+
+            [body]
+
+            COMPONENT=123
+            TYPE=INTERNAL_CLEANUP
+            PRIORITY=P2
+            SEVERITY=S2
+            PARENT+=321
+            """
+        )
+        self.assertEqual(b, expected_body)

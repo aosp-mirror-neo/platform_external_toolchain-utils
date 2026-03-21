@@ -26,7 +26,7 @@ ARBITRARY_LLVM_CONFIG = git_llvm_rev.LLVMConfig(
 class Test(unittest.TestCase):
     """Tests for nightly_revert_checker."""
 
-    def test_email_rendering_works_for_singular_revert(self):
+    def test_email_rendering_works_for_singular_revert(self) -> None:
         def prettify_sha(sha: str) -> tiny_render.Piece:
             return "pretty_" + sha
 
@@ -75,7 +75,7 @@ class Test(unittest.TestCase):
 
         self.assertEqual(email, expected_email)
 
-    def test_email_rendering_works_for_multiple_reverts(self):
+    def test_email_rendering_works_for_multiple_reverts(self) -> None:
         def prettify_sha(sha: str) -> tiny_render.Piece:
             return "pretty_" + sha
 
@@ -151,7 +151,7 @@ class Test(unittest.TestCase):
 
         self.assertEqual(email, expected_email)
 
-    def test_sha_prettification_for_email(self):
+    def test_sha_prettification_for_email(self) -> None:
         sha = "a" * 40
         rev = 123456
         self.assertEqual(
@@ -166,11 +166,15 @@ class Test(unittest.TestCase):
         )
 
     @mock.patch.object(time, "time")
-    def test_emailing_about_stale_heads_skips_in_simple_cases(self, time_time):
+    def test_emailing_about_stale_heads_skips_in_simple_cases(
+        self, time_time: mock.Mock
+    ) -> None:
         now = 1_000_000_000
         time_time.return_value = now
 
-        def assert_no_email(state: nightly_revert_checker.State):
+        def assert_no_email(
+            state: nightly_revert_checker.State,
+        ) -> None:
             self.assertFalse(
                 nightly_revert_checker.maybe_email_about_stale_heads(
                     state,
@@ -203,7 +207,7 @@ class Test(unittest.TestCase):
             )
         )
 
-    def test_state_round_trips_through_json(self):
+    def test_state_round_trips_through_json(self) -> None:
         state = nightly_revert_checker.State(
             seen_reverts={"abc123": ["def456"]},
             last_seen_llvm_shas={"abc123": 456},
@@ -222,8 +226,8 @@ class Test(unittest.TestCase):
     @mock.patch.object(time, "time")
     @mock.patch.object(nightly_revert_checker, "_send_revert_email")
     def test_emailing_about_stale_with_one_report(
-        self, send_revert_email, time_time
-    ):
+        self, send_revert_email: mock.Mock, time_time: mock.Mock
+    ) -> None:
         def prettify_sha(sha: str) -> str:
             return f"pretty({sha})"
 
@@ -269,7 +273,7 @@ class Test(unittest.TestCase):
             "bug at go/crostc-bug if an update is needed. Thanks!",
         )
 
-    def test_appending_footers_when_none_exist(self):
+    def test_appending_footers_when_none_exist(self) -> None:
         base_message = textwrap.dedent(
             """\
             hello: world!
@@ -295,7 +299,7 @@ class Test(unittest.TestCase):
             want_message,
         )
 
-    def test_appending_footers_when_some_exist(self):
+    def test_appending_footers_when_some_exist(self) -> None:
         base_message = textwrap.dedent(
             """\
             hello: world!
@@ -327,7 +331,7 @@ class Test(unittest.TestCase):
             want_message,
         )
 
-    def test_update_new_state_head_info(self):
+    def test_update_new_state_head_info(self) -> None:
         now = 1_000_000_000
         old_state = nightly_revert_checker.State(
             heads={
@@ -383,7 +387,7 @@ class Test(unittest.TestCase):
             ),
         )
 
-    def test_appending_footers_when_last_paragraph_is_tricky(self):
+    def test_appending_footers_when_last_paragraph_is_tricky(self) -> None:
         base_message = textwrap.dedent(
             """\
             hello: world!
@@ -417,7 +421,9 @@ class Test(unittest.TestCase):
 class RevertsOldCommitTest(unittest.TestCase):
     """Tests for reverts_old_commit."""
 
-    def test_sha_translation_failure(self, mock_translate_sha_to_rev):
+    def test_sha_translation_failure(
+        self, mock_translate_sha_to_rev: mock.Mock
+    ) -> None:
         mock_translate_sha_to_rev.side_effect = subprocess.CalledProcessError(
             1, "git"
         )
@@ -429,7 +435,9 @@ class RevertsOldCommitTest(unittest.TestCase):
             )
         )
 
-    def test_simple_true_case(self, mock_translate_sha_to_rev):
+    def test_simple_true_case(
+        self, mock_translate_sha_to_rev: mock.Mock
+    ) -> None:
         mock_translate_sha_to_rev.side_effect = [
             git_llvm_rev.Rev(branch="main", number=100_000),
             git_llvm_rev.Rev(branch="main", number=50_000),
@@ -442,7 +450,9 @@ class RevertsOldCommitTest(unittest.TestCase):
             )
         )
 
-    def test_simple_false_case(self, mock_translate_sha_to_rev):
+    def test_simple_false_case(
+        self, mock_translate_sha_to_rev: mock.Mock
+    ) -> None:
         mock_translate_sha_to_rev.side_effect = [
             git_llvm_rev.Rev(branch="main", number=100_000),
             git_llvm_rev.Rev(branch="main", number=90_000),

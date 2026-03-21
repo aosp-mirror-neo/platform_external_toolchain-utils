@@ -41,6 +41,21 @@
     "rel_patch_path": "llvm-8.0-clang-executable-detection.v2.patch",
     "version_range": {
       "from": 370808,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "Fixes crbug/591436. Force fallback to traditional executable detection"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "llvm-8.0-clang-executable-detection.v3.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },
@@ -101,6 +116,21 @@
     "rel_patch_path": "v7-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
       "from": 571439,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
+      "info": [],
+      "title": "v8: Crash when dereferencing nullopt for std::optional"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v8-Crash-when-dereferencing-nullopt-for-std-optional.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },
@@ -254,7 +284,7 @@
     "rel_patch_path": "v2-libc-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTAB.patch",
     "version_range": {
       "from": 563880,
-      "until": null
+      "until": 584947
     }
   },
   {
@@ -269,6 +299,21 @@
     "rel_patch_path": "Partial-Revert-Driver-Support-using-toolchain-libc-and-libc-for-baremetal-96736-.patch",
     "version_range": {
       "from": 547379,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan R Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "v2: Partial Revert \"[Driver] Support using toolchain libc and libc++ for baremetal (#96736)\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v2-Partial-Revert-Driver-Support-using-toolchain-libc-and-libc-for-baremetal-96736-.patch",
+    "version_range": {
+      "from": 584947,
       "until": null
     }
   },
@@ -811,6 +856,22 @@
     "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8-v2.patch",
     "version_range": {
       "from": 574158,
+      "until": 584947
+    }
+  },
+  {
+    "metadata": {
+      "author": "Timm Baeder <tbaeder@redhat.com>",
+      "info": [],
+      "title": "[UPSTREAM] [clang] Remove hasValue() check in `RecordExprEvaluator::VisitCXXConstructExpr()` (#154610)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8b3d4bdf8bade1d1faa8ff3fcbdda7060f8b46d8-v3.patch",
+    "version_range": {
+      "from": 584948,
       "until": 587658
     }
   },
@@ -980,6 +1041,52 @@
     "version_range": {
       "from": 574158,
       "until": 595389
+    }
+  },
+  {
+    "metadata": {
+      "author": "",
+      "info": [],
+      "title": "[AArch64][SME] Disable tail calls for callees that require saving ZT0"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ed465b33492cbc6a696fa2962fd4f0ec568e7de1.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 595389
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "Revert \"v3: Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE a no-op on baremetal\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Revert-v3-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTABLE-a-no-op-on-baremetal-.patch",
+    "version_range": {
+      "from": 584947,
+      "until": 584949
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "Make _LIBCPP_MAKE_OVERRIDABLE_FUNCTION a no-op on baremetal"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION-a-no-op-on-baremetal.patch",
+    "version_range": {
+      "from": 584947,
+      "until": null
     }
   }
 ]

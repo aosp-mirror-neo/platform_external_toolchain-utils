@@ -31,7 +31,7 @@ def fetch_all_sdk_manifest_paths() -> list[str]:
     return sorted(x.strip() for x in results.splitlines())
 
 
-def fetch_manifests_into(into_dir: Path, manifests: list[str]):
+def fetch_manifests_into(into_dir: Path, manifests: list[str]) -> None:
     # Wrap this in a `try` block because gsutil likes to print to stdout *and*
     # stderr even on success, so we silence them & only print on failure.
     try:
@@ -63,7 +63,7 @@ def load_manifest_versions(manifest: Path) -> dict[str, str]:
     return {k: v[0][0] for k, v in raw_versions["packages"].items()}
 
 
-def main(argv: list[str]):
+def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,

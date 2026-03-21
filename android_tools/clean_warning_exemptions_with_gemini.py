@@ -26,6 +26,7 @@ import time
 from typing import Iterator
 
 from android_tools import android_paths
+from android_tools import bp_tools
 from android_tools import parse_and_apply_warning_exemptions as parse_and_apply
 from cros_utils import git_utils
 
@@ -679,7 +680,14 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Do not upload changes to Gerrit.",
     )
-    return parser.parse_args(argv)
+    opts = parser.parse_args(argv)
+
+    if opts.android_tree:
+        android_paths.assert_is_valid_android_tree_root(
+            parser, opts.android_tree
+        )
+
+    return opts
 
 
 def upload_changes(
@@ -766,9 +774,9 @@ def main(argv: list[str]) -> None:
         summary_file = parse_and_apply.ExemptionSummary.from_file(
             summary_file_path
         )
-        repos_to_run_on = summary_file.git_dirs
+        repos_to_run_on = [Path(x) for x in summary_file.exemptions]
 
-    bpfmt_path = parse_and_apply.bpfmt_path(android_tree)
+    bpfmt_path = bp_tools.bpfmt_path(android_tree)
     if not bpfmt_path.exists():
         sys.exit(
             f"No bpfmt found at {bpfmt_path} - are you using the tree you "

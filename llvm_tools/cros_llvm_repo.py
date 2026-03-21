@@ -22,7 +22,7 @@ def try_get_path() -> Path | None:
     return llvm_project if llvm_project.is_dir() else None
 
 
-def fetch_upstream(repo_path: Path):
+def fetch_upstream(repo_path: Path) -> None:
     """Runs `git fetch` for the upstream branch in the given repo."""
     subprocess.run(
         ["git", "fetch", UPSTREAM_REMOTE, UPSTREAM_MAIN],

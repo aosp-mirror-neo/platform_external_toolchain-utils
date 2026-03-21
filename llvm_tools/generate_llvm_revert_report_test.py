@@ -13,7 +13,7 @@ from llvm_tools import generate_llvm_revert_report
 class TestRevert(unittest.TestCase):
     """Unit tests for generate_llvm_revert_report.Revert"""
 
-    def test_from_dict_extra_fields(self):
+    def test_from_dict_extra_fields(self) -> None:
         data = {
             "createdOn": 1762960808,
             "status": "MERGED",
@@ -30,7 +30,7 @@ class TestRevert(unittest.TestCase):
             ),
         )
 
-    def test_from_dict_missing_fields(self):
+    def test_from_dict_missing_fields(self) -> None:
         data = {
             "status": "MERGED",
             "url": "https://the_url/",
@@ -42,7 +42,7 @@ class TestRevert(unittest.TestCase):
 class TestWriteReverts(unittest.TestCase):
     """Tests that writing the reverts produces the expected output."""
 
-    def test_no_reverts(self):
+    def test_no_reverts(self) -> None:
         output = io.StringIO()
         generate_llvm_revert_report.write_reverts_as_csv(output, [])
         self.assertEqual(
@@ -50,7 +50,7 @@ class TestWriteReverts(unittest.TestCase):
             '"Status","URI","Subject","Notes"\r\n',
         )
 
-    def test_with_reverts(self):
+    def test_with_reverts(self) -> None:
         output = io.StringIO()
         reverts = [
             generate_llvm_revert_report.Revert(

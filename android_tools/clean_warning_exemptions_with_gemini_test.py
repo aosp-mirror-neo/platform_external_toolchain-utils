@@ -13,7 +13,7 @@ from llvm_tools import test_helpers
 class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
     """Tests for remove_blank_lines_from_diff."""
 
-    def test_remove_blank_lines_from_diff_basic_example(self):
+    def test_remove_blank_lines_from_diff_basic_example(self) -> None:
         diff = textwrap.dedent(
             """
             diff --git a/... b/...
@@ -43,7 +43,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             clean_warnings.remove_blank_lines_from_diff(diff), expected_diff
         )
 
-    def test_no_blank_lines_no_change(self):
+    def test_no_blank_lines_no_change(self) -> None:
         diff = textwrap.dedent(
             """
             diff --git a/... b/...
@@ -60,7 +60,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             clean_warnings.remove_blank_lines_from_diff(diff), diff
         )
 
-    def test_multiple_hunks_with_indent(self):
+    def test_multiple_hunks_with_indent(self) -> None:
         diff = textwrap.dedent(
             """
             diff --git a/... b/...
@@ -102,7 +102,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             clean_warnings.remove_blank_lines_from_diff(diff), expected_diff
         )
 
-    def test_removed_and_context_blank_line_is_kept(self):
+    def test_removed_and_context_blank_line_is_kept(self) -> None:
         diff = textwrap.dedent(
             """
             diff --git a/... b/...
@@ -121,7 +121,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             clean_warnings.remove_blank_lines_from_diff(diff), diff
         )
 
-    def test_remove_blank_lines_from_diff_omitted_len(self):
+    def test_remove_blank_lines_from_diff_omitted_len(self) -> None:
         """Test remove_blank_lines_from_diff with omitted hunk lengths."""
         diff = textwrap.dedent(
             """
@@ -146,7 +146,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             clean_warnings.remove_blank_lines_from_diff(diff), expected_diff
         )
 
-    def test_hunk_removal_if_only_whitespace(self):
+    def test_hunk_removal_if_only_whitespace(self) -> None:
         """Test remove_blank_lines_from_diff with omitted hunk lengths."""
         diff = textwrap.dedent(
             """
@@ -177,7 +177,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             expected_diff.rstrip(),
         )
 
-    def test_hunk_removal_keeps_header_if_no_hunk(self):
+    def test_hunk_removal_keeps_header_if_no_hunk(self) -> None:
         """If no hunk is found, headers should be kept."""
         diff = textwrap.dedent(
             """\
@@ -204,7 +204,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             expected_diff.strip(),
         )
 
-    def test_hunk_removal_keeps_header_multiple_hunks(self):
+    def test_hunk_removal_keeps_header_multiple_hunks(self) -> None:
         """If all hunks are removed, the header should be kept."""
         diff = textwrap.dedent(
             """\
@@ -231,7 +231,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             expected_diff.strip(),
         )
 
-    def test_multifile_hunk_removal_if_only_whitespace(self):
+    def test_multifile_hunk_removal_if_only_whitespace(self) -> None:
         """Test remove_blank_lines_from_diff with omitted hunk lengths."""
         diff = textwrap.dedent(
             """
@@ -256,7 +256,7 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
 class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
     """Tests for diff_trivially_has_no_dedupe_potential."""
 
-    def test_no_hunk(self):
+    def test_no_hunk(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/some/file.bp
@@ -267,7 +267,7 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
         )
 
-    def test_one_wno_flag(self):
+    def test_one_wno_flag(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/some/file.bp
@@ -283,7 +283,7 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
         )
 
-    def test_multiple_different_wno_flags(self):
+    def test_multiple_different_wno_flags(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/some/file.bp
@@ -303,7 +303,7 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
         )
 
-    def test_duplicate_wno_flags_same_hunk(self):
+    def test_duplicate_wno_flags_same_hunk(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/some/file.bp
@@ -323,7 +323,7 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
         )
 
-    def test_duplicate_wno_flags_across_hunks(self):
+    def test_duplicate_wno_flags_across_hunks(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/some/file.bp
@@ -344,7 +344,7 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             clean_warnings.diff_trivially_has_no_dedupe_potential(diff)
         )
 
-    def test_no_added_lines(self):
+    def test_no_added_lines(self) -> None:
         diff = textwrap.dedent(
             """
             --- a/some/file.bp
@@ -364,12 +364,12 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
 class TestIterateDiffPieces(test_helpers.TempDirTestCase):
     """Tests for iterate_diff_pieces."""
 
-    def test_empty_diff(self):
+    def test_empty_diff(self) -> None:
         diff = ""
         pieces = list(clean_warnings.iterate_diff_pieces(diff))
         self.assertEqual(pieces, [""])
 
-    def test_docstring_example(self):
+    def test_docstring_example(self) -> None:
         diff = (
             textwrap.dedent(
                 """\
@@ -408,7 +408,7 @@ class TestIterateDiffPieces(test_helpers.TempDirTestCase):
 class TestDiffHunkParsing(test_helpers.TempDirTestCase):
     """Tests for diff hunk parsing."""
 
-    def test_no_newline_at_end_of_file_old(self):
+    def test_no_newline_at_end_of_file_old(self) -> None:
         diff = textwrap.dedent(
             r"""
             @@ -110,4 +116,4 @@ cc_fuzz {
@@ -424,7 +424,7 @@ class TestDiffHunkParsing(test_helpers.TempDirTestCase):
         # exactly the number of lines specified by the hunk header.
         clean_warnings.DiffHunk.parse(diff.lstrip().split("\n"))
 
-    def test_no_newline_at_end_of_file_new(self):
+    def test_no_newline_at_end_of_file_new(self) -> None:
         diff = textwrap.dedent(
             r"""
             @@ -110,4 +116,4 @@ cc_fuzz {

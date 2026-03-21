@@ -4,29 +4,17 @@
 
 """End-to-end test for afdo_prof_analysis."""
 
+import argparse
 import datetime
 import json
 import os
 from pathlib import Path
 import shutil
 import tempfile
+from typing import Any
 
 from afdo_tools.bisection import afdo_prof_analysis as analysis
 from llvm_tools import test_helpers
-
-
-class ObjectWithFields:
-    """Turns kwargs given to the constructor into fields on an object.
-
-    Examples:
-        x = ObjectWithFields(a=1, b=2)
-        assert x.a == 1
-        assert x.b == 2
-    """
-
-    def __init__(self, **kwargs):
-        for key, val in kwargs.items():
-            setattr(self, key, val)
 
 
 class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
@@ -57,7 +45,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
         "bisect_results": {"ranges": [], "individuals": ["func_a"]},
     }
 
-    def setUp(self):
+    def setUp(self) -> None:
         super().setUp()
 
         # Test scripts depend on AFDO_TEST_DIR pointing to a directory to run
@@ -69,7 +57,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
         saved_value = os.environ.get(tmpdir_env_var)
         os.environ[tmpdir_env_var] = str(self.tempdir)
 
-        def restore_environ():
+        def restore_environ() -> None:
             if saved_value is None:
                 del os.environ[tmpdir_env_var]
             else:
@@ -77,7 +65,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
 
         self.addCleanup(restore_environ)
 
-    def test_afdo_prof_analysis(self):
+    def test_afdo_prof_analysis(self) -> None:
         # Individual issues take precedence by nature of our algos
         # so first, that should be caught
         good = self.good_prof.copy()
@@ -99,7 +87,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
 
         self.run_check(good, bad, expected_cp)
 
-    def test_afdo_prof_state(self):
+    def test_afdo_prof_state(self) -> None:
         """Verifies that saved state is correct replication."""
         temp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
@@ -144,7 +132,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
             loaded_run = json.load(f)
         self.assertEqual(initial_run, loaded_run)
 
-    def test_exit_on_problem_status(self):
+    def test_exit_on_problem_status(self) -> None:
         temp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
 
@@ -159,7 +147,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
                 extern_decider="problemstatus_external.sh",
             )
 
-    def test_state_assumption(self):
+    def test_state_assumption(self) -> None:
         def compare_runs(
             tmp_dir: Path, first_ctr: int, second_ctr: int
         ) -> None:
@@ -241,15 +229,15 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
 
     def run_check(
         self,
-        good_prof,
-        bad_prof,
-        expected,
-        state_file=None,
-        no_resume=True,
-        out_file=None,
-        extern_decider=None,
-        seed=None,
-    ):
+        good_prof: dict[str, str],
+        bad_prof: dict[str, str],
+        expected: dict[str, Any],
+        state_file: str | None = None,
+        no_resume: bool = True,
+        out_file: str | None = None,
+        extern_decider: str | None = None,
+        seed: int | None = None,
+    ) -> int:
         temp_dir = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, temp_dir, ignore_errors=True)
 
@@ -276,7 +264,7 @@ class AfdoProfAnalysisE2ETest(test_helpers.TempDirTestCase):
             state_file = os.path.join(self.tempdir, "afdo_analysis_state.json")
 
         actual = analysis.main_impl(
-            ObjectWithFields(
+            argparse.Namespace(
                 good_prof=good_prof_file,
                 bad_prof=bad_prof_file,
                 external_decider=external_script,

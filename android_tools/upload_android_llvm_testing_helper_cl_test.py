@@ -13,9 +13,9 @@ from llvm_tools import test_helpers
 class Test(test_helpers.TempDirTestCase):
     """Tests for upload_android_llvm_testing_helper_cl"""
 
-    def test_add_flag_after_optimization_level_happy_case(self):
+    def test_add_flag_after_optimization_level_happy_case(self) -> None:
         file_contents = textwrap.dedent(
-            """\
+            """
             cflags := []string{
               "-O2",
               "some other flag",
@@ -28,7 +28,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(
             new_contents,
             textwrap.dedent(
-                """\
+                """
                 cflags := []string{
                   "-O2",
                   "-my-flag",
@@ -38,7 +38,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_add_flag_after_optimization_level_multiple_newlines(self):
+    def test_add_flag_after_optimization_level_multiple_newlines(self) -> None:
         # The first pass at this script used a `re.MULTILINE` regex on the
         # entire `file_contents`, which produced undesirable behavior.
         # Specifically, it started with `r'^(\s+)'`. The first capture group
@@ -48,7 +48,7 @@ class Test(test_helpers.TempDirTestCase):
         # capture-group contained a newline, and ensures that the script doesn't
         # emit it before `-my-flag`.
         file_contents = textwrap.dedent(
-            """\
+            """
             cflags := []string{
 
               "-O2",
@@ -62,7 +62,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(
             new_contents,
             textwrap.dedent(
-                """\
+                """
                 cflags := []string{
 
                   "-O2",
@@ -73,7 +73,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_add_flag_after_optimization_level_bad_flag(self):
+    def test_add_flag_after_optimization_level_bad_flag(self) -> None:
         with self.assertRaisesRegex(ValueError, "requiring escaping"):
             upload_cl.add_flag_after_optimization_level(
                 "",
@@ -85,13 +85,13 @@ class Test(test_helpers.TempDirTestCase):
                 "\\",
             )
 
-    def test_add_flag_after_optimization_level_no_match(self):
+    def test_add_flag_after_optimization_level_no_match(self) -> None:
         with self.assertRaisesRegex(
             ValueError, "Wanted exactly one match.*found 0"
         ):
             upload_cl.add_flag_after_optimization_level("foo", "-flag")
 
-    def test_add_flag_after_optimization_level_many_matches(self):
+    def test_add_flag_after_optimization_level_many_matches(self) -> None:
         contents = textwrap.dedent(
             """
             cflags := []string{

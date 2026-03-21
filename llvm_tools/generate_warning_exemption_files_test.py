@@ -18,7 +18,7 @@ class Test(test_helpers.TempDirTestCase):
 
     ### Below are essentially Go-lden file tests.
 
-    def test_go_file_creation_works_with_no_warnings(self):
+    def test_go_file_creation_works_with_no_warnings(self) -> None:
         actual = gen.create_go_file(
             llvm_revision=123,
             per_package_warnings={},
@@ -36,7 +36,7 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertEqual(expected, actual)
 
-    def test_go_file_creation_works_with_a_few_warnings(self):
+    def test_go_file_creation_works_with_a_few_warnings(self) -> None:
         amd64_generic = warning_exemption.Builder(
             name="amd64-generic", url="https://amd64-generic-url"
         )
@@ -103,7 +103,7 @@ class Test(test_helpers.TempDirTestCase):
         )
         self.assertEqual(expected, actual)
 
-    def test_yaml_file_generation(self):
+    def test_yaml_file_generation(self) -> None:
         amd64_generic = warning_exemption.Builder(
             name="amd64-generic",
             url="https://amd64-generic-url",
@@ -148,7 +148,7 @@ class Test(test_helpers.TempDirTestCase):
             ),
         )
 
-    def test_warning_path_canonicalization_works(self):
+    def test_warning_path_canonicalization_works(self) -> None:
         result = gen.canonicalize_warning_lines(
             (
                 "/build/brya/foo.cc:12:34: error: don't do this [-Wfoo2]",

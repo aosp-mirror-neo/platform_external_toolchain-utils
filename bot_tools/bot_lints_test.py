@@ -4,9 +4,11 @@
 
 """Tests for bot_lints."""
 
+from collections.abc import Sequence
 import datetime
 import json
 import subprocess
+from typing import Any
 import unittest
 from unittest import mock
 
@@ -31,13 +33,17 @@ class Test(unittest.TestCase):
     """Tests for bot_lints."""
 
     @mock.patch.object(subprocess, "run")
-    def test_fetch_bot_findings_works_as_intended(self, mock_run):
-        def mock_run_impl(cmd, *args, **kwargs):
+    def test_fetch_bot_findings_works_as_intended(
+        self, mock_run: mock.MagicMock
+    ) -> None:
+        def mock_run_impl(
+            cmd: Sequence[str], *args: Any, **kwargs: Any
+        ) -> mock.MagicMock:
             del args
             del kwargs
 
             if cmd[:2] == ("bb", "log"):
-                stdout_json = {
+                stdout_json: dict[str, Any] = {
                     "findings": [
                         {
                             "category": "mock category",
@@ -92,8 +98,12 @@ class Test(unittest.TestCase):
         self.assertEqual(mock_run.call_count, 2)
 
     @mock.patch.object(subprocess, "run")
-    def test_findings_arent_fetched_if_no_finding_step(self, mock_run):
-        def mock_run_impl(cmd, *args, **kwargs):
+    def test_findings_arent_fetched_if_no_finding_step(
+        self, mock_run: mock.MagicMock
+    ) -> None:
+        def mock_run_impl(
+            cmd: Sequence[str], *args: Any, **kwargs: Any
+        ) -> mock.MagicMock:
             del args
             del kwargs
 

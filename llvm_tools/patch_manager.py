@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-from typing import Callable, Iterable
+from typing import Callable, Iterable, NoReturn
 
 from llvm_tools import get_llvm_hash
 from llvm_tools import patch_utils
@@ -43,7 +43,7 @@ class GitBisectionCode(enum.IntEnum):
     SKIP = 125
 
 
-def GetCommandLineArgs(sys_argv: list[str] | None):
+def GetCommandLineArgs(sys_argv: list[str] | None) -> argparse.Namespace:
     """Get the required arguments from the command line."""
 
     # Create parser and add optional command-line arguments.
@@ -111,7 +111,7 @@ def GetCommandLineArgs(sys_argv: list[str] | None):
     return parser.parse_args(sys_argv)
 
 
-def GetHEADSVNVersion(src_path):
+def GetHEADSVNVersion(src_path: Path) -> int:
     """Gets the SVN version of HEAD in the src tree."""
     git_hash = subprocess.check_output(
         ["git", "-C", src_path, "rev-parse", "HEAD"], encoding="utf-8"
@@ -119,7 +119,9 @@ def GetHEADSVNVersion(src_path):
     return get_llvm_hash.GetVersionFrom(src_path, git_hash.rstrip())
 
 
-def GetCommitHashesForBisection(src_path, good_svn_version, bad_svn_version):
+def GetCommitHashesForBisection(
+    src_path: Path, good_svn_version: int, bad_svn_version: int
+) -> tuple[str, str]:
     """Gets the good and bad commit hashes required by `git bisect start`."""
 
     bad_commit_hash = get_llvm_hash.GetGitHashFrom(src_path, bad_svn_version)
@@ -233,14 +235,14 @@ def ApplyPatchAndPrior(
     raise ValueError(f"Did not find patch {rel_patch_path}. Does it exist?")
 
 
-def PrintPatchResults(patch_info: patch_utils.PatchInfo):
+def PrintPatchResults(patch_info: patch_utils.PatchInfo) -> None:
     """Prints the results of handling the patches of a package.
 
     Args:
         patch_info: A dataclass that has information on the patches.
     """
 
-    def _fmt(patches):
+    def _fmt(patches: Iterable[patch_utils.PatchEntry]) -> Iterable[str]:
         return (str(pe.patch_path()) for pe in patches)
 
     if patch_info.applied_patches:
@@ -263,7 +265,7 @@ def PrintPatchResults(patch_info: patch_utils.PatchInfo):
 
     if patch_info.disabled_patches:
         print("\nThe following patches were disabled:")
-        print("\n".join(_fmt(patch_info.disabled_patches)))
+        print("\n".join(patch_info.disabled_patches))
 
     if patch_info.removed_patches:
         print(
@@ -273,7 +275,7 @@ def PrintPatchResults(patch_info: patch_utils.PatchInfo):
             print("%s" % os.path.basename(cur_patch_path))
 
 
-def main(sys_argv: list[str]):
+def main(sys_argv: list[str]) -> None:
     """Applies patches to the source tree and takes action on a failed patch."""
 
     args_output = GetCommandLineArgs(sys_argv)
@@ -294,7 +296,7 @@ def main(sys_argv: list[str]):
     else:
         patch_cmd = patch_utils.gnu_patch
 
-    def _apply_all(args):
+    def _apply_all(args: argparse.Namespace) -> None:
         if args.svn_version is None:
             raise ValueError("--svn_version must be set when applying patches")
         result = patch_utils.apply_all_from_json(
@@ -306,12 +308,12 @@ def main(sys_argv: list[str]):
         )
         PrintPatchResults(result)
 
-    def _disable(args):
+    def _disable(args: argparse.Namespace) -> None:
         patch_utils.update_version_ranges(
             args.svn_version, llvm_src_dir, patches_json_fp, patch_cmd
         )
 
-    def _test_single(args):
+    def _test_single(args: argparse.Namespace) -> NoReturn:
         if not args.test_patch:
             raise ValueError(
                 "Running with bisect_patches requires the --test_patch flag."

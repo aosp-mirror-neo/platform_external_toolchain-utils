@@ -63,7 +63,7 @@ class RunStepFn(Protocol):
     ) -> T: ...
 
 
-def get_command_output(command: Command, *args, **kwargs) -> str:
+def get_command_output(command: Command, *args: Any, **kwargs: Any) -> str:
     return subprocess.check_output(
         command, encoding="utf-8", *args, **kwargs
     ).strip()
@@ -142,7 +142,7 @@ class RustVersion(NamedTuple):
     minor: int
     patch: int
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.major}.{self.minor}.{self.patch}"
 
     @staticmethod
@@ -746,7 +746,7 @@ def find_ebuild_for_rust_version(version: RustVersion) -> Path:
     return find_ebuild_path(rust_path(), "rust", version)
 
 
-def rebuild_packages(workon_packages: list[str]):
+def rebuild_packages(workon_packages: list[str]) -> None:
     """Rebuild packages modified by this script."""
     try:
         run_in_chroot(
@@ -769,7 +769,9 @@ def rebuild_packages(workon_packages: list[str]):
         raise
 
 
-def remove_ebuild_version(path: PathOrStr, name: str, version: RustVersion):
+def remove_ebuild_version(
+    path: PathOrStr, name: str, version: RustVersion
+) -> None:
     """Remove the specified version of an ebuild.
 
     Removes {path}/{name}-{version}.ebuild and {path}/{name}-{version}-*.ebuild
@@ -868,7 +870,9 @@ def create_new_commit(rust_version: RustVersion) -> None:
     )
 
 
-def run_in_chroot(cmd: Command, *args, **kwargs) -> subprocess.CompletedProcess:
+def run_in_chroot(
+    cmd: Command, *args: Any, **kwargs: Any
+) -> subprocess.CompletedProcess:
     """Runs a command in the ChromiumOS chroot.
 
     This takes the same arguments as subprocess.run(). By default,
@@ -957,7 +961,7 @@ def main(argv: list[str]) -> None:
 
     try:
         with state_file.open(encoding="utf-8") as f:
-            completed_steps = json.load(f)
+            completed_steps: dict[str, Any] = json.load(f)
     except FileNotFoundError:
         completed_steps = {}
 

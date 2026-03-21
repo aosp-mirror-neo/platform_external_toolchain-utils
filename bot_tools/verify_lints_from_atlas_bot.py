@@ -10,7 +10,7 @@ import dataclasses
 import logging
 import re
 import sys
-from typing import Iterable
+from typing import Any, Iterable
 
 from bot_tools import bot_lints
 from llvm_tools import cros_cls
@@ -117,7 +117,7 @@ def log_errors_with_lints(
 
     logged_errors = False
 
-    def log_error(*args, **kwargs):
+    def log_error(*args: Any, **kwargs: Any) -> None:
         nonlocal logged_errors
         logged_errors = True
         logging.error(*args, **kwargs)

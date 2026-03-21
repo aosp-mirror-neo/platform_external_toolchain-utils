@@ -33,6 +33,7 @@ from pathlib import Path
 import queue
 import subprocess
 import sys
+import time
 import typing
 from typing import Any, IO
 
@@ -40,8 +41,8 @@ from typing import Any, IO
 # not contain `google.genai`. `mypy` can _see_ the module, but complains that it
 # doesn't have correct typing markers.
 # pylint:disable=import-error
-from google import genai  # type: ignore[import-untyped]
-from google.genai import types  # type: ignore[import-untyped]
+from google import genai
+from google.genai import types
 
 
 T = typing.TypeVar("T")
@@ -70,7 +71,7 @@ def get_dict_elem_with_type(
         # don't want a `True` to pass when the user asks for `int`.
         # pylint:disable=unidiomatic-typecheck
         if type(value) is expect_type:
-            return typing.cast(T, value)
+            return value
         raise ValueError(
             f"Key {key} is of type {type(value)}; wanted {expect_type} in {obj}"
         )
@@ -172,6 +173,21 @@ class GeminiRevertInference:
 class GeminiResponseIsBrokenError(Exception):
     """Thrown when the Gemini response for a SHA is known to be broken."""
 
+    def __init__(
+        self,
+        msg: str,
+        *,
+        partial_response: str | None = None,
+        failure_reason: str | None = None,
+    ):
+        assert (partial_response is None) == (failure_reason is None), (
+            "Must be given either both a partial_response and failure_reason, "
+            "or neither."
+        )
+        self.partial_response = partial_response
+        self.failure_reason = failure_reason
+        super().__init__(msg)
+
 
 def parse_gemini_response(
     sha: str, response: types.GenerateContentResponse
@@ -229,22 +245,45 @@ def parse_gemini_response(
     result_part = next((x for x in parts if not x.thought), None)
     if not result_part or not result_part.text:
         raise GeminiResponseIsBrokenError(
-            f"Gemini returned no result for query on {sha}: {response}"
+            f"Gemini returned no result for query on {sha}: {response}",
+            partial_response=result_part.text if result_part else "",
+            failure_reason="The result from Gemini was empty.",
         )
 
+    result_text = result_part.text
     try:
-        parsed_result = json.loads(result_part.text)
+        parsed_result = json.loads(result_text)
     except json.JSONDecodeError:
         raise GeminiResponseIsBrokenError(
-            f"Gemini produced invalid JSON for query on {sha}: {response}"
+            f"Gemini produced invalid JSON for query on {sha}: {response}",
+            partial_response=result_text,
+            failure_reason="The result was not syntactically valid JSON.",
         )
 
     try:
         return GeminiRevertInference.from_json_checked(parsed_result)
     except ValueError as e:
         raise GeminiResponseIsBrokenError(
-            f"Gemini produced invalid JSON for query on {sha}: {e}"
+            f"Gemini produced invalid JSON for query on {sha}: {e}",
+            partial_response=result_text,
+            failure_reason=(
+                f"The result from Gemini had an unexpected structure: {e}"
+            ),
         )
+
+
+def generate_retry_message(err: GeminiResponseIsBrokenError) -> str:
+    if not err.partial_response:
+        return (
+            "You did not provide a response; please respond with only the "
+            "appropriate JSON."
+        )
+
+    return (
+        "Your response was **invalid**. Please respond with only the "
+        "requested, well-formed JSON. A hint about what was wrong:\n"
+        f"{err.failure_reason}"
+    )
 
 
 def process_one_sha(
@@ -252,7 +291,7 @@ def process_one_sha(
 ) -> GeminiRevertInference:
     """Queries the given genai client for revert info"""
     commit_info = subprocess.run(
-        ("git", "log", "-n1", sha),
+        ("git", "log", "-n1", "--name-status", sha),
         check=True,
         cwd=llvm_dir,
         stdin=subprocess.DEVNULL,
@@ -263,23 +302,11 @@ def process_one_sha(
 
     logging.info("Processing commit %s...", sha)
 
-    # It's rare for requests to use more than 2,000 tokens (thinking and output
-    # combined). That said, setting _some kind of limit_, even if it's generous,
-    # seems prudent.
-    #
-    # thinking_budget is set to `-1` to cause Gemini to determine how much
-    # thinking is useful; there's an implicit limit of ~60K tokens, per
-    # https://ai.google.dev/gemini-api/docs/thinking
-    thinking_budget = -1
-
-    # Output which is separate from thinking budgets, generally are just a few
-    # hundred tokens.
-    output_token_budget = 3_000
-
     # This is in a `range(_)` loop for an unfortunate reason: despite attempts
     # to bring randomness to zero, this API still seems to return slightly
     # random results. The docs also explicitly do _not_ promise determinism:
-    # https://cloud.google.com/vertex-ai/generative-ai/docs/learn/prompts/adjust-parameter-values
+    # https://cloud.google.com/vertex-ai/generative-ai/
+    # docs/learn/prompts/adjust-parameter-values
     #
     # If you hit the API multiple times, you will **very often** get the same
     # result, but with low probability (seemingly <1/50), Gemini will return
@@ -288,55 +315,95 @@ def process_one_sha(
     #
     # Just retry a few times to minimize the chance of brokenness bubbling up.
     retry_limit = 5
-    i = 1
 
-    # This loop is awkward to write with a `for range` due to how it exits, so
-    # the increment is handled manually.
-    while True:
-        response = client.models.generate_content(
-            # TODO(b/445908427): Maybe try gemini flash or flash-lite once the
-            # revert checker is known to work well enough.
-            model="gemini-2.5-pro",
-            contents=commit_info,
-            config=types.GenerateContentConfig(
-                automatic_function_calling=types.AutomaticFunctionCallingConfig(
-                    disable=True,
-                ),
-                system_instruction=system_prompt,
-                response_mime_type="application/json",
-                tool_config=types.ToolConfig(),
-                response_schema=GeminiRevertInference,
-                thinking_config=types.ThinkingConfig(
-                    include_thoughts=True,
-                    thinking_budget=thinking_budget,
-                ),
-                max_output_tokens=output_token_budget,
-                # Minimize randomness; just pick the best answer possible.
-                # https://cloud.google.com/vertex-ai/generative-ai/docs/learn/prompts/adjust-parameter-values
-                temperature=0,
-                top_k=1,
-                top_p=1,
-                seed=0,
-            ),
+    chat_config = types.GenerateContentConfig(
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(
+            disable=True,
+        ),
+        system_instruction=system_prompt,
+        response_mime_type="application/json",
+        tool_config=types.ToolConfig(),
+        response_schema=GeminiRevertInference,
+        thinking_config=types.ThinkingConfig(
+            include_thoughts=True,
+            # gemini-3-flash experimentally sees meaningfully lower quality
+            # answers with the `low` thinking level. When trying `medium`, genai
+            # 1.54.0 reports API warnings about an invalid thinking level
+            # (despite docs saying that `medium` exists for gemini-3-flash). Use
+            # `high` since that gives the best results for now.
+            thinking_level=types.ThinkingLevel.HIGH,
+        ),
+        # Note that this budget **includes** thinking tokens. It was previously
+        # 3,000, but this is demonstrably too little in very rare cases:
+        # b/458341903#comment17 . The much higher limit is intended to keep
+        # Gemini bounded in case it somehow starts looping, but otherwise allow
+        # it maximum flexibility to produce the tokens it needs.
+        max_output_tokens=30_000,
+        # Minimize randomness; just pick the best answer possible.
+        # https://cloud.google.com/vertex-ai/generative-ai/
+        # docs/learn/prompts/adjust-parameter-values
+        temperature=0,
+        top_k=1,
+        top_p=1,
+        seed=0,
+    )
+
+    for i in range(1, retry_limit + 1):
+        logging.info("Attempt %d running Gemini on SHA %s", i, sha)
+        chat = client.chats.create(
+            model="gemini-3-flash-preview",
+            config=chat_config,
         )
 
+        response = chat.send_message(commit_info)
+
+        # If we hit an error that isn't about response correctness, it's
+        # probably a server error. We'll sleep a bit in hopes that that helps.
+        back_off_secs = i * 2
+        try:
+            return parse_gemini_response(sha, response)
+        except GeminiResponseIsBrokenError as e:
+            # If there's no partial response (which must be differentiated from
+            # an _empty_ one), it's an API error. We can't continue the chat.
+            if e.partial_response is None:
+                logging.exception(
+                    "Gemini failed on attempt %d for SHA %s; retrying soon",
+                    i,
+                    sha,
+                )
+                time.sleep(back_off_secs)
+                continue
+
+            # Otherwise, there's something here. Log info about what Gemini
+            # handed back and continue. It's expected that the _why_ will be
+            # covered by the exception that's logged.
+            logging.exception(
+                "Gemini failed to provide a valid response on attempt %d "
+                "for SHA %s; trying follow-up. Response was %r.",
+                i,
+                sha,
+                e.partial_response,
+            )
+            follow_up_message = generate_retry_message(e)
+
+        response = chat.send_message(follow_up_message)
         try:
             return parse_gemini_response(sha, response)
         except GeminiResponseIsBrokenError:
-            if i >= retry_limit:
-                raise
             logging.exception(
-                "Failed attempt %d of running Gemini on SHA %s; retrying...",
+                "Gemini failed on follow-up for attempt %d/SHA %s; retrying "
+                "soon",
                 i,
                 sha,
             )
+            time.sleep(back_off_secs)
 
-        i += 1
+    raise ValueError(f"Hit Gemini retry limit for SHA {sha}")
 
 
 def write_one_result(
     output: IO[str], sha: str, sha_result: GeminiRevertInference
-):
+) -> None:
     obj = {"sha": sha, "result": sha_result.to_json()}
     json.dump(obj, output)
     output.write("\n")

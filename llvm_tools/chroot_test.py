@@ -11,7 +11,7 @@ from llvm_tools import test_helpers
 class Test(test_helpers.TempDirTestCase):
     """Tests for chroot.py."""
 
-    def test_chromeos_root_finding_works(self):
+    def test_chromeos_root_finding_works(self) -> None:
         root = self.make_tempdir()
         (root / ".repo").mkdir()
         self.assertEqual(chroot.FindChromeOSRootAbove(root), root)
@@ -20,7 +20,7 @@ class Test(test_helpers.TempDirTestCase):
         subdir.mkdir(parents=True)
         self.assertEqual(chroot.FindChromeOSRootAbove(subdir), root)
 
-    def test_chromeos_root_finding_raises_in_trivial_case(self):
+    def test_chromeos_root_finding_raises_in_trivial_case(self) -> None:
         root = self.make_tempdir()
         subdir = root / "foo" / "bar" / "baz"
         subdir.mkdir(parents=True)

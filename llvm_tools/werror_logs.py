@@ -333,7 +333,7 @@ def cq_builder_name_from_werror_logs_path(werror_logs: str) -> str:
 
 def download_and_unpack_werror_tarballs(
     unpack_dir: Path, download_dir: Path, gs_urls: list[str]
-):
+) -> None:
     # This is necessary below when we're untarring files. It should trivially
     # always be the case, and assuming it makes testing easier.
     assert download_dir.is_absolute(), download_dir

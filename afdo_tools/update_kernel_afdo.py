@@ -59,7 +59,7 @@ class KernelVersion:
     major: int
     minor: int
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.major}.{self.minor}"
 
     @classmethod
@@ -96,7 +96,7 @@ class ProfileSelectionInfo:
     max_profile_age: datetime.timedelta
 
 
-def get_parser():
+def get_parser() -> argparse.ArgumentParser:
     """Returns an argument parser for this script."""
     parser = argparse.ArgumentParser(
         description=__doc__,
@@ -231,13 +231,13 @@ class KernelGsProfile:
     _FILE_NAME_PARSE_RE = re.compile(r"R(\d+)-(\d+\.\d+)-(\d+)(\..+\..+)")
 
     @property
-    def file_name_no_suffix(self):
+    def file_name_no_suffix(self) -> str:
         return (
             f"R{self.release_number}-{self.chrome_build}-{self.cwp_timestamp}"
         )
 
     @property
-    def file_name(self):
+    def file_name(self) -> str:
         return f"{self.file_name_no_suffix}{self.suffix}"
 
     @classmethod
@@ -542,7 +542,7 @@ def update_afdo_for_channel(
 
 def commit_new_profiles(
     toolchain_utils: Path, channel: git_utils.Channel, had_failures: bool
-):
+) -> None:
     """Runs `git commit -a` with an appropriate message."""
     commit_message_lines = [
         "afdo_metadata: Publish the new kernel profiles",
@@ -597,7 +597,7 @@ def upload_head_to_gerrit(
     toolchain_utils: Path,
     chromeos_tree: Path | None,
     branch: git_utils.ChannelBranch,
-):
+) -> None:
     """Uploads HEAD to gerrit as a CL, and sets reviewers/CCs."""
     cl_ids = git_utils.upload_to_gerrit(
         toolchain_utils,
