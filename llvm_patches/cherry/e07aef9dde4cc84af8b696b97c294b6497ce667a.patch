@@ -1,0 +1,137 @@
+From 0287082ff18b0d5e565f362b3153f3c10ed4b8e0 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 24 Oct 2025 23:33:25 +0200
+Subject: [PATCH] [clang][Sema] close IsStandardConversion hole when adding
+ cfi_unchecked_callee (#164592)
+
+Commit b194cf1e401a changed this function for the case where attribute
+`cfi_unchecked_callee` is added in a function conversion. But this
+introduces a hole (issue #162798), and it seems the change was
+unnecessary: the preceding `TryFunctionConversion` will already allow
+adding the `cfi_unchecked_callee` attribute, and will update `FromType`
+if it succeeds. So we revert the changes to `IsStandardConversion`. We
+also remove the helper function `AddingCFIUncheckedCallee` which is no
+longer needed, and simplify the corresponding
+`DiscardingCFIUncheckedCallee`.
+
+Fixes: #162798
+
+patch.cherry: true
+patch.metadata.author: Bruno De Fraine <brunodf@synopsys.com>
+patch.metadata.original_sha: e07aef9dde4cc84af8b696b97c294b6497ce667a
+patch.platforms: chromiumos
+patch.version_range.from: 577795
+patch.version_range.until: 595115
+
+---
+ clang/include/clang/Sema/Sema.h               |  5 ----
+ clang/lib/Sema/SemaChecking.cpp               | 30 ++++---------------
+ clang/lib/Sema/SemaOverload.cpp               | 11 +++----
+ .../cfi-unchecked-callee-attribute.cpp        |  1 +
+ 4 files changed, 10 insertions(+), 37 deletions(-)
+
+diff --git a/clang/include/clang/Sema/Sema.h b/clang/include/clang/Sema/Sema.h
+index 423dcf9e2b70..2652bf6904fa 100644
+--- a/clang/include/clang/Sema/Sema.h
++++ b/clang/include/clang/Sema/Sema.h
+@@ -2676,11 +2676,6 @@ public:
+   /// function without this attribute.
+   bool DiscardingCFIUncheckedCallee(QualType From, QualType To) const;
+ 
+-  /// Returns true if `From` is a function or pointer to a function without the
+-  /// `cfi_unchecked_callee` attribute but `To` is a function or pointer to
+-  /// function with this attribute.
+-  bool AddingCFIUncheckedCallee(QualType From, QualType To) const;
+-
+   /// This function calls Action when it determines that E designates a
+   /// misaligned member due to the packed attribute. This is used to emit
+   /// local diagnostics like in reference binding.
+diff --git a/clang/lib/Sema/SemaChecking.cpp b/clang/lib/Sema/SemaChecking.cpp
+index bc87611e1f84..23b38c9007d9 100644
+--- a/clang/lib/Sema/SemaChecking.cpp
++++ b/clang/lib/Sema/SemaChecking.cpp
+@@ -12053,14 +12053,9 @@ static void DiagnoseMixedUnicodeImplicitConversion(Sema &S, const Type *Source,
+   }
+ }
+ 
+-enum CFIUncheckedCalleeChange {
+-  None,
+-  Adding,
+-  Discarding,
+-};
+-
+-static CFIUncheckedCalleeChange AdjustingCFIUncheckedCallee(QualType From,
+-                                                            QualType To) {
++bool Sema::DiscardingCFIUncheckedCallee(QualType From, QualType To) const {
++  From = Context.getCanonicalType(From);
++  To = Context.getCanonicalType(To);
+   QualType MaybePointee = From->getPointeeType();
+   if (!MaybePointee.isNull() && MaybePointee->getAs<FunctionType>())
+     From = MaybePointee;
+@@ -12072,25 +12067,10 @@ static CFIUncheckedCalleeChange AdjustingCFIUncheckedCallee(QualType From,
+     if (const auto *ToFn = To->getAs<FunctionType>()) {
+       if (FromFn->getCFIUncheckedCalleeAttr() &&
+           !ToFn->getCFIUncheckedCalleeAttr())
+-        return Discarding;
+-      if (!FromFn->getCFIUncheckedCalleeAttr() &&
+-          ToFn->getCFIUncheckedCalleeAttr())
+-        return Adding;
++        return true;
+     }
+   }
+-  return None;
+-}
+-
+-bool Sema::DiscardingCFIUncheckedCallee(QualType From, QualType To) const {
+-  From = Context.getCanonicalType(From);
+-  To = Context.getCanonicalType(To);
+-  return ::AdjustingCFIUncheckedCallee(From, To) == Discarding;
+-}
+-
+-bool Sema::AddingCFIUncheckedCallee(QualType From, QualType To) const {
+-  From = Context.getCanonicalType(From);
+-  To = Context.getCanonicalType(To);
+-  return ::AdjustingCFIUncheckedCallee(From, To) == Adding;
++  return false;
+ }
+ 
+ void Sema::CheckImplicitConversion(Expr *E, QualType T, SourceLocation CC,
+diff --git a/clang/lib/Sema/SemaOverload.cpp b/clang/lib/Sema/SemaOverload.cpp
+index 76e189d53684..1b232cde1029 100644
+--- a/clang/lib/Sema/SemaOverload.cpp
++++ b/clang/lib/Sema/SemaOverload.cpp
+@@ -2543,15 +2543,12 @@ static bool IsStandardConversion(Sema &S, Expr* From, QualType ToType,
+ 
+   SCS.setToType(2, FromType);
+ 
+-  // If we have not converted the argument type to the parameter type,
+-  // this is a bad conversion sequence, unless we're resolving an overload in C.
+-  //
+-  // Permit conversions from a function without `cfi_unchecked_callee` to a
+-  // function with `cfi_unchecked_callee`.
+-  if (CanonFrom == CanonTo || S.AddingCFIUncheckedCallee(CanonFrom, CanonTo))
++  if (CanonFrom == CanonTo)
+     return true;
+ 
+-  if ((S.getLangOpts().CPlusPlus || !InOverloadResolution))
++  // If we have not converted the argument type to the parameter type,
++  // this is a bad conversion sequence, unless we're resolving an overload in C.
++  if (S.getLangOpts().CPlusPlus || !InOverloadResolution)
+     return false;
+ 
+   ExprResult ER = ExprResult{From};
+diff --git a/clang/test/Frontend/cfi-unchecked-callee-attribute.cpp b/clang/test/Frontend/cfi-unchecked-callee-attribute.cpp
+index f2c4e9e2f889..549e56531e84 100644
+--- a/clang/test/Frontend/cfi-unchecked-callee-attribute.cpp
++++ b/clang/test/Frontend/cfi-unchecked-callee-attribute.cpp
+@@ -9,6 +9,7 @@ void (*checked_ptr)(void) = unchecked;  // expected-warning{{implicit conversion
+ void (CFI_UNCHECKED_CALLEE *unchecked_ptr)(void) = unchecked;
+ void (CFI_UNCHECKED_CALLEE *from_normal)(void) = checked;
+ void (CFI_UNCHECKED_CALLEE *c_no_function_decay)(void) = &unchecked;
++void (CFI_UNCHECKED_CALLEE __attribute__((noreturn)) *other_conflict)(void) = &checked; // expected-error{{cannot initialize a variable of type 'void (*)() __attribute__((noreturn)) __attribute__((cfi_unchecked_callee))' with an rvalue of type 'void (*)()'}}
+ void (CFI_UNCHECKED_CALLEE *arr[10])(void);
+ void (*cfi_elem)(void) = arr[1];  // expected-warning{{implicit conversion from 'void (*)() __attribute__((cfi_unchecked_callee))' to 'void (*)()' discards 'cfi_unchecked_callee' attribute}}
+ void (CFI_UNCHECKED_CALLEE *cfi_unchecked_elem)(void) = arr[1];
+-- 
+2.39.5

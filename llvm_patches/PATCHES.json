@@ -1088,5 +1088,213 @@
       "from": 584947,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "author": "Peter Collingbourne <peter@pcc.me.uk>",
+      "info": [],
+      "original_sha": "97716d2e311aed1b3b73461ee83e53faa512e499",
+      "title": "Revert \"CodeGen: Respect function align attribute if less than preferred alignment.\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/97716d2e311aed1b3b73461ee83e53faa512e499.patch",
+    "version_range": {
+      "from": 583291,
+      "until": 587614
+    }
+  },
+  {
+    "metadata": {
+      "author": "Dave Lee <davelee.com@gmail.com>",
+      "info": [],
+      "original_sha": "1dc0005d6d23f36b80358abad6590886c8eed32a",
+      "title": "Revert \"[lldb] Fallback to expression eval when Dump of variable fails in dwim-print\" (#153824)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/1dc0005d6d23f36b80358abad6590886c8eed32a.patch",
+    "version_range": {
+      "from": 584876,
+      "until": 586678
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sander de Smalen <sander.desmalen@arm.com>",
+      "info": [],
+      "original_sha": "ed5bd23867eacaa3789060f9250ba6fcece2a3de",
+      "title": "Revert \"Reland \"RegisterCoalescer: Add implicit-def of super register when coalescing SUBREG_TO_REG\" (#134408)\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ed5bd23867eacaa3789060f9250ba6fcece2a3de.patch",
+    "version_range": {
+      "from": 584670,
+      "until": 585229
+    }
+  },
+  {
+    "metadata": {
+      "author": "Tomer Shafir <tomer.shafir8@gmail.com>",
+      "info": [],
+      "original_sha": "ffddf33beb8097e760fafcbdd28d56c1d055e820",
+      "title": "[AArch64] Remove wrong processor feature (#151289)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/ffddf33beb8097e760fafcbdd28d56c1d055e820.patch",
+    "version_range": {
+      "from": 580390,
+      "until": 587113
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikita Popov <nikita.ppv@gmail.com>",
+      "info": [],
+      "original_sha": "f35e9fa478e25266f7a72aed5cd34437c6aa7c39",
+      "title": "Revert \"[IR] Optimize stripAndAccumulateConstantOffsets() for common case (NFC)\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f35e9fa478e25266f7a72aed5cd34437c6aa7c39.patch",
+    "version_range": {
+      "from": 583754,
+      "until": 585886
+    }
+  },
+  {
+    "metadata": {
+      "author": "Antonio Frighetto <me@antoniofrighetto.com>",
+      "info": [],
+      "original_sha": "33761df961627f9d057fa049509fc8ba8baaaf78",
+      "title": "Revert \"[SimpleLoopUnswitch]\u00a0Record loops from unswitching non-trivial conditions\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/33761df961627f9d057fa049509fc8ba8baaaf78.patch",
+    "version_range": {
+      "from": 583896,
+      "until": 586893
+    }
+  },
+  {
+    "metadata": {
+      "author": "Ruiling, Song <ruiling.song@amd.com>",
+      "info": [],
+      "original_sha": "45dec71725bd57831051c27e43da698c23de1a52",
+      "title": "[IR] Allow nofree metadata to inttoptr (#153149)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/45dec71725bd57831051c27e43da698c23de1a52.patch",
+    "version_range": {
+      "from": 565233,
+      "until": 588813
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
+      "info": [],
+      "original_sha": "8a65c4f11a4cb2aabb95c2c0f497cbae2e143cc0",
+      "title": "[libc++] Disable cv-qualified arithmetic hash specializations (#155786)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/8a65c4f11a4cb2aabb95c2c0f497cbae2e143cc0.patch",
+    "version_range": {
+      "from": 578327,
+      "until": 588501
+    }
+  },
+  {
+    "metadata": {
+      "author": "Mehdi Amini <joker.eph@gmail.com>",
+      "info": [],
+      "original_sha": "c5062d7d6358d73931b4791c77500f476606b003",
+      "title": "Revert \"[mlir] move if-condition propagation to a standalone pass\" (#159535)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/c5062d7d6358d73931b4791c77500f476606b003.patch",
+    "version_range": {
+      "from": 583835,
+      "until": 590952
+    }
+  },
+  {
+    "metadata": {
+      "author": "Youngsuk Kim <joseph942010@gmail.com>",
+      "info": [],
+      "original_sha": "05484c63332ffeef21f044080eb536fbe7daf599",
+      "title": "[mlir] Fix bug in PDLL Parser (#155243)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/05484c63332ffeef21f044080eb536fbe7daf599.patch",
+    "version_range": {
+      "from": 549784,
+      "until": 587806
+    }
+  },
+  {
+    "metadata": {
+      "author": "Alex Bradbury <asb@igalia.com>",
+      "info": [],
+      "original_sha": "a314b3b401b5f9e6218d863bfcc29393e1b6f447",
+      "title": "[MachineCopyPropagation] Remove logic to recognise and delete no-op moves produced after forwarded uses (#167336)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/a314b3b401b5f9e6218d863bfcc29393e1b6f447.patch",
+    "version_range": {
+      "from": 567963,
+      "until": 596943
+    }
+  },
+  {
+    "metadata": {
+      "author": "Bruno De Fraine <brunodf@synopsys.com>",
+      "info": [],
+      "original_sha": "e07aef9dde4cc84af8b696b97c294b6497ce667a",
+      "title": "[clang][Sema] close IsStandardConversion hole when adding cfi_unchecked_callee (#164592)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/e07aef9dde4cc84af8b696b97c294b6497ce667a.patch",
+    "version_range": {
+      "from": 577795,
+      "until": 595115
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sam Clegg <sbc@chromium.org>",
+      "info": [],
+      "original_sha": "0baf5a0496a50ffa9f47b76087cb66980a1f713e",
+      "title": "Revert \"Silence -Wunused-parameter warnings in Unwind-wasm.c\" (#175776)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/0baf5a0496a50ffa9f47b76087cb66980a1f713e.patch",
+    "version_range": {
+      "from": 565502,
+      "until": 609367
+    }
   }
 ]

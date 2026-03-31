@@ -1,0 +1,210 @@
+From 117ea34d69e62fc5d17ac68c1843282299622448 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 29 Aug 2025 18:13:26 +0200
+Subject: [PATCH] [libc++] Disable cv-qualified arithmetic hash specializations
+ (#155786)
+
+#140407 accidentally enabled `hash` for cv-qualified types. This patch
+disables these specializations again.
+
+patch.cherry: true
+patch.metadata.author: Nikolas Klauser <nikolasklauser@berlin.de>
+patch.metadata.original_sha: 8a65c4f11a4cb2aabb95c2c0f497cbae2e143cc0
+patch.platforms: chromiumos
+patch.version_range.from: 578327
+patch.version_range.until: 588501
+
+---
+ libcxx/include/CMakeLists.txt                 |  1 +
+ libcxx/include/__functional/hash.h            | 14 ++++++++---
+ libcxx/include/__type_traits/is_unqualified.h | 25 +++++++++++++++++++
+ libcxx/include/module.modulemap.in            |  1 +
+ .../function.objects/unord.hash/enum.pass.cpp | 10 ++++++++
+ .../unord.hash/floating.pass.cpp              | 10 ++++++++
+ .../unord.hash/integral.pass.cpp              | 10 ++++++++
+ 7 files changed, 67 insertions(+), 4 deletions(-)
+ create mode 100644 libcxx/include/__type_traits/is_unqualified.h
+
+diff --git a/libcxx/include/CMakeLists.txt b/libcxx/include/CMakeLists.txt
+index 51444ec668e2..0ee7909b98f9 100644
+--- a/libcxx/include/CMakeLists.txt
++++ b/libcxx/include/CMakeLists.txt
+@@ -875,6 +875,7 @@ set(files
+   __type_traits/is_trivially_relocatable.h
+   __type_traits/is_unbounded_array.h
+   __type_traits/is_union.h
++  __type_traits/is_unqualified.h
+   __type_traits/is_unsigned.h
+   __type_traits/is_valid_expansion.h
+   __type_traits/is_void.h
+diff --git a/libcxx/include/__functional/hash.h b/libcxx/include/__functional/hash.h
+index 489a6f00b8a3..83bbf1b5e26c 100644
+--- a/libcxx/include/__functional/hash.h
++++ b/libcxx/include/__functional/hash.h
+@@ -21,6 +21,7 @@
+ #include <__type_traits/is_enum.h>
+ #include <__type_traits/is_floating_point.h>
+ #include <__type_traits/is_integral.h>
++#include <__type_traits/is_unqualified.h>
+ #include <__type_traits/underlying_type.h>
+ #include <__utility/pair.h>
+ #include <__utility/swap.h>
+@@ -355,7 +356,8 @@ struct __hash_impl {
+ };
+ 
+ template <class _Tp>
+-struct __hash_impl<_Tp, __enable_if_t<is_enum<_Tp>::value> > : __unary_function<_Tp, size_t> {
++struct __hash_impl<_Tp, __enable_if_t<is_enum<_Tp>::value && __is_unqualified_v<_Tp> > >
++    : __unary_function<_Tp, size_t> {
+   _LIBCPP_HIDE_FROM_ABI size_t operator()(_Tp __v) const _NOEXCEPT {
+     using type = __underlying_type_t<_Tp>;
+     return hash<type>()(static_cast<type>(__v));
+@@ -363,17 +365,21 @@ struct __hash_impl<_Tp, __enable_if_t<is_enum<_Tp>::value> > : __unary_function<
+ };
+ 
+ template <class _Tp>
+-struct __hash_impl<_Tp, __enable_if_t<is_integral<_Tp>::value && (sizeof(_Tp) <= sizeof(size_t))> >
++struct __hash_impl<
++    _Tp,
++    __enable_if_t<is_integral<_Tp>::value && __is_unqualified_v<_Tp> && (sizeof(_Tp) <= sizeof(size_t))> >
+     : __unary_function<_Tp, size_t> {
+   _LIBCPP_HIDE_FROM_ABI size_t operator()(_Tp __v) const _NOEXCEPT { return static_cast<size_t>(__v); }
+ };
+ 
+ template <class _Tp>
+-struct __hash_impl<_Tp, __enable_if_t<is_integral<_Tp>::value && (sizeof(_Tp) > sizeof(size_t))> >
++struct __hash_impl<_Tp,
++                   __enable_if_t<is_integral<_Tp>::value && __is_unqualified_v<_Tp> && (sizeof(_Tp) > sizeof(size_t))> >
+     : __scalar_hash<_Tp> {};
+ 
+ template <class _Tp>
+-struct __hash_impl<_Tp, __enable_if_t<is_floating_point<_Tp>::value> > : __scalar_hash<_Tp> {
++struct __hash_impl<_Tp, __enable_if_t<is_floating_point<_Tp>::value && __is_unqualified_v<_Tp> > >
++    : __scalar_hash<_Tp> {
+   _LIBCPP_HIDE_FROM_ABI size_t operator()(_Tp __v) const _NOEXCEPT {
+     // -0.0 and 0.0 should return same hash
+     if (__v == 0.0f)
+diff --git a/libcxx/include/__type_traits/is_unqualified.h b/libcxx/include/__type_traits/is_unqualified.h
+new file mode 100644
+index 000000000000..7970b3611601
+--- /dev/null
++++ b/libcxx/include/__type_traits/is_unqualified.h
+@@ -0,0 +1,25 @@
++//===----------------------------------------------------------------------===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef _LIBCPP___TYPE_TRAITS_IS_UNQUALIFIED_H
++#define _LIBCPP___TYPE_TRAITS_IS_UNQUALIFIED_H
++
++#include <__config>
++
++#if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
++#  pragma GCC system_header
++#endif
++
++_LIBCPP_BEGIN_NAMESPACE_STD
++
++template <class _Tp>
++inline const bool __is_unqualified_v = __is_same(_Tp, __remove_cvref(_Tp));
++
++_LIBCPP_END_NAMESPACE_STD
++
++#endif // _LIBCPP___TYPE_TRAITS_IS_UNQUALIFIED_H
+diff --git a/libcxx/include/module.modulemap.in b/libcxx/include/module.modulemap.in
+index 5857a83b5fe1..9291ade96dae 100644
+--- a/libcxx/include/module.modulemap.in
++++ b/libcxx/include/module.modulemap.in
+@@ -336,6 +336,7 @@ module std_core [system] {
+       header "__type_traits/is_union.h"
+       export std_core.type_traits.integral_constant
+     }
++    module is_unqualified { header "__type_traits/is_unqualified.h" }
+     module is_unsigned {
+       header "__type_traits/is_unsigned.h"
+       export std_core.type_traits.integral_constant
+diff --git a/libcxx/test/std/utilities/function.objects/unord.hash/enum.pass.cpp b/libcxx/test/std/utilities/function.objects/unord.hash/enum.pass.cpp
+index fd1fbe5f113b..05a19329f909 100644
+--- a/libcxx/test/std/utilities/function.objects/unord.hash/enum.pass.cpp
++++ b/libcxx/test/std/utilities/function.objects/unord.hash/enum.pass.cpp
+@@ -21,6 +21,10 @@
+ 
+ #include "test_macros.h"
+ 
++#if TEST_STD_VER >= 11
++#  include "poisoned_hash_helper.h"
++#endif
++
+ enum class Colors { red, orange, yellow, green, blue, indigo, violet };
+ enum class Cardinals { zero, one, two, three, five=5 };
+ enum class LongColors : short { red, orange, yellow, green, blue, indigo, violet };
+@@ -33,6 +37,12 @@ template <class T>
+ void
+ test()
+ {
++#if TEST_STD_VER >= 11
++    test_hash_disabled<const T>();
++    test_hash_disabled<volatile T>();
++    test_hash_disabled<const volatile T>();
++#endif
++
+     typedef std::hash<T> H;
+ #if TEST_STD_VER <= 17
+     static_assert((std::is_same<typename H::argument_type, T>::value), "");
+diff --git a/libcxx/test/std/utilities/function.objects/unord.hash/floating.pass.cpp b/libcxx/test/std/utilities/function.objects/unord.hash/floating.pass.cpp
+index b8f85e193dc8..f6c31d068b23 100644
+--- a/libcxx/test/std/utilities/function.objects/unord.hash/floating.pass.cpp
++++ b/libcxx/test/std/utilities/function.objects/unord.hash/floating.pass.cpp
+@@ -27,10 +27,20 @@
+ 
+ #include "test_macros.h"
+ 
++#if TEST_STD_VER >= 11
++#  include "poisoned_hash_helper.h"
++#endif
++
+ template <class T>
+ void
+ test()
+ {
++#if TEST_STD_VER >= 11
++    test_hash_disabled<const T>();
++    test_hash_disabled<volatile T>();
++    test_hash_disabled<const volatile T>();
++#endif
++
+     typedef std::hash<T> H;
+ #if TEST_STD_VER <= 17
+     static_assert((std::is_same<typename H::argument_type, T>::value), "");
+diff --git a/libcxx/test/std/utilities/function.objects/unord.hash/integral.pass.cpp b/libcxx/test/std/utilities/function.objects/unord.hash/integral.pass.cpp
+index 14af7093c1e3..c798b3aa77ea 100644
+--- a/libcxx/test/std/utilities/function.objects/unord.hash/integral.pass.cpp
++++ b/libcxx/test/std/utilities/function.objects/unord.hash/integral.pass.cpp
+@@ -26,10 +26,20 @@
+ 
+ #include "test_macros.h"
+ 
++#if TEST_STD_VER >= 11
++#  include "poisoned_hash_helper.h"
++#endif
++
+ template <class T>
+ void
+ test()
+ {
++#if TEST_STD_VER >= 11
++    test_hash_disabled<const T>();
++    test_hash_disabled<volatile T>();
++    test_hash_disabled<const volatile T>();
++#endif
++
+     typedef std::hash<T> H;
+ #if TEST_STD_VER <= 17
+     static_assert((std::is_same<typename H::argument_type, T>::value), "");
+-- 
+2.39.5

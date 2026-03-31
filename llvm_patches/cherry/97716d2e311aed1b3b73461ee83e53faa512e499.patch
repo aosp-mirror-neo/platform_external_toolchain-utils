@@ -1,0 +1,65 @@
+From d10142ea7e2133ec5bf1fa2d2489fc3fc29cc2c0 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 22 Aug 2025 12:59:54 -0700
+Subject: [PATCH] Revert "CodeGen: Respect function align attribute if less
+ than preferred alignment."
+
+This reverts commit 9878ef3abd2a48fcfb81357d581dac292b52ddb3.
+
+Needs more discussion of the semantics of the align attribute. See:
+https://discourse.llvm.org/t/rfc-enhancing-function-alignment-attributes/88019
+
+patch.cherry: true
+patch.metadata.author: Peter Collingbourne <peter@pcc.me.uk>
+patch.metadata.original_sha: 97716d2e311aed1b3b73461ee83e53faa512e499
+patch.platforms: chromiumos
+patch.version_range.from: 583291
+patch.version_range.until: 587614
+
+---
+ llvm/lib/CodeGen/MachineFunction.cpp    |  3 ++-
+ llvm/test/CodeGen/X86/function-align.ll | 18 ------------------
+ 2 files changed, 2 insertions(+), 19 deletions(-)
+ delete mode 100644 llvm/test/CodeGen/X86/function-align.ll
+
+diff --git a/llvm/lib/CodeGen/MachineFunction.cpp b/llvm/lib/CodeGen/MachineFunction.cpp
+index ec40f6af3caa..fe967a1920a2 100644
+--- a/llvm/lib/CodeGen/MachineFunction.cpp
++++ b/llvm/lib/CodeGen/MachineFunction.cpp
+@@ -211,7 +211,8 @@ void MachineFunction::init() {
+   ConstantPool = new (Allocator) MachineConstantPool(getDataLayout());
+   Alignment = STI->getTargetLowering()->getMinFunctionAlignment();
+ 
+-  if (!F.getAlign() && !F.hasOptSize())
++  // FIXME: Shouldn't use pref alignment if explicit alignment is set on F.
++  if (!F.hasOptSize())
+     Alignment = std::max(Alignment,
+                          STI->getTargetLowering()->getPrefFunctionAlignment());
+ 
+diff --git a/llvm/test/CodeGen/X86/function-align.ll b/llvm/test/CodeGen/X86/function-align.ll
+deleted file mode 100644
+index 11d0e9992992..000000000000
+--- a/llvm/test/CodeGen/X86/function-align.ll
++++ /dev/null
+@@ -1,18 +0,0 @@
+-; RUN: llc -function-sections < %s | FileCheck %s
+-
+-target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
+-target triple = "x86_64-unknown-linux-gnu"
+-
+-; CHECK: .section .text.f1
+-; CHECK-NOT: .p2align
+-; CHECK: f1:
+-define void @f1() align 1 {
+-  ret void
+-}
+-
+-; CHECK: .section .text.f2
+-; CHECK-NEXT: .globl f2
+-; CHECK-NEXT: .p2align 1
+-define void @f2() align 2 {
+-  ret void
+-}
+-- 
+2.39.5
