@@ -28,13 +28,16 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from typing import Any, Iterable
 
 
 # Add `v1` here in case format changes happen in the future. These aren't
 # _planned_; the current architecture of this should be able to use 'v1'
 # forever, but no harm in explicit versioning.
-_GS_WHEEL_LOCATION = "gs://chromeos-localmirror/crostc/python-wheels/v1"
+_GS_WHEEL_BASE = "chromeos-localmirror/crostc/python-wheels/v1"
+_GS_WHEEL_LOCATION = f"gs://{_GS_WHEEL_BASE}"
+_GS_WHEEL_LOCATION_HTTPS = f"https://storage.googleapis.com/{_GS_WHEEL_BASE}"
 
 _SUPPORTED_PYTHON_VERSIONS = (
     # For the chroot.
@@ -195,19 +198,63 @@ def fetch_wheels_from_gs_overwriting(
 ) -> None:
     """Replaces files in `wheel_dir` with ones that exist in gs://."""
     logging.info("Fetching %d wheels from gs://...", len(wheels_to_fetch))
-    cmd: list[str | Path] = [
-        get_gs_executable(),
-        # Use multiple threads.
-        "-m",
-        "cp",
-    ]
-    cmd += (os.path.join(_GS_WHEEL_LOCATION, x) for x in wheels_to_fetch)
-    cmd.append(wheel_dir)
-    subprocess.run(
-        cmd,
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
+
+    def fetch_one(wheel: str) -> None:
+        url = f"{_GS_WHEEL_LOCATION_HTTPS}/{wheel}"
+        out_file = wheel_dir / wheel
+        cmd = (
+            "curl",
+            "--fail",
+            "--location",
+            "--silent",
+            "--show-error",
+            "--output",
+            str(out_file),
+            url,
+        )
+        logging.debug(
+            "Downloading %s with curl command: %s", wheel, shlex.join(cmd)
+        )
+        max_attempts = 4
+        for i in range(max_attempts):
+            try:
+                subprocess.run(
+                    cmd,
+                    check=True,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    encoding="utf-8",
+                    errors="replace",
+                )
+                logging.debug("Download of %s succeeded!", wheel)
+                return
+            except subprocess.CalledProcessError as e:
+                if i == max_attempts - 1:
+                    logging.error(
+                        "Final download attempt of %s failed; output: %s",
+                        wheel,
+                        e.stdout,
+                    )
+                    raise
+
+                sleep_time = 2**i
+                logging.warning(
+                    "Download of %s failed (attempt %d/%d); "
+                    "retrying in %ds...\noutput: %s",
+                    wheel,
+                    i + 1,
+                    max_attempts,
+                    sleep_time,
+                    e.stdout,
+                )
+                time.sleep(sleep_time)
+
+    # gs:// ratelimits are generally pretty high, so use a generous threadpool
+    # here.
+    pool_size = min(len(wheels_to_fetch), 32)
+    with multiprocessing.pool.ThreadPool(pool_size) as pool:
+        pool.map(fetch_one, wheels_to_fetch)
 
 
 def calculate_wheel_hash(wheel_file: Path) -> str | None:
