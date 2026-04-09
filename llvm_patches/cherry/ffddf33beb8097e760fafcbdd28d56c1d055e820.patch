@@ -1,0 +1,167 @@
+From dab379497adc6fb63f54dba7eb41c9c4b4af8353 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Tue, 19 Aug 2025 21:20:09 +0300
+Subject: [PATCH] [AArch64] Remove wrong processor feature (#151289)
+
+`fmov dX, dY` is not a preferred instruction.
+
+Previously introduced by:
+https://github.com/llvm/llvm-project/pull/144152
+
+patch.cherry: true
+patch.metadata.author: Tomer Shafir <tomer.shafir8@gmail.com>
+patch.metadata.original_sha: ffddf33beb8097e760fafcbdd28d56c1d055e820
+patch.platforms: chromiumos
+patch.version_range.from: 580390
+patch.version_range.until: 587113
+
+---
+ llvm/lib/Target/AArch64/AArch64Processors.td  | 10 ------
+ .../AArch64/arm64-zero-cycle-regmov-fpr.ll    | 34 -------------------
+ 2 files changed, 44 deletions(-)
+
+diff --git a/llvm/lib/Target/AArch64/AArch64Processors.td b/llvm/lib/Target/AArch64/AArch64Processors.td
+index adc984ad795a..fa037df53102 100644
+--- a/llvm/lib/Target/AArch64/AArch64Processors.td
++++ b/llvm/lib/Target/AArch64/AArch64Processors.td
+@@ -318,7 +318,6 @@ def TuneAppleA7  : SubtargetFeature<"apple-a7", "ARMProcFamily", "AppleA7",
+                                     FeatureFuseAES, FeatureFuseCryptoEOR,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing,
+                                     FeatureZCZeroingFPWorkaround]>;
+ 
+@@ -332,7 +331,6 @@ def TuneAppleA10 : SubtargetFeature<"apple-a10", "ARMProcFamily", "AppleA10",
+                                     FeatureFuseCryptoEOR,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA11 : SubtargetFeature<"apple-a11", "ARMProcFamily", "AppleA11",
+@@ -345,7 +343,6 @@ def TuneAppleA11 : SubtargetFeature<"apple-a11", "ARMProcFamily", "AppleA11",
+                                     FeatureFuseCryptoEOR,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA12 : SubtargetFeature<"apple-a12", "ARMProcFamily", "AppleA12",
+@@ -358,7 +355,6 @@ def TuneAppleA12 : SubtargetFeature<"apple-a12", "ARMProcFamily", "AppleA12",
+                                     FeatureFuseCryptoEOR,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA13 : SubtargetFeature<"apple-a13", "ARMProcFamily", "AppleA13",
+@@ -371,7 +367,6 @@ def TuneAppleA13 : SubtargetFeature<"apple-a13", "ARMProcFamily", "AppleA13",
+                                     FeatureFuseCryptoEOR,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA14 : SubtargetFeature<"apple-a14", "ARMProcFamily", "AppleA14",
+@@ -389,7 +384,6 @@ def TuneAppleA14 : SubtargetFeature<"apple-a14", "ARMProcFamily", "AppleA14",
+                                     FeatureFuseLiterals,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA15 : SubtargetFeature<"apple-a15", "ARMProcFamily", "AppleA15",
+@@ -407,7 +401,6 @@ def TuneAppleA15 : SubtargetFeature<"apple-a15", "ARMProcFamily", "AppleA15",
+                                     FeatureFuseLiterals,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA16 : SubtargetFeature<"apple-a16", "ARMProcFamily", "AppleA16",
+@@ -425,7 +418,6 @@ def TuneAppleA16 : SubtargetFeature<"apple-a16", "ARMProcFamily", "AppleA16",
+                                     FeatureFuseLiterals,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleA17 : SubtargetFeature<"apple-a17", "ARMProcFamily", "AppleA17",
+@@ -443,7 +435,6 @@ def TuneAppleA17 : SubtargetFeature<"apple-a17", "ARMProcFamily", "AppleA17",
+                                     FeatureFuseLiterals,
+                                     FeatureStorePairSuppress,
+                                     FeatureZCRegMoveGPR64,
+-                                    FeatureZCRegMoveFPR64,
+                                     FeatureZCZeroing]>;
+ 
+ def TuneAppleM4 : SubtargetFeature<"apple-m4", "ARMProcFamily", "AppleM4",
+@@ -460,7 +451,6 @@ def TuneAppleM4 : SubtargetFeature<"apple-m4", "ARMProcFamily", "AppleM4",
+                                      FeatureFuseCryptoEOR,
+                                      FeatureFuseLiterals,
+                                      FeatureZCRegMoveGPR64,
+-                                     FeatureZCRegMoveFPR64,
+                                      FeatureZCZeroing
+                                      ]>;
+ 
+diff --git a/llvm/test/CodeGen/AArch64/arm64-zero-cycle-regmov-fpr.ll b/llvm/test/CodeGen/AArch64/arm64-zero-cycle-regmov-fpr.ll
+index f422f96f3349..fa15ab42c263 100644
+--- a/llvm/test/CodeGen/AArch64/arm64-zero-cycle-regmov-fpr.ll
++++ b/llvm/test/CodeGen/AArch64/arm64-zero-cycle-regmov-fpr.ll
+@@ -1,7 +1,5 @@
+ ; RUN: llc < %s -mtriple=arm64-linux-gnu | FileCheck %s -check-prefixes=NOTCPU-LINUX --match-full-lines
+ ; RUN: llc < %s -mtriple=arm64-apple-macosx -mcpu=generic | FileCheck %s -check-prefixes=NOTCPU-APPLE --match-full-lines
+-; RUN: llc < %s -mtriple=arm64-apple-macosx -mcpu=apple-m1 | FileCheck %s -check-prefixes=CPU --match-full-lines
+-; RUN: llc < %s -mtriple=arm64-apple-macosx -mcpu=apple-m1 -mattr=-zcm-fpr64 | FileCheck %s -check-prefixes=NOTATTR --match-full-lines
+ ; RUN: llc < %s -mtriple=arm64-apple-macosx -mattr=+zcm-fpr64 | FileCheck %s -check-prefixes=ATTR --match-full-lines
+ 
+ define void @zero_cycle_regmov_FPR32(float %a, float %b, float %c, float %d) {
+@@ -23,22 +21,6 @@ entry:
+ ; NOTCPU-APPLE: fmov s0, [[REG1]]
+ ; NOTCPU-APPLE: fmov s1, [[REG2]]
+ 
+-; CPU: fmov [[REG2:d[0-9]+]], d3
+-; CPU: fmov [[REG1:d[0-9]+]], d2
+-; CPU: fmov d0, d2
+-; CPU: fmov d1, d3
+-; CPU-NEXT: bl {{_?foo_float}}
+-; CPU: fmov d0, [[REG1]]
+-; CPU: fmov d1, [[REG2]]
+-
+-; NOTATTR: fmov [[REG2:s[0-9]+]], s3
+-; NOTATTR: fmov [[REG1:s[0-9]+]], s2
+-; NOTATTR: fmov s0, s2
+-; NOTATTR: fmov s1, s3
+-; NOTATTR-NEXT: bl {{_?foo_float}}
+-; NOTATTR: fmov s0, [[REG1]]
+-; NOTATTR: fmov s1, [[REG2]]
+-
+ ; ATTR: fmov d0, d2
+ ; ATTR: fmov d1, d3
+ ; ATTR: fmov [[REG2:d[0-9]+]], d3
+@@ -72,22 +54,6 @@ entry:
+ ; NOTCPU-APPLE: fmov s0, [[REG1]]
+ ; NOTCPU-APPLE: fmov s1, [[REG2]]
+ 
+-; CPU: fmov [[REG2:d[0-9]+]], d3
+-; CPU: fmov [[REG1:d[0-9]+]], d2
+-; CPU: fmov d0, d2
+-; CPU: fmov d1, d3
+-; CPU-NEXT: bl {{_?foo_half}}
+-; CPU: fmov d0, [[REG1]]
+-; CPU: fmov d1, [[REG2]]
+-
+-; NOTATTR: fmov [[REG2:s[0-9]+]], s3
+-; NOTATTR: fmov [[REG1:s[0-9]+]], s2
+-; NOTATTR: fmov s0, s2
+-; NOTATTR: fmov s1, s3
+-; NOTATTR-NEXT: bl {{_?foo_half}}
+-; NOTATTR: fmov s0, [[REG1]]
+-; NOTATTR: fmov s1, [[REG2]]
+-
+ ; ATTR: fmov d0, d2
+ ; ATTR: fmov d1, d3
+ ; ATTR: fmov [[REG2:d[0-9]+]], d3
+-- 
+2.39.5

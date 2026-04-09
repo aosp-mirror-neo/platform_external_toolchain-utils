@@ -1,0 +1,54 @@
+From 6a09269febe5500aafaa0348ad01bba9db2b80ba Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Wed, 4 Mar 2026 09:59:28 -0800
+Subject: [PATCH] Revert "Silence -Wunused-parameter warnings in Unwind-wasm.c"
+ (#175776)
+
+Reverts llvm/llvm-project#125412
+
+See the discussion in #125412 for why this is necessary. The summary is
+that:
+
+- Eliding arguments is the C23 extension, but libunwind builds its C
+files with `-std=c99`, so this change broke the build.
+- `-Wno-unused-parameter` is part of the build for libunwind, so the
+codebase does allow them.
+
+patch.cherry: true
+patch.metadata.author: Sam Clegg <sbc@chromium.org>
+patch.metadata.original_sha: 0baf5a0496a50ffa9f47b76087cb66980a1f713e
+patch.platforms: chromiumos
+patch.version_range.from: 565502
+patch.version_range.until: 609367
+
+---
+ libunwind/src/Unwind-wasm.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/libunwind/src/Unwind-wasm.c b/libunwind/src/Unwind-wasm.c
+index b8b7bc2779f1..b18b32c5d178 100644
+--- a/libunwind/src/Unwind-wasm.c
++++ b/libunwind/src/Unwind-wasm.c
+@@ -102,7 +102,8 @@ _LIBUNWIND_EXPORT uintptr_t _Unwind_GetIP(struct _Unwind_Context *context) {
+ }
+ 
+ /// Not used in Wasm.
+-_LIBUNWIND_EXPORT void _Unwind_SetIP(struct _Unwind_Context *, uintptr_t) {}
++_LIBUNWIND_EXPORT void _Unwind_SetIP(struct _Unwind_Context *context,
++                                     uintptr_t value) {}
+ 
+ /// Called by personality handler to get LSDA for current frame.
+ _LIBUNWIND_EXPORT uintptr_t
+@@ -114,7 +115,8 @@ _Unwind_GetLanguageSpecificData(struct _Unwind_Context *context) {
+ }
+ 
+ /// Not used in Wasm.
+-_LIBUNWIND_EXPORT uintptr_t _Unwind_GetRegionStart(struct _Unwind_Context *) {
++_LIBUNWIND_EXPORT uintptr_t
++_Unwind_GetRegionStart(struct _Unwind_Context *context) {
+   return 0;
+ }
+ 
+-- 
+2.39.5

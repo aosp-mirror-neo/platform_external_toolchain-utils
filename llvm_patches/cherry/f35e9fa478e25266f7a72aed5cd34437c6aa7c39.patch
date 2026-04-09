@@ -1,0 +1,83 @@
+From ea13bfe416b466eaef7747831cba6cbe7566b4a1 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 8 Aug 2025 20:37:44 +0200
+Subject: [PATCH] Revert "[IR] Optimize stripAndAccumulateConstantOffsets() for
+ common case (NFC)"
+
+This reverts commit a7edc95c799c46665ecf4465a4dc7ff4bee3ced0.
+
+An issue has been reported at: https://github.com/llvm/llvm-project/commit/a7edc95c799c46665ecf4465a4dc7ff4bee3ced0#commitcomment-163691175
+
+patch.cherry: true
+patch.metadata.author: Nikita Popov <nikita.ppv@gmail.com>
+patch.metadata.original_sha: f35e9fa478e25266f7a72aed5cd34437c6aa7c39
+patch.platforms: chromiumos
+patch.version_range.from: 583754
+patch.version_range.until: 585886
+
+---
+ llvm/lib/IR/Value.cpp | 46 +++++++++++++++++++------------------------
+ 1 file changed, 20 insertions(+), 26 deletions(-)
+
+diff --git a/llvm/lib/IR/Value.cpp b/llvm/lib/IR/Value.cpp
+index 129ca4a57de5..5928c89029b8 100644
+--- a/llvm/lib/IR/Value.cpp
++++ b/llvm/lib/IR/Value.cpp
+@@ -747,34 +747,28 @@ const Value *Value::stripAndAccumulateConstantOffsets(
+       // means when we construct GEPOffset, we need to use the size
+       // of GEP's pointer type rather than the size of the original
+       // pointer type.
+-      unsigned CurBitWidth = DL.getIndexTypeSizeInBits(V->getType());
+-      if (CurBitWidth == BitWidth) {
+-        if (!GEP->accumulateConstantOffset(DL, Offset, ExternalAnalysis))
+-          return V;
+-      } else {
+-        APInt GEPOffset(CurBitWidth, 0);
+-        if (!GEP->accumulateConstantOffset(DL, GEPOffset, ExternalAnalysis))
+-          return V;
++      APInt GEPOffset(DL.getIndexTypeSizeInBits(V->getType()), 0);
++      if (!GEP->accumulateConstantOffset(DL, GEPOffset, ExternalAnalysis))
++        return V;
+ 
+-        // Stop traversal if the pointer offset wouldn't fit in the bit-width
+-        // provided by the Offset argument. This can happen due to AddrSpaceCast
+-        // stripping.
+-        if (GEPOffset.getSignificantBits() > BitWidth)
+-          return V;
++      // Stop traversal if the pointer offset wouldn't fit in the bit-width
++      // provided by the Offset argument. This can happen due to AddrSpaceCast
++      // stripping.
++      if (GEPOffset.getSignificantBits() > BitWidth)
++        return V;
+ 
+-        // External Analysis can return a result higher/lower than the value
+-        // represents. We need to detect overflow/underflow.
+-        APInt GEPOffsetST = GEPOffset.sextOrTrunc(BitWidth);
+-        if (!ExternalAnalysis) {
+-          Offset += GEPOffsetST;
+-        } else {
+-          bool Overflow = false;
+-          APInt OldOffset = Offset;
+-          Offset = Offset.sadd_ov(GEPOffsetST, Overflow);
+-          if (Overflow) {
+-            Offset = OldOffset;
+-            return V;
+-          }
++      // External Analysis can return a result higher/lower than the value
++      // represents. We need to detect overflow/underflow.
++      APInt GEPOffsetST = GEPOffset.sextOrTrunc(BitWidth);
++      if (!ExternalAnalysis) {
++        Offset += GEPOffsetST;
++      } else {
++        bool Overflow = false;
++        APInt OldOffset = Offset;
++        Offset = Offset.sadd_ov(GEPOffsetST, Overflow);
++        if (Overflow) {
++          Offset = OldOffset;
++          return V;
+         }
+       }
+       V = GEP->getPointerOperand();
+-- 
+2.39.5

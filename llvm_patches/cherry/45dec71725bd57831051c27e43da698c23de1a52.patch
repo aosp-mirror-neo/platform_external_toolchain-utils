@@ -1,0 +1,185 @@
+From ff2a442fbb0bf54e11d32ebd6c7d063ae17c80a8 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Tue, 2 Sep 2025 21:50:47 +0800
+Subject: [PATCH] [IR] Allow nofree metadata to inttoptr (#153149)
+
+Our GPU compiler usually construct pointers through inttoptr. The memory
+was pre-allocated before the shader function execution and remains valid
+through the execution of the shader function. This brings back the
+expected behavior of instruction hoisting for the test
+`hoist-speculatable-load.ll`, which was broken by #126117.
+
+patch.cherry: true
+patch.metadata.author: Ruiling, Song <ruiling.song@amd.com>
+patch.metadata.original_sha: 45dec71725bd57831051c27e43da698c23de1a52
+patch.platforms: chromiumos
+patch.version_range.from: 565233
+patch.version_range.until: 588813
+
+---
+ llvm/docs/LangRef.rst                             | 14 +++++++++++++-
+ llvm/include/llvm/IR/FixedMetadataKinds.def       |  1 +
+ llvm/lib/IR/Value.cpp                             |  3 +++
+ llvm/lib/IR/Verifier.cpp                          | 11 +++++++++++
+ .../Transforms/LICM/hoist-speculatable-load.ll    |  6 +++---
+ llvm/test/Verifier/nofree_metadata.ll             | 15 +++++++++++++++
+ 6 files changed, 46 insertions(+), 4 deletions(-)
+ create mode 100644 llvm/test/Verifier/nofree_metadata.ll
+
+diff --git a/llvm/docs/LangRef.rst b/llvm/docs/LangRef.rst
+index 28746bf9d05a..37ac667518f2 100644
+--- a/llvm/docs/LangRef.rst
++++ b/llvm/docs/LangRef.rst
+@@ -8475,6 +8475,13 @@ specific. The behavior is undefined if the runtime memory address does
+ resolve to an object defined in one of the indicated address spaces.
+ 
+ 
++'``nofree``' Metadata
++^^^^^^^^^^^^^^^^^^^^^
++
++The ``nofree`` metadata indicates the memory pointed by the pointer will not be
++freed after the attached instruction.
++
++
+ Module Flags Metadata
+ =====================
+ 
+@@ -12533,7 +12540,7 @@ Syntax:
+ 
+ ::
+ 
+-      <result> = inttoptr <ty> <value> to <ty2>[, !dereferenceable !<deref_bytes_node>][, !dereferenceable_or_null !<deref_bytes_node>]             ; yields ty2
++      <result> = inttoptr <ty> <value> to <ty2>[, !dereferenceable !<deref_bytes_node>][, !dereferenceable_or_null !<deref_bytes_node>][, !nofree !<empty_node>]            ; yields ty2
+ 
+ Overview:
+ """""""""
+@@ -12558,6 +12565,11 @@ metadata name ``<deref_bytes_node>`` corresponding to a metadata node with one
+ ``i64`` entry.
+ See ``dereferenceable_or_null`` metadata.
+ 
++The optional ``!nofree`` metadata must reference a single metadata name
++``<empty_node>`` corresponding to a metadata node with no entries.
++The existence of the ``!nofree`` metadata on the instruction tells the optimizer
++that the memory pointed by the pointer will not be freed after this point.
++
+ Semantics:
+ """"""""""
+ 
+diff --git a/llvm/include/llvm/IR/FixedMetadataKinds.def b/llvm/include/llvm/IR/FixedMetadataKinds.def
+index 90276eae13e4..d09cc15d65ff 100644
+--- a/llvm/include/llvm/IR/FixedMetadataKinds.def
++++ b/llvm/include/llvm/IR/FixedMetadataKinds.def
+@@ -54,3 +54,4 @@ LLVM_FIXED_MD_KIND(MD_coro_outside_frame, "coro.outside.frame", 39)
+ LLVM_FIXED_MD_KIND(MD_mmra, "mmra", 40)
+ LLVM_FIXED_MD_KIND(MD_noalias_addrspace, "noalias.addrspace", 41)
+ LLVM_FIXED_MD_KIND(MD_callee_type, "callee_type", 42)
++LLVM_FIXED_MD_KIND(MD_nofree, "nofree", 43)
+diff --git a/llvm/lib/IR/Value.cpp b/llvm/lib/IR/Value.cpp
+index 5928c89029b8..4e8f359481b8 100644
+--- a/llvm/lib/IR/Value.cpp
++++ b/llvm/lib/IR/Value.cpp
+@@ -836,6 +836,9 @@ bool Value::canBeFreed() const {
+       return false;
+   }
+ 
++  if (isa<IntToPtrInst>(this) && getMetadata(LLVMContext::MD_nofree))
++    return false;
++
+   const Function *F = nullptr;
+   if (auto *I = dyn_cast<Instruction>(this))
+     F = I->getFunction();
+diff --git a/llvm/lib/IR/Verifier.cpp b/llvm/lib/IR/Verifier.cpp
+index 3ff9895e161c..7169d81b463f 100644
+--- a/llvm/lib/IR/Verifier.cpp
++++ b/llvm/lib/IR/Verifier.cpp
+@@ -527,6 +527,7 @@ private:
+   void visitRangeMetadata(Instruction &I, MDNode *Range, Type *Ty);
+   void visitNoaliasAddrspaceMetadata(Instruction &I, MDNode *Range, Type *Ty);
+   void visitDereferenceableMetadata(Instruction &I, MDNode *MD);
++  void visitNofreeMetadata(Instruction &I, MDNode *MD);
+   void visitProfMetadata(Instruction &I, MDNode *MD);
+   void visitCallStackMetadata(MDNode *MD);
+   void visitMemProfMetadata(Instruction &I, MDNode *MD);
+@@ -4995,6 +4996,13 @@ void Verifier::visitDereferenceableMetadata(Instruction& I, MDNode* MD) {
+         &I);
+ }
+ 
++void Verifier::visitNofreeMetadata(Instruction &I, MDNode *MD) {
++  Check(I.getType()->isPointerTy(), "nofree applies only to pointer types", &I);
++  Check((isa<IntToPtrInst>(I)), "nofree applies only to inttoptr instruction",
++        &I);
++  Check(MD->getNumOperands() == 0, "nofree metadata must be empty", &I);
++}
++
+ void Verifier::visitProfMetadata(Instruction &I, MDNode *MD) {
+   auto GetBranchingTerminatorNumOperands = [&]() {
+     unsigned ExpectedNumOperands = 0;
+@@ -5470,6 +5478,9 @@ void Verifier::visitInstruction(Instruction &I) {
+   if (MDNode *MD = I.getMetadata(LLVMContext::MD_dereferenceable_or_null))
+     visitDereferenceableMetadata(I, MD);
+ 
++  if (MDNode *MD = I.getMetadata(LLVMContext::MD_nofree))
++    visitNofreeMetadata(I, MD);
++
+   if (MDNode *TBAA = I.getMetadata(LLVMContext::MD_tbaa))
+     TBAAVerifyHelper.visitTBAAMetadata(I, TBAA);
+ 
+diff --git a/llvm/test/Transforms/LICM/hoist-speculatable-load.ll b/llvm/test/Transforms/LICM/hoist-speculatable-load.ll
+index a4a38c2eaadc..31236e8f29d6 100644
+--- a/llvm/test/Transforms/LICM/hoist-speculatable-load.ll
++++ b/llvm/test/Transforms/LICM/hoist-speculatable-load.ll
+@@ -4,19 +4,19 @@
+ define void @f(i32 %ptr_i, ptr %ptr2, i1 %cond) {
+ ; CHECK-LABEL: @f(
+ ; CHECK-NEXT:  entry:
+-; CHECK-NEXT:    [[PTR:%.*]] = inttoptr i32 [[PTR_I:%.*]] to ptr
++; CHECK-NEXT:    [[PTR:%.*]] = inttoptr i32 [[PTR_I:%.*]] to ptr, !nofree [[META0:![0-9]+]]
+ ; CHECK-NEXT:    call void @llvm.assume(i1 true) [ "align"(ptr [[PTR]], i32 16), "dereferenceable"(ptr [[PTR]], i32 16) ]
+ ; CHECK-NEXT:    br i1 [[COND:%.*]], label [[FOR_BODY_LR_PH:%.*]], label [[IF0:%.*]]
+ ; CHECK:       if0:
+ ; CHECK-NEXT:    store i32 0, ptr [[PTR2:%.*]], align 4
+ ; CHECK-NEXT:    br label [[FOR_BODY_LR_PH]]
+ ; CHECK:       for.body.lr.ph:
++; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[PTR]], align 4
+ ; CHECK-NEXT:    br label [[FOR_BODY:%.*]]
+ ; CHECK:       for.body:
+ ; CHECK-NEXT:    [[I_08:%.*]] = phi i32 [ 0, [[FOR_BODY_LR_PH]] ], [ [[INC:%.*]], [[IF_END:%.*]] ]
+ ; CHECK-NEXT:    br i1 [[COND]], label [[IF_END]], label [[IF:%.*]]
+ ; CHECK:       if:
+-; CHECK-NEXT:    [[TMP0:%.*]] = load i32, ptr [[PTR]], align 4, !invariant.load [[META0:![0-9]+]]
+ ; CHECK-NEXT:    store i32 [[TMP0]], ptr [[PTR2]], align 4
+ ; CHECK-NEXT:    br label [[IF_END]]
+ ; CHECK:       if.end:
+@@ -27,7 +27,7 @@ define void @f(i32 %ptr_i, ptr %ptr2, i1 %cond) {
+ ; CHECK-NEXT:    ret void
+ ;
+ entry:
+-  %ptr = inttoptr i32 %ptr_i to ptr
++  %ptr = inttoptr i32 %ptr_i to ptr, !nofree !{}
+   call void @llvm.assume(i1 true) [ "align"(ptr %ptr, i32 16), "dereferenceable"(ptr %ptr, i32 16) ]
+   br i1 %cond, label %for.body.lr.ph, label %if0
+ 
+diff --git a/llvm/test/Verifier/nofree_metadata.ll b/llvm/test/Verifier/nofree_metadata.ll
+new file mode 100644
+index 000000000000..e04f5b9f1c52
+--- /dev/null
++++ b/llvm/test/Verifier/nofree_metadata.ll
+@@ -0,0 +1,15 @@
++; RUN: not llvm-as < %s 2>&1 | FileCheck %s
++
++declare ptr @dummy()
++
++; CHECK: nofree applies only to inttoptr instruction
++define void @test_not_inttoptr() {
++  call ptr @dummy(), !nofree !{}
++  ret void
++}
++
++; CHECK: nofree metadata must be empty
++define void @test_invalid_arg(i32 %p) {
++  inttoptr i32 %p to ptr, !nofree !{i32 0}
++  ret void
++}
+-- 
+2.39.5

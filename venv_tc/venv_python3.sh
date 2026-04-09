@@ -30,7 +30,13 @@ is_venv_set_up() {
 set_up_venv_impl() {
   rm -rf "${venv_location}"
 
-  python3 -m venv "${venv_location}"
+  if ! python3 -m venv "${venv_location}"; then
+    echo
+    echo
+    echo "*** venv setup failed - maybe you need to run" >&2
+    echo "'sudo apt -y install python3-venv' or similar?" >&2
+    exit 1
+  fi
   python3 "${my_dir}/wheels.py" ensure-downloaded
   "${venv_location}/bin/python3" -m ensurepip
 
@@ -61,8 +67,8 @@ set_up_venv() {
   set -e
 
   if [[ "${status}" -ne 0 ]]; then
-    echo "Setting up venv failed; stdout/stderr:" 2>&1
-    echo "${stdstreams}" 2>&1
+    echo "Setting up venv failed; stdout/stderr:" >&2
+    echo "${stdstreams}" >&2
     exit 1
   fi
 }

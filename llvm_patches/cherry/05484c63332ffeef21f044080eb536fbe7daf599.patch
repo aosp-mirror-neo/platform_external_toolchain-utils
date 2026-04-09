@@ -1,0 +1,42 @@
+From aae6060e8a83e873ed58f690f4791c1637528022 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Mon, 25 Aug 2025 07:16:36 -0700
+Subject: [PATCH] [mlir] Fix bug in PDLL Parser (#155243)
+
+This reverts changes made to `mlir/lib/Tools/PDLL/Parser/Parser.cpp` in
+095b41c6eedb3acc908dc63ee91ff77944c07d75 .
+
+`raw_indented_ostream::printReindented()` reads from a string to which
+it also concurrently writes to, causing unintended behavior.
+
+Credits to @jackalcooper for finding the issue.
+
+patch.cherry: true
+patch.metadata.author: Youngsuk Kim <joseph942010@gmail.com>
+patch.metadata.original_sha: 05484c63332ffeef21f044080eb536fbe7daf599
+patch.platforms: chromiumos
+patch.version_range.from: 549784
+patch.version_range.until: 587806
+
+---
+ mlir/lib/Tools/PDLL/Parser/Parser.cpp | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/mlir/lib/Tools/PDLL/Parser/Parser.cpp b/mlir/lib/Tools/PDLL/Parser/Parser.cpp
+index 51e702a1bb53..c883baa7be2c 100644
+--- a/mlir/lib/Tools/PDLL/Parser/Parser.cpp
++++ b/mlir/lib/Tools/PDLL/Parser/Parser.cpp
+@@ -147,8 +147,9 @@ private:
+     std::string docStr;
+     {
+       llvm::raw_string_ostream docOS(docStr);
++      std::string tmpDocStr = doc.str();
+       raw_indented_ostream(docOS).printReindented(
+-          StringRef(docStr).rtrim(" \t"));
++          StringRef(tmpDocStr).rtrim(" \t"));
+     }
+     return docStr;
+   }
+-- 
+2.39.5
