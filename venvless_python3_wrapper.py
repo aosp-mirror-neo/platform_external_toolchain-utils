@@ -41,15 +41,9 @@ def find_file_to_execute(argv0: str) -> tuple[Path, Path]:
         raise ValueError(
             f"Expected argv0 to be in {prefix} - it's {relative_script_path}"
         )
-    target_script = relative_script_path_str[len(prefix) :]
+    target_script = relative_script_path_str[len(prefix) :] + ".py"
     result = toolchain_utils / target_script
     if not result.exists():
-        # TODO(b/505362208): Unconditionally add .py once the .py symlinks
-        # no longer exist
-        if not result.name.endswith(".py"):
-            result_py = result.with_suffix(".py")
-            if result_py.exists():
-                return result_py, toolchain_utils
         sys.exit(f"No script found at {target_script} - can't execute")
     return result, toolchain_utils
 
