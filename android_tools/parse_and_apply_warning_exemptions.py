@@ -10,7 +10,7 @@ unpacking `verbose.log`, or similar).
 
 If you invoke this script like:
 
-$ py/bin/android_tools/parse_and_apply_warning_exemptions.py \
+$ py/bin/android_tools/parse_and_apply_warning_exemptions \
     --android-tree=/path/to/android/tree/root \
     --bug-number=1234 \
     --build-log=/tmp/build.log \

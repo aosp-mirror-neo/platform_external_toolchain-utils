@@ -203,7 +203,7 @@ def maybe_upload_new_llvm_next_profile(
         / "py"
         / "bin"
         / "pgo_tools"
-        / "create_chroot_and_generate_pgo_profile.py"
+        / "create_chroot_and_generate_pgo_profile"
     )
 
     llvm_next_branch = get_llvm_hash.DetectLatestLLVMBranch(

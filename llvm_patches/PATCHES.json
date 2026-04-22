@@ -1174,7 +1174,7 @@
       "author": "Antonio Frighetto <me@antoniofrighetto.com>",
       "info": [],
       "original_sha": "33761df961627f9d057fa049509fc8ba8baaaf78",
-      "title": "Revert \"[SimpleLoopUnswitch]\u00a0Record loops from unswitching non-trivial conditions\""
+      "title": "Revert \"[SimpleLoopUnswitch] Record loops from unswitching non-trivial conditions\""
     },
     "platforms": [
       "chromiumos"
@@ -1295,6 +1295,21 @@
     "version_range": {
       "from": 565502,
       "until": 609367
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [InstSimplify] Fix Compilation Hang in simplifyExtractValueInst (#190279)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/4a6adf42d80a91f79c9c7c8d0c7801f9575d40dd.patch",
+    "version_range": {
+      "from": 563880,
+      "until": 613667
     }
   }
 ]

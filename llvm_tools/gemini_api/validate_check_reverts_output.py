@@ -71,7 +71,7 @@ def run_gemini_on_goldens(
         / "bin"
         / "llvm_tools"
         / "gemini_api"
-        / "check_reverts.py",
+        / "check_reverts",
         f"--gemini-api-key={gemini_api_key}",
         f"--llvm-dir={llvm_dir}",
     ]

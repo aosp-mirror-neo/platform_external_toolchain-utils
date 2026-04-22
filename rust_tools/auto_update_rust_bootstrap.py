@@ -832,7 +832,7 @@ def main(argv: list[str]) -> None:
 
     rust_bootstrap_dir = opts.chromiumos_overlay / "dev-lang/rust-bootstrap"
     copy_rust_bootstrap_script = (
-        py_bin_dir / "rust_tools" / "copy_rust_bootstrap.py"
+        py_bin_dir / "rust_tools" / "copy_rust_bootstrap"
     )
 
     had_recoverable_error = False

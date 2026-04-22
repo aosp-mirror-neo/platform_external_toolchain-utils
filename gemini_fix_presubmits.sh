@@ -18,7 +18,7 @@ unstaged and uncommitted.
 
 Presubmits can be run with:
 ```
-py/bin/toolchain_utils_githooks/check-presubmit.py --infer_files --force_autofix
+py/bin/toolchain_utils_githooks/check-presubmit --infer_files --force_autofix
 ```
 EOF
 
