@@ -95,7 +95,7 @@ MIRROR_PATH = "gs://chromeos-localmirror/distfiles"
 GPG_KEYSERVER = "keyserver.ubuntu.com"
 PGO_RUST = Path(
     "/mnt/host/source"
-    "/src/third_party/toolchain-utils/py/bin/pgo_tools_rust/pgo_rust.py"
+    "/src/third_party/toolchain-utils/py/bin/pgo_tools_rust/pgo_rust"
 )
 # This is the signing key used by upstream Rust as of 2023-08-09.
 # If the project switches to a different key, this will have to be updated.

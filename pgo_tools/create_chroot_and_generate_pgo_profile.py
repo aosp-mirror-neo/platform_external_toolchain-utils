@@ -119,7 +119,7 @@ def generate_pgo_profile(
         cros_paths.CHROOT_SOURCE_ROOT
         / cros_paths.TOOLCHAIN_UTILS_PYBIN
         / "pgo_tools"
-        / "generate_pgo_profile.py"
+        / "generate_pgo_profile"
     )
     pgo_utils.run(
         cros_sdk

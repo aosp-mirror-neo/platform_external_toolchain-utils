@@ -57,7 +57,7 @@ Python practices to keep in mind:
 To execute a Python-based tool, use the symlinks in the `py/bin` directory. For example, to run the `afdo_tools/monitor_chrome_afdo.py` script, run
 
 ```bash
-./py/bin/afdo_tools/monitor_chrome_afdo.py --chrome-tree=/path/to/chrome
+./py/bin/afdo_tools/monitor_chrome_afdo --chrome-tree=/path/to/chrome
 ```
 
 #### Testing and Verification
@@ -74,7 +74,7 @@ To execute a Python-based tool, use the symlinks in the `py/bin` directory. For 
     ./run_python_tests.sh llvm_tools/atomic_write_file_test.py
     ```
 
-3.   **When you are done with a series of changes**, you should run `py/bin/toolchain_utils_githooks/check-presubmit.py` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests. Passing `--force_autofix` is recommended to have it autoformat your changed files.
+3.   **When you are done with a series of changes**, you should run `py/bin/toolchain_utils_githooks/check-presubmit` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests. Passing `--force_autofix` is recommended to have it autoformat your changed files.
     ```bash
-    py/bin/toolchain_utils_githooks/check-presubmit.py path/to/changed/file1.py path/to/changed/file2.sh [...]
+    py/bin/toolchain_utils_githooks/check-presubmit path/to/changed/file1.py path/to/changed/file2.sh [...]
     ```

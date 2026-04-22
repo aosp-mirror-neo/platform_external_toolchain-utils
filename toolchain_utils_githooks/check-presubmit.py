@@ -715,7 +715,7 @@ def check_tests(
 ) -> CheckResult:
     """Runs tests."""
     run_tests_for = os.path.join(
-        toolchain_utils_root, "py", "bin", "run_tests_for.py"
+        toolchain_utils_root, "py", "bin", "run_tests_for"
     )
     cmd = [run_tests_for, "--"]
     cmd += files
@@ -912,7 +912,7 @@ def maybe_reexec_inside_chroot(
             "py",
             "bin",
             "toolchain_utils_githooks",
-            "check-presubmit.py",
+            "check-presubmit",
         ),
     ]
 

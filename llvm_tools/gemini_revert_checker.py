@@ -370,7 +370,7 @@ def _find_commits_reverted_by(
         / "bin"
         / "llvm_tools"
         / "gemini_api"
-        / "check_reverts.py",
+        / "check_reverts",
         f"--llvm-dir={llvm_dir}",
     ]
 
