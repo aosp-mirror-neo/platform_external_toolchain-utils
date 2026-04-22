@@ -796,6 +796,36 @@ def merge_base(git_dir: Path, refs: Sequence[str]) -> str | None:
     return None
 
 
+def is_ancestor(
+    git_dir: Path, *, parent: str, child: str, strict: bool = False
+) -> bool:
+    """Returns True if `parent` is an ancestor of `child`.
+
+    Args:
+        git_dir: Root directory for a given local git repository.
+        parent: The potential ancestor commit/ref.
+        child: The potential descendant commit/ref.
+        strict: If True, returns False if `parent` and `child` are equal.
+    """
+    if strict:
+        # Resolve refs to SHAs to check equality accurately.
+        parent_sha = resolve_ref(git_dir, parent)
+        child_sha = resolve_ref(git_dir, child)
+        if parent_sha == child_sha:
+            return False
+
+    return (
+        subprocess.run(
+            ("git", "merge-base", "--is-ancestor", parent, child),
+            cwd=git_dir,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    )
+
+
 def branch_list(git_dir: Path, glob: str | None = None) -> list[str]:
     """List branches, optionally matching a given glob."""
     addendum = [glob] if glob else []
