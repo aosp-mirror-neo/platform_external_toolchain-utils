@@ -173,7 +173,6 @@ def maybe_upload_new_llvm_next_profile(
     chromiumos_tree: Path,
     profile_cache: GsProfileCache,
     dry_run: bool,
-    toolchain_utils: Path,
     clean_llvm: bool,
     force_generation: bool,
 ) -> None:
@@ -198,10 +197,12 @@ def maybe_upload_new_llvm_next_profile(
         )
         upload_profile = False
 
+    # NOTE: This invokes from the _current script's_ checkout, since the
+    # `chromiumos_tree` we've been given may be synced to a different version of
+    # CrOS. No need to introduce the potential of compatibility hazards.
     create_script = (
-        toolchain_utils
-        / "py"
-        / "bin"
+        cros_paths.script_toolchain_utils_root()
+        / cros_paths.TOOLCHAIN_UTILS_PYBIN_REL
         / "pgo_tools"
         / "create_chroot_and_generate_pgo_profile"
     )
@@ -365,8 +366,6 @@ def create_llvm_pgo_ebuild_update(
 
 
 def main(argv: list[str]) -> None:
-    my_dir = Path(__file__).resolve().parent
-
     pgo_utils.exit_if_in_chroot()
 
     logging.basicConfig(
@@ -390,7 +389,6 @@ def main(argv: list[str]) -> None:
         chromiumos_tree=chromiumos_tree,
         profile_cache=profile_cache,
         dry_run=dry_run,
-        toolchain_utils=my_dir.parent,
         clean_llvm=opts.clean_llvm,
         force_generation=opts.force_llvm_next_pgo_generation,
     )

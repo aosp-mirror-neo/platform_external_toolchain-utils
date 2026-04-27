@@ -22,6 +22,8 @@ import threading
 import traceback
 from typing import Callable, Iterable, NamedTuple, Sequence
 
+from cros_utils import cros_paths
+
 
 # Each checker represents an independent check that's done on our sources.
 #
@@ -46,6 +48,7 @@ CheckResult = NamedTuple(
 
 Command = Sequence[str | os.PathLike]
 CheckResults = list[tuple[str, CheckResult]] | CheckResult
+
 
 # Environment variable that's set to a nonempty value on bots. Used for
 # skipping some tasks on CI. Other presubmit checks detect whether a bot is
@@ -715,7 +718,9 @@ def check_tests(
 ) -> CheckResult:
     """Runs tests."""
     run_tests_for = os.path.join(
-        toolchain_utils_root, "py", "bin", "run_tests_for"
+        toolchain_utils_root,
+        cros_paths.TOOLCHAIN_UTILS_PYBIN_REL,
+        "run_tests_for",
     )
     cmd = [run_tests_for, "--"]
     cmd += files
@@ -909,8 +914,7 @@ def maybe_reexec_inside_chroot(
         "--",
         os.path.join(
             chroot_toolchain_utils,
-            "py",
-            "bin",
+            cros_paths.TOOLCHAIN_UTILS_PYBIN_REL,
             "toolchain_utils_githooks",
             "check-presubmit",
         ),

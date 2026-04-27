@@ -366,8 +366,7 @@ def _find_commits_reverted_by(
     #   file.
     check_reverts_command: list[Path | str] = [
         cros_paths.script_toolchain_utils_root()
-        / "py"
-        / "bin"
+        / cros_paths.TOOLCHAIN_UTILS_PYBIN_REL
         / "llvm_tools"
         / "gemini_api"
         / "check_reverts",

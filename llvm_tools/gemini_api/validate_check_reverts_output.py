@@ -67,8 +67,7 @@ def run_gemini_on_goldens(
 
     check_reverts_command: list[str | Path] = [
         cros_paths.script_toolchain_utils_root()
-        / "py"
-        / "bin"
+        / cros_paths.TOOLCHAIN_UTILS_PYBIN_REL
         / "llvm_tools"
         / "gemini_api"
         / "check_reverts",
