@@ -14,6 +14,7 @@ from unittest import mock
 import urllib.request
 
 from cros_utils import git_utils
+from llvm_tools import test_helpers
 from rust_tools import rust_uprev
 
 
@@ -339,6 +340,36 @@ class FindStableRustVersionTest(unittest.TestCase):
                 self.assertEqual(actual, rust_uprev.RustVersion(1, 50, 0))
 
 
+class FindBootstrapVersionTest(test_helpers.TempDirTestCase):
+    """Tests for rust_uprev.find_bootstrap_version."""
+
+    def test_success(self) -> None:
+        tmpdir = self.make_tempdir()
+        (tmpdir / "rust-bootstrap-1.94.0.ebuild").touch()
+        (tmpdir / "rust-bootstrap-1.94.1.ebuild").touch()
+        (tmpdir / "rust-bootstrap-1.95.0.ebuild").touch()
+        with mock.patch.object(
+            rust_uprev, "rust_bootstrap_path", return_value=tmpdir
+        ):
+            actual = rust_uprev.find_bootstrap_version(
+                rust_uprev.RustVersion(1, 95, 0)
+            )
+            self.assertEqual(actual, rust_uprev.RustVersion(1, 94, 1))
+
+    def test_no_match(self) -> None:
+        tmpdir = self.make_tempdir()
+        (tmpdir / "rust-bootstrap-1.93.0.ebuild").touch()
+        with mock.patch.object(
+            rust_uprev, "rust_bootstrap_path", return_value=tmpdir
+        ):
+            with self.assertRaisesRegex(
+                ValueError, "Expect to find at least one"
+            ):
+                rust_uprev.find_bootstrap_version(
+                    rust_uprev.RustVersion(1, 95, 0)
+                )
+
+
 class MirrorHasFileTest(unittest.TestCase):
     """Tests for rust_uprev.mirror_has_file."""
 
@@ -483,6 +514,11 @@ class RustVersionTest(unittest.TestCase):
             "rust-1.2.3-r1.ebuild"
         )
         self.assertEqual(expected, actual)
+
+        actual = rust_uprev.RustVersion.parse_from_ebuild(
+            "rust-bootstrap-1.2.3.ebuild", package_name="rust-bootstrap"
+        )
+        self.assertEqual(expected, rust_uprev.RustVersion(1, 2, 3))
 
     def test_parse_fail(self) -> None:
         with self.assertRaises(AssertionError) as context:
