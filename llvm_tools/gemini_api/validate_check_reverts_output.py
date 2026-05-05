@@ -190,6 +190,7 @@ def _write_results_to_file(
         json.dump(
             dump_results, f, sort_keys=True, separators=(",", ": "), indent=2
         )
+        f.write("\n")
 
 
 def main(argv: list[str]) -> None:
