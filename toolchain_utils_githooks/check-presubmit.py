@@ -668,6 +668,60 @@ def check_go_format(
     )
 
 
+def check_json_format(
+    toolchain_utils_root: str,
+    thread_pool: multiprocessing.pool.ThreadPool,
+    files: Iterable[str],
+) -> CheckResult:
+    """Runs `cros format --check` on JSON files."""
+    json_files = [f for f in remove_deleted_files(files) if f.endswith(".json")]
+    if not json_files:
+        return CheckResult(
+            ok=True,
+            output="no json files to check",
+            autofix_commands=[],
+        )
+
+    if not has_executable_on_path("cros"):
+        complaint = textwrap.dedent(
+            """\
+            WARNING: JSON formatting check disabled. `cros` is not on your
+            $PATH. Please either enter a chroot, or ensure `cros` is available.
+            Continuing.
+            """
+        )
+        return CheckResult(
+            ok=True,
+            output=complaint,
+            autofix_commands=[],
+        )
+
+    def check_file(file_path: str) -> tuple[str, bool]:
+        exit_code, _ = run_command_unchecked(
+            ("cros", "format", "--check", file_path), cwd=toolchain_utils_root
+        )
+        return file_path, exit_code == 0
+
+    results = thread_pool.map(check_file, json_files)
+    bad_files = [file_path for file_path, ok in results if not ok]
+
+    if not bad_files:
+        return CheckResult(
+            ok=True,
+            output="all JSON files are properly formatted",
+            autofix_commands=[],
+        )
+
+    autofix = [["cros", "format"] + bad_files]
+    return CheckResult(
+        ok=False,
+        output=(
+            f"The following JSON files have incorrect formatting: {bad_files}"
+        ),
+        autofix_commands=autofix,
+    )
+
+
 def is_running_on_bot() -> bool:
     """Returns True if this script is executing on a bot."""
     return bool(os.environ.get(SWARMING_TASK_ID_ENV))
@@ -1093,6 +1147,7 @@ def main(argv: list[str]) -> int:
             style_checked_files,
         ),
         ("check_go_format", check_go_format, style_checked_files),
+        ("check_json_format", check_json_format, style_checked_files),
         ("check_tests", check_tests, files),
         (
             "check_no_compiler_wrapper_changes",
