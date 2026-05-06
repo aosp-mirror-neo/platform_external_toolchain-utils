@@ -444,9 +444,16 @@ def gnu_patch(
             encoding="utf-8",
             check=True,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
         )
     except subprocess.CalledProcessError as e:
+        print(
+            f"Failed to apply patch (via GNU patch).\n"
+            f"stdout:\n{e.stdout}\n"
+            f"stderr:\n{e.stderr}\n===",
+            file=sys.stderr,
+        )
         parsed_hunks = pe.parsed_hunks()
         failed_hunks_id_dict = parse_failed_patch_output(e.stdout)
         failed_hunks = {}
