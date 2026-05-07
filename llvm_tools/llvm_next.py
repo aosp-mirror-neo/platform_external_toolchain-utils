@@ -17,7 +17,7 @@ LLVM_NEXT_REV = 584947
 # llvm_next_py_autoupdate.py.
 # pylint: disable=line-too-long
 LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
-    "https://crrev.com/i/9088380/3",
+    "https://crrev.com/i/9088380/4",
     "https://chromium-review.git.corp.google.com/c/chromiumos/overlays/chromiumos-overlay/+/7649966/1",
 )
 # A list of CLs that constitute the current llvm-next roll.
