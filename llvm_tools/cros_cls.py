@@ -9,11 +9,15 @@ import datetime
 import enum
 import json
 import logging
+from pathlib import Path
 import re
 import shlex
 import subprocess
 import time
 from typing import Any, Iterable
+
+from android_tools import gerrit_utils
+from cros_utils import cros_paths
 
 
 BuildID = int
@@ -132,6 +136,15 @@ class ChangeListURL:
 
     def __str__(self) -> str:
         return f"https://{self.crrev_url_without_http()}"
+
+
+@dataclasses.dataclass(frozen=True)
+class GerritChange:
+    """Represents a Gerrit change with its URL and uploader."""
+
+    url: ChangeListURL
+    uploader: str | None
+    status: gerrit_utils.CLStatus | None = None
 
 
 class BuilderStatus(enum.StrEnum):
@@ -313,6 +326,58 @@ def fetch_cq_orchestrator_ids(
     return [x.build_id for x in finished_results]
 
 
+def fetch_gerrit_deps_of_most_recent_patchset(
+    cl_url: ChangeListURL,
+) -> list[GerritChange]:
+    """Fetches transitive dependencies of the most recent patchset of a CL.
+
+    This dependency list is fetched by 'gerrit deps'; in short, it's the
+    transitive list of `Cq-Depend`s and not-merged-yet parents of the given
+    `cl_url`.
+    """
+    internal_flag = ("-i",) if cl_url.internal else ()
+    cmd = ("gerrit", *internal_flag, "--json", "deps", str(cl_url.cl_id))
+
+    logging.info("Running gerrit deps command: %s", shlex.join(cmd))
+    stdout = subprocess.run(
+        cmd,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+
+    deps_json = json.loads(stdout)
+    results = []
+    for dep in deps_json:
+        url_str = dep.get("url")
+        if not url_str:
+            logging.warning("No URL found for dependency in JSON: %r", dep)
+            continue
+
+        current_ps = dep.get("currentPatchSet", {})
+        url = ChangeListURL.parse(url_str)
+        if url.patch_set is None:
+            ps_str = current_ps.get("number")
+            if not ps_str:
+                raise ValueError(
+                    f"No patch set available for dependency {url_str}"
+                )
+            url = dataclasses.replace(url, patch_set=int(ps_str))
+
+        uploader = current_ps.get("uploader", {}).get("email")
+        if not uploader:
+            logging.warning(
+                "No uploader email found for dependency in JSON: %r", dep
+            )
+            uploader = None
+
+        status = gerrit_utils.CLStatus.parse(dep["status"])
+        results.append(GerritChange(url=url, uploader=uploader, status=status))
+
+    return results
+
+
 @dataclasses.dataclass(frozen=True)
 class CQOrchestratorOutput:
     """A class representing the output of a cq-orchestrator builder."""
@@ -417,3 +482,69 @@ def parse_release_from_builder_artifacts_link(artifacts_link: str) -> str:
             f"Expected one release version in {artifacts_link}; got: {results}"
         )
     return results[0]
+
+
+_DIRECT_OWNERS_REGEX = re.compile(
+    r"^[ \t]*([^ \t\n#]+@[^ \t\n#]+)[ \t]*(?:#.*)?$", re.MULTILINE
+)
+
+
+def parse_direct_owners_from_file(file_contents: str) -> list[str]:
+    """Parses unrestricted OWNERS emails from the given file contents."""
+    # We only care about accounts _directly mentioned_ with unrestricted access
+    # because that's the only case we'll realistically encounter at the moment.
+    # This ignores directives like `include` or `per-file`.
+    return _DIRECT_OWNERS_REGEX.findall(file_contents)
+
+
+def fetch_current_toolchain_owners(
+    owners_file: Path | None = None,
+) -> list[str]:
+    """Fetches current toolchain owners from the given file.
+
+    If owners_file is None, it defaults to
+    cros_paths.script_toolchain_utils_root() / "OWNERS.toolchain".
+
+    For each email ending in '@chromium.org', it also adds a corresponding
+    '@google.com' email, since in practice, those are interchangeable. It does
+    *not* add an '@chromium.org' email for '@google.com' emails, since new
+    chromium.org emails are discouraged.
+    """
+    if owners_file is None:
+        owners_file = (
+            cros_paths.script_toolchain_utils_root() / "OWNERS.toolchain"
+        )
+
+    if not owners_file.exists():
+        raise ValueError(
+            f"Handed path to nonexistent OWNERS file: {owners_file}"
+        )
+
+    owners = parse_direct_owners_from_file(
+        owners_file.read_text(encoding="utf-8")
+    )
+    results = []
+    for email in owners:
+        results.append(email)
+        if email.endswith("@chromium.org"):
+            prefix = email.split("@")[0]
+            results.append(f"{prefix}@google.com")
+    return results
+
+
+def partition_changes_by_uploader_trust(
+    changes: list[GerritChange],
+    owners: list[str],
+    trusted_allowlist: Iterable[ChangeListURL] = (),
+) -> tuple[list[GerritChange], list[GerritChange]]:
+    """Partitions changes by whether the uploader is a toolchain owner."""
+    trusted_set = set(trusted_allowlist)
+    trusted = []
+    untrusted = []
+    owners_set = set(owners)
+    for change in changes:
+        if change.uploader in owners_set or change.url in trusted_set:
+            trusted.append(change)
+        else:
+            untrusted.append(change)
+    return trusted, untrusted

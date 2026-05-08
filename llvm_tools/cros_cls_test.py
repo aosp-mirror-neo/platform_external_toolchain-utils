@@ -5,9 +5,12 @@
 """Tests for cros_cls."""
 
 import datetime
+import subprocess
+import textwrap
 import unittest
 from unittest import mock
 
+from android_tools import gerrit_utils
 from llvm_tools import cros_cls
 
 
@@ -302,3 +305,216 @@ class TestBbLsInfo(unittest.TestCase):
             ValueError, r"Expected one build-id from stdout"
         ):
             cros_cls.parse_build_id_from_bb_add_output(output)
+
+
+class TestFetchGerritDeps(unittest.TestCase):
+    """Tests for fetch_gerrit_deps_of_most_recent_patchset."""
+
+    @mock.patch.object(subprocess, "run")
+    def test_fetch_gerrit_deps(self, mock_run: mock.MagicMock) -> None:
+        mock_stdout = """[
+            {
+                "url": "https://chromium-review.googlesource.com/#/c/7736647/",
+                "status": "NEW",
+                "currentPatchSet": {
+                    "number": "2",
+                    "uploader": {
+                        "email": "uploader@chromium.org"
+                    }
+                }
+            },
+            {
+                "url": "https://chrome-internal-review.googlesource.com/#/c/9088380/",
+                "status": "MERGED",
+                "currentPatchSet": {
+                    "number": "5",
+                    "uploader": {
+                        "email": "uploader@google.com"
+                    }
+                }
+            }
+        ]"""
+        mock_run_return_value = mock.MagicMock()
+        mock_run_return_value.stdout = mock_stdout
+        mock_run.return_value = mock_run_return_value
+
+        cl_url = cros_cls.ChangeListURL(cl_id=12345, internal=False)
+        deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
+
+        self.assertEqual(
+            deps,
+            [
+                cros_cls.GerritChange(
+                    url=cros_cls.ChangeListURL(cl_id=7736647, patch_set=2),
+                    uploader="uploader@chromium.org",
+                    status=gerrit_utils.CLStatus.NEW,
+                ),
+                cros_cls.GerritChange(
+                    url=cros_cls.ChangeListURL(
+                        cl_id=9088380, patch_set=5, internal=True
+                    ),
+                    uploader="uploader@google.com",
+                    status=gerrit_utils.CLStatus.MERGED,
+                ),
+            ],
+        )
+
+        # Verify command line
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        self.assertEqual(args, ("gerrit", "--json", "deps", "12345"))
+
+    @mock.patch.object(subprocess, "run")
+    def test_fetch_gerrit_deps_missing_patchset(
+        self, mock_run: mock.MagicMock
+    ) -> None:
+        mock_stdout = """[
+            {
+                "url": "https://chromium-review.googlesource.com/#/c/7736647/",
+                "currentPatchSet": {
+                    "uploader": {
+                        "email": "uploader@chromium.org"
+                    }
+                }
+            }
+        ]"""
+        mock_run_return_value = mock.MagicMock()
+        mock_run_return_value.stdout = mock_stdout
+        mock_run.return_value = mock_run_return_value
+
+        cl_url = cros_cls.ChangeListURL(cl_id=12345, internal=False)
+        with self.assertRaisesRegex(
+            ValueError, "No patch set available for dependency"
+        ):
+            cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
+
+    @mock.patch.object(subprocess, "run")
+    def test_fetch_gerrit_deps_missing_uploader(
+        self, mock_run: mock.MagicMock
+    ) -> None:
+        mock_stdout = """[
+            {
+                "url": "https://chromium-review.googlesource.com/#/c/7736647/",
+                "status": "NEW",
+                "currentPatchSet": {
+                    "number": "2"
+                }
+            }
+        ]"""
+        mock_run_return_value = mock.MagicMock()
+        mock_run_return_value.stdout = mock_stdout
+        mock_run.return_value = mock_run_return_value
+
+        cl_url = cros_cls.ChangeListURL(cl_id=12345, internal=False)
+        deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
+
+        self.assertEqual(
+            deps,
+            [
+                cros_cls.GerritChange(
+                    url=cros_cls.ChangeListURL(cl_id=7736647, patch_set=2),
+                    uploader=None,
+                    status=gerrit_utils.CLStatus.NEW,
+                )
+            ],
+        )
+
+
+class TestToolchainOwners(unittest.TestCase):
+    """Tests for toolchain owners functions."""
+
+    def test_owners_file_parsing_functions(self) -> None:
+        contents = textwrap.dedent(
+            """\
+            foo@chromium.org
+            bar@google.com
+            """
+        )
+        owners = cros_cls.parse_direct_owners_from_file(contents)
+        self.assertEqual(owners, ["foo@chromium.org", "bar@google.com"])
+
+    def test_owners_file_parsing_ignores_exciting_patterns(self) -> None:
+        contents = textwrap.dedent(
+            """\
+            # Some commentary
+            foo@chromium.org  # More commentary
+            #Even-More@Commentary
+            per-file some-file = bar@chromium.org
+            include ../OWNERS
+            # OWNERS emails can either be '*' or a valid email. Ignore the
+            # former.
+            *
+            """
+        )
+        owners = cros_cls.parse_direct_owners_from_file(contents)
+        self.assertEqual(owners, ["foo@chromium.org"])
+
+    def test_owners_file_parsing_edge_cases(self) -> None:
+        contents = (
+            "  user1@google.com\n"
+            "user2@google.com  # comment\n"
+            "user3@google.com invalid\n"
+            "invalid user4@google.com\n"
+            "\n"
+            "  \n"
+            "  # just a comment\n"
+        )
+        owners = cros_cls.parse_direct_owners_from_file(contents)
+        self.assertEqual(owners, ["user1@google.com", "user2@google.com"])
+
+    def test_fetch_current_toolchain_owners(self) -> None:
+        mock_file = mock.MagicMock()
+        mock_file.exists.return_value = True
+        mock_file.read_text.return_value = "foo@chromium.org\nbar@google.com\n"
+
+        owners = cros_cls.fetch_current_toolchain_owners(owners_file=mock_file)
+
+        self.assertEqual(
+            owners,
+            ["foo@chromium.org", "foo@google.com", "bar@google.com"],
+        )
+
+
+class TestPartitionChanges(unittest.TestCase):
+    """Tests for partition_changes_by_uploader_trust."""
+
+    def test_partition_changes(self) -> None:
+        cl1 = cros_cls.ChangeListURL(cl_id=1)
+        cl2 = cros_cls.ChangeListURL(cl_id=2)
+        cl3 = cros_cls.ChangeListURL(cl_id=3)
+        cl4 = cros_cls.ChangeListURL(cl_id=4)
+
+        changes = [
+            cros_cls.GerritChange(url=cl1, uploader="owner@google.com"),
+            cros_cls.GerritChange(url=cl2, uploader="other@google.com"),
+            cros_cls.GerritChange(url=cl3, uploader="owner@chromium.org"),
+            cros_cls.GerritChange(url=cl4, uploader=None),
+        ]
+
+        owners = ["owner@google.com", "owner@chromium.org"]
+
+        trusted, untrusted = cros_cls.partition_changes_by_uploader_trust(
+            changes, owners
+        )
+
+        self.assertEqual(trusted, [changes[0], changes[2]])
+        self.assertEqual(untrusted, [changes[1], changes[3]])
+
+    def test_partition_changes_with_allowlist(self) -> None:
+        cl1 = cros_cls.ChangeListURL(cl_id=1)
+        cl2 = cros_cls.ChangeListURL(cl_id=2)
+
+        changes = [
+            cros_cls.GerritChange(url=cl1, uploader="untrusted@evil.com"),
+            cros_cls.GerritChange(url=cl2, uploader="other@untrusted.com"),
+        ]
+
+        owners = ["owner@google.com"]
+        allowlist = {cl1}
+
+        trusted, untrusted = cros_cls.partition_changes_by_uploader_trust(
+            changes, owners, trusted_allowlist=allowlist
+        )
+
+        self.assertEqual(trusted, [changes[0]])
+        self.assertEqual(untrusted, [changes[1]])
