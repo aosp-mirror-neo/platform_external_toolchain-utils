@@ -1311,5 +1311,20 @@
       "from": 563880,
       "until": 613667
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[BACKPORT] [lldb][lldb-server] Fix zip file lookup ignoring last entry in the zip file (#173966)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/5ed875a06cb0a6d543f719ad72df2a1660e42cb9.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 608878
+    }
   }
 ]
