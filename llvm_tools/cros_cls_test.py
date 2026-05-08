@@ -119,6 +119,20 @@ class TestChangeListURL(unittest.TestCase):
         with self.assertRaises(ValueError):
             cros_cls.ChangeListURL.parse("crrev.com/c/123456/14foo=bar")
 
+    def test_parsing_hash_c_url(self) -> None:
+        self.assertEqual(
+            cros_cls.ChangeListURL.parse(
+                "https://chrome-internal-review.googlesource.com/#/c/9088380/"
+            ),
+            cros_cls.ChangeListURL(cl_id=9088380, internal=True),
+        )
+        self.assertEqual(
+            cros_cls.ChangeListURL.parse(
+                "https://chromium-review.git.corp.google.com/#/c/7832690/"
+            ),
+            cros_cls.ChangeListURL(cl_id=7832690, internal=False),
+        )
+
     def test_str_functions_properly(self) -> None:
         self.assertEqual(
             str(

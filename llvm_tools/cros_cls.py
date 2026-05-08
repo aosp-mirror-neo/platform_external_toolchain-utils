@@ -80,7 +80,7 @@ class ChangeListURL:
         # ...or chromium-review URLs. Note that chromium-review can either be
         # served by googlesource or git.corp.google hosts.
         r"|(?:chromium|chrome-internal)-review\."
-        r"(?:git\.corp\.google|googlesource)\.com/.*/\+/)"
+        r"(?:git\.corp\.google|googlesource)\.com/(?:.*/\+/|#/c/))"
         # Match the CL number...
         r"(\d+)"
         # and (optionally) the patch-set, as well as consuming any of the
