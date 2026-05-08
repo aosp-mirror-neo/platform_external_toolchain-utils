@@ -4,12 +4,9 @@
 
 """Tests for llvm_next_py_autoupdate."""
 
-import contextlib
-import dataclasses
-import json
 import subprocess
 import textwrap
-from typing import Iterable, Iterator
+from typing import Iterable
 from unittest import mock
 
 from llvm_tools import cros_cls
@@ -23,287 +20,182 @@ ARBITRARY_CL_URL = cros_cls.ChangeListURL.parse("crrev.com/c/98765432/1")
 class Test(test_helpers.TempDirTestCase):
     """Tests for llvm_next_py_autoupdate."""
 
-    def toolchain_owners_with_listing(
-        self, owners: Iterable[str]
-    ) -> llvm_next_py_autoupdate.LazyToolchainOwners:
-        owners_file_path = self.make_tempdir() / "OWNERS.mock"
-        owners_file_path.write_text("\n".join(owners), encoding="utf-8")
-        return llvm_next_py_autoupdate.LazyToolchainOwners(owners_file_path)
+    def toolchain_owners_with_listing(self, owners: Iterable[str]) -> set[str]:
+        return set(owners)
 
-    def empty_toolchain_owners(
-        self,
-    ) -> llvm_next_py_autoupdate.LazyToolchainOwners:
+    def empty_toolchain_owners(self) -> set[str]:
         return self.toolchain_owners_with_listing(())
 
-    @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_works_with_new_cl(
-        self, mock_subprocess_run: mock.MagicMock
-    ) -> None:
-        mock_run_return_value = mock.MagicMock()
-        mock_run_return_value.stdout = json.dumps(
-            [
-                {
-                    "status": "NEW",
-                    "currentPatchSet": {
-                        "number": "123",
-                    },
-                }
-            ]
+    def test_compute_new_urls_clears_all_if_manifest_closed(self) -> None:
+        manifest_cl = cros_cls.ChangeListURL.parse("crrev.com/c/123/1")
+        new_manifest, new_allowlist = llvm_next_py_autoupdate.compute_new_urls(
+            manifest_cl,
+            is_manifest_closed=True,
+            all_changes=[],
+            owners=[],
+            current_allowlist_urls=[],
         )
-        mock_subprocess_run.return_value = mock_run_return_value
-        self.assertEqual(
-            llvm_next_py_autoupdate.fetch_cl_info(
-                self.empty_toolchain_owners(), ARBITRARY_CL_URL
-            ),
-            llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=False,
-                most_recent_patch_set=123,
-            ),
-        )
+        self.assertIsNone(new_manifest)
+        self.assertEqual(new_allowlist, [])
 
-    @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_works_with_closed_cl(
-        self, mock_subprocess_run: mock.MagicMock
-    ) -> None:
-        mock_run_return_value = mock.MagicMock()
-        mock_subprocess_run.return_value = mock_run_return_value
-
-        for closed_status in ("ABANDONED", "MERGED"):
-            mock_run_return_value.stdout = json.dumps(
-                [
-                    {
-                        "status": closed_status,
-                        "currentPatchSet": {
-                            "number": "123",
-                        },
-                    }
-                ]
-            )
-            self.assertEqual(
-                llvm_next_py_autoupdate.fetch_cl_info(
-                    self.empty_toolchain_owners(), ARBITRARY_CL_URL
-                ),
-                llvm_next_py_autoupdate.GerritCLInfo(
-                    is_abandoned_or_merged=True,
-                    is_uploader_a_googler=False,
-                    most_recent_patch_set=123,
-                ),
-            )
-
-    @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_determines_googler_is_googler(
-        self, mock_subprocess_run: mock.MagicMock
-    ) -> None:
-        mock_run_return_value = mock.MagicMock()
-        mock_run_return_value.stdout = json.dumps(
-            [
-                {
-                    "status": "NEW",
-                    "currentPatchSet": {
-                        "number": "123",
-                        "uploader": {
-                            "email": "foo@google.com",
-                        },
-                    },
-                }
-            ]
-        )
-        mock_subprocess_run.return_value = mock_run_return_value
-        self.assertEqual(
-            llvm_next_py_autoupdate.fetch_cl_info(
-                self.empty_toolchain_owners(), ARBITRARY_CL_URL
-            ),
-            llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=True,
-                most_recent_patch_set=123,
-            ),
-        )
-
-    @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_determines_chromium_isnt_googler(
-        self, mock_subprocess_run: mock.MagicMock
-    ) -> None:
-        mock_run_return_value = mock.MagicMock()
-        mock_run_return_value.stdout = json.dumps(
-            [
-                {
-                    "status": "NEW",
-                    "currentPatchSet": {
-                        "number": "123",
-                        "uploader": {
-                            "email": "foo@chromium.org",
-                        },
-                    },
-                }
-            ]
-        )
-        mock_subprocess_run.return_value = mock_run_return_value
-        self.assertEqual(
-            llvm_next_py_autoupdate.fetch_cl_info(
-                self.empty_toolchain_owners(), ARBITRARY_CL_URL
-            ),
-            llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=False,
-                most_recent_patch_set=123,
-            ),
-        )
-
-    @mock.patch.object(subprocess, "run")
-    def test_fetch_cl_info_determines_chromium_owner_is_googler(
-        self, mock_subprocess_run: mock.MagicMock
-    ) -> None:
-        mock_run_return_value = mock.MagicMock()
-        mock_run_return_value.stdout = json.dumps(
-            [
-                {
-                    "status": "NEW",
-                    "currentPatchSet": {
-                        "number": "123",
-                        "uploader": {
-                            "email": "foo@chromium.org",
-                        },
-                    },
-                }
-            ]
-        )
-        mock_subprocess_run.return_value = mock_run_return_value
-        self.assertEqual(
-            llvm_next_py_autoupdate.fetch_cl_info(
-                self.toolchain_owners_with_listing(
-                    ["bar@google.com", "foo@chromium.org"]
-                ),
-                ARBITRARY_CL_URL,
-            ),
-            llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=True,
-                most_recent_patch_set=123,
-            ),
-        )
-
-    @contextlib.contextmanager
-    def mock_fetch_cl_info(
+    def test_compute_new_urls_updates_manifest_if_untrusted_new_patchset(
         self,
-        mock_cl_info: dict[
-            cros_cls.ChangeListURL, llvm_next_py_autoupdate.GerritCLInfo
-        ],
-    ) -> Iterator[mock.MagicMock]:
-        """Mocks `fetch_cl_info` to return `mock_cl_info` entries."""
+    ) -> None:
+        manifest_cl = cros_cls.ChangeListURL.parse("crrev.com/c/123/1")
+        owners = ["owner@google.com"]
 
-        def fetch_cl_info_side_effect(
-            _owners: llvm_next_py_autoupdate.LazyToolchainOwners,
-            cl: cros_cls.ChangeListURL,
-        ) -> llvm_next_py_autoupdate.GerritCLInfo:
-            if x := mock_cl_info.get(cl):
-                return x
-            raise ValueError(f"CL without mock info: {cl}")
+        main_cl_change = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/123/2"),
+            uploader="stranger@evil.com",
+        )
 
-        with mock.patch.object(
-            llvm_next_py_autoupdate, "fetch_cl_info"
-        ) as mock_fetch_cl_info:
-            mock_fetch_cl_info.side_effect = fetch_cl_info_side_effect
-            yield mock_fetch_cl_info
+        new_manifest, new_allowlist = llvm_next_py_autoupdate.compute_new_urls(
+            manifest_cl,
+            is_manifest_closed=False,
+            all_changes=[main_cl_change],
+            owners=owners,
+            current_allowlist_urls=[],
+        )
+        self.assertEqual(new_manifest, "https://crrev.com/c/123/2")
+        self.assertEqual(new_allowlist, [])
 
-    def test_update_empty_urls(self) -> None:
-        with self.mock_fetch_cl_info(mock_cl_info={}):
-            self.assertIsNone(
-                llvm_next_py_autoupdate.update_testing_url_list(
-                    self.empty_toolchain_owners(), ()
-                )
-            )
+    def test_compute_new_urls_skips_manifest_update_if_trusted_new_patchset(
+        self,
+    ) -> None:
+        manifest_cl = cros_cls.ChangeListURL.parse("crrev.com/c/123/1")
+        owners = ["owner@google.com"]
 
-    def test_merged_cl_is_removed_by_update(self) -> None:
-        mock_cl_info = {
-            ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=True,
-                is_uploader_a_googler=True,
-                most_recent_patch_set=1,
-            )
-        }
-        with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
-            update_result = llvm_next_py_autoupdate.update_testing_url_list(
-                self.empty_toolchain_owners(), [str(ARBITRARY_CL_URL)]
-            )
-            assert update_result is not None
-            messages, new_list = update_result
-            mocked_fetch.assert_called_once()
-        self.assertEqual(new_list, [])
-        self.assertNotEqual(messages, "")
+        main_cl_change = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/123/2"),
+            uploader="owner@google.com",
+        )
 
-    def test_update_is_nop_if_no_CLs_changed(self) -> None:
-        patch_set = ARBITRARY_CL_URL.patch_set
-        # Placate mypy.
-        assert patch_set is not None
-        mock_cl_info = {
-            ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=True,
-                most_recent_patch_set=patch_set,
+        new_manifest, new_allowlist = llvm_next_py_autoupdate.compute_new_urls(
+            manifest_cl,
+            is_manifest_closed=False,
+            all_changes=[main_cl_change],
+            owners=owners,
+            current_allowlist_urls=[],
+        )
+        self.assertEqual(new_manifest, "https://crrev.com/c/123/1")
+        self.assertEqual(new_allowlist, [])
+
+    def test_compute_new_urls_populates_allowlist_urls_with_untrusted_deps(
+        self,
+    ) -> None:
+        manifest_cl = cros_cls.ChangeListURL.parse("crrev.com/c/123/1")
+        owners = ["owner@google.com"]
+
+        main_cl_change = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/123/1"),
+            uploader="owner@google.com",
+        )
+        untrusted_dep = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/333/1"),
+            uploader="stranger@evil.com",
+        )
+
+        new_manifest, new_allowlist = llvm_next_py_autoupdate.compute_new_urls(
+            manifest_cl,
+            is_manifest_closed=False,
+            all_changes=[main_cl_change, untrusted_dep],
+            owners=owners,
+            current_allowlist_urls=[],
+        )
+        self.assertEqual(new_manifest, "https://crrev.com/c/123/1")
+        self.assertEqual(new_allowlist, ["https://crrev.com/c/333/1"])
+
+    def test_compute_new_urls_sorts_allowlist_urls(self) -> None:
+        manifest_cl = cros_cls.ChangeListURL.parse("crrev.com/c/123/1")
+        owners = ["owner@google.com"]
+
+        main_cl_change = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/123/1"),
+            uploader="owner@google.com",
+        )
+        untrusted_dep1 = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/333/1"),
+            uploader="stranger@evil.com",
+        )
+        untrusted_dep2 = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/222/1"),
+            uploader="stranger@evil.com",
+        )
+        untrusted_dep3 = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/111/1"),
+            uploader="stranger@evil.com",
+        )
+
+        new_manifest, new_allowlist = llvm_next_py_autoupdate.compute_new_urls(
+            manifest_cl,
+            is_manifest_closed=False,
+            all_changes=[
+                main_cl_change,
+                untrusted_dep1,
+                untrusted_dep2,
+                untrusted_dep3,
+            ],
+            owners=owners,
+            current_allowlist_urls=(
+                cros_cls.ChangeListURL.parse("crrev.com/c/222/1"),
             ),
-        }
-        with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
-            self.assertIsNone(
-                llvm_next_py_autoupdate.update_testing_url_list(
-                    self.empty_toolchain_owners(), [str(ARBITRARY_CL_URL)]
-                )
-            )
-            mocked_fetch.assert_called_once()
+        )
 
-    def test_update_happens_if_patch_set_changed(self) -> None:
-        patch_set = ARBITRARY_CL_URL.patch_set
-        # Placate mypy.
-        assert patch_set is not None
-        new_patch_set = patch_set + 1
-        mock_cl_info = {
-            ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=True,
-                most_recent_patch_set=new_patch_set,
-            ),
-        }
-        with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
-            update_result = llvm_next_py_autoupdate.update_testing_url_list(
-                self.empty_toolchain_owners(), [str(ARBITRARY_CL_URL)]
-            )
-            assert update_result is not None
-            messages, new_list = update_result
-            mocked_fetch.assert_called_once()
-
+        self.assertEqual(new_manifest, "https://crrev.com/c/123/1")
         self.assertEqual(
-            new_list,
+            new_allowlist,
             [
-                str(
-                    dataclasses.replace(
-                        ARBITRARY_CL_URL,
-                        patch_set=new_patch_set,
-                    )
-                )
+                "https://crrev.com/c/222/1",
+                "https://crrev.com/c/111/1",
+                "https://crrev.com/c/333/1",
             ],
         )
-        self.assertNotEqual(messages, "")
 
-    def test_update_skipped_if_patch_set_changed_by_non_googler(self) -> None:
-        patch_set = ARBITRARY_CL_URL.patch_set
-        # Placate mypy.
-        assert patch_set is not None
-        new_patch_set = patch_set + 1
-        mock_cl_info = {
-            ARBITRARY_CL_URL: llvm_next_py_autoupdate.GerritCLInfo(
-                is_abandoned_or_merged=False,
-                is_uploader_a_googler=False,
-                most_recent_patch_set=new_patch_set,
+    def test_compute_new_urls_sorts_manual_urls(self) -> None:
+        manifest_cl = cros_cls.ChangeListURL.parse("crrev.com/c/123/1")
+        owners = ["owner@google.com"]
+
+        main_cl_change = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/123/1"),
+            uploader="owner@google.com",
+        )
+        untrusted_dep1 = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/333/1"),
+            uploader="stranger@evil.com",
+        )
+        untrusted_dep2 = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/222/1"),
+            uploader="stranger@evil.com",
+        )
+        untrusted_dep3 = cros_cls.GerritChange(
+            url=cros_cls.ChangeListURL.parse("crrev.com/c/111/1"),
+            uploader="stranger@evil.com",
+        )
+
+        new_manifest, new_allowlist = llvm_next_py_autoupdate.compute_new_urls(
+            manifest_cl,
+            is_manifest_closed=False,
+            all_changes=[
+                main_cl_change,
+                untrusted_dep1,
+                untrusted_dep2,
+                untrusted_dep3,
+            ],
+            owners=owners,
+            current_allowlist_urls=(
+                cros_cls.ChangeListURL.parse("crrev.com/c/222/1"),
             ),
-        }
-        with self.mock_fetch_cl_info(mock_cl_info) as mocked_fetch:
-            self.assertIsNone(
-                llvm_next_py_autoupdate.update_testing_url_list(
-                    self.empty_toolchain_owners(), [str(ARBITRARY_CL_URL)]
-                )
-            )
-            mocked_fetch.assert_called_once()
+        )
+
+        self.assertEqual(new_manifest, "https://crrev.com/c/123/1")
+        self.assertEqual(
+            new_allowlist,
+            [
+                "https://crrev.com/c/222/1",
+                "https://crrev.com/c/111/1",
+                "https://crrev.com/c/333/1",
+            ],
+        )
 
     def assert_only_call_is_cros_format(
         self, mock_subprocess_run: mock.MagicMock
@@ -315,7 +207,7 @@ class Test(test_helpers.TempDirTestCase):
         )
 
     @mock.patch.object(subprocess, "run")
-    def test_updating_empty_cl_list(
+    def test_updating_cl_list_to_be_empty(
         self, mock_subprocess_run: mock.MagicMock
     ) -> None:
         llvm_next_py = self.make_tempdir() / "llvm_next.py"
@@ -323,7 +215,10 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ()
+                _LLVM_NEXT_MANIFEST_CL: str | None = "some CL URL"
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = (
+                "some other CL URL",
+                )
 
                 # Some other comment
                 """
@@ -331,16 +226,14 @@ class Test(test_helpers.TempDirTestCase):
             encoding="utf-8",
         )
 
-        llvm_next_py_autoupdate.write_url_list(
-            llvm_next_py, [str(ARBITRARY_CL_URL)]
-        )
+        llvm_next_py_autoupdate.write_url_list(llvm_next_py, None, [])
         self.assertEqual(
             llvm_next_py.read_text(encoding="utf-8"),
             textwrap.dedent(
-                f"""\
+                """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
-                {repr(str(ARBITRARY_CL_URL))},
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = (
                 )
 
                 # Some other comment
@@ -350,7 +243,7 @@ class Test(test_helpers.TempDirTestCase):
         self.assert_only_call_is_cros_format(mock_subprocess_run)
 
     @mock.patch.object(subprocess, "run")
-    def test_updating_cl_list_to_be_empty(
+    def test_adding_to_empty_cl_list(
         self, mock_subprocess_run: mock.MagicMock
     ) -> None:
         llvm_next_py = self.make_tempdir() / "llvm_next.py"
@@ -358,8 +251,44 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
-                "some CL URL",
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = ()
+
+                # Some other comment
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        llvm_next_py_autoupdate.write_url_list(llvm_next_py, None, ["url1"])
+        self.assertEqual(
+            llvm_next_py.read_text(encoding="utf-8"),
+            textwrap.dedent(
+                """\
+                # Some comment
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = (
+                'url1',
+                )
+
+                # Some other comment
+                """
+            ),
+        )
+        self.assert_only_call_is_cros_format(mock_subprocess_run)
+
+    @mock.patch.object(subprocess, "run")
+    def test_adding_to_non_empty_cl_list(
+        self, mock_subprocess_run: mock.MagicMock
+    ) -> None:
+        llvm_next_py = self.make_tempdir() / "llvm_next.py"
+        llvm_next_py.write_text(
+            textwrap.dedent(
+                """\
+                # Some comment
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = (
+                'url1',
                 )
 
                 # Some other comment
@@ -368,15 +297,18 @@ class Test(test_helpers.TempDirTestCase):
             encoding="utf-8",
         )
 
-        llvm_next_py_autoupdate.write_url_list(llvm_next_py, [])
-        # N.B., `cros format` will eliminate the unnecesary '\n's.
+        llvm_next_py_autoupdate.write_url_list(
+            llvm_next_py, None, ["url1", "url2"]
+        )
         self.assertEqual(
             llvm_next_py.read_text(encoding="utf-8"),
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
-
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = (
+                'url1',
+                'url2',
 
                 )
 
@@ -395,7 +327,8 @@ class Test(test_helpers.TempDirTestCase):
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ("some CL URL")
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = ("some URL")
 
                 # Some other comment
                 """
@@ -403,45 +336,17 @@ class Test(test_helpers.TempDirTestCase):
             encoding="utf-8",
         )
 
-        llvm_next_py_autoupdate.write_url_list(llvm_next_py, [])
-        # N.B., `cros format` will eliminate the unnecesary '\n'.
+        llvm_next_py_autoupdate.write_url_list(llvm_next_py, None, [])
         self.assertEqual(
             llvm_next_py.read_text(encoding="utf-8"),
             textwrap.dedent(
                 """\
                 # Some comment
-                LLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = (
-
-                )
+                _LLVM_NEXT_MANIFEST_CL: str | None = None
+                _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = ()
 
                 # Some other comment
                 """
             ),
         )
         self.assert_only_call_is_cros_format(mock_subprocess_run)
-
-    def test_owners_file_parsing_functions(self) -> None:
-        contents = textwrap.dedent(
-            """\
-            foo@chromium.org
-            bar@google.com
-            """
-        )
-        owners = llvm_next_py_autoupdate.parse_direct_owners_from_file(contents)
-        self.assertEqual(owners, ["foo@chromium.org", "bar@google.com"])
-
-    def test_owners_file_parsing_ignores_exciting_patterns(self) -> None:
-        contents = textwrap.dedent(
-            """\
-            # Some commentary
-            foo@chromium.org  # More commentary
-            #Even-More@Commentary
-            per-file some-file = bar@chromium.org
-            include ../OWNERS
-            # OWNERS emails can either be '*' or a valid email. Ignore the
-            # former.
-            *
-            """
-        )
-        owners = llvm_next_py_autoupdate.parse_direct_owners_from_file(contents)
-        self.assertEqual(owners, ["foo@chromium.org"])

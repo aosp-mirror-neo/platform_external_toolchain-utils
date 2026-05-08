@@ -9,6 +9,7 @@ import logging
 import os
 from pathlib import Path
 import shlex
+import sys
 from typing import Iterable
 
 from llvm_tools import chroot
@@ -17,11 +18,14 @@ from llvm_tools import get_llvm_hash
 from llvm_tools import llvm_next
 
 
+class UntrustedCLsError(Exception):
+    """Raised when untrusted CLs are detected and not allowed."""
+
+
 DEFAULT_LLVM_NEXT_BUILDERS = ("chromeos/staging/staging-build-chromiumos-sdk",)
 
 
 def generate_bb_add_command(
-    use_llvm_next: bool,
     extra_cls: Iterable[cros_cls.ChangeListURL],
     bots: Iterable[str],
     tags: Iterable[str],
@@ -29,8 +33,6 @@ def generate_bb_add_command(
     """Generates a `bb add` command.
 
     Args:
-        use_llvm_next: if True, all current llvm-next CLs will be added to the
-            run.
         extra_cls: A list of extra CLs to add to the run.
         bots: Bots that should be spawned by this command, e.g.,
             `chromeos/staging/staging-build-chromiumos-sdk`.
@@ -42,13 +44,6 @@ def generate_bb_add_command(
         configuration.
     """
     cls: list[cros_cls.ChangeListURL] = []
-    if use_llvm_next:
-        if not llvm_next.LLVM_NEXT_TESTING_CLS:
-            raise ValueError(
-                "llvm-next testing requested, but no llvm-next CLs exist."
-            )
-        cls += llvm_next.LLVM_NEXT_TESTING_CLS
-
     if extra_cls:
         cls += extra_cls
 
@@ -64,10 +59,8 @@ def generate_bb_add_command(
 
 def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
     """Returns False if llvm-next testing is likely to be useful."""
-    if not llvm_next.LLVM_NEXT_TESTING_CLS:
-        logging.info(
-            "Tests seem pointless: no llvm-next testing CLs are registered."
-        )
+    if not llvm_next.LLVM_NEXT_MANIFEST_CL:
+        logging.info("Tests seem pointless: LLVM_NEXT_MANIFEST_CL is not set.")
         return True
 
     current_hash = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(
@@ -84,6 +77,63 @@ def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
         "Testing seems useful; llvm-next hash is %s", llvm_next.LLVM_NEXT_HASH
     )
     return False
+
+
+def fetch_llvm_next_deps_or_exit(
+    main_cl: cros_cls.ChangeListURL,
+    *,
+    untrusted_reject: bool,
+    untrusted_ignore: bool,
+) -> list[cros_cls.ChangeListURL]:
+    """Fetches dependencies for the main CL and handles untrusted CLs."""
+    logging.info("Fetching dependencies for main CL: %s", main_cl)
+    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(main_cl)
+    owners = cros_cls.fetch_current_toolchain_owners()
+
+    trusted, untrusted = cros_cls.partition_changes_by_uploader_trust(
+        deps,
+        owners,
+        # NOTE: Add `main_cl` here since that always has a patchset, and it's
+        # _theoretically_ possible for it to be untrusted (say someone uploads
+        # it, then leaves the team, so is removed from OWNERS).
+        trusted_allowlist=(
+            llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST + (main_cl,)
+        ),
+    )
+
+    result_cls = [change.url for change in trusted]
+
+    if not untrusted:
+        return result_cls
+
+    if untrusted_reject:
+        logging.error("Untrusted CLs detected:")
+        for c in untrusted:
+            logging.error("- %s by %s", c.url, c.uploader)
+        raise UntrustedCLsError(
+            "Aborting due to untrusted CLs (requested by --untrusted-reject)"
+        )
+
+    if untrusted_ignore:
+        logging.info("Ignoring untrusted CLs:")
+        for c in untrusted:
+            logging.info("- %s by %s", c.url, c.uploader)
+        return result_cls
+
+    print("Untrusted CLs detected:")
+    for c in untrusted:
+        print(f"- {c.url} by {c.uploader}")
+
+    try:
+        response = input("\n\nAllow run with these untrusted CLs? [y/N]: ")
+    except EOFError:
+        response = "n"
+
+    if response.strip().lower() != "y":
+        raise UntrustedCLsError("Aborted by user.")
+
+    result_cls.extend(change.url for change in untrusted)
+    return result_cls
 
 
 def parse_opts(argv: list[str]) -> argparse.Namespace:
@@ -142,6 +192,17 @@ def parse_opts(argv: list[str]) -> argparse.Namespace:
         Tags are arbitrary text.
         """,
     )
+    untrusted_group = parser.add_mutually_exclusive_group()
+    untrusted_group.add_argument(
+        "--untrusted-ignore",
+        action="store_true",
+        help="Ignore untrusted CLs and do not include them in the run.",
+    )
+    untrusted_group.add_argument(
+        "--untrusted-reject",
+        action="store_true",
+        help="Reject the run if there are untrusted CLs.",
+    )
     parser.add_argument(
         "bot", nargs="*", default=[], help="Bot(s) to run `bb add` with."
     )
@@ -179,9 +240,27 @@ def main(argv: list[str]) -> None:
         )
         return
 
+    extra_cls = list(opts.cl) if opts.cl else []
+
+    if opts.llvm_next:
+        main_cl = llvm_next.LLVM_NEXT_MANIFEST_CL
+        if not main_cl:
+            logging.error("LLVM_NEXT_MANIFEST_CL is not set in llvm_next.py")
+            sys.exit(1)
+
+        try:
+            extra_cls.extend(
+                fetch_llvm_next_deps_or_exit(
+                    main_cl,
+                    untrusted_reject=opts.untrusted_reject,
+                    untrusted_ignore=opts.untrusted_ignore,
+                )
+            )
+        except UntrustedCLsError as e:
+            sys.exit(str(e))
+
     cmd = generate_bb_add_command(
-        use_llvm_next=opts.llvm_next,
-        extra_cls=opts.cl,
+        extra_cls=extra_cls,
         bots=opts.bot,
         tags=opts.tag or (),
     )
