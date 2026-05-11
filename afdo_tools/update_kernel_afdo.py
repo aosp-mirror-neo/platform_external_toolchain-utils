@@ -375,7 +375,8 @@ def write_afdo_descriptor_file(
         for k, gs_name in contents.items()
     }
 
-    contents_json = json.dumps(contents_dict, indent=4, sort_keys=True)
+    # indent=2 and trailing newline are required by `cros format`.
+    contents_json = json.dumps(contents_dict, indent=2, sort_keys=True) + "\n"
     try:
         existing_contents = path.read_text(encoding="utf-8")
     except FileNotFoundError:
