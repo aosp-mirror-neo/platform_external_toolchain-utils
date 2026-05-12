@@ -3,6 +3,7 @@
 # found in the LICENSE file.
 
 """Contains useful constants for testing LLVM."""
+
 from llvm_tools import cros_cls
 
 
@@ -18,10 +19,7 @@ _LLVM_NEXT_MANIFEST_CL: str | None = "https://crrev.com/i/9088380/3"
 # These are CLs that need to run in llvm-next bot invocations that aren't
 # uploaded by individuals in the global allowlist.
 # pylint: disable=line-too-long
-_LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = (
-    "https://crrev.com/i/9088380/7",
-    "https://chromium-review.git.corp.google.com/c/chromiumos/overlays/chromiumos-overlay/+/7649966/1",
-)
+_LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = ()
 
 # Users/tooling edit the strings above for ease-of-use; scripts should use the
 # well-typed constants, though.
