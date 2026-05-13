@@ -79,20 +79,42 @@ def run_command_unchecked(
     command: Command,
     cwd: str | None = None,
     env: dict[str, str] | None = None,
-) -> tuple[int, str]:
-    """Runs a command in the given dir, returning its exit code and stdio."""
-    p = subprocess.run(
-        command,
-        check=False,
-        cwd=cwd,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        env=env,
-        encoding="utf-8",
-        errors="replace",
+    timeout: int = 120,
+) -> tuple[int, str, bool]:
+    """Runs a command in the given dir, returning its exit code and stdio.
+
+    Returns:
+        A tuple of (exit_code, output, timed_out).
+    """
+    try:
+        p = subprocess.run(
+            command,
+            check=False,
+            cwd=cwd,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+        )
+        return p.returncode, p.stdout, False
+    except subprocess.TimeoutExpired as e:
+        return -1, default_timeout_message(command, e), True
+
+
+def default_timeout_message(
+    command: Command, ex: subprocess.TimeoutExpired
+) -> str:
+    """Returns a default message for command timeouts."""
+    msg = (
+        f"Command `{shlex.join(str(x) for x in command)}` "
+        f"timed out after {ex.timeout} seconds"
     )
-    return p.returncode, p.stdout
+    if ex.output:
+        msg += f"\nStdstreams:\n{ex.output.decode('utf-8', errors='replace')}"
+    return msg
 
 
 def has_executable_on_path(exe: str) -> bool:
@@ -173,9 +195,13 @@ def check_isort(
 
     config_file_flag = f"--settings-file={config_file}"
     command = [str(isort), "-c", config_file_flag] + list(python_files)
-    exit_code, stdout_and_stderr = run_command_unchecked(
+    exit_code, stdout_and_stderr, timed_out = run_command_unchecked(
         command, cwd=toolchain_utils_root
     )
+    if timed_out:
+        return CheckResult(
+            ok=False, output=stdout_and_stderr, autofix_commands=[]
+        )
 
     # isort fails when files have broken formatting.
     if not exit_code:
@@ -219,9 +245,13 @@ def check_black(
     # versions in the past. This is an issue, since newer versions of
     # black may format things differently. Make the version obvious.
     command: Command = [black, "--version"]
-    exit_code, stdout_and_stderr = run_command_unchecked(
+    exit_code, stdout_and_stderr, timed_out = run_command_unchecked(
         command, cwd=toolchain_utils_root
     )
+    if timed_out:
+        return CheckResult(
+            ok=False, output=stdout_and_stderr, autofix_commands=[]
+        )
     if exit_code:
         return CheckResult(
             ok=False,
@@ -233,9 +263,13 @@ def check_black(
     black_version = stdout_and_stderr.strip()
     black_invocation: list[str] = [str(black), "--line-length=80"]
     command = black_invocation + ["--check"] + list(python_files)
-    exit_code, stdout_and_stderr = run_command_unchecked(
+    exit_code, stdout_and_stderr, timed_out = run_command_unchecked(
         command, cwd=toolchain_utils_root
     )
+    if timed_out:
+        return CheckResult(
+            ok=False, output=stdout_and_stderr, autofix_commands=[]
+        )
     # black fails when files are poorly formatted.
     if exit_code == 0:
         return CheckResult(
@@ -302,9 +336,11 @@ def check_mypy(
     fixed_env = env_with_pythonpath(toolchain_utils_root)
     # Show the version number, mainly for troubleshooting purposes.
     cmd = mypy.command + ["--version"]
-    exit_code, output = run_command_unchecked(
+    exit_code, output, timed_out = run_command_unchecked(
         cmd, cwd=toolchain_utils_root, env=fixed_env
     )
+    if timed_out:
+        return CheckResult(ok=False, output=output, autofix_commands=[])
     if exit_code:
         return CheckResult(
             ok=False,
@@ -316,9 +352,11 @@ def check_mypy(
 
     cmd = list(mypy.command)
     cmd += files
-    exit_code, output = run_command_unchecked(
+    exit_code, output, timed_out = run_command_unchecked(
         cmd, cwd=toolchain_utils_root, env=fixed_env
     )
+    if timed_out:
+        return CheckResult(ok=False, output=output, autofix_commands=[])
     if exit_code == 0:
         return CheckResult(
             ok=True,
@@ -523,11 +561,12 @@ def check_cros_lint(
     # lint` (if it's been made available to us), or we try a mix of
     # pylint+staticcheck.
     def try_run_cros_lint(cros_binary: str) -> CheckResult | None:
-        exit_code, output = run_command_unchecked(
-            [cros_binary, "lint", "--"] + fixed_files,
-            toolchain_utils_root,
-            env=fixed_env,
+        cmd = [cros_binary, "lint", "--"] + fixed_files
+        exit_code, output, timed_out = run_command_unchecked(
+            cmd, cwd=toolchain_utils_root, env=fixed_env
         )
+        if timed_out:
+            return CheckResult(ok=False, output=output, autofix_commands=[])
 
         # This is returned specifically if cros couldn't find the ChromeOS tree
         # root.
@@ -555,9 +594,11 @@ def check_cros_lint(
     tasks = []
 
     def check_result_from_command(command: list[str]) -> CheckResult:
-        exit_code, output = run_command_unchecked(
-            command, toolchain_utils_root, env=fixed_env
+        exit_code, output, timed_out = run_command_unchecked(
+            command, cwd=toolchain_utils_root, env=fixed_env
         )
+        if timed_out:
+            return CheckResult(ok=False, output=output, autofix_commands=[])
         return CheckResult(
             ok=exit_code == 0,
             output=output,
@@ -641,7 +682,11 @@ def check_go_format(
         )
 
     command = [gofmt, "-l"] + go_files
-    exit_code, output = run_command_unchecked(command, cwd=toolchain_utils_root)
+    exit_code, output, timed_out = run_command_unchecked(
+        command, cwd=toolchain_utils_root
+    )
+    if timed_out:
+        return CheckResult(ok=False, output=output, autofix_commands=[])
 
     if exit_code:
         return CheckResult(
@@ -696,28 +741,56 @@ def check_json_format(
             autofix_commands=[],
         )
 
-    def check_file(file_path: str) -> tuple[str, bool]:
-        exit_code, _ = run_command_unchecked(
-            ("cros", "format", "--check", file_path), cwd=toolchain_utils_root
+    def check_file(file_path: str) -> tuple[CheckResult, bool]:
+        """Checks formatting of a JSON file.
+
+        Returns:
+            A tuple of (CheckResult, timeout_expired).
+        """
+        cmd = ("cros", "format", "--check", file_path)
+        exit_code, output, timed_out = run_command_unchecked(
+            cmd, cwd=toolchain_utils_root
         )
-        return file_path, exit_code == 0
+        if timed_out:
+            return (
+                CheckResult(ok=False, output=output, autofix_commands=[]),
+                True,
+            )
+        return (
+            CheckResult(
+                ok=exit_code == 0,
+                output=file_path if exit_code else "",
+                autofix_commands=[],
+            ),
+            False,
+        )
 
     results = thread_pool.map(check_file, json_files)
-    bad_files = [file_path for file_path, ok in results if not ok]
 
-    if not bad_files:
+    if all(r.ok for r, _ in results):
         return CheckResult(
             ok=True,
             output="all JSON files are properly formatted",
             autofix_commands=[],
         )
 
-    autofix = [["cros", "format"] + bad_files]
+    bad_files = [
+        r.output for r, timed_out in results if not r.ok and not timed_out
+    ]
+    timeout_messages = [r.output for r, timed_out in results if timed_out]
+
+    output = []
+    if timeout_messages:
+        output.extend(timeout_messages)
+    if bad_files:
+        output.append(
+            f"The following JSON files have incorrect formatting: {bad_files}"
+        )
+
+    autofix = [["cros", "format"] + bad_files] if bad_files else []
     return CheckResult(
         ok=False,
-        output=(
-            f"The following JSON files have incorrect formatting: {bad_files}"
-        ),
+        output="\n".join(output),
         autofix_commands=autofix,
     )
 
@@ -778,9 +851,13 @@ def check_tests(
     )
     cmd = [run_tests_for, "--"]
     cmd += files
-    exit_code, stdout_and_stderr = run_command_unchecked(
-        cmd, toolchain_utils_root
+    exit_code, stdout_and_stderr, timed_out = run_command_unchecked(
+        cmd, cwd=toolchain_utils_root
     )
+    if timed_out:
+        return CheckResult(
+            ok=False, output=stdout_and_stderr, autofix_commands=[]
+        )
     return CheckResult(
         ok=exit_code == 0,
         output=stdout_and_stderr,
@@ -859,9 +936,12 @@ def try_autofix(
         return
 
     if not force_autofix:
-        exit_code, output = run_command_unchecked(
+        exit_code, output, timed_out = run_command_unchecked(
             ("git", "status", "--porcelain"), cwd=toolchain_utils_root
         )
+        if timed_out:
+            print(f"Autofix aborted: {output}")
+            return
         if exit_code:
             print("Autofix aborted: couldn't get toolchain-utils git status.")
             return
@@ -877,9 +957,12 @@ def try_autofix(
 
     anything_succeeded = False
     for command in all_autofix_commands:
-        exit_code, output = run_command_unchecked(
+        exit_code, output, timed_out = run_command_unchecked(
             command, cwd=toolchain_utils_root
         )
+        if timed_out:
+            print(f"*** {output}")
+            continue
 
         if exit_code:
             print(
