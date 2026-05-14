@@ -5,6 +5,7 @@
 """Tools for interacting with CrOS CLs, and the CQ in particular."""
 
 import dataclasses
+import datetime
 import enum
 import json
 import logging
@@ -170,6 +171,31 @@ def builder_url(build_id: BuildID) -> str:
     return f"https://ci.chromium.org/b/{build_id}"
 
 
+@dataclasses.dataclass(frozen=True, eq=True)
+class BbLsInfo:
+    """A class representing the output of a `bb ls` command."""
+
+    build_id: BuildID
+    status: BuilderStatus
+    create_time: datetime.datetime
+    builder_name: str
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> "BbLsInfo":
+        return cls(
+            build_id=BuildID(d["id"]),
+            status=BuilderStatus.parse(d["status"]),
+            create_time=datetime.datetime.fromisoformat(d["createTime"]),
+            builder_name=d["builder"]["builder"],
+        )
+
+
+def fetch_bb_ls_info(*, ls_args: list[str]) -> list[BbLsInfo]:
+    """Runs `bb ls` with `-json` and returns a list of BbLsInfo."""
+    results = _run_bb_decoding_output(["ls"] + ls_args, multiline=True)
+    return [BbLsInfo.from_dict(r) for r in results]
+
+
 # Used to parse the build ID from a `bb add` invocation.
 #
 # b/460037583: previous `bb` versions used ci.chromium.org, new ones use
@@ -267,28 +293,24 @@ def fetch_cq_orchestrator_ids(
 
     Newer runs are sorted later in the list.
     """
-    results: list[dict[str, Any]] = _run_bb_decoding_output(
-        [
-            "ls",
+    results = fetch_bb_ls_info(
+        ls_args=[
             "-cl",
             str(cl),
             "chromeos/cq/cq-orchestrator",
-        ],
-        multiline=True,
+        ]
     )
 
     # We can theoretically filter on a status flag, but it seems to only accept
     # at most one value. Filter here instead; parsing one or two extra JSON
     # objects is cheap.
-    finished_results = [
-        x for x in results if not BuilderStatus(x["status"]).is_running
-    ]
+    finished_results = [x for x in results if not x.status.is_running]
 
     # Sort by createTime. Fall back to build ID if a tie needs to be broken.
     # While `createTime` is a string, it's formatted so it can be sorted
     # correctly without parsing.
-    finished_results.sort(key=lambda x: (x["createTime"], x["id"]))
-    return [int(x["id"]) for x in finished_results]
+    finished_results.sort(key=lambda x: (x.create_time, x.build_id))
+    return [x.build_id for x in finished_results]
 
 
 @dataclasses.dataclass(frozen=True)

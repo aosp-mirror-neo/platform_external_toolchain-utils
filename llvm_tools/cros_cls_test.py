@@ -4,7 +4,9 @@
 
 """Tests for cros_cls."""
 
+import datetime
 import unittest
+from unittest import mock
 
 from llvm_tools import cros_cls
 
@@ -217,6 +219,68 @@ class TestBuildIDParsing(unittest.TestCase):
             ValueError, r"Expected one build-id from stdout"
         ):
             cros_cls.parse_build_id_from_bb_add_output(output)
+
+
+class TestBbLsInfo(unittest.TestCase):
+    """BbLsInfo tests."""
+
+    def test_from_dict(self) -> None:
+        build_id = "8681949416952307121"
+        create_time_str = "2026-05-13T04:00:46.922407325Z"
+        d = {
+            "id": build_id,
+            "status": "FAILURE",
+            "createTime": create_time_str,
+            "builder": {"builder": "staging-build-chromiumos-sdk"},
+        }
+        info = cros_cls.BbLsInfo.from_dict(d)
+        expected = cros_cls.BbLsInfo(
+            build_id=int(build_id),
+            status=cros_cls.BuilderStatus.FAILURE,
+            create_time=datetime.datetime.fromisoformat(create_time_str),
+            builder_name="staging-build-chromiumos-sdk",
+        )
+        self.assertEqual(info, expected)
+
+    @mock.patch.object(cros_cls, "_run_bb_decoding_output")
+    def test_fetch_bb_ls_info(
+        self, mock_run_bb_decoding_output: mock.MagicMock
+    ) -> None:
+        t1_str = "2026-05-13T04:00:00Z"
+        t2_str = "2026-05-13T04:00:01Z"
+        mock_run_bb_decoding_output.return_value = [
+            {
+                "id": "1",
+                "status": "SUCCESS",
+                "createTime": t1_str,
+                "builder": {"builder": "b1"},
+            },
+            {
+                "id": "2",
+                "status": "FAILURE",
+                "createTime": t2_str,
+                "builder": {"builder": "b2"},
+            },
+        ]
+        results = cros_cls.fetch_bb_ls_info(ls_args=["args"])
+        expected = [
+            cros_cls.BbLsInfo(
+                build_id=1,
+                status=cros_cls.BuilderStatus.SUCCESS,
+                create_time=datetime.datetime.fromisoformat(t1_str),
+                builder_name="b1",
+            ),
+            cros_cls.BbLsInfo(
+                build_id=2,
+                status=cros_cls.BuilderStatus.FAILURE,
+                create_time=datetime.datetime.fromisoformat(t2_str),
+                builder_name="b2",
+            ),
+        ]
+        self.assertEqual(results, expected)
+        mock_run_bb_decoding_output.assert_called_once_with(
+            ["ls", "args"], multiline=True
+        )
 
     def test_parse_build_id_from_bb_add_output_no_id(self) -> None:
         output = "No build ID here"
