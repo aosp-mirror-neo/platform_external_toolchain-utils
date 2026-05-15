@@ -18,6 +18,7 @@ import logging
 from pathlib import Path
 import shlex
 import subprocess
+from typing import Iterable
 
 from llvm_tools import chroot
 
@@ -106,38 +107,48 @@ def handle_workon(*, start: bool, host: bool, board: str | None) -> None:
     if not board:
         return
 
-    board_cmd = ["cros", "workon", "-b", board, action]
-    board_cmd += BOARD_PKGS
+    board_cmd = ("cros", "workon", "-b", board, action, *BOARD_PKGS)
     logging.info("Running: %s", shlex.join(board_cmd))
     subprocess.run(board_cmd, check=True, stdin=subprocess.DEVNULL)
 
 
-def handle_build() -> None:
+def handle_build(*, host: bool, board: str | None) -> None:
     """Handles the build subcommand."""
-    cmd1 = (
-        "sudo",
-        "emerge",
-        "-j",
-        "sys-devel/llvm",
-        "sys-libs/libcxx",
-        "sys-libs/llvm-libunwind",
-        "sys-libs/scudo",
-    )
-    logging.info("Running: %s", shlex.join(cmd1))
-    subprocess.run(
-        cmd1,
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
+    if board:
+        raise_if_board_not_set_up(board)
 
-    cross_combos = get_cross_compile_combinations()
-    cmd2 = ["sudo", "emerge", "-j"] + cross_combos
-    logging.info("Running: %s", shlex.join(cmd2))
-    subprocess.run(cmd2, check=True, stdin=subprocess.DEVNULL)
+    if host:
+        cmd1 = (
+            "sudo",
+            "emerge",
+            "-j",
+            "sys-devel/llvm",
+            "sys-libs/libcxx",
+            "sys-libs/llvm-libunwind",
+            "sys-libs/scudo",
+        )
+        logging.info("Running: %s", shlex.join(cmd1))
+        subprocess.run(
+            cmd1,
+            check=True,
+            stdin=subprocess.DEVNULL,
+        )
+
+        cross_combos = get_cross_compile_combinations()
+        cmd2 = ["sudo", "emerge", "-j"] + cross_combos
+        logging.info("Running: %s", shlex.join(cmd2))
+        subprocess.run(cmd2, check=True, stdin=subprocess.DEVNULL)
+
+    if not board:
+        return
+
+    cmd = (f"emerge-{board}", "-j", *BOARD_PKGS)
+    logging.info("Running: %s", shlex.join(cmd))
+    subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
 
 
 def clean_up_old_binpkgs(
-    packages: list[str], pkg_root: Path = Path("/var/lib/portage/pkgs")
+    packages: Iterable[str], pkg_root: Path = Path("/var/lib/portage/pkgs")
 ) -> None:
     """Finds and deletes old binpkgs for specified packages."""
     files_to_delete = []
@@ -155,7 +166,7 @@ def clean_up_old_binpkgs(
             files_to_delete.append(str(file_path))
 
     if files_to_delete:
-        cmd = ["sudo", "rm", "-f"] + files_to_delete
+        cmd = ("sudo", "rm", "-f", *files_to_delete)
         logging.info("Running: %s", shlex.join(cmd))
         try:
             subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)
@@ -163,31 +174,53 @@ def clean_up_old_binpkgs(
             logging.error("Failed to delete binpkgs: %s", e)
 
 
-def handle_force_reset() -> None:
+def handle_force_reset(*, host: bool, board: str | None) -> None:
     """Handles the force-reset subcommand."""
-    cross_combos = get_cross_compile_combinations()
-    pkgs_to_stop = [
-        "sys-devel/llvm",
-        "sys-libs/libcxx",
-        "sys-libs/llvm-libunwind",
-        "sys-libs/scudo",
-        "dev-util/lldb-server",
-    ] + cross_combos
+    if board:
+        raise_if_board_not_set_up(board)
 
-    cmd1 = ["cros", "workon", "--host", "stop"] + pkgs_to_stop
+    if host:
+        cross_combos = get_cross_compile_combinations()
+        pkgs_to_stop = (
+            "sys-devel/llvm",
+            "sys-libs/libcxx",
+            "sys-libs/llvm-libunwind",
+            "sys-libs/scudo",
+            "dev-util/lldb-server",
+            *cross_combos,
+        )
+
+        cmd1 = ("cros", "workon", "--host", "stop", *pkgs_to_stop)
+        logging.info("Running: %s", shlex.join(cmd1))
+        subprocess.run(cmd1, check=True, stdin=subprocess.DEVNULL)
+
+        # The old binpkgs for these **may** be invalid: if a user edited the
+        # llvm ebuild directly, for instance, without `cros workon`'ing it,
+        # portage will save the resultant binpkg and reuse that if
+        # reinstallation is requested via -G.
+        #
+        # Forcing a redownload is the only way to be assured that we're
+        # resetting to a landed version of LLVM.
+        clean_up_old_binpkgs(pkgs_to_stop)
+
+        cmd2 = ("sudo", "emerge", "-G", *pkgs_to_stop)
+        logging.info("Running: %s", shlex.join(cmd2))
+        subprocess.run(cmd2, check=True, stdin=subprocess.DEVNULL)
+
+    if not board:
+        return
+
+    cmd1 = ("cros", "workon", "-b", board, "stop", *BOARD_PKGS)
     logging.info("Running: %s", shlex.join(cmd1))
     subprocess.run(cmd1, check=True, stdin=subprocess.DEVNULL)
 
-    # The old binpkgs for these **may** be invalid: if a user edited the llvm
-    # ebuild directly, for instance, without `cros workon`'ing it, portage will
-    # save the resultant binpkg and reuse that if reinstallation is requested
-    # via -G.
-    #
-    # Forcing a redownload is the only way to be assured that we're resetting to
-    # a landed version of LLVM.
-    clean_up_old_binpkgs(pkgs_to_stop)
+    pkg_dir = Path(f"/build/{board}/packages")
+    clean_up_old_binpkgs(BOARD_PKGS, pkg_root=pkg_dir)
 
-    cmd2 = ["sudo", "emerge", "-G"] + pkgs_to_stop
+    # Use `-g` here, since we sometimes don't get binpkgs for these. The most
+    # important binpkgs to sync are the host packages that will ultimately be
+    # used to build these.
+    cmd2 = (f"emerge-{board}", "-g", "-j", *BOARD_PKGS)
     logging.info("Running: %s", shlex.join(cmd2))
     subprocess.run(cmd2, check=True, stdin=subprocess.DEVNULL)
 
@@ -223,14 +256,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "build",
         help="Build all LLVM packages for either the host or a board.",
     )
-    # TODO(gbiv): Add `--board` here. It doesn't exist at present, so the review
-    # of this script is easier.
     build_parser.add_argument(
         "--host",
         action="store_true",
-        required=True,
         help="Build host packages (including `cross-*`)",
     )
+    build_parser.add_argument("--board", help="Board to operate on")
 
     force_reset_parser = subparsers.add_parser(
         "force-reset",
@@ -248,14 +279,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         required=True,
         help="Pass to acknowledge that workon of everything will be stopped.",
     )
-    # TODO(gbiv): Add `--board` here. It doesn't exist at present, so the review
-    # of this script is easier.
     force_reset_parser.add_argument(
-        "--host", action="store_true", required=True, help="Operate on host"
+        "--host", action="store_true", help="Operate on host"
     )
+    force_reset_parser.add_argument("--board", help="Board to operate on")
     opts = parser.parse_args(argv)
-    if opts.command == "workon" and not (opts.host or opts.board):
-        parser.error("workon requires --host and/or --board")
+    if not (opts.host or opts.board):
+        parser.error(f"{opts.command} requires --host and/or --board")
     return opts
 
 
@@ -282,8 +312,8 @@ def main(argv: list[str]) -> None:
                 board=opts.board,
             )
         case "build":
-            handle_build()
+            handle_build(host=opts.host, board=opts.board)
         case "force-reset":
-            handle_force_reset()
+            handle_force_reset(host=opts.host, board=opts.board)
         case _:
             assert False, "Unhandled command"
