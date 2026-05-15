@@ -46,6 +46,14 @@ BOARD_PKGS = (
     "dev-util/lldb-server",
 )
 
+# Non-`cross-*` packages that comprise the LLVM toolchain,
+# which are shipped with the chroot by default.
+HOST_PKGS = (
+    "sys-devel/llvm",
+    "sys-libs/libcxx",
+    "sys-libs/llvm-libunwind",
+)
+
 
 def get_cross_compile_combinations() -> list[str]:
     """Generates all cross-compile combinations."""
@@ -87,17 +95,14 @@ def handle_workon(*, start: bool, host: bool, board: str | None) -> None:
     if host:
         cross_combos = get_cross_compile_combinations()
 
-        host_cmd = [
+        host_cmd = (
             "cros",
             "workon",
             "--host",
             action,
-            "sys-devel/llvm",
-            "sys-libs/libcxx",
-            "sys-libs/llvm-libunwind",
-            "sys-libs/scudo",
-            "dev-util/lldb-server",
-        ] + cross_combos
+            *HOST_PKGS,
+            *cross_combos,
+        )
 
         logging.info("Running: %s", shlex.join(host_cmd))
         subprocess.run(host_cmd, check=True, stdin=subprocess.DEVNULL)
@@ -122,10 +127,7 @@ def handle_build(*, host: bool, board: str | None) -> None:
             "sudo",
             "emerge",
             "-j",
-            "sys-devel/llvm",
-            "sys-libs/libcxx",
-            "sys-libs/llvm-libunwind",
-            "sys-libs/scudo",
+            *HOST_PKGS,
         )
         logging.info("Running: %s", shlex.join(cmd1))
         subprocess.run(
@@ -135,7 +137,7 @@ def handle_build(*, host: bool, board: str | None) -> None:
         )
 
         cross_combos = get_cross_compile_combinations()
-        cmd2 = ["sudo", "emerge", "-j"] + cross_combos
+        cmd2 = ("sudo", "emerge", "-j", *cross_combos)
         logging.info("Running: %s", shlex.join(cmd2))
         subprocess.run(cmd2, check=True, stdin=subprocess.DEVNULL)
 
@@ -182,11 +184,7 @@ def handle_force_reset(*, host: bool, board: str | None) -> None:
     if host:
         cross_combos = get_cross_compile_combinations()
         pkgs_to_stop = (
-            "sys-devel/llvm",
-            "sys-libs/libcxx",
-            "sys-libs/llvm-libunwind",
-            "sys-libs/scudo",
-            "dev-util/lldb-server",
+            *HOST_PKGS,
             *cross_combos,
         )
 
@@ -203,7 +201,9 @@ def handle_force_reset(*, host: bool, board: str | None) -> None:
         # resetting to a landed version of LLVM.
         clean_up_old_binpkgs(pkgs_to_stop)
 
-        cmd2 = ("sudo", "emerge", "-G", *pkgs_to_stop)
+        # Use `-G` since if our host toolchain is in an uncertain state, we
+        # can't safely build the old version.
+        cmd2 = ("sudo", "emerge", "-G", "-j", *pkgs_to_stop)
         logging.info("Running: %s", shlex.join(cmd2))
         subprocess.run(cmd2, check=True, stdin=subprocess.DEVNULL)
 
