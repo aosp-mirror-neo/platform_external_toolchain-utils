@@ -1,0 +1,65 @@
+From 2e26366a9b22e2a2a786965eea73ed7cb51372e2 Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Wed, 1 Apr 2026 21:54:02 +0000
+Subject: [PATCH] Revert "Check for unsupported target options even with
+ -Qunused-arguments (#141698)"
+
+This reverts commit a4b2f4a72aa9b4655ecc723838830e0a7f29c9ca.
+
+This commit causes breakages all throughout ChromeOS. While it resolves
+a real problem, we revert this change temporarily so that we can work
+to remove passing these flags throughout ChromeOS.
+
+BUG=b:491530865
+TEST=Partially built 5.10 kernel, saw bad flags work.
+
+---
+ clang/lib/Driver/Driver.cpp            | 12 ++++++------
+ clang/test/Driver/unsupported-option.c |  5 -----
+ 2 files changed, 6 insertions(+), 11 deletions(-)
+
+diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
+index a2bade0f841f..17c457fb4baa 100644
+--- a/clang/lib/Driver/Driver.cpp
++++ b/clang/lib/Driver/Driver.cpp
+@@ -5305,11 +5305,11 @@ void Driver::BuildJobs(Compilation &C) const {
+     });
+   }
+ 
+-  // If the user passed -Qunused-arguments or there were errors, don't
+-  // warn about any unused arguments.
+-  bool ReportUnusedArguments =
+-      !Diags.hasErrorOccurred() &&
+-      !C.getArgs().hasArg(options::OPT_Qunused_arguments);
++  // If the user passed -Qunused-arguments or there were errors, don't warn
++  // about any unused arguments.
++  if (Diags.hasErrorOccurred() ||
++      C.getArgs().hasArg(options::OPT_Qunused_arguments))
++    return;
+ 
+   // Claim -fdriver-only here.
+   (void)C.getArgs().hasArg(options::OPT_fdriver_only);
+@@ -5363,7 +5363,7 @@ void Driver::BuildJobs(Compilation &C) const {
+             !C.getActions().empty()) {
+           Diag(diag::err_drv_unsupported_opt_for_target)
+               << A->getSpelling() << getTargetTriple();
+-        } else if (ReportUnusedArguments) {
++        } else {
+           Diag(clang::diag::warn_drv_unused_argument)
+               << A->getAsString(C.getArgs());
+         }
+diff --git a/clang/test/Driver/unsupported-option.c b/clang/test/Driver/unsupported-option.c
+index 7234e5257158..af836cf00337 100644
+--- a/clang/test/Driver/unsupported-option.c
++++ b/clang/test/Driver/unsupported-option.c
+@@ -27,8 +27,3 @@
+ // RUN: not %clang --target=x86_64 -### -mhtm -lc %s 2>&1 \
+ // RUN:   | FileCheck %s -check-prefix=UNSUP_OPT
+ // UNSUP_OPT: error: unsupported option
+-
+-
+-// RUN: not %clang -c -Qunused-arguments --target=aarch64-- -mfpu=crypto-neon-fp-armv8 %s 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=QUNUSED_ARGUMENTS
+-// QUNUSED_ARGUMENTS: error: unsupported option '-mfpu=' for target 'aarch64--'
+-- 
+2.39.5
