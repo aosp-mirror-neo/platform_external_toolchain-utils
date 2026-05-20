@@ -22,7 +22,7 @@ def run_gemini_on_goldens(
     llvm_dir: Path,
     jobs: int | None,
     stop_after: str | None,
-    only_sha: str | None,
+    only_shas: list[str] | None,
 ) -> tuple[
     dict[str, check_reverts.GeminiRevertInference], tuple[str, ...] | None
 ]:
@@ -35,17 +35,17 @@ def run_gemini_on_goldens(
           `check_reverts.py` selects.
         stop_after: If specified, GOLDEN_SHAS will be truncated such that
           `stop_after` is the last SHA to test. Mutually exclusive with
-          `only_sha`.
-        only_sha: If specified, only this SHA will be tested.
+          `only_shas`.
+        only_shas: If specified, only these SHAs will be tested.
 
     Returns:
         A tuple, containing:
         - A dict of {sha: inference_result}
         - A tuple of SHAs that were tested, or None if all were tested.
     """
-    if stop_after and only_sha:
+    if stop_after and only_shas:
         raise ValueError(
-            "Only one of `stop_after` and `only_sha` may be specified."
+            "Only one of `stop_after` and `only_shas` may be specified."
         )
 
     shas_to_test = GOLDEN_SHAS
@@ -58,10 +58,13 @@ def run_gemini_on_goldens(
                 "--stop-after value {stop_after} does not exist in GOLDEN_SHAS"
             )
         shas_to_test = shas_to_test[: i + 1]
-    elif only_sha:
-        if only_sha not in shas_to_test:
-            raise ValueError("Unknown SHA to test: {only_sha}")
-        shas_to_test = (only_sha,)
+    elif only_shas:
+        shas_to_test_set = set(shas_to_test)
+        unknown_shas = [sha for sha in only_shas if sha not in shas_to_test_set]
+        if unknown_shas:
+            bullet_list = "\n".join(f"- {sha}" for sha in unknown_shas)
+            raise ValueError(f"Unknown SHA(s) to test:\n{bullet_list}")
+        shas_to_test = tuple(only_shas)
     else:
         tested_all_shas = True
 
@@ -172,7 +175,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     exclusive_group.add_argument(
         "--only-sha",
-        help="If passed, only this SHA will be checked.",
+        action="append",
+        dest="only_shas",
+        help="If passed, only these SHAs will be checked. Can be repeated.",
     )
     return parser.parse_args(argv)
 
@@ -211,7 +216,7 @@ def main(argv: list[str]) -> None:
         opts.llvm_dir,
         opts.jobs,
         opts.stop_after,
-        opts.only_sha,
+        opts.only_shas,
     )
 
     try:
