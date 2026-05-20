@@ -6,10 +6,7 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        143108,
-        144538
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
@@ -499,9 +496,7 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        139474
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
@@ -760,9 +755,7 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        144913
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
@@ -874,12 +867,9 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        150675
-      ],
+      "reverted_prs": [],
       "reverted_shas": [
-        "0844812b2e9d7f5ab005223443791c9287bcf5a2",
-        "1db4c6b27500e686fad9e55bbbe7c7c68b246b7e"
+        "0844812b2e9d7f5ab005223443791c9287bcf5a2"
       ]
     }
   ],
@@ -1054,7 +1044,7 @@
     {
       "is_amdgpu_only": false,
       "is_flang_only": false,
-      "is_reland": true,
+      "is_reland": false,
       "is_revert": true,
       "is_test_only": false,
       "reverted_prs": [
@@ -1333,9 +1323,7 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        131759
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
@@ -1355,11 +1343,9 @@
       "is_amdgpu_only": true,
       "is_flang_only": false,
       "is_reland": false,
-      "is_revert": true,
+      "is_revert": false,
       "is_test_only": false,
-      "reverted_prs": [
-        151286
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
@@ -1657,7 +1643,7 @@
   ],
   "a03f82d7e582078163bce7ecaf960e8a53fb4744": [
     {
-      "is_amdgpu_only": true,
+      "is_amdgpu_only": false,
       "is_flang_only": false,
       "is_reland": false,
       "is_revert": false,
@@ -1761,9 +1747,7 @@
       "is_reland": false,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        148758
-      ],
+      "reverted_prs": [],
       "reverted_shas": [
         "3a18fe33f0763cd9276c99c276448412100f6270"
       ]
@@ -1952,9 +1936,7 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        123632
-      ],
+      "reverted_prs": [],
       "reverted_shas": [
         "6b1db79887df19bc8e8c946108966aa6021c8b87"
       ]
@@ -2302,7 +2284,6 @@
       "is_revert": true,
       "is_test_only": false,
       "reverted_prs": [
-        150783,
         151099
       ],
       "reverted_shas": [
@@ -2561,9 +2542,7 @@
       "is_reland": true,
       "is_revert": true,
       "is_test_only": false,
-      "reverted_prs": [
-        151472
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],

@@ -22,14 +22,23 @@ The data provided is produced by `git log -n1 --name-status`.
    (generally formatted as #1234).
 3. PR Exclusion Rule: The PR number at the very end of a commit subject line, if
    present, refers to the commit itself. Do not include this PR number in the
-   `reverted_pr`s field.
-4. Non-Reverts: If a commit is not a revert, `is_revert` should be false.
-5. `is_amdgpu_only`: This should be `true` if and only if the commit is exclusively
+   `reverted_prs` field.
+4. Reland Rule: For a commit that is a reland or reapply, do NOT include the
+   SHAs or PR numbers of the original changes being relanded in `reverted_shas`
+   or `reverted_prs`. Only include the SHAs or PR numbers of the *revert* commits
+   if they are being undone.
+5. Intent Rule: Do not extract PR numbers or SHAs that are mentioned as future
+   goals, plans, or general context (e.g., "So that we can revert PR #12345").
+   Only extract PRs and SHAs that are actually reverted by *this* commit.
+6. Non-Reverts: If a commit is not a revert or reland that undoes a revert,
+   `is_revert` should be false.
+7. `is_amdgpu_only`: This should be `true` if and only if the commit is exclusively
    related to AMDGPU.
-5. `is_flang_only`: This should be `true` if and only if the commit is exclusively
+8. `is_flang_only`: This should be `true` if and only if the commit is exclusively
    related to flang.
-7. `is_test_only`: This should be `true` if and only if the commit is
-   test-specific.
+9. `is_test_only`: This should be `true` if and only if the commit exclusively
+   modifies test-related files or tests themselves. Do not set to true for
+   documentation changes about testing.
 
 # Examples
 

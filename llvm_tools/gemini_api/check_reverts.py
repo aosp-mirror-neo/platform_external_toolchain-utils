@@ -351,12 +351,13 @@ def process_one_sha(
         response_schema=GeminiRevertInference,
         thinking_config=types.ThinkingConfig(
             include_thoughts=True,
-            # gemini-3-flash experimentally sees meaningfully lower quality
-            # answers with the `low` thinking level. When trying `medium`, genai
-            # 1.54.0 reports API warnings about an invalid thinking level
-            # (despite docs saying that `medium` exists for gemini-3-flash). Use
-            # `high` since that gives the best results for now.
-            thinking_level=types.ThinkingLevel.HIGH,
+            # gemini-3.5-flash experimentally sees meaningfully lower quality
+            # answers with the `low` thinking level. HIGH and MEDIUM give equal
+            # results, and MEDIUM is the default, so use that.
+            #
+            # HACK: Our current version of google-genai is too old to support
+            # MEDIUM. It's the default though, so leave it unspecified.
+            # thinking_level=types.ThinkingLevel.MEDIUM,
         ),
         # Note that this budget **includes** thinking tokens. It was previously
         # 3,000, but this is demonstrably too little in very rare cases:
@@ -364,19 +365,16 @@ def process_one_sha(
         # Gemini bounded in case it somehow starts looping, but otherwise allow
         # it maximum flexibility to produce the tokens it needs.
         max_output_tokens=30_000,
-        # Minimize randomness; just pick the best answer possible.
-        # https://cloud.google.com/vertex-ai/generative-ai/
-        # docs/learn/prompts/adjust-parameter-values
-        temperature=0,
-        top_k=1,
-        top_p=1,
+        # NOTE: New Gemini models strongly recommend not setting
+        # temperature/etc. So don't.
+        # https://ai.google.dev/gemini-api/docs/interactions/whats-new-gemini-3.5#parameter-updates
         seed=0,
     )
 
     for i in range(1, retry_limit + 1):
         logging.info("Attempt %d running Gemini on SHA %s", i, sha)
         chat = client.chats.create(
-            model="gemini-3-flash-preview",
+            model="gemini-3.5-flash",
             config=chat_config,
         )
 
