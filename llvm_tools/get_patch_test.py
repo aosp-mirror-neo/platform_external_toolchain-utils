@@ -12,6 +12,7 @@ from typing import Any
 import unittest
 from unittest import mock
 
+from cros_utils import cros_paths
 from llvm_tools import get_patch
 from llvm_tools import git_llvm_rev
 
@@ -77,10 +78,6 @@ def _mock_write_patch(*_: object, **__: object) -> None:
     pass
 
 
-def _mock_get_changed_packages(*_: object, **__: object) -> set[Path]:
-    return {get_patch.LLVM_PKG_PATH}
-
-
 class TestGetPatch(unittest.TestCase):
     """Test case harness for get_patch."""
 
@@ -92,7 +89,6 @@ class TestGetPatch(unittest.TestCase):
             get_commit_subj=_mock_get_commit_subj,
             get_commit_author=_mock_get_commit_author,
             _git_format_patch=_mock_git_format_patch,
-            get_changed_packages=_mock_get_changed_packages,
             _write_patch=_mock_write_patch,
         )
         self.module_patcher.start()
@@ -109,7 +105,11 @@ class TestGetPatch(unittest.TestCase):
         self.addCleanup(self.llvm_project_dir.rmdir)
         self.chromiumos_root = Path(tempfile.mkdtemp())
         self.addCleanup(self.chromiumos_root.rmdir)
-        self.workdir = self.chromiumos_root / get_patch.LLVM_PKG_PATH / "files"
+        self.workdir = (
+            self.chromiumos_root
+            / cros_paths.TOOLCHAIN_UTILS
+            / get_patch.PATCH_METADATA_DIR
+        )
         self.workdir.mkdir(parents=True, exist_ok=True)
 
         self.patches_json_file = (

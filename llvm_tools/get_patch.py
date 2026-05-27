@@ -34,13 +34,7 @@ from llvm_tools import git_llvm_rev
 from llvm_tools import patch_utils
 
 
-LLVM_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-devel/llvm"
-COMPILER_RT_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/compiler-rt"
-LIBCXX_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/libcxx"
-LIBUNWIND_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/llvm-libunwind"
-SCUDO_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "sys-libs/scudo"
-LLDB_PKG_PATH = cros_paths.CHROMIUMOS_OVERLAY / "dev-util/lldb-server"
-
+PATCH_METADATA_DIR = "llvm_patches"
 PATCH_METADATA_FILENAME = "PATCHES.json"
 
 
@@ -171,55 +165,56 @@ class PatchContext:
         self,
         patch_source: LLVMGitRef,
     ) -> list[patch_utils.PatchEntry]:
-        packages = get_changed_packages(
-            self.llvm_project_dir, patch_source.git_ref
-        )
         new_patch_entries: list[patch_utils.PatchEntry] = []
-        for workdir in self._workdirs_for_packages(packages):
+        workdir = (
+            self.chromiumos_root
+            / cros_paths.TOOLCHAIN_UTILS
+            / PATCH_METADATA_DIR
+        )
+        rel_patch_path = f"cherry/{patch_source.git_ref}.patch"
+        if (workdir / "cherry").is_dir():
             rel_patch_path = f"cherry/{patch_source.git_ref}.patch"
-            if (workdir / "cherry").is_dir():
-                rel_patch_path = f"cherry/{patch_source.git_ref}.patch"
-            else:
-                # Some packages don't have a cherry directory.
-                rel_patch_path = f"{patch_source.git_ref}.patch"
-            if not self._is_valid_patch_range(self.start_ref, patch_source):
-                raise CherrypickVersionError(
-                    f"'from' ref {self.start_ref} is later or"
-                    f" same as than 'until' ref {patch_source}"
-                )
-            pe = patch_utils.PatchEntry(
-                workdir=workdir,
-                metadata={
-                    "author": get_commit_author(
-                        self.llvm_project_dir, patch_source.git_ref
-                    ),
-                    "info": [],
-                    "original_sha": patch_source.git_ref,
-                    "title": get_commit_subj(
-                        self.llvm_project_dir, patch_source.git_ref
-                    ),
-                },
-                platforms=list(self.platforms),
-                rel_patch_path=rel_patch_path,
-                version_range={
-                    "from": self.start_ref.to_rev(self.llvm_project_dir).number,
-                    "until": patch_source.to_rev(self.llvm_project_dir).number,
-                },
+        else:
+            # Some packages don't have a cherry directory.
+            rel_patch_path = f"{patch_source.git_ref}.patch"
+        if not self._is_valid_patch_range(self.start_ref, patch_source):
+            raise CherrypickVersionError(
+                f"'from' ref {self.start_ref} is later or"
+                f" same as than 'until' ref {patch_source}"
             )
-            # Before we actually do any modifications, check if the patch is
-            # already applied.
-            if self.is_patch_applied(pe):
-                raise CherrypickError(
-                    f"Patch at {pe.rel_patch_path}"
-                    " already exists in PATCHES.json"
-                )
-            contents = _git_format_patch(
-                self.llvm_project_dir,
-                patch_source.git_ref,
+        pe = patch_utils.PatchEntry(
+            workdir=workdir,
+            metadata={
+                "author": get_commit_author(
+                    self.llvm_project_dir, patch_source.git_ref
+                ),
+                "info": [],
+                "original_sha": patch_source.git_ref,
+                "title": get_commit_subj(
+                    self.llvm_project_dir, patch_source.git_ref
+                ),
+            },
+            platforms=list(self.platforms),
+            rel_patch_path=rel_patch_path,
+            version_range={
+                "from": self.start_ref.to_rev(self.llvm_project_dir).number,
+                "until": patch_source.to_rev(self.llvm_project_dir).number,
+            },
+        )
+        # Before we actually do any modifications, check if the patch is
+        # already applied.
+        if self.is_patch_applied(pe):
+            raise CherrypickError(
+                f"Patch at {pe.rel_patch_path}"
+                " already exists in PATCHES.json"
             )
-            if not self.dry_run:
-                _write_patch(pe.title(), contents, pe.patch_path())
-            new_patch_entries.append(pe)
+        contents = _git_format_patch(
+            self.llvm_project_dir,
+            patch_source.git_ref,
+        )
+        if not self.dry_run:
+            _write_patch(pe.title(), contents, pe.patch_path())
+        new_patch_entries.append(pe)
         return new_patch_entries
 
     def _make_patches_from_pr(
@@ -228,35 +223,39 @@ class PatchContext:
         json_response = get_llvm_github_pull(patch_source.number)
         github_ctx = GitHubPRContext(json_response, self.llvm_project_dir)
         rel_patch_path = f"{github_ctx.full_title_cleaned}.patch"
-        contents, packages = github_ctx.git_squash_chain_patch()
+        contents = github_ctx.git_squash_chain_patch()
         new_patch_entries = []
-        for workdir in self._workdirs_for_packages(packages):
-            pe = patch_utils.PatchEntry(
-                workdir=workdir,
-                metadata={
-                    # No author here, because we squash the commits down
-                    # and they could differ.
-                    "title": github_ctx.full_title,
-                    "original_sha": None,
-                    "info": [],
-                },
-                rel_patch_path=rel_patch_path,
-                platforms=list(self.platforms),
-                version_range={
-                    "from": self.start_ref.to_rev(self.llvm_project_dir).number,
-                    "until": None,
-                },
+        workdir = (
+            self.chromiumos_root
+            / cros_paths.TOOLCHAIN_UTILS
+            / PATCH_METADATA_DIR
+        )
+        pe = patch_utils.PatchEntry(
+            workdir=workdir,
+            metadata={
+                # No author here, because we squash the commits down
+                # and they could differ.
+                "title": github_ctx.full_title,
+                "original_sha": None,
+                "info": [],
+            },
+            rel_patch_path=rel_patch_path,
+            platforms=list(self.platforms),
+            version_range={
+                "from": self.start_ref.to_rev(self.llvm_project_dir).number,
+                "until": None,
+            },
+        )
+        # Before we actually do any modifications, check if the patch is
+        # already applied.
+        if self.is_patch_applied(pe):
+            raise CherrypickError(
+                f"Patch at {pe.rel_patch_path}"
+                " already exists in PATCHES.json"
             )
-            # Before we actually do any modifications, check if the patch is
-            # already applied.
-            if self.is_patch_applied(pe):
-                raise CherrypickError(
-                    f"Patch at {pe.rel_patch_path}"
-                    " already exists in PATCHES.json"
-                )
-            if not self.dry_run:
-                _write_patch(pe.title(), contents, pe.patch_path())
-            new_patch_entries.append(pe)
+        if not self.dry_run:
+            _write_patch(pe.title(), contents, pe.patch_path())
+        new_patch_entries.append(pe)
         return new_patch_entries
 
     def _workdirs_for_packages(self, packages: Iterable[Path]) -> list[Path]:
@@ -377,7 +376,7 @@ class GitHubPRContext:
     def full_title_cleaned(self) -> str:
         return re.sub(r"\W", "-", self.full_title)
 
-    def git_squash_chain_patch(self) -> tuple[str, set[Path]]:
+    def git_squash_chain_patch(self) -> str:
         """Replicate a squashed merge commit as a patch file.
 
         Args:
@@ -443,9 +442,6 @@ class GitHubPRContext:
                     ],
                     worktree_dir,
                 )
-                changed_packages = get_changed_packages(
-                    worktree_dir, (self.base_ref, "HEAD")
-                )
                 patch_contents = _git_format_patch(worktree_dir, "HEAD")
             finally:
                 logging.debug(
@@ -460,7 +456,7 @@ class GitHubPRContext:
                     ["git", "branch", "-D", tmpbranch_name],
                     self.llvm_project_dir,
                 )
-        return (patch_contents, changed_packages)
+        return patch_contents
 
     def _fetch(self) -> None:
         if not self._fetched:
@@ -490,56 +486,6 @@ class GitHubPRContext:
             encoding="utf-8",
             check=True,
         )
-
-
-def get_changed_packages(
-    llvm_project_dir: Path, ref: str | tuple[str, str]
-) -> set[Path]:
-    """Returns package paths which changed over a given ref.
-
-    Args:
-        llvm_project_dir: Path to llvm-project
-        ref: Git ref to check diff of. If set to a tuple, compares the diff
-            between the first and second ref.
-
-    Returns:
-        A set of package paths which were changed.
-    """
-    if isinstance(ref, tuple):
-        ref_from, ref_to = ref
-    elif isinstance(ref, str):
-        ref_from = ref + "^"
-        ref_to = ref
-    else:
-        raise TypeError(f"ref was {type(ref)}; need a tuple or a string")
-
-    logging.debug("Getting git diff between %s..%s", ref_from, ref_to)
-    proc = subprocess.run(
-        ["git", "diff", "--name-only", f"{ref_from}..{ref_to}"],
-        check=True,
-        encoding="utf-8",
-        stdout=subprocess.PIPE,
-        cwd=llvm_project_dir,
-    )
-    changed_paths = proc.stdout.splitlines()
-    logging.debug("Found %d changed files", len(changed_paths))
-    # Some LLVM projects are built by LLVM ebuild on x86, so always apply the
-    # patch to LLVM ebuild
-    packages = {LLVM_PKG_PATH}
-    for changed_path in changed_paths:
-        if changed_path.startswith("compiler-rt"):
-            packages.add(COMPILER_RT_PKG_PATH)
-            if "scudo" in changed_path:
-                packages.add(SCUDO_PKG_PATH)
-        elif changed_path.startswith("libunwind"):
-            packages.add(LIBUNWIND_PKG_PATH)
-        elif changed_path.startswith("libcxx") or changed_path.startswith(
-            "libcxxabi"
-        ):
-            packages.add(LIBCXX_PKG_PATH)
-        elif changed_path.startswith("lldb"):
-            packages.add(LLDB_PKG_PATH)
-    return packages
 
 
 def _has_repo_child(path: Path) -> bool:
