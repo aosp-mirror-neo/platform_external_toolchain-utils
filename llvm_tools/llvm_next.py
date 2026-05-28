@@ -10,6 +10,10 @@ from llvm_tools import cros_cls
 LLVM_NEXT_HASH = "d4d2d7d7856258d5d781c4a912046fc7777122e2"
 LLVM_NEXT_REV = 584947
 
+# Group of people who are not in OWNERS, but can be trusted by bb_add.py and
+# llvm_next_py_autoupdate.py if they're the uploader of CLs.
+TRUSTED_UPLOADERS: tuple[str, ...] = ("devadharuns@google.com",)
+
 # NOTE: Always specify patch-sets for these CLs. We don't want uploads by
 # untrusted users to turn into bot invocations w/ untrusted input.
 #

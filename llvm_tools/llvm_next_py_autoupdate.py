@@ -203,6 +203,7 @@ def main(argv: list[str]) -> None:
     else:
         manifest_cl = llvm_next.LLVM_NEXT_MANIFEST_CL
         owners = cros_cls.fetch_current_toolchain_owners()
+        owners.extend(llvm_next.TRUSTED_UPLOADERS)
 
         new_manifest_cl, new_allowlist_urls = (
             update_manifest_and_allowlist_urls(manifest_cl, owners)

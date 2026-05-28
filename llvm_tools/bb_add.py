@@ -89,6 +89,7 @@ def fetch_llvm_next_deps_or_exit(
     logging.info("Fetching dependencies for main CL: %s", main_cl)
     deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(main_cl)
     owners = cros_cls.fetch_current_toolchain_owners()
+    owners.extend(llvm_next.TRUSTED_UPLOADERS)
 
     trusted, untrusted = cros_cls.partition_changes_by_uploader_trust(
         deps,
