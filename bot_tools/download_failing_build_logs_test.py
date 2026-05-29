@@ -16,7 +16,7 @@ class DownloadFailingBuildLogsTests(unittest.TestCase):
     def test_sanitize_step_name(self) -> None:
         self.assertEqual(
             download_failing_build_logs.sanitize_step_name("hello-world"),
-            "hello_world",
+            "hello-world",
         )
         self.assertEqual(
             download_failing_build_logs.sanitize_step_name("foo|bar"), "foo_bar"
@@ -37,13 +37,13 @@ class DownloadFailingBuildLogsTests(unittest.TestCase):
         assignments = download_failing_build_logs.StepFileAssignments(out_dir)
 
         path1 = assignments.assign_log_file("my-builder", "build-step")
-        self.assertEqual(path1, Path("/tmp/logs/my_builder/build_step.log"))
+        self.assertEqual(path1, Path("/tmp/logs/my-builder/build-step.log"))
 
         path2 = assignments.assign_log_file("my-builder", "build|step")
-        self.assertEqual(path2, Path("/tmp/logs/my_builder/build_step_1.log"))
+        self.assertEqual(path2, Path("/tmp/logs/my-builder/build_step.log"))
 
         path3 = assignments.assign_log_file("my-builder", "build#step")
-        self.assertEqual(path3, Path("/tmp/logs/my_builder/build_step_2.log"))
+        self.assertEqual(path3, Path("/tmp/logs/my-builder/build_step_1.log"))
 
         path4 = assignments.assign_log_file("my-builder", "test-step")
-        self.assertEqual(path4, Path("/tmp/logs/my_builder/test_step.log"))
+        self.assertEqual(path4, Path("/tmp/logs/my-builder/test-step.log"))

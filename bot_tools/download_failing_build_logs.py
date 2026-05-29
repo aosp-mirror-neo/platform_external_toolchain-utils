@@ -72,13 +72,17 @@ class StepFileAssignments:
 
 
 def sanitize_step_name(name: str) -> str:
-    """Replaces any non-alphanumeric characters with underscores.
+    """Replaces most non-alphanumeric characters with underscores.
 
     Step names come with separators like `|` in them, and often include other
     discouraged characters (spaces, asterisks, ...). Sanitizing helps avoid
     having to deal with that.
     """
-    return "".join(c if c.isalnum() else "_" for c in name)
+    # Note on intent: the substitution here is mostly about removing characters
+    # that would be surprising in a file path. e.g., `-` is unsurprising, and
+    # preserving it allows us to exactly reproduce CQ builder names, so it's
+    # preserved.
+    return "".join(c if c.isalnum() or c == "-" else "_" for c in name)
 
 
 def fetch_and_save_step_log(task: tuple[int, str, Path]) -> bool:
