@@ -25,6 +25,7 @@ import subprocess
 import tempfile
 from typing import Any, Iterable
 
+from cros_utils import cros_paths
 from llvm_tools import cros_cls
 
 
@@ -242,8 +243,17 @@ def main(argv: list[str]) -> int:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
+    cros_root = cros_paths.script_chromiumos_checkout_or_exit()
+
     if opts.cl:
         logging.info("Resolving CL URL: %s", opts.cl)
+        # fetch_cq_orchestrator_ids requires a patch-set; assume the user meant
+        # the most recent one if none is provided.
+        if opts.cl.patch_set is None:
+            inspect_result = cros_cls.gerrit_inspect(opts.cl, cros_root)
+            current_ps = inspect_result.current_patch_set
+            logging.info("Selected most recent patchset: %d", current_ps)
+            opts.cl = dataclasses.replace(opts.cl, patch_set=current_ps)
         ids = cros_cls.fetch_cq_orchestrator_ids(opts.cl)
         if not ids:
             logging.error(

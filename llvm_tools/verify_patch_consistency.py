@@ -25,16 +25,15 @@ Examples:
 """
 
 import argparse
-import json
 from pathlib import Path
 import re
 import subprocess
 import sys
 import textwrap
-from typing import Any
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
+from llvm_tools import cros_cls
 from llvm_tools import git_llvm_rev
 from llvm_tools import llvm_project_base_commit
 from llvm_tools import patch_utils
@@ -203,31 +202,19 @@ def ref_diff(cwd: Path, ref1: str, ref2: str) -> str:
     ).stdout
 
 
-def _gerrit_inspect(cl: int, chromiumos_root: Path) -> list[dict[str, Any]]:
-    """Gerrit command wrapper for easy mocking."""
-    cmd = ("gerrit", "--json", "inspect", str(cl))
-    return json.loads(
-        subprocess.run(
-            cmd,
-            cwd=chromiumos_root,
-            check=True,
-            stdout=subprocess.PIPE,
-            stdin=subprocess.DEVNULL,
-            encoding="utf-8",
-        ).stdout
-    )
-
-
-def parse_branch(cl: int, chromiumos_root: Path) -> tuple[int, str]:
+def parse_branch(
+    cl: cros_cls.ChangeListURL, chromiumos_root: Path
+) -> tuple[int, str]:
     """Extract the LLVM synthetic revision and git ref from a CL branch."""
-    json_obj = _gerrit_inspect(cl, chromiumos_root)
-    branch_name = json_obj[0]["branch"]
-    ref = json_obj[0]["currentPatchSet"]["ref"]
+    inspect_result = cros_cls.gerrit_inspect(cl, chromiumos_root)
+    branch_name = inspect_result.branch
+    ref = inspect_result.ref
     branch_regex = re.compile(r"llvm-r(\d+)")
     if match := branch_regex.search(branch_name):
         return int(match.group(1)), ref
     raise RuntimeError(
-        f"Could not parse SVN revision from CL {cl}'s branch: '{branch_name}'"
+        f"Could not parse SVN revision from CL {cl.cl_id}'s branch: "
+        f"'{branch_name}'"
     )
 
 
@@ -332,7 +319,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 def main(argv: list[str]) -> int:
     """Entry point."""
     args = parse_args(argv)
-    svn_revision, cl_ref = parse_branch(args.cl, args.chromiumos_root)
+    svn_revision, cl_ref = parse_branch(
+        cros_cls.ChangeListURL(cl_id=args.cl), args.chromiumos_root
+    )
     if not verify_in_worktree(
         toolchain_utils_dir=args.chromiumos_root / cros_paths.TOOLCHAIN_UTILS,
         llvm_src_dir=args.llvm_dir,

@@ -306,6 +306,10 @@ def fetch_cq_orchestrator_ids(
 
     Newer runs are sorted later in the list.
     """
+    # This is a requirement of `bb` itself; the error message is mildly clearer
+    # if we `raise` it here.
+    if cl.patch_set is None:
+        raise ValueError(f"CL {cl} must have a patchset specified.")
     results = fetch_bb_ls_info(
         ls_args=[
             "-cl",
@@ -376,6 +380,43 @@ def fetch_gerrit_deps_of_most_recent_patchset(
         results.append(GerritChange(url=url, uploader=uploader, status=status))
 
     return results
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class GerritInspectResult:
+    """Result of running gerrit inspect on a CL."""
+
+    branch: str
+    current_patch_set: int
+    ref: str
+
+
+def gerrit_inspect(
+    cl: ChangeListURL, chromiumos_root: Path
+) -> GerritInspectResult:
+    """Returns the result of running gerrit inspect on a CL."""
+    internal_flag = ("-i",) if cl.internal else ()
+    cmd = ("gerrit", *internal_flag, "--json", "inspect", str(cl.cl_id))
+    results = json.loads(
+        subprocess.run(
+            cmd,
+            cwd=chromiumos_root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            encoding="utf-8",
+        ).stdout
+    )
+    if len(results) != 1:
+        raise ValueError(
+            f"Expected exactly 1 result from gerrit inspect, got {len(results)}"
+        )
+    res = results[0]
+    return GerritInspectResult(
+        branch=res["branch"],
+        current_patch_set=int(res["currentPatchSet"]["number"]),
+        ref=res["currentPatchSet"]["ref"],
+    )
 
 
 @dataclasses.dataclass(frozen=True)

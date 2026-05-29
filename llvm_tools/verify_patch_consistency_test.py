@@ -14,83 +14,12 @@ from typing import Any, Callable
 from unittest import mock
 
 from cros_utils import git_utils
+from llvm_tools import cros_cls
 from llvm_tools import git_llvm_rev
 from llvm_tools import llvm_project_base_commit
 from llvm_tools import patch_utils
 from llvm_tools import test_helpers
 from llvm_tools import verify_patch_consistency
-
-
-GERRIT_JSON_FIXTURE = """\
-[
-  {
-    "project": "github.com/llvm/llvm-project",
-    "branch": "chromeos/llvm-r516547-1",
-    "createdOn": 1718657891,
-    "lastUpdated": 1720459316,
-    "id": "If250deb1c592b3cf054cca8c0cd530f3d6fd4f89",
-    "owner": {
-      "name": "User McUserface",
-      "email": "someuserhere@google.com",
-      "username": "User McUserface"
-    },
-    "number": "5637483",
-    "url": "https://crrev.com/c/5637483",
-    "status": "ABANDONED",
-    "subject": "Revert \\"add_tablegen: Quick fix to reflect LLVM_TABLEGEN\\"",
-    "private": false,
-    "topic": null,
-    "currentPatchSet": {
-      "approvals": [
-        {
-          "type": "CRVW",
-          "description": "Code-Review",
-          "value": "0",
-          "grantedOn": 1718657891,
-          "by": {
-            "name": "User McUserface",
-            "email": "someuserhere@google.com",
-            "username": "User McUserface"
-          }
-        },
-        {
-          "type": "COMR",
-          "description": "Commit-Queue",
-          "value": "0",
-          "grantedOn": 1718752263,
-          "by": {
-            "name": "User McUserface",
-            "email": "someuserhere@google.com",
-            "username": "User McUserface"
-          }
-        },
-        {
-          "type": "VRIF",
-          "description": "Verified",
-          "value": "0",
-          "grantedOn": 1718657891,
-          "by": {
-            "name": "User McUserface",
-            "email": "someuserhere@google.com",
-            "username": "User McUserface"
-          }
-        }
-      ],
-      "ref": "refs/changes/83/5637483/1",
-      "revision": "9f316824661b96d0ba586ff48b6128f7e9783f19",
-      "number": "1",
-      "date": 1718657800,
-      "draft": false
-    },
-    "commitMessage": "A commit message",
-    "dependsOn": [
-      {
-        "revision": "210497ee293346804b43ece37fb9d6658c39ab34"
-      }
-    ]
-  }
-]
-"""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -116,28 +45,20 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
         self.git_llvm_rev_patcher = None
         self.verify_patch_consistency_patcher = None
 
-    @mock.patch.object(verify_patch_consistency, "_gerrit_inspect")
+    @mock.patch.object(cros_cls, "gerrit_inspect", autospec=True)
     def test_parse_branch_simple(self, mock_gerrit_inspect: mock.Mock) -> None:
         """Test we're extracting the llvm revision and ref from gerrit json."""
 
-        mock_gerrit_inspect.return_value = [
-            {
-                "branch": "chromeos/llvm-r1234567-42",
-                "currentPatchSet": {"ref": "some_remote_ref"},
-            }
-        ]
-        llvm_rev, ref = verify_patch_consistency.parse_branch(10101, Path())
+        mock_gerrit_inspect.return_value = cros_cls.GerritInspectResult(
+            branch="chromeos/llvm-r1234567-42",
+            current_patch_set=42,
+            ref="some_remote_ref",
+        )
+        llvm_rev, ref = verify_patch_consistency.parse_branch(
+            cros_cls.ChangeListURL(cl_id=10101), Path()
+        )
         self.assertEqual(llvm_rev, 1234567)
         self.assertEqual(ref, "some_remote_ref")
-
-    @mock.patch.object(verify_patch_consistency, "_gerrit_inspect")
-    def test_parse_branch_complex(self, mock_gerrit_inspect: mock.Mock) -> None:
-        """Test parse_branch with a real JSON response."""
-
-        mock_gerrit_inspect.return_value = json.loads(GERRIT_JSON_FIXTURE)
-        llvm_rev, ref = verify_patch_consistency.parse_branch(5637483, Path())
-        self.assertEqual(llvm_rev, 516547)
-        self.assertEqual(ref, "refs/changes/83/5637483/1")
 
     def _set_up_mocking(self, translate_sha: str, fetch_head_ref: str) -> None:
         # Patch git_utils ----------------------------------------------

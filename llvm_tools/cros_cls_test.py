@@ -5,6 +5,8 @@
 """Tests for cros_cls."""
 
 import datetime
+import json
+from pathlib import Path
 import subprocess
 import textwrap
 import unittest
@@ -167,6 +169,61 @@ class TestChangeListURL(unittest.TestCase):
             ),
             "https://crrev.com/i/1234/2",
         )
+
+
+class TestGerritInspect(unittest.TestCase):
+    """Tests for gerrit_inspect."""
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_gerrit_inspect_success(self, mock_run: mock.Mock) -> None:
+        mock_run.return_value.stdout = json.dumps(
+            [
+                {
+                    "branch": "some_branch",
+                    "currentPatchSet": {
+                        "number": "42",
+                        "ref": "refs/changes/123",
+                    },
+                }
+            ]
+        )
+        result = cros_cls.gerrit_inspect(
+            cros_cls.ChangeListURL(cl_id=123), Path()
+        )
+        self.assertEqual(
+            result,
+            cros_cls.GerritInspectResult(
+                branch="some_branch",
+                current_patch_set=42,
+                ref="refs/changes/123",
+            ),
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_gerrit_inspect_failure_empty(self, mock_run: mock.Mock) -> None:
+        mock_run.return_value.stdout = "[]"
+        with self.assertRaises(ValueError):
+            cros_cls.gerrit_inspect(cros_cls.ChangeListURL(cl_id=123), Path())
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_gerrit_inspect_failure_multiple(self, mock_run: mock.Mock) -> None:
+        mock_run.return_value.stdout = "[{}, {}]"
+        with self.assertRaises(ValueError):
+            cros_cls.gerrit_inspect(cros_cls.ChangeListURL(cl_id=123), Path())
+
+
+class TestFetchCqOrchestratorIds(unittest.TestCase):
+    """Tests for fetch_cq_orchestrator_ids."""
+
+    @mock.patch.object(cros_cls, "fetch_bb_ls_info", autospec=True)
+    def test_fetch_cq_orchestrator_ids_no_patchset(
+        self, mock_fetch: mock.Mock
+    ) -> None:
+        cl = cros_cls.ChangeListURL(cl_id=123, patch_set=None)
+        with self.assertRaises(ValueError) as cm:
+            cros_cls.fetch_cq_orchestrator_ids(cl)
+        self.assertIn("must have a patchset specified", str(cm.exception))
+        mock_fetch.assert_not_called()
 
 
 class Test(unittest.TestCase):
