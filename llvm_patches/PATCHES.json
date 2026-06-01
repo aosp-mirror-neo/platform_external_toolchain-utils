@@ -1387,5 +1387,66 @@
       "from": 596125,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "author": "XChy <xxs_chy@outlook.com>",
+      "info": [],
+      "title": "Avoid moving blocks to fall through to an indirect target (#152916)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f393f2a61e58a74b44b4480122c08927446bddb0.patch",
+    "version_range": {
+      "from": 574158,
+      "until": 586447
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "[clang][Driver] Add -fexperimental-gccadjacent flag"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Add-fexperimental-gccadjacent-flag.patch",
+    "version_range": {
+      "from": 584947,
+      "until": 596125
+    }
+  },
+  {
+    "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
+      "info": [],
+      "title": "[clang][Driver] Add -fexperimental-gccadjacent flag"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Add-fexperimental-gccadjacent-flag-v2.patch",
+    "version_range": {
+      "from": 596125,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan R AW <ajordanr@google.com>",
+      "info": [],
+      "original_sha": "7e735ea180fe6d199dd71dacf4396bcbbb3bbb3c",
+      "title": "[compiler-rt][cmake] Fix check_cxx_compiler_flag calls (#197529)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/7e735ea180fe6d199dd71dacf4396bcbbb3bbb3c.patch",
+    "version_range": {
+      "from": 596125,
+      "until": null
+    }
   }
 ]
