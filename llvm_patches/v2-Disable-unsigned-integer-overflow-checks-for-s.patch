@@ -1,0 +1,30 @@
+From be256a6e240d836231009f29b38f294adaf32f37 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Mon, 25 Aug 2025 18:43:07 +0000
+Subject: [PATCH] v2: Disable unsigned-integer-overflow checks for std::sort
+
+Change-Id: Ie09d2557d78d2b0d1307e87a1b807a13e37a5fc5
+
+patch.version_range.from: 596125
+
+Change-Id: I807bf99e9068e07c64f91eda47c115147e7ccf7f
+---
+ libcxx/include/__algorithm/sort.h | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/libcxx/include/__algorithm/sort.h b/libcxx/include/__algorithm/sort.h
+index 8aa894e9228c..0b86aeee78b9 100644
+--- a/libcxx/include/__algorithm/sort.h
++++ b/libcxx/include/__algorithm/sort.h
+@@ -858,6 +858,7 @@ extern template _LIBCPP_EXPORTED_FROM_ABI void
+ __sort<__less<long double>&, long double*>(long double*, long double*, __less<long double>&);
+ 
+ template <class _AlgPolicy, class _RandomAccessIterator, class _Comp>
++__attribute__((no_sanitize("unsigned-integer-overflow")))
+ _LIBCPP_HIDE_FROM_ABI _LIBCPP_CONSTEXPR_SINCE_CXX20 void
+ __sort_dispatch(_RandomAccessIterator __first, _RandomAccessIterator __last, _Comp& __comp) {
+   if (__first == __last) // log(0) is undefined, so don't try computing the depth
+-- 
+2.54.0.823.g6e5bcc1fc9-goog
+

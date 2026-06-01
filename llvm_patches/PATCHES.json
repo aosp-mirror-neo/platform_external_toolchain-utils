@@ -86,6 +86,21 @@
     "rel_patch_path": "lld-10.0-invoke-name-v2.patch",
     "version_range": {
       "from": 502154,
+      "until": 596125
+    }
+  },
+  {
+    "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
+      "info": [],
+      "title": "Uses argv[0] to get host system information. Created\na wrapper of LLD and real lld becomes lld.elf so the LLD\ncannot get the host system information and dies"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "lld-10.0-invoke-name-v3.patch",
+    "version_range": {
+      "from": 596125,
       "until": null
     }
   },
@@ -888,6 +903,22 @@
     "rel_patch_path": "Disable-unsigned-integer-overflow-checks-for-s.patch",
     "version_range": {
       "from": 574158,
+      "until": 596125
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
+      "info": [],
+      "title": "Disable unsigned-integer-overflow checks for std::sort"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "v2-Disable-unsigned-integer-overflow-checks-for-s.patch",
+    "version_range": {
+      "from": 596125,
       "until": null
     }
   },
@@ -1339,6 +1370,21 @@
     "rel_patch_path": "Revert-Check-for-unsupported-target-options-even-with-Qunused-arguments-141698-.patch",
     "version_range": {
       "from": 577011,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "author": "Volodymyr Turanskyy <vturanskyy@gmail.com>",
+      "info": [],
+      "title": "[libc++] Add support for picolibc and newlib in RUNTIMES_USE_LIBC"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/a6643f27ecdaaff2945a1acd213a745c1526c525.patch",
+    "version_range": {
+      "from": 596125,
       "until": null
     }
   }
