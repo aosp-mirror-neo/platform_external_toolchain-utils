@@ -15,11 +15,13 @@ This must be run inside of the chroot.
 
 import argparse
 import logging
+import os
 from pathlib import Path
 import shlex
 import subprocess
 from typing import Iterable
 
+from cros_utils import cros_paths
 from llvm_tools import chroot
 
 
@@ -289,17 +291,42 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return opts
 
 
+def maybe_reexec_inside_chroot(argv: list[str]) -> None:
+    """Re-executes the script inside the chroot if it is not already there."""
+    if chroot.InChroot():
+        return
+
+    chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
+    chroot_script_path = (
+        cros_paths.CHROOT_SOURCE_ROOT
+        / cros_paths.TOOLCHAIN_UTILS
+        / cros_paths.TOOLCHAIN_UTILS_PYBIN_REL
+        / "llvm_tools"
+        / "chroot_toolchain"
+    )
+
+    args = (
+        "cros_sdk",
+        "--",
+        str(chroot_script_path),
+        *argv,
+    )
+
+    logging.info("Re-executing inside chroot...")
+    os.chdir(chromeos_root)
+    os.execvp(args[0], args)
+
+
 def main(argv: list[str]) -> None:
     opts = parse_args(argv)
-
-    # Verify after parsing, so at least `--help` works outside.
-    chroot.VerifyInsideChroot()
 
     logging.basicConfig(
         format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
         "%(message)s",
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
+
+    maybe_reexec_inside_chroot(argv)
 
     match opts.command:
         case "workon":
