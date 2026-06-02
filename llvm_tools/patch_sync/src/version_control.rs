@@ -3,20 +3,27 @@
 // found in the LICENSE file.
 
 use anyhow::{anyhow, bail, ensure, Context, Result};
+use const_format::concatcp;
 use regex::Regex;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::Command;
+
+use crate::git;
+use crate::git::{cleanup_branch, git_cd_cmd};
 
 const CROS_TOOLCHAIN_UTILS_REL_PATH: &str = "src/third_party/toolchain-utils";
 const CROS_PATCH_WORKDIR: &str = "llvm_patches";
 const ANDROID_LLVM_REL_PATH: &str = "toolchain/llvm_android";
 
 // Need to checkout the upstream, rather than the local clone.
-const CROS_MAIN_BRANCH: &str = "cros/main";
-const ANDROID_MAIN_BRANCH: &str = "goog/main";
-const WORK_BRANCH_NAME: &str = "__patch_sync_tmp";
+const CROS_REMOTE: &str = "cros";
+const CROS_MAIN_BRANCH: &str = "main";
+const CROS_MAIN_BRANCH_GROUP: &str = concatcp!(CROS_REMOTE, "/", CROS_MAIN_BRANCH);
+const ANDROID_REMOTE: &str = "goog";
+const ANDROID_MAIN_BRANCH: &str = "main";
+const ANDROID_MAIN_BRANCH_GROUP: &str = concatcp!(ANDROID_REMOTE, "/", ANDROID_MAIN_BRANCH);
 
 /// Options for changes that get `repo upload`ed.
 #[derive(Debug)]
@@ -31,14 +38,30 @@ pub struct RepoUploadOpts {
 pub struct RepoSetupContext {
     pub cros_checkout: PathBuf,
     pub android_checkout: PathBuf,
-    /// Run `repo sync` before doing any comparisons.
+    /// Use default_android_git_context to create this entry.
+    pub android_git_context: git::GitContext,
+    /// Run `repo sync` or "git fetch + checkout" before doing any comparisons.
     pub sync_before: bool,
     /// Generally LLVM ebuilds are now 9999 LIVE ebuilds, so only uprev if this is set.
     pub uprev_ebuilds: bool,
 }
 
 impl RepoSetupContext {
+    pub fn default_android_git_context(android_checkout: &Path) -> git::GitContext {
+        let git_root = android_checkout.join(ANDROID_LLVM_REL_PATH);
+        git::GitContext {
+            git_root,
+            main_branch: ANDROID_MAIN_BRANCH.to_string(),
+            remote: ANDROID_REMOTE.to_string(),
+        }
+    }
+
     pub fn setup(&self) -> Result<()> {
+        ensure!(
+            self.android_git_context.git_root.is_dir(),
+            "{} must be a dir",
+            self.android_git_context.git_root.display()
+        );
         if self.sync_before {
             {
                 let crpp = self.cros_patches_path();
@@ -48,7 +71,7 @@ impl RepoSetupContext {
                     "cros_git '{}' is not a dir",
                     cros_git.display()
                 );
-                git_cd_cmd(cros_git, ["checkout", CROS_MAIN_BRANCH])?;
+                git_cd_cmd(cros_git, ["checkout", CROS_MAIN_BRANCH_GROUP])?;
             }
             {
                 let anpp = self.android_patches_path();
@@ -58,10 +81,10 @@ impl RepoSetupContext {
                     "android_git '{}' is not a dir",
                     android_git.display()
                 );
-                git_cd_cmd(android_git, ["checkout", ANDROID_MAIN_BRANCH])?;
+                git_cd_cmd(android_git, ["checkout", ANDROID_MAIN_BRANCH_GROUP])?;
             }
             repo_cd_cmd(&self.cros_checkout, ["sync", CROS_TOOLCHAIN_UTILS_REL_PATH])?;
-            repo_cd_cmd(&self.android_checkout, ["sync", ANDROID_LLVM_REL_PATH])?;
+            self.android_git_context.sync()?;
         }
         Ok(())
     }
@@ -118,53 +141,43 @@ impl RepoSetupContext {
         )
     }
 
-    pub fn android_repo_upload<S: AsRef<str>>(
-        &self,
-        reviewers: &[S],
-        upload_opts: &RepoUploadOpts,
-    ) -> Result<()> {
-        let mut extra_args = Vec::new();
-        for reviewer in reviewers {
-            extra_args.push("--re");
-            extra_args.push(reviewer.as_ref());
-        }
-        // NOTE: Android has no 'autoreview topic', so that's ignored here.
-        let RepoUploadOpts {
-            wip_mode,
-            enable_cq,
-            set_autoreview_topic: _,
-        } = upload_opts;
-        if *wip_mode {
-            extra_args.push("--wip");
-            extra_args.push("--no-emails");
-        }
-        if *enable_cq {
-            extra_args.push("--label=Presubmit-Ready+1");
-        }
-        Self::repo_upload(
-            &self.android_checkout,
-            ANDROID_LLVM_REL_PATH,
+    pub fn android_upload(&self, reviewers: &[String], upload_opts: &RepoUploadOpts) -> Result<()> {
+        let labels = if upload_opts.enable_cq {
+            vec!["Presubmit-Ready+1".to_string()]
+        } else {
+            Vec::new()
+        };
+        let git_upload_opts = git::GitUploadOpts {
+            git_ref: "HEAD",
+            wip_mode: upload_opts.wip_mode,
+            topic: None,
+            reviewers,
+            cc: &Vec::new(),
+            labels: &labels,
+            extra: &Vec::new(),
+        };
+        self.android_git_context.upload(
             &Self::build_commit_msg(
                 "Synchronize patches from chromiumos",
                 "chromiumos",
                 "android",
                 "Test: N/A",
             ),
-            extra_args,
+            git_upload_opts,
         )
     }
 
     fn cros_cleanup(&self) -> Result<()> {
         let git_path = self.cros_checkout.join(CROS_TOOLCHAIN_UTILS_REL_PATH);
-        Self::cleanup_branch(&git_path, CROS_MAIN_BRANCH, WORK_BRANCH_NAME)
-            .with_context(|| format!("cleaning up branch {}", WORK_BRANCH_NAME))?;
+        cleanup_branch(&git_path, CROS_MAIN_BRANCH_GROUP, git::WORK_BRANCH_NAME)
+            .with_context(|| format!("cleaning up branch {}", git::WORK_BRANCH_NAME))?;
         Ok(())
     }
 
     fn android_cleanup(&self) -> Result<()> {
-        let git_path = self.android_checkout.join(ANDROID_LLVM_REL_PATH);
-        Self::cleanup_branch(&git_path, ANDROID_MAIN_BRANCH, WORK_BRANCH_NAME)
-            .with_context(|| format!("cleaning up branch {}", WORK_BRANCH_NAME))?;
+        let git_path = &self.android_git_context.git_root;
+        cleanup_branch(git_path, ANDROID_MAIN_BRANCH_GROUP, git::WORK_BRANCH_NAME)
+            .with_context(|| format!("cleaning up branch {}", git::WORK_BRANCH_NAME))?;
         Ok(())
     }
 
@@ -180,8 +193,8 @@ impl RepoSetupContext {
 
     /// Get the Android path to the PATCHES.json file
     pub fn android_patches_path(&self) -> PathBuf {
-        self.android_checkout
-            .join(ANDROID_LLVM_REL_PATH)
+        self.android_git_context
+            .git_root
             .join("patches/PATCHES.json")
     }
 
@@ -206,7 +219,7 @@ impl RepoSetupContext {
     pub fn old_android_patch_contents(&self, hash: &str) -> Result<String> {
         Self::old_file_contents(
             hash,
-            &self.android_checkout.join(ANDROID_LLVM_REL_PATH),
+            &self.android_git_context.git_root,
             Path::new("patches/PATCHES.json"),
         )
     }
@@ -225,9 +238,9 @@ impl RepoSetupContext {
         );
         repo_cd_cmd(
             checkout_path,
-            ["start", WORK_BRANCH_NAME, subproject_git_wd],
+            ["start", git::WORK_BRANCH_NAME, subproject_git_wd],
         )?;
-        let base_args = ["upload", "--br", WORK_BRANCH_NAME, "-y", "--verify"];
+        let base_args = ["upload", "--br", git::WORK_BRANCH_NAME, "-y", "--verify"];
         let new_args = base_args
             .iter()
             .copied()
@@ -236,19 +249,6 @@ impl RepoSetupContext {
         git_cd_cmd(git_path, ["add", "."])
             .and_then(|_| git_cd_cmd(git_path, ["commit", "-m", commit_msg]))
             .and_then(|_| repo_cd_cmd(checkout_path, new_args))?;
-        Ok(())
-    }
-
-    /// Clean up the git repo after we're done with it.
-    fn cleanup_branch(git_path: &Path, base_branch: &str, rm_branch: &str) -> Result<()> {
-        git_cd_cmd(git_path, ["restore", "."])?;
-        git_cd_cmd(git_path, ["clean", "-fd"])?;
-        git_cd_cmd(git_path, ["checkout", base_branch])?;
-        // It's acceptable to be able to not delete the branch. This may be
-        // because the branch does not exist, which is an expected result.
-        // Since this is a very common case, we won't report any failures related
-        // to this command failure as it'll pollute the stderr logs.
-        let _ = git_cd_cmd(git_path, ["branch", "-D", rm_branch]);
         Ok(())
     }
 
@@ -349,26 +349,6 @@ fn find_ebuild(dir: &Path) -> Result<PathBuf> {
         .pop()
         .ok_or_else(|| anyhow!("could not find ebuild"))?;
     Ok(highest_rev_ebuild.1)
-}
-
-/// Run a given git command from inside a specified git dir.
-pub fn git_cd_cmd<I, S>(pwd: &Path, args: I) -> Result<Output>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<OsStr>,
-{
-    let mut command = Command::new("git");
-    command.current_dir(pwd).args(args);
-    let output = command.output()?;
-    if !output.status.success() {
-        bail!(
-            "git command failed:\n  {:?}\nstdout --\n{}\nstderr --\n{}",
-            command,
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr),
-        );
-    }
-    Ok(output)
 }
 
 pub fn repo_cd_cmd<I, S>(pwd: &Path, args: I) -> Result<()>
