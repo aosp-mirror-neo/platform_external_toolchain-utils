@@ -7,8 +7,8 @@
 from llvm_tools import cros_cls
 
 
-LLVM_NEXT_HASH = "d4d2d7d7856258d5d781c4a912046fc7777122e2"
-LLVM_NEXT_REV = 584947
+LLVM_NEXT_HASH = "2bc22ea02edda5926f3e53f141def9bf212ac1db"
+LLVM_NEXT_REV = 596125
 
 # Group of people who are not in OWNERS, but can be trusted by bb_add.py and
 # llvm_next_py_autoupdate.py if they're the uploader of CLs.
@@ -19,7 +19,7 @@ TRUSTED_UPLOADERS: tuple[str, ...] = ("devadharuns@google.com",)
 #
 # Please note that these are (somewhat) automatically curated. See
 # llvm_next_py_autoupdate.py.
-_LLVM_NEXT_MANIFEST_CL: str | None = "https://crrev.com/i/9088380/3"
+_LLVM_NEXT_MANIFEST_CL: str | None = "https://crrev.com/i/9352536/1"
 # These are CLs that need to run in llvm-next bot invocations that aren't
 # uploaded by individuals in the global allowlist.
 # pylint: disable=line-too-long
