@@ -34,10 +34,8 @@ def main(argv: list[str]) -> None:
     )
     opts = parser.parse_args(argv)
 
-    if not llvm_next.LLVM_NEXT_TESTING_CLS:
-        logging.info(
-            "No llvm-next testing CLs are registered; exiting cleanly."
-        )
+    if not llvm_next.LLVM_NEXT_MANIFEST_CL:
+        logging.info("No llvm-next manifest CL is registered; exiting cleanly.")
         return
 
     ls_args: list[str] = []
