@@ -20,6 +20,7 @@ import subprocess
 from typing import Iterable
 
 from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 from cros_utils import git_utils
 from llvm_tools import cros_cls
 from llvm_tools import llvm_next
@@ -79,11 +80,11 @@ def write_url_list(
 
 
 def compute_new_urls(
-    manifest_cl: cros_cls.ChangeListURL,
+    manifest_cl: gerrit_utils.ChangeListURL,
     is_manifest_closed: bool,
     all_changes: list[cros_cls.GerritChange],
     owners: list[str],
-    current_allowlist_urls: Iterable[cros_cls.ChangeListURL],
+    current_allowlist_urls: Iterable[gerrit_utils.ChangeListURL],
 ) -> tuple[str | None, list[str]]:
     """Computes the new manifest CL and allowlist URLs.
 
@@ -135,7 +136,7 @@ def compute_new_urls(
 
 
 def update_manifest_and_allowlist_urls(
-    manifest_cl: cros_cls.ChangeListURL,
+    manifest_cl: gerrit_utils.ChangeListURL,
     owners: list[str],
 ) -> tuple[str | None, list[str]]:
     """Updates manifest and allowlist URLs by fetching deps and partitioning."""

@@ -13,6 +13,7 @@ import textwrap
 from typing import Any, Callable
 from unittest import mock
 
+from cros_utils import gerrit_utils
 from cros_utils import git_utils
 from llvm_tools import cros_cls
 from llvm_tools import git_llvm_rev
@@ -55,7 +56,7 @@ class TestVerifyPatchConsistency(test_helpers.TempDirTestCase):
             ref="some_remote_ref",
         )
         llvm_rev, ref = verify_patch_consistency.parse_branch(
-            cros_cls.ChangeListURL(cl_id=10101), Path()
+            gerrit_utils.ChangeListURL(cl_id=10101), Path()
         )
         self.assertEqual(llvm_rev, 1234567)
         self.assertEqual(ref, "some_remote_ref")

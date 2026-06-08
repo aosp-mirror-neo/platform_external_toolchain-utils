@@ -4,7 +4,7 @@
 
 """Contains useful constants for testing LLVM."""
 
-from llvm_tools import cros_cls
+from cros_utils import gerrit_utils
 
 
 LLVM_NEXT_HASH = "2bc22ea02edda5926f3e53f141def9bf212ac1db"
@@ -29,13 +29,13 @@ _LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = ()
 # well-typed constants, though.
 #
 # Both of these require patch-sets for reasons in the `NOTE` above.
-LLVM_NEXT_MANIFEST_CL: cros_cls.ChangeListURL | None = (
-    cros_cls.ChangeListURL.parse_with_patch_set(_LLVM_NEXT_MANIFEST_CL)
+LLVM_NEXT_MANIFEST_CL: gerrit_utils.ChangeListURL | None = (
+    gerrit_utils.ChangeListURL.parse_with_patch_set(_LLVM_NEXT_MANIFEST_CL)
     if _LLVM_NEXT_MANIFEST_CL
     else None
 )
 
-LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[cros_cls.ChangeListURL, ...] = tuple(
-    cros_cls.ChangeListURL.parse_with_patch_set(url)
+LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[gerrit_utils.ChangeListURL, ...] = tuple(
+    gerrit_utils.ChangeListURL.parse_with_patch_set(url)
     for url in _LLVM_NEXT_TESTING_URL_ALLOWLIST
 )

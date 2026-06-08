@@ -16,161 +16,6 @@ from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
 
 
-class TestChangeListURL(unittest.TestCase):
-    """ChangeListURL tests."""
-
-    def test_parsing_long_form_url(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse(
-                "chromium-review.googlesource.com/c/chromiumos/overlays/"
-                "chromiumos-overlay/+/123456",
-            ),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-
-    def test_parsing_long_form_internal_url(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse(
-                "chrome-internal-review.googlesource.com/c/chromeos/"
-                "manifest-internal/+/654321"
-            ),
-            cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
-        )
-
-    def test_parsing_long_form_git_corp_url(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse(
-                "chromium-review.git.corp.google.com/c/chromiumos/overlays/"
-                "chromiumos-overlay/+/123456",
-            ),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-
-    def test_parsing_long_form_git_corp_internal_url(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse(
-                "chrome-internal-review.git.corp.google.com/c/chromeos/"
-                "manifest-internal/+/654321"
-            ),
-            cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
-        )
-
-    def test_parsing_short_internal_url(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/i/654321"),
-            cros_cls.ChangeListURL(cl_id=654321, patch_set=None, internal=True),
-        )
-
-    def test_parsing_discards_http(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("http://crrev.com/c/123456"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-
-    def test_parsing_discards_https(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("https://crrev.com/c/123456"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-
-    def test_parsing_detects_patch_sets(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/14"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
-        )
-
-    def test_parsing_is_okay_with_trailing_slash(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/14/"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
-        )
-
-    def test_parsing_is_okay_with_valid_trailing_junk(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456?foo=bar"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/?foo=bar"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/14/foo=bar"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
-        )
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/14?foo=bar"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
-        )
-
-        # While these aren't well-formed, Gerrit handles them without issue.
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456&foo=bar"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=None),
-        )
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/14&foo=bar"),
-            cros_cls.ChangeListURL(cl_id=123456, patch_set=14),
-        )
-
-    def test_parsing_raises_on_invalid_trailing_jumk(self) -> None:
-        with self.assertRaises(ValueError):
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456foo=bar")
-
-        with self.assertRaises(ValueError):
-            cros_cls.ChangeListURL.parse("crrev.com/c/123456/14foo=bar")
-
-    def test_parsing_hash_c_url(self) -> None:
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse(
-                "https://chrome-internal-review.googlesource.com/#/c/9088380/"
-            ),
-            cros_cls.ChangeListURL(cl_id=9088380, internal=True),
-        )
-        self.assertEqual(
-            cros_cls.ChangeListURL.parse(
-                "https://chromium-review.git.corp.google.com/#/c/7832690/"
-            ),
-            cros_cls.ChangeListURL(cl_id=7832690, internal=False),
-        )
-
-    def test_str_functions_properly(self) -> None:
-        self.assertEqual(
-            str(
-                cros_cls.ChangeListURL(
-                    cl_id=1234,
-                    patch_set=2,
-                )
-            ),
-            "https://crrev.com/c/1234/2",
-        )
-
-        self.assertEqual(
-            str(
-                cros_cls.ChangeListURL(
-                    cl_id=1234,
-                    patch_set=None,
-                )
-            ),
-            "https://crrev.com/c/1234",
-        )
-
-        self.assertEqual(
-            str(
-                cros_cls.ChangeListURL(
-                    cl_id=1234,
-                    patch_set=2,
-                    internal=True,
-                )
-            ),
-            "https://crrev.com/i/1234/2",
-        )
-
-
 class TestGerritInspect(unittest.TestCase):
     """Tests for gerrit_inspect."""
 
@@ -188,7 +33,7 @@ class TestGerritInspect(unittest.TestCase):
             ]
         )
         result = cros_cls.gerrit_inspect(
-            cros_cls.ChangeListURL(cl_id=123), Path()
+            gerrit_utils.ChangeListURL(cl_id=123), Path()
         )
         self.assertEqual(
             result,
@@ -203,13 +48,17 @@ class TestGerritInspect(unittest.TestCase):
     def test_gerrit_inspect_failure_empty(self, mock_run: mock.Mock) -> None:
         mock_run.return_value.stdout = "[]"
         with self.assertRaises(ValueError):
-            cros_cls.gerrit_inspect(cros_cls.ChangeListURL(cl_id=123), Path())
+            cros_cls.gerrit_inspect(
+                gerrit_utils.ChangeListURL(cl_id=123), Path()
+            )
 
     @mock.patch.object(subprocess, "run", autospec=True)
     def test_gerrit_inspect_failure_multiple(self, mock_run: mock.Mock) -> None:
         mock_run.return_value.stdout = "[{}, {}]"
         with self.assertRaises(ValueError):
-            cros_cls.gerrit_inspect(cros_cls.ChangeListURL(cl_id=123), Path())
+            cros_cls.gerrit_inspect(
+                gerrit_utils.ChangeListURL(cl_id=123), Path()
+            )
 
 
 class TestFetchCqOrchestratorIds(unittest.TestCase):
@@ -219,7 +68,7 @@ class TestFetchCqOrchestratorIds(unittest.TestCase):
     def test_fetch_cq_orchestrator_ids_no_patchset(
         self, mock_fetch: mock.Mock
     ) -> None:
-        cl = cros_cls.ChangeListURL(cl_id=123, patch_set=None)
+        cl = gerrit_utils.ChangeListURL(cl_id=123, patch_set=None)
         with self.assertRaises(ValueError) as cm:
             cros_cls.fetch_cq_orchestrator_ids(cl)
         self.assertIn("must have a patchset specified", str(cm.exception))
@@ -395,19 +244,19 @@ class TestFetchGerritDeps(unittest.TestCase):
         mock_run_return_value.stdout = mock_stdout
         mock_run.return_value = mock_run_return_value
 
-        cl_url = cros_cls.ChangeListURL(cl_id=12345, internal=False)
+        cl_url = gerrit_utils.ChangeListURL(cl_id=12345, internal=False)
         deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
 
         self.assertEqual(
             deps,
             [
                 cros_cls.GerritChange(
-                    url=cros_cls.ChangeListURL(cl_id=7736647, patch_set=2),
+                    url=gerrit_utils.ChangeListURL(cl_id=7736647, patch_set=2),
                     uploader="uploader@chromium.org",
                     status=gerrit_utils.CLStatus.NEW,
                 ),
                 cros_cls.GerritChange(
-                    url=cros_cls.ChangeListURL(
+                    url=gerrit_utils.ChangeListURL(
                         cl_id=9088380, patch_set=5, internal=True
                     ),
                     uploader="uploader@google.com",
@@ -439,7 +288,7 @@ class TestFetchGerritDeps(unittest.TestCase):
         mock_run_return_value.stdout = mock_stdout
         mock_run.return_value = mock_run_return_value
 
-        cl_url = cros_cls.ChangeListURL(cl_id=12345, internal=False)
+        cl_url = gerrit_utils.ChangeListURL(cl_id=12345, internal=False)
         with self.assertRaisesRegex(
             ValueError, "No patch set available for dependency"
         ):
@@ -462,14 +311,14 @@ class TestFetchGerritDeps(unittest.TestCase):
         mock_run_return_value.stdout = mock_stdout
         mock_run.return_value = mock_run_return_value
 
-        cl_url = cros_cls.ChangeListURL(cl_id=12345, internal=False)
+        cl_url = gerrit_utils.ChangeListURL(cl_id=12345, internal=False)
         deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
 
         self.assertEqual(
             deps,
             [
                 cros_cls.GerritChange(
-                    url=cros_cls.ChangeListURL(cl_id=7736647, patch_set=2),
+                    url=gerrit_utils.ChangeListURL(cl_id=7736647, patch_set=2),
                     uploader=None,
                     status=gerrit_utils.CLStatus.NEW,
                 )
@@ -536,10 +385,10 @@ class TestPartitionChanges(unittest.TestCase):
     """Tests for partition_changes_by_uploader_trust."""
 
     def test_partition_changes(self) -> None:
-        cl1 = cros_cls.ChangeListURL(cl_id=1)
-        cl2 = cros_cls.ChangeListURL(cl_id=2)
-        cl3 = cros_cls.ChangeListURL(cl_id=3)
-        cl4 = cros_cls.ChangeListURL(cl_id=4)
+        cl1 = gerrit_utils.ChangeListURL(cl_id=1)
+        cl2 = gerrit_utils.ChangeListURL(cl_id=2)
+        cl3 = gerrit_utils.ChangeListURL(cl_id=3)
+        cl4 = gerrit_utils.ChangeListURL(cl_id=4)
 
         changes = [
             cros_cls.GerritChange(url=cl1, uploader="owner@google.com"),
@@ -558,8 +407,8 @@ class TestPartitionChanges(unittest.TestCase):
         self.assertEqual(untrusted, [changes[1], changes[3]])
 
     def test_partition_changes_with_allowlist(self) -> None:
-        cl1 = cros_cls.ChangeListURL(cl_id=1)
-        cl2 = cros_cls.ChangeListURL(cl_id=2)
+        cl1 = gerrit_utils.ChangeListURL(cl_id=1)
+        cl2 = gerrit_utils.ChangeListURL(cl_id=2)
 
         changes = [
             cros_cls.GerritChange(url=cl1, uploader="untrusted@evil.com"),

@@ -7,6 +7,7 @@
 import unittest
 from unittest import mock
 
+from cros_utils import gerrit_utils
 from llvm_tools import bb_add
 from llvm_tools import cros_cls
 from llvm_tools import llvm_next
@@ -21,8 +22,8 @@ class Test(unittest.TestCase):
     def test_generate_bb_add_adds_extra_cls(self) -> None:
         cmd = bb_add.generate_bb_add_command(
             extra_cls=(
-                cros_cls.ChangeListURL(123, 1),
-                cros_cls.ChangeListURL(126),
+                gerrit_utils.ChangeListURL(123, 1),
+                gerrit_utils.ChangeListURL(126),
             ),
             bots=_ARBITRARY_BOTS,
             tags=(),
@@ -42,7 +43,7 @@ class Test(unittest.TestCase):
 
     def test_use_of_tags(self) -> None:
         cmd = bb_add.generate_bb_add_command(
-            extra_cls=(cros_cls.ChangeListURL(126),),
+            extra_cls=(gerrit_utils.ChangeListURL(126),),
             bots=_ARBITRARY_BOTS,
             tags=("custom-tag",),
         )
@@ -64,7 +65,7 @@ class Test(unittest.TestCase):
     def test_fetch_llvm_next_deps_or_exit_main_cl_is_trusted(
         self, mock_owners: mock.MagicMock, mock_fetch_deps: mock.MagicMock
     ) -> None:
-        main_cl = cros_cls.ChangeListURL(cl_id=12345, patch_set=1)
+        main_cl = gerrit_utils.ChangeListURL(cl_id=12345, patch_set=1)
         mock_fetch_deps.return_value = [
             cros_cls.GerritChange(url=main_cl, uploader="untrusted@user.com")
         ]
@@ -83,8 +84,8 @@ class Test(unittest.TestCase):
     def test_fetch_llvm_next_deps_or_exit_trusted_uploader(
         self, mock_owners: mock.MagicMock, mock_fetch_deps: mock.MagicMock
     ) -> None:
-        main_cl = cros_cls.ChangeListURL(cl_id=12345, patch_set=1)
-        dep_cl = cros_cls.ChangeListURL(cl_id=67890, patch_set=1)
+        main_cl = gerrit_utils.ChangeListURL(cl_id=12345, patch_set=1)
+        dep_cl = gerrit_utils.ChangeListURL(cl_id=67890, patch_set=1)
         mock_fetch_deps.return_value = [
             cros_cls.GerritChange(url=main_cl, uploader="untrusted@user.com"),
             cros_cls.GerritChange(url=dep_cl, uploader="trusted@uploader.com"),

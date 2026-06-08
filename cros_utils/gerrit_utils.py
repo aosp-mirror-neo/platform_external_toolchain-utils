@@ -8,8 +8,10 @@ import dataclasses
 import enum
 import json
 import logging
+import re
 import subprocess
-from typing import Any
+from typing import Any, Self
+import urllib.parse
 
 
 ANDROID_INTERNAL_GERRIT_HOST = (
@@ -29,7 +31,7 @@ class CLStatus(enum.Enum):
         return self == self.NEW
 
     @classmethod
-    def parse(cls, status: str) -> "CLStatus":
+    def parse(cls, status: str) -> Self:
         """Parses a CL status from a string."""
         for member in cls:
             if member.value == status:
@@ -128,3 +130,138 @@ def fetch_related_changes(
             )
         )
     return results
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class ChangeListURL:
+    """A consistent representation of a CL URL.
+
+    The __str__ always converts to a crrev.com URL for ChromeOS,
+    or ag/ URL for Android.
+    """
+
+    cl_id: int
+    patch_set: int | None = None
+    internal: bool = False
+    android: bool = False
+
+    # Matches `/+/CL_NUM/MAYBE_PATCHSET`; used for Gerrit's long-form URL paths.
+    # Note that things like file paths may appear after these if the user copied
+    # the URL while looking at a specific file in the patchset.
+    _LONG_FORM_RE = re.compile(r"/\+/(\d+)(?:/(\d+))?(?:/|$)")
+    # Matches shorter-form URL paths, including:
+    #
+    # - /c/CL_NUM/MAYBE_PATCHSET
+    # - /i/CL_NUM/MAYBE_PATCHSET
+    # - /CL_NUM/MAYBE_PATCHSET
+    #
+    # Same note about a file path potentially being present afterwards.
+    _SHORT_FORM_RE = re.compile(r"^/(?:c/|i/)?(\d+)(?:/(\d+))?(?:/|$)")
+
+    @classmethod
+    def parse(cls, url: str) -> Self:
+        orig_url = url
+        if not url.startswith(("http://", "https://")):
+            url = "https://" + url
+
+        parsed = urllib.parse.urlparse(url)
+        netloc = parsed.netloc
+        path = parsed.path
+
+        if parsed.fragment.startswith("/c/"):
+            path = parsed.fragment
+
+        # Clean path from GET params that leaked into path (e.g. split on &)
+        path = path.split("&")[0]
+
+        android = False
+        internal = False
+
+        if netloc == "ag":
+            android = True
+            internal = True
+        elif netloc == "go" and path.startswith("/ag/"):
+            android = True
+            internal = True
+            path = path.removeprefix("/ag")
+        elif netloc == "googleplex-android-review.git.corp.google.com":
+            android = True
+            internal = True
+        elif netloc == "crrev.com":
+            if path.startswith("/i/"):
+                internal = True
+            elif not path.startswith("/c/"):
+                raise ValueError(
+                    f"URL {orig_url!r} was not recognized: "
+                    f"invalid crrev.com path {path!r}"
+                )
+        elif netloc in (
+            "chrome-internal-review.googlesource.com",
+            "chrome-internal-review.git.corp.google.com",
+        ):
+            internal = True
+        elif netloc in (
+            "chromium-review.googlesource.com",
+            "chromium-review.git.corp.google.com",
+        ):
+            internal = False
+        else:
+            raise ValueError(
+                f"URL {orig_url!r} was not recognized: "
+                f"unrecognized host {netloc!r}"
+            )
+
+        if "/+/" in path:
+            match = cls._LONG_FORM_RE.search(path)
+        else:
+            match = cls._SHORT_FORM_RE.match(path)
+
+        if match:
+            cl_id, patch_set = match.groups()
+        else:
+            raise ValueError(
+                f"URL {orig_url!r} was not recognized: "
+                f"could not parse CL ID from path {path!r}"
+            )
+
+        return cls(
+            cl_id=int(cl_id),
+            patch_set=int(patch_set) if patch_set else None,
+            internal=internal,
+            android=android,
+        )
+
+    @classmethod
+    def parse_with_patch_set(cls, url: str) -> Self:
+        """parse(), but raises a ValueError if no patchset is specified."""
+        result = cls.parse(url)
+        if result.patch_set is None:
+            raise ValueError("A patchset number must be specified.")
+        return result
+
+    def shorthand_url_without_http(self) -> str:
+        if self.android:
+            result = f"ag/{self.cl_id}"
+        else:
+            namespace = "i" if self.internal else "c"
+            result = f"crrev.com/{namespace}/{self.cl_id}"
+        if self.patch_set is not None:
+            result += f"/{self.patch_set}"
+        return result
+
+    @property
+    def gerrit_tool_id(self) -> str:
+        """Returns an identifier for this CL for use with the 'gerrit' tool."""
+        return f"*{self.cl_id}" if self.internal else f"{self.cl_id}"
+
+    @property
+    def gerrit_host(self) -> str:
+        """Returns the Gerrit host URL for this CL."""
+        if self.android:
+            return ANDROID_INTERNAL_GERRIT_HOST
+        if self.internal:
+            return "https://chrome-internal-review.googlesource.com"
+        return "https://chromium-review.googlesource.com"
+
+    def __str__(self) -> str:
+        return f"https://{self.shorthand_url_without_http()}"

@@ -12,6 +12,7 @@ import shlex
 import sys
 from typing import Iterable
 
+from cros_utils import gerrit_utils
 from llvm_tools import chroot
 from llvm_tools import cros_cls
 from llvm_tools import get_llvm_hash
@@ -26,7 +27,7 @@ DEFAULT_LLVM_NEXT_BUILDERS = ("chromeos/staging/staging-build-chromiumos-sdk",)
 
 
 def generate_bb_add_command(
-    extra_cls: Iterable[cros_cls.ChangeListURL],
+    extra_cls: Iterable[gerrit_utils.ChangeListURL],
     bots: Iterable[str],
     tags: Iterable[str],
 ) -> list[str]:
@@ -43,13 +44,13 @@ def generate_bb_add_command(
         A command that would spawn the requested builders in the requested
         configuration.
     """
-    cls: list[cros_cls.ChangeListURL] = []
+    cls: list[gerrit_utils.ChangeListURL] = []
     if extra_cls:
         cls += extra_cls
 
     cmd = ["bb", "add"]
     for cl in cls:
-        cmd += ("-cl", cl.crrev_url_without_http())
+        cmd += ("-cl", cl.shorthand_url_without_http())
 
     for tag in tags:
         cmd += ("-t", tag)
@@ -80,11 +81,11 @@ def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
 
 
 def fetch_llvm_next_deps_or_exit(
-    main_cl: cros_cls.ChangeListURL,
+    main_cl: gerrit_utils.ChangeListURL,
     *,
     untrusted_reject: bool,
     untrusted_ignore: bool,
-) -> list[cros_cls.ChangeListURL]:
+) -> list[gerrit_utils.ChangeListURL]:
     """Fetches dependencies for the main CL and handles untrusted CLs."""
     logging.info("Fetching dependencies for main CL: %s", main_cl)
     deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(main_cl)
@@ -171,7 +172,7 @@ def parse_opts(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--cl",
         action="append",
-        type=cros_cls.ChangeListURL.parse,
+        type=gerrit_utils.ChangeListURL.parse,
         help="""
         CL to add to the `bb add` run. May be specified multiple times. In the
         form crrev.com/c/123456.

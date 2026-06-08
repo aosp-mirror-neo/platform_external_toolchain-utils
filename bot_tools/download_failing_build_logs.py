@@ -26,6 +26,7 @@ import tempfile
 from typing import Any, Iterable
 
 from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
 
 
@@ -190,7 +191,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument(
         "--cl",
-        type=cros_cls.ChangeListURL.parse,
+        type=gerrit_utils.ChangeListURL.parse,
         help="""
         ChangeList URL to retrieve the newest cq-orchestrator run. Generally in
         the form crrev.com/c/1234/5.

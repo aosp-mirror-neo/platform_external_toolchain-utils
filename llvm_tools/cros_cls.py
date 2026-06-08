@@ -64,85 +64,11 @@ def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
     return parse_or_log(stdout)
 
 
-@dataclasses.dataclass(frozen=True, eq=True)
-class ChangeListURL:
-    """A consistent representation of a CL URL.
-
-    The __str__s always converts to a crrev.com URL.
-    """
-
-    cl_id: int
-    patch_set: int | None = None
-    internal: bool = False
-
-    _URL_PARSE_RE = re.compile(
-        # Match an optional https:// header.
-        r"(?:https?://)?"
-        # Leaving the CL number and patch set as the next parts, match either
-        # crrev...
-        r"(crrev\.com/[ci]/"
-        # ...or chromium-review URLs. Note that chromium-review can either be
-        # served by googlesource or git.corp.google hosts.
-        r"|(?:chromium|chrome-internal)-review\."
-        r"(?:git\.corp\.google|googlesource)\.com/(?:.*/\+/|#/c/))"
-        # Match the CL number...
-        r"(\d+)"
-        # and (optionally) the patch-set, as well as consuming any of the
-        # path after the patch-set.
-        r"(?:/(\d+)?(?:/.*)?)?"
-        # Validate any sort of GET params for completeness.
-        r"(?:$|[?&].*)"
-    )
-
-    @classmethod
-    def parse(cls, url: str) -> "ChangeListURL":
-        m = cls._URL_PARSE_RE.fullmatch(url)
-        if not m:
-            raise ValueError(
-                f"URL {url!r} was not recognized. Supported URL formats are "
-                "crrev.com/c/${cl_number}/${patch_set_number}, and "
-                "chromium-review.googlesource.com/c/project/path/+/"
-                "${cl_number}/${patch_set_number}. The patch-set number is "
-                "optional, and there may be a preceding http:// or https://. "
-                "Internal CL links are also supported."
-            )
-        host, cl_id, maybe_patch_set = m.groups()
-        internal = host.startswith("chrome-internal-review") or host.startswith(
-            "crrev.com/i/"
-        )
-        if maybe_patch_set is not None:
-            maybe_patch_set = int(maybe_patch_set)
-        return cls(int(cl_id), maybe_patch_set, internal)
-
-    @classmethod
-    def parse_with_patch_set(cls, url: str) -> "ChangeListURL":
-        """parse(), but raises a ValueError if no patchset is specified."""
-        result = cls.parse(url)
-        if result.patch_set is None:
-            raise ValueError("A patchset number must be specified.")
-        return result
-
-    def crrev_url_without_http(self) -> str:
-        namespace = "i" if self.internal else "c"
-        result = f"crrev.com/{namespace}/{self.cl_id}"
-        if self.patch_set is not None:
-            result += f"/{self.patch_set}"
-        return result
-
-    @property
-    def gerrit_tool_id(self) -> str:
-        """Returns an identifier for this CL for use with the 'gerrit' tool."""
-        return f"*{self.cl_id}" if self.internal else f"{self.cl_id}"
-
-    def __str__(self) -> str:
-        return f"https://{self.crrev_url_without_http()}"
-
-
 @dataclasses.dataclass(frozen=True)
 class GerritChange:
     """Represents a Gerrit change with its URL and uploader."""
 
-    url: ChangeListURL
+    url: gerrit_utils.ChangeListURL
     uploader: str | None
     status: gerrit_utils.CLStatus | None = None
 
@@ -237,7 +163,7 @@ def parse_build_id_from_bb_add_output(output: str) -> BuildID:
 
 def spawn_bot(
     bot_name: str,
-    cls: Iterable[ChangeListURL] = (),
+    cls: Iterable[gerrit_utils.ChangeListURL] = (),
 ) -> BuildID:
     """Uses `bb add` to spawn a builder with the given params."""
     cmd = ["bb", "add"]
@@ -300,7 +226,7 @@ def fetch_builder_steps(build_id: BuildID) -> list[Any]:
 
 
 def fetch_cq_orchestrator_ids(
-    cl: ChangeListURL,
+    cl: gerrit_utils.ChangeListURL,
 ) -> list[BuildID]:
     """Returns the BuildID of completed cq-orchestrator runs on a CL.
 
@@ -331,7 +257,7 @@ def fetch_cq_orchestrator_ids(
 
 
 def fetch_gerrit_deps_of_most_recent_patchset(
-    cl_url: ChangeListURL,
+    cl_url: gerrit_utils.ChangeListURL,
 ) -> list[GerritChange]:
     """Fetches transitive dependencies of the most recent patchset of a CL.
 
@@ -360,7 +286,7 @@ def fetch_gerrit_deps_of_most_recent_patchset(
             continue
 
         current_ps = dep.get("currentPatchSet", {})
-        url = ChangeListURL.parse(url_str)
+        url = gerrit_utils.ChangeListURL.parse(url_str)
         if url.patch_set is None:
             ps_str = current_ps.get("number")
             if not ps_str:
@@ -392,7 +318,7 @@ class GerritInspectResult:
 
 
 def gerrit_inspect(
-    cl: ChangeListURL, chromiumos_root: Path
+    cl: gerrit_utils.ChangeListURL, chromiumos_root: Path
 ) -> GerritInspectResult:
     """Returns the result of running gerrit inspect on a CL."""
     internal_flag = ("-i",) if cl.internal else ()
@@ -576,7 +502,7 @@ def fetch_current_toolchain_owners(
 def partition_changes_by_uploader_trust(
     changes: list[GerritChange],
     owners: list[str],
-    trusted_allowlist: Iterable[ChangeListURL] = (),
+    trusted_allowlist: Iterable[gerrit_utils.ChangeListURL] = (),
 ) -> tuple[list[GerritChange], list[GerritChange]]:
     """Partitions changes by whether the uploader is a toolchain owner."""
     trusted_set = set(trusted_allowlist)

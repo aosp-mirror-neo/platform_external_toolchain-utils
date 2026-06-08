@@ -13,6 +13,7 @@ import sys
 from typing import Any, Iterable
 
 from bot_tools import bot_lints
+from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
 
 
@@ -21,7 +22,7 @@ CLS_TO_APPLY = tuple(
     # N.B., require patch-sets here since automation runs this script; without a
     # patch-set, we might run a bot on a CL that hasn't been approved by someone
     # who can CQ+1.
-    cros_cls.ChangeListURL.parse_with_patch_set(x)
+    gerrit_utils.ChangeListURL.parse_with_patch_set(x)
     for x in (
         # Adds source in platform2/ that has known lints in it (reflected in
         # DEFAULT_FINDING_EXPECTATIONS below).
@@ -81,7 +82,7 @@ DEFAULT_FINDING_EXPECTATIONS = (
 
 
 def spawn_bot_and_collect_lints(
-    cls_to_apply: Iterable[cros_cls.ChangeListURL],
+    cls_to_apply: Iterable[gerrit_utils.ChangeListURL],
 ) -> list[bot_lints.Finding]:
     build_id = cros_cls.spawn_bot(
         "chromeos/cq/atlas-linters-cq", cls=cls_to_apply

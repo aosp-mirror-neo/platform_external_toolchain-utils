@@ -40,6 +40,7 @@ import tempfile
 import threading
 from typing import Any, Counter, DefaultDict, IO, Iterable, Optional
 
+from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
 
 
@@ -542,7 +543,7 @@ def main(argv: list[str]) -> None:
     cl_or_cq_orchestrator = fetch_cq.add_mutually_exclusive_group(required=True)
     cl_or_cq_orchestrator.add_argument(
         "--cl",
-        type=cros_cls.ChangeListURL.parse_with_patch_set,
+        type=gerrit_utils.ChangeListURL.parse_with_patch_set,
         help="Link to a CL to get the most recent cq-orchestrator from",
     )
     cl_or_cq_orchestrator.add_argument(

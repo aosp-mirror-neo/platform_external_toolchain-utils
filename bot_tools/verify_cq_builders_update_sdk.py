@@ -13,6 +13,7 @@ import logging
 import re
 import sys
 
+from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
 
 
@@ -108,7 +109,7 @@ def _inspect_and_verify_cq_orchestrator(
 
 
 def _run_and_verify_cq(
-    cl_urls: list[cros_cls.ChangeListURL], timeout_hours: int
+    cl_urls: list[gerrit_utils.ChangeListURL], timeout_hours: int
 ) -> None:
     """Spawns a CQ orchestrator, waits, and then verifies its children."""
     logging.info(
@@ -152,7 +153,7 @@ def _parse_args(argv: list[str]) -> argparse.Namespace:
         required=True,
         action="append",
         # Patch-set is necessary, since this is run by automation.
-        type=cros_cls.ChangeListURL.parse_with_patch_set,
+        type=gerrit_utils.ChangeListURL.parse_with_patch_set,
         help="""
         A CL (incl patch-set) to run the CQ orchestrator with (e.g.,
         crrev.com/c/12345/1). May be specified multiple times. At least one

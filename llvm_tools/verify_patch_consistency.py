@@ -32,6 +32,7 @@ import sys
 import textwrap
 
 from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 from cros_utils import git_utils
 from llvm_tools import cros_cls
 from llvm_tools import git_llvm_rev
@@ -203,7 +204,7 @@ def ref_diff(cwd: Path, ref1: str, ref2: str) -> str:
 
 
 def parse_branch(
-    cl: cros_cls.ChangeListURL, chromiumos_root: Path
+    cl: gerrit_utils.ChangeListURL, chromiumos_root: Path
 ) -> tuple[int, str]:
     """Extract the LLVM synthetic revision and git ref from a CL branch."""
     inspect_result = cros_cls.gerrit_inspect(cl, chromiumos_root)
@@ -320,7 +321,7 @@ def main(argv: list[str]) -> int:
     """Entry point."""
     args = parse_args(argv)
     svn_revision, cl_ref = parse_branch(
-        cros_cls.ChangeListURL(cl_id=args.cl), args.chromiumos_root
+        gerrit_utils.ChangeListURL(cl_id=args.cl), args.chromiumos_root
     )
     if not verify_in_worktree(
         toolchain_utils_dir=args.chromiumos_root / cros_paths.TOOLCHAIN_UTILS,
