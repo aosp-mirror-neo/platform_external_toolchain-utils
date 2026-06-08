@@ -14,9 +14,9 @@ from typing import Iterable, Mapping
 
 from android_tools import android_paths
 from android_tools import find_owners
-from android_tools import gerrit_utils
 from android_tools import parse_and_apply_warning_exemptions
 from cros_utils import bugs
+from cros_utils import gerrit_utils
 
 
 TARGET_DIR_RE = re.compile(r"//([^:]+):")
@@ -117,7 +117,7 @@ def lookup_owners_for_git_repos(
 
     all_results = find_owners.fetch_all_likely_relevant_code_owners(
         repo_cache,
-        gerrit_utils.INTERNAL_GERRIT_HOST,
+        gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST,
         check_files,
     )
     resolved_owners = {

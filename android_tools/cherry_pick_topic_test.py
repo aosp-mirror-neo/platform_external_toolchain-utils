@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 
 from android_tools import cherry_pick_topic
-from android_tools import gerrit_utils
+from cros_utils import gerrit_utils
 
 
 class ResolveAndSortClDependenciesTest(unittest.TestCase):

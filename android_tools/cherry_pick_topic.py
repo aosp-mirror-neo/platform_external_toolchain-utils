@@ -15,7 +15,7 @@ import subprocess
 import threading
 import urllib.parse
 
-from android_tools import gerrit_utils
+from cros_utils import gerrit_utils
 from llvm_tools import manifest_utils
 
 
@@ -527,7 +527,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--gerrit-host",
-        default=gerrit_utils.INTERNAL_GERRIT_HOST,
+        default=gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST,
         help="Gerrit host to query",
     )
     parser.add_argument(

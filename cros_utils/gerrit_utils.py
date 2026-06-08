@@ -12,7 +12,9 @@ import subprocess
 from typing import Any
 
 
-INTERNAL_GERRIT_HOST = "https://googleplex-android-review.git.corp.google.com"
+ANDROID_INTERNAL_GERRIT_HOST = (
+    "https://googleplex-android-review.git.corp.google.com"
+)
 
 
 class CLStatus(enum.Enum):

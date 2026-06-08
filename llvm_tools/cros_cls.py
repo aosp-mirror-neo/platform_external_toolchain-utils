@@ -16,8 +16,8 @@ import subprocess
 import time
 from typing import Any, Iterable
 
-from android_tools import gerrit_utils
 from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 
 
 BuildID = int

@@ -10,7 +10,7 @@ from unittest import mock
 
 from android_tools import file_new_warning_exemption_bugs
 from android_tools import find_owners
-from android_tools import gerrit_utils
+from cros_utils import gerrit_utils
 
 
 class LookupOwnersTest(unittest.TestCase):
@@ -54,6 +54,6 @@ class LookupOwnersTest(unittest.TestCase):
 
         mock_fetch_owners.assert_called_once_with(
             mock_create_repo_cache.return_value,
-            gerrit_utils.INTERNAL_GERRIT_HOST,
+            gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST,
             expected_check_files,
         )
