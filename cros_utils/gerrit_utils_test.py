@@ -363,7 +363,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, self.gerrit_host, executor
+                cls, executor
             )
 
         self.assertEqual(result, [cl1, cl2, cl3])
@@ -388,7 +388,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, self.gerrit_host, executor
+                cls, executor
             )
 
         self.assertEqual(result, [cl1, cl2, cl3])
@@ -412,7 +412,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, self.gerrit_host, executor
+                cls, executor
             )
 
         self.assertEqual(result, [cl1, cl2])
@@ -427,7 +427,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, self.gerrit_host, executor
+                cls, executor
             )
 
         self.assertEqual(result, [cl1])
@@ -465,7 +465,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, self.gerrit_host, executor
+                cls, executor
             )
 
         self.assertEqual(result, [cl1a, cl2a, cl1b, cl2b])
@@ -508,7 +508,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, self.gerrit_host, executor
+                cls, executor
             )
 
         # Expected: A (1) is applied first, then B (2) and C (3).

@@ -61,11 +61,16 @@ class Test(unittest.TestCase):
             + _ARBITRARY_BOTS,
         )
 
+    @mock.patch.object(gerrit_utils, "fetch_related_changes")
     @mock.patch.object(cros_cls, "fetch_gerrit_deps_of_most_recent_patchset")
     @mock.patch.object(cros_cls, "fetch_current_toolchain_owners")
     def test_fetch_llvm_next_deps_or_exit_main_cl_is_trusted(
-        self, mock_owners: mock.MagicMock, mock_fetch_deps: mock.MagicMock
+        self,
+        mock_owners: mock.MagicMock,
+        mock_fetch_deps: mock.MagicMock,
+        mock_fetch_related: mock.MagicMock,
     ) -> None:
+        mock_fetch_related.return_value = []
         main_cl = gerrit_utils.ChangeListURL(cl_id=12345, patch_set=1)
         mock_fetch_deps.return_value = [
             gerrit_utils.CLDetails(
@@ -86,11 +91,16 @@ class Test(unittest.TestCase):
 
         self.assertEqual(result, [main_cl])
 
+    @mock.patch.object(gerrit_utils, "fetch_related_changes")
     @mock.patch.object(cros_cls, "fetch_gerrit_deps_of_most_recent_patchset")
     @mock.patch.object(cros_cls, "fetch_current_toolchain_owners")
     def test_fetch_llvm_next_deps_or_exit_trusted_uploader(
-        self, mock_owners: mock.MagicMock, mock_fetch_deps: mock.MagicMock
+        self,
+        mock_owners: mock.MagicMock,
+        mock_fetch_deps: mock.MagicMock,
+        mock_fetch_related: mock.MagicMock,
     ) -> None:
+        mock_fetch_related.return_value = []
         main_cl = gerrit_utils.ChangeListURL(cl_id=12345, patch_set=1)
         dep_cl = gerrit_utils.ChangeListURL(cl_id=67890, patch_set=1)
         mock_fetch_deps.return_value = [
@@ -120,3 +130,53 @@ class Test(unittest.TestCase):
             )
 
         self.assertEqual(result, [main_cl, dep_cl])
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes")
+    @mock.patch.object(cros_cls, "fetch_gerrit_deps_of_most_recent_patchset")
+    @mock.patch.object(cros_cls, "fetch_current_toolchain_owners")
+    def test_fetch_llvm_next_deps_or_exit_sorts_by_relation_chain(
+        self,
+        mock_owners: mock.MagicMock,
+        mock_fetch_deps: mock.MagicMock,
+        mock_fetch_related: mock.MagicMock,
+    ) -> None:
+        cl_child = gerrit_utils.ChangeListURL(cl_id=999, patch_set=1)
+        cl_parent = gerrit_utils.ChangeListURL(cl_id=111, patch_set=1)
+
+        mock_fetch_deps.return_value = [
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl_child,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="owner@google.com",
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl_parent,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="owner@google.com",
+            ),
+        ]
+        mock_owners.return_value = ["owner@google.com"]
+
+        mock_fetch_related.return_value = [
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl_child,
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl_parent,
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+        ]
+
+        result = bb_add.fetch_llvm_next_deps_or_exit(
+            main_cl=cl_child,
+            chromeos_tree=Path("/fake/path"),
+            untrusted_reject=False,
+            untrusted_ignore=False,
+        )
+
+        self.assertEqual(result, [cl_parent, cl_child])

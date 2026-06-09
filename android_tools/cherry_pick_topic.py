@@ -399,9 +399,7 @@ def main(argv: list[str]) -> int:
     # mindful of Gerrit ratelimits (each thread is expected to perform at most
     # one Gerrit operation at a time).
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        cls = gerrit_utils.resolve_and_sort_cl_dependencies(
-            cls, opts.gerrit_host, executor
-        )
+        cls = gerrit_utils.resolve_and_sort_cl_dependencies(cls, executor)
         results = executor.map(fetch_command_for_change, cls)
         cherry_picks = [pick for pick in results if pick]
 

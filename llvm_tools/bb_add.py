@@ -106,39 +106,51 @@ def fetch_llvm_next_deps_or_exit(
         ),
     )
 
-    result_cls = [change.cl_url for change in trusted]
+    included_changes = list(trusted)
 
-    if not untrusted:
-        return result_cls
+    if untrusted:
+        if untrusted_reject:
+            logging.error("Untrusted CLs detected:")
+            for c in untrusted:
+                logging.error("- %s by %s", c.cl_url, c.uploader)
+            raise UntrustedCLsError(
+                "Aborting due to untrusted CLs "
+                "(requested by --untrusted-reject)"
+            )
 
-    if untrusted_reject:
-        logging.error("Untrusted CLs detected:")
-        for c in untrusted:
-            logging.error("- %s by %s", c.cl_url, c.uploader)
-        raise UntrustedCLsError(
-            "Aborting due to untrusted CLs (requested by --untrusted-reject)"
+        if untrusted_ignore:
+            logging.info("Ignoring untrusted CLs:")
+            for c in untrusted:
+                logging.info("- %s by %s", c.cl_url, c.uploader)
+        else:
+            print("Untrusted CLs detected:")
+            for c in untrusted:
+                print(f"- {c.cl_url} by {c.uploader}")
+
+            try:
+                response = input(
+                    "\n\nAllow run with these untrusted CLs? [y/N]: "
+                )
+            except EOFError:
+                response = "n"
+
+            if response.strip().lower() != "y":
+                raise UntrustedCLsError("Aborted by user.")
+
+            included_changes.extend(untrusted)
+
+    # b/520356087: the order that CLs are specified here is _identical_ to the
+    # order in which they're applied on the bot. `gerrit deps` prints its walk
+    # order by default, which means that we will very often have children
+    # ordered before parents, which leads to merge conflicts on bots.
+    #
+    # We use relation chains to resolve and sort them.
+    with gerrit_utils.default_gerrit_thread_pool() as executor:
+        sorted_changes = gerrit_utils.resolve_and_sort_cl_dependencies(
+            included_changes,
+            executor=executor,
         )
-
-    if untrusted_ignore:
-        logging.info("Ignoring untrusted CLs:")
-        for c in untrusted:
-            logging.info("- %s by %s", c.cl_url, c.uploader)
-        return result_cls
-
-    print("Untrusted CLs detected:")
-    for c in untrusted:
-        print(f"- {c.cl_url} by {c.uploader}")
-
-    try:
-        response = input("\n\nAllow run with these untrusted CLs? [y/N]: ")
-    except EOFError:
-        response = "n"
-
-    if response.strip().lower() != "y":
-        raise UntrustedCLsError("Aborted by user.")
-
-    result_cls.extend(change.cl_url for change in untrusted)
-    return result_cls
+    return [change.cl_url for change in sorted_changes]
 
 
 def parse_opts(argv: list[str]) -> argparse.Namespace:

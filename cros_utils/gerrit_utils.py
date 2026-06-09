@@ -269,9 +269,26 @@ def fetch_related_changes(gerrit_host: str, change_id: int) -> list[CLDetails]:
     return results
 
 
+def default_gerrit_thread_pool(
+    max_workers: int = 8,
+) -> concurrent.futures.ThreadPoolExecutor:
+    """Returns a ThreadPoolExecutor with default settings for Gerrit queries.
+
+    Gerrit can ratelimit usage pretty hard, so this mostly serves to centralize
+    a reasonable default for `max_workers`. The ThreadPool established by this
+    should be appropriate to pass to functions in this module that require it,
+    e.g., resolve_and_sort_cl_dependencies.
+    """
+    return concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+
+
+def _cl_key(cl: CLDetails) -> tuple[str, int]:
+    """Returns a unique key (gerrit_host, cl_number) for a CL."""
+    return (cl.cl_url.gerrit_host, cl.cl_number)
+
+
 def resolve_and_sort_cl_dependencies(
     cls: list[CLDetails],
-    gerrit_host: str,
     executor: concurrent.futures.ThreadPoolExecutor,
 ) -> list[CLDetails]:
     """Resolves and sorts all CL dependencies."""
@@ -303,8 +320,8 @@ def resolve_and_sort_cl_dependencies(
     # scanning to figure that out is a bit of a pain.
 
     # All of this state is protected by `lock`.
-    cl_map = {cl.cl_number: cl for cl in cls}
-    processed_cl_numbers = set()
+    cl_map = {_cl_key(cl): cl for cl in cls}
+    processed_cl_keys = set()
     all_chains: list[list[CLDetails]] = []
 
     lock = threading.Lock()
@@ -314,14 +331,17 @@ def resolve_and_sort_cl_dependencies(
 
         Updates captured state above appropriately.
         """
+        cl_key = _cl_key(cl_detail)
         with lock:
             # As mentioned above, multiple CLs in the same chain will return the
             # same chain. Skip this request if we've seen this CL during another
             # request.
-            if cl_detail.cl_number in processed_cl_numbers:
+            if cl_key in processed_cl_keys:
                 return
 
-        chain_info = fetch_related_changes(gerrit_host, cl_detail.cl_number)
+        chain_info = fetch_related_changes(
+            cl_detail.cl_url.gerrit_host, cl_detail.cl_number
+        )
 
         # Note that chains are returned in order from children to parents. For
         # simplicity later, make it parents-first.
@@ -330,11 +350,11 @@ def resolve_and_sort_cl_dependencies(
         with lock:
             # It could be that we had racing `fetch_related_changes` invocations
             # for the same chain; bail if we've already processed this chain.
-            if cl_detail.cl_number in processed_cl_numbers:
+            if cl_key in processed_cl_keys:
                 return
 
             if not chain_info:
-                processed_cl_numbers.add(cl_detail.cl_number)
+                processed_cl_keys.add(cl_key)
                 all_chains.append([cl_detail])
                 return
 
@@ -344,7 +364,7 @@ def resolve_and_sort_cl_dependencies(
                 (
                     i
                     for i in reversed(range(len(chain_info)))
-                    if chain_info[i].cl_number in cl_map
+                    if _cl_key(chain_info[i]) in cl_map
                 ),
                 None,
             )
@@ -354,7 +374,7 @@ def resolve_and_sort_cl_dependencies(
             )
             del chain_info[child_most_cl_idx + 1 :]
 
-            processed_cl_numbers.update(c.cl_number for c in chain_info)
+            processed_cl_keys.update(_cl_key(c) for c in chain_info)
 
             current_chain: list[CLDetails] = []
             for related_cl_info in chain_info:
@@ -367,7 +387,8 @@ def resolve_and_sort_cl_dependencies(
                     )
                     continue
 
-                cl_to_add = cl_map.get(related_cl_info.cl_number)
+                related_key = _cl_key(related_cl_info)
+                cl_to_add = cl_map.get(related_key)
                 if not cl_to_add:
                     logging.info(
                         "Discovered new, unmerged CL %d from relation chain "
@@ -376,7 +397,7 @@ def resolve_and_sort_cl_dependencies(
                         cl_detail.cl_number,
                     )
                     cl_to_add = related_cl_info
-                    cl_map[related_cl_info.cl_number] = cl_to_add
+                    cl_map[related_key] = cl_to_add
 
                 current_chain.append(cl_to_add)
 
@@ -390,17 +411,18 @@ def resolve_and_sort_cl_dependencies(
         f.result()
 
     # The chain ordering will be deterministic (sourced from Gerrit), but
-    # threads will race to add to this list. Sort by the CL number for
+    # threads will race to add to this list. Sort by the CL key for
     # determinism.
-    all_chains.sort(key=lambda chain: chain[0].cl_number)
+    all_chains.sort(key=lambda chain: _cl_key(chain[0]))
     logging.debug("Final CL chains after parent resolution: %s", all_chains)
 
     seen = set()
     deduped_cls = []
     for chain in all_chains:
         for cl in chain:
-            if cl.cl_number not in seen:
-                seen.add(cl.cl_number)
+            cl_key = _cl_key(cl)
+            if cl_key not in seen:
+                seen.add(cl_key)
                 deduped_cls.append(cl)
     return deduped_cls
 
