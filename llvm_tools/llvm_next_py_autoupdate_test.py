@@ -10,7 +10,6 @@ from typing import Iterable
 from unittest import mock
 
 from cros_utils import gerrit_utils
-from llvm_tools import cros_cls
 from llvm_tools import llvm_next_py_autoupdate
 from llvm_tools import test_helpers
 
@@ -45,8 +44,10 @@ class Test(test_helpers.TempDirTestCase):
         manifest_cl = gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1")
         owners = ["owner@google.com"]
 
-        main_cl_change = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/2"),
+        main_cl_change = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/2"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
 
@@ -66,8 +67,10 @@ class Test(test_helpers.TempDirTestCase):
         manifest_cl = gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1")
         owners = ["owner@google.com"]
 
-        main_cl_change = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/2"),
+        main_cl_change = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/2"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="owner@google.com",
         )
 
@@ -87,12 +90,16 @@ class Test(test_helpers.TempDirTestCase):
         manifest_cl = gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1")
         owners = ["owner@google.com"]
 
-        main_cl_change = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1"),
+        main_cl_change = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="owner@google.com",
         )
-        untrusted_dep = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/333/1"),
+        untrusted_dep = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/333/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
 
@@ -110,20 +117,28 @@ class Test(test_helpers.TempDirTestCase):
         manifest_cl = gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1")
         owners = ["owner@google.com"]
 
-        main_cl_change = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1"),
+        main_cl_change = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="owner@google.com",
         )
-        untrusted_dep1 = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/333/1"),
+        untrusted_dep1 = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/333/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
-        untrusted_dep2 = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/222/1"),
+        untrusted_dep2 = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/222/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
-        untrusted_dep3 = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/111/1"),
+        untrusted_dep3 = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/111/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
 
@@ -156,20 +171,28 @@ class Test(test_helpers.TempDirTestCase):
         manifest_cl = gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1")
         owners = ["owner@google.com"]
 
-        main_cl_change = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1"),
+        main_cl_change = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/123/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="owner@google.com",
         )
-        untrusted_dep1 = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/333/1"),
+        untrusted_dep1 = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/333/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
-        untrusted_dep2 = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/222/1"),
+        untrusted_dep2 = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/222/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
-        untrusted_dep3 = cros_cls.GerritChange(
-            url=gerrit_utils.ChangeListURL.parse("crrev.com/c/111/1"),
+        untrusted_dep3 = gerrit_utils.CLDetails(
+            project="test-project",
+            cl_url=gerrit_utils.ChangeListURL.parse("crrev.com/c/111/1"),
+            status=gerrit_utils.CLStatus.NEW,
             uploader="stranger@evil.com",
         )
 

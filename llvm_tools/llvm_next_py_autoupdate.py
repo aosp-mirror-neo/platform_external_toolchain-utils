@@ -82,7 +82,7 @@ def write_url_list(
 def compute_new_urls(
     manifest_cl: gerrit_utils.ChangeListURL,
     is_manifest_closed: bool,
-    all_changes: list[cros_cls.GerritChange],
+    all_changes: list[gerrit_utils.CLDetails],
     owners: list[str],
     current_allowlist_urls: Iterable[gerrit_utils.ChangeListURL],
 ) -> tuple[str | None, list[str]]:
@@ -112,25 +112,25 @@ def compute_new_urls(
     # second... just choose the CL number for consistency.
     untrusted.sort(
         key=lambda c: (
-            allowlist_indices.get(c.url.cl_id, len(allowlist_list)),
-            c.url.cl_id,
+            allowlist_indices.get(c.cl_url.cl_id, len(allowlist_list)),
+            c.cl_url.cl_id,
         )
     )
     new_manifest_cl_str = str(manifest_cl)
     new_allowlist_urls: list[str] = []
 
     for change in untrusted:
-        if change.url.cl_id != manifest_cl.cl_id:
-            new_allowlist_urls.append(str(change.url))
+        if change.cl_url.cl_id != manifest_cl.cl_id:
+            new_allowlist_urls.append(str(change.cl_url))
             continue
 
-        if change.url.patch_set != manifest_cl.patch_set:
+        if change.cl_url.patch_set != manifest_cl.patch_set:
             logging.info(
                 "Manifest CL %s patch-set was updated by untrusted user; "
                 "updating to lock it.",
                 manifest_cl,
             )
-            new_manifest_cl_str = str(change.url)
+            new_manifest_cl_str = str(change.cl_url)
 
     return new_manifest_cl_str, new_allowlist_urls
 
@@ -147,7 +147,7 @@ def update_manifest_and_allowlist_urls(
 
     main_cl_in_deps = None
     for change in deps:
-        if change.url.cl_id == manifest_cl.cl_id:
+        if change.cl_url.cl_id == manifest_cl.cl_id:
             main_cl_in_deps = change
             break
 

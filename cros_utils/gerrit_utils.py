@@ -183,6 +183,7 @@ class CLDetails:
     project: str
     cl_url: ChangeListURL
     status: CLStatus
+    uploader: str | None = None
 
     @property
     def cl_number(self) -> int:

@@ -66,15 +66,6 @@ def _run_bb_decoding_output(
     return parse_or_log(stdout)
 
 
-@dataclasses.dataclass(frozen=True)
-class GerritChange:
-    """Represents a Gerrit change with its URL and uploader."""
-
-    url: gerrit_utils.ChangeListURL
-    uploader: str | None
-    status: gerrit_utils.CLStatus | None = None
-
-
 class BuilderStatus(enum.StrEnum):
     """Statuses from builders."""
 
@@ -275,7 +266,7 @@ def fetch_cq_orchestrator_ids(
 def fetch_gerrit_deps_of_most_recent_patchset(
     cl_url: gerrit_utils.ChangeListURL,
     chromiumos_root: Path,
-) -> list[GerritChange]:
+) -> list[gerrit_utils.CLDetails]:
     """Fetches transitive dependencies of the most recent patchset of a CL.
 
     This dependency list is fetched by 'gerrit deps'; in short, it's the
@@ -303,6 +294,11 @@ def fetch_gerrit_deps_of_most_recent_patchset(
             logging.warning("No URL found for dependency in JSON: %r", dep)
             continue
 
+        project = dep.get("project")
+        if not project:
+            logging.warning("No project found for dependency in JSON: %r", dep)
+            continue
+
         current_ps = dep.get("currentPatchSet", {})
         url = gerrit_utils.ChangeListURL.parse(url_str)
         if url.patch_set is None:
@@ -321,7 +317,14 @@ def fetch_gerrit_deps_of_most_recent_patchset(
             uploader = None
 
         status = gerrit_utils.CLStatus.parse(dep["status"])
-        results.append(GerritChange(url=url, uploader=uploader, status=status))
+        results.append(
+            gerrit_utils.CLDetails(
+                project=project,
+                cl_url=url,
+                status=status,
+                uploader=uploader,
+            )
+        )
 
     return results
 
@@ -524,17 +527,17 @@ def fetch_current_toolchain_owners(
 
 
 def partition_changes_by_uploader_trust(
-    changes: list[GerritChange],
+    changes: list[gerrit_utils.CLDetails],
     owners: list[str],
     trusted_allowlist: Iterable[gerrit_utils.ChangeListURL] = (),
-) -> tuple[list[GerritChange], list[GerritChange]]:
+) -> tuple[list[gerrit_utils.CLDetails], list[gerrit_utils.CLDetails]]:
     """Partitions changes by whether the uploader is a toolchain owner."""
     trusted_set = set(trusted_allowlist)
     trusted = []
     untrusted = []
     owners_set = set(owners)
     for change in changes:
-        if change.uploader in owners_set or change.url in trusted_set:
+        if change.uploader in owners_set or change.cl_url in trusted_set:
             trusted.append(change)
         else:
             untrusted.append(change)

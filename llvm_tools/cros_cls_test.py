@@ -251,6 +251,7 @@ class TestFetchGerritDeps(unittest.TestCase):
     def test_fetch_gerrit_deps(self, mock_run: mock.MagicMock) -> None:
         mock_stdout = """[
             {
+                "project": "test-project",
                 "url": "https://chromium-review.googlesource.com/#/c/7736647/",
                 "status": "NEW",
                 "currentPatchSet": {
@@ -261,6 +262,7 @@ class TestFetchGerritDeps(unittest.TestCase):
                 }
             },
             {
+                "project": "test-project",
                 "url": "https://chrome-internal-review.googlesource.com/#/c/9088380/",
                 "status": "MERGED",
                 "currentPatchSet": {
@@ -283,17 +285,21 @@ class TestFetchGerritDeps(unittest.TestCase):
         self.assertEqual(
             deps,
             [
-                cros_cls.GerritChange(
-                    url=gerrit_utils.ChangeListURL(cl_id=7736647, patch_set=2),
-                    uploader="uploader@chromium.org",
+                gerrit_utils.CLDetails(
+                    project="test-project",
+                    cl_url=gerrit_utils.ChangeListURL(
+                        cl_id=7736647, patch_set=2
+                    ),
                     status=gerrit_utils.CLStatus.NEW,
+                    uploader="uploader@chromium.org",
                 ),
-                cros_cls.GerritChange(
-                    url=gerrit_utils.ChangeListURL(
+                gerrit_utils.CLDetails(
+                    project="test-project",
+                    cl_url=gerrit_utils.ChangeListURL(
                         cl_id=9088380, patch_set=5, internal=True
                     ),
-                    uploader="uploader@google.com",
                     status=gerrit_utils.CLStatus.MERGED,
+                    uploader="uploader@google.com",
                 ),
             ],
         )
@@ -309,6 +315,7 @@ class TestFetchGerritDeps(unittest.TestCase):
     ) -> None:
         mock_stdout = """[
             {
+                "project": "test-project",
                 "url": "https://chromium-review.googlesource.com/#/c/7736647/",
                 "currentPatchSet": {
                     "uploader": {
@@ -335,6 +342,7 @@ class TestFetchGerritDeps(unittest.TestCase):
     ) -> None:
         mock_stdout = """[
             {
+                "project": "test-project",
                 "url": "https://chromium-review.googlesource.com/#/c/7736647/",
                 "status": "NEW",
                 "currentPatchSet": {
@@ -354,10 +362,13 @@ class TestFetchGerritDeps(unittest.TestCase):
         self.assertEqual(
             deps,
             [
-                cros_cls.GerritChange(
-                    url=gerrit_utils.ChangeListURL(cl_id=7736647, patch_set=2),
-                    uploader=None,
+                gerrit_utils.CLDetails(
+                    project="test-project",
+                    cl_url=gerrit_utils.ChangeListURL(
+                        cl_id=7736647, patch_set=2
+                    ),
                     status=gerrit_utils.CLStatus.NEW,
+                    uploader=None,
                 )
             ],
         )
@@ -428,10 +439,30 @@ class TestPartitionChanges(unittest.TestCase):
         cl4 = gerrit_utils.ChangeListURL(cl_id=4)
 
         changes = [
-            cros_cls.GerritChange(url=cl1, uploader="owner@google.com"),
-            cros_cls.GerritChange(url=cl2, uploader="other@google.com"),
-            cros_cls.GerritChange(url=cl3, uploader="owner@chromium.org"),
-            cros_cls.GerritChange(url=cl4, uploader=None),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl1,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="owner@google.com",
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl2,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="other@google.com",
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl3,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="owner@chromium.org",
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl4,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader=None,
+            ),
         ]
 
         owners = ["owner@google.com", "owner@chromium.org"]
@@ -448,8 +479,18 @@ class TestPartitionChanges(unittest.TestCase):
         cl2 = gerrit_utils.ChangeListURL(cl_id=2)
 
         changes = [
-            cros_cls.GerritChange(url=cl1, uploader="untrusted@evil.com"),
-            cros_cls.GerritChange(url=cl2, uploader="other@untrusted.com"),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl1,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="untrusted@evil.com",
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=cl2,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="other@untrusted.com",
+            ),
         ]
 
         owners = ["owner@google.com"]

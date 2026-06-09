@@ -106,7 +106,7 @@ def fetch_llvm_next_deps_or_exit(
         ),
     )
 
-    result_cls = [change.url for change in trusted]
+    result_cls = [change.cl_url for change in trusted]
 
     if not untrusted:
         return result_cls
@@ -114,7 +114,7 @@ def fetch_llvm_next_deps_or_exit(
     if untrusted_reject:
         logging.error("Untrusted CLs detected:")
         for c in untrusted:
-            logging.error("- %s by %s", c.url, c.uploader)
+            logging.error("- %s by %s", c.cl_url, c.uploader)
         raise UntrustedCLsError(
             "Aborting due to untrusted CLs (requested by --untrusted-reject)"
         )
@@ -122,12 +122,12 @@ def fetch_llvm_next_deps_or_exit(
     if untrusted_ignore:
         logging.info("Ignoring untrusted CLs:")
         for c in untrusted:
-            logging.info("- %s by %s", c.url, c.uploader)
+            logging.info("- %s by %s", c.cl_url, c.uploader)
         return result_cls
 
     print("Untrusted CLs detected:")
     for c in untrusted:
-        print(f"- {c.url} by {c.uploader}")
+        print(f"- {c.cl_url} by {c.uploader}")
 
     try:
         response = input("\n\nAllow run with these untrusted CLs? [y/N]: ")
@@ -137,7 +137,7 @@ def fetch_llvm_next_deps_or_exit(
     if response.strip().lower() != "y":
         raise UntrustedCLsError("Aborted by user.")
 
-    result_cls.extend(change.url for change in untrusted)
+    result_cls.extend(change.cl_url for change in untrusted)
     return result_cls
 
 

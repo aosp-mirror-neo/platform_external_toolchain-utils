@@ -68,7 +68,12 @@ class Test(unittest.TestCase):
     ) -> None:
         main_cl = gerrit_utils.ChangeListURL(cl_id=12345, patch_set=1)
         mock_fetch_deps.return_value = [
-            cros_cls.GerritChange(url=main_cl, uploader="untrusted@user.com")
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=main_cl,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="untrusted@user.com",
+            )
         ]
         mock_owners.return_value = ["owner@google.com"]
 
@@ -89,8 +94,18 @@ class Test(unittest.TestCase):
         main_cl = gerrit_utils.ChangeListURL(cl_id=12345, patch_set=1)
         dep_cl = gerrit_utils.ChangeListURL(cl_id=67890, patch_set=1)
         mock_fetch_deps.return_value = [
-            cros_cls.GerritChange(url=main_cl, uploader="untrusted@user.com"),
-            cros_cls.GerritChange(url=dep_cl, uploader="trusted@uploader.com"),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=main_cl,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="untrusted@user.com",
+            ),
+            gerrit_utils.CLDetails(
+                project="test-project",
+                cl_url=dep_cl,
+                status=gerrit_utils.CLStatus.NEW,
+                uploader="trusted@uploader.com",
+            ),
         ]
         mock_owners.return_value = ["owner@google.com"]
 
