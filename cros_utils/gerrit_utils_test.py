@@ -4,6 +4,7 @@
 
 """Tests for gerrit_utils."""
 
+import concurrent.futures
 import json
 import unittest
 from unittest import mock
@@ -318,3 +319,260 @@ class TestChangeListURL(unittest.TestCase):
             ),
             "https://ag/1234",
         )
+
+
+class ResolveAndSortClDependenciesTest(unittest.TestCase):
+    """Tests for resolve_and_sort_cl_dependencies."""
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
+    def test_truncates_chain_to_child_most_cl(
+        self, mock_fetch_related_changes: mock.Mock
+    ) -> None:
+        """Verifies that the chain is truncated to the child-most CL."""
+        cl1 = gerrit_utils.CLDetails(project="project/a", cl_number=1)
+        cl2 = gerrit_utils.CLDetails(project="project/a", cl_number=2)
+        cl3 = gerrit_utils.CLDetails(project="project/a", cl_number=3)
+
+        # The input CLs only contain 1 and 3. The chain contains 1, 2, 3, 4.
+        # The child-most CL in the input is 3. So the final list should be
+        # [1, 2, 3].
+        cls = [cl1, cl3]
+        chain_info = [
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=4,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=3,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=2,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=1,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+        ]
+        mock_fetch_related_changes.return_value = chain_info
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            result = gerrit_utils.resolve_and_sort_cl_dependencies(
+                cls, "gerrit_host", executor
+            )
+
+        self.assertEqual(result, [cl1, cl2, cl3])
+        mock_fetch_related_changes.assert_called_once_with("gerrit_host", 1)
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
+    def test_no_truncation_if_child_most_is_last(
+        self, mock_fetch_related_changes: mock.Mock
+    ) -> None:
+        """Verifies no truncation when the child-most CL is the last one."""
+        cl1 = gerrit_utils.CLDetails(project="project/a", cl_number=1)
+        cl2 = gerrit_utils.CLDetails(project="project/a", cl_number=2)
+        cl3 = gerrit_utils.CLDetails(project="project/a", cl_number=3)
+
+        cls = [cl1, cl3]
+        chain_info = [
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=3,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=2,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=1,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+        ]
+        mock_fetch_related_changes.return_value = chain_info
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            result = gerrit_utils.resolve_and_sort_cl_dependencies(
+                cls, "gerrit_host", executor
+            )
+
+        self.assertEqual(result, [cl1, cl2, cl3])
+        mock_fetch_related_changes.assert_called_once_with("gerrit_host", 1)
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
+    def test_single_cl_from_chain(
+        self, mock_fetch_related_changes: mock.Mock
+    ) -> None:
+        """Verifies correct handling when only one CL from a chain is given."""
+        cl1 = gerrit_utils.CLDetails(project="project/a", cl_number=1)
+        cl2 = gerrit_utils.CLDetails(project="project/a", cl_number=2)
+
+        cls = [cl2]
+        chain_info = [
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=3,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=2,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+            gerrit_utils.RelatedChangeInfo(
+                cl_number=1,
+                project="project/a",
+                status=gerrit_utils.CLStatus.NEW,
+            ),
+        ]
+        mock_fetch_related_changes.return_value = chain_info
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            result = gerrit_utils.resolve_and_sort_cl_dependencies(
+                cls, "gerrit_host", executor
+            )
+
+        self.assertEqual(result, [cl1, cl2])
+        mock_fetch_related_changes.assert_called_once_with("gerrit_host", 2)
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
+    def test_standalone_cl(self, mock_fetch_related_changes: mock.Mock) -> None:
+        """Verifies correct handling of a standalone CL."""
+        cl1 = gerrit_utils.CLDetails(project="project/a", cl_number=1)
+        cls = [cl1]
+        mock_fetch_related_changes.return_value = []
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            result = gerrit_utils.resolve_and_sort_cl_dependencies(
+                cls, "gerrit_host", executor
+            )
+
+        self.assertEqual(result, [cl1])
+        mock_fetch_related_changes.assert_called_once_with("gerrit_host", 1)
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
+    def test_multiple_cls_and_projects(
+        self, mock_fetch_related_changes: mock.Mock
+    ) -> None:
+        """Verifies correct handling of multiple CLs in multiple projects."""
+        cl1a = gerrit_utils.CLDetails(project="project/a", cl_number=1)
+        cl2a = gerrit_utils.CLDetails(project="project/a", cl_number=2)
+        cl1b = gerrit_utils.CLDetails(project="project/b", cl_number=3)
+        cl2b = gerrit_utils.CLDetails(project="project/b", cl_number=4)
+
+        cls = [cl2a, cl2b]
+
+        def fetch_side_effect(
+            gerrit_host: str, change_id: int
+        ) -> list[gerrit_utils.RelatedChangeInfo]:
+            del gerrit_host  # unused
+            if change_id == cl2a.cl_number:
+                return [
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=2,
+                        project="project/a",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=1,
+                        project="project/a",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                ]
+            if change_id == cl2b.cl_number:
+                return [
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=4,
+                        project="project/b",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=3,
+                        project="project/b",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                ]
+            return []
+
+        mock_fetch_related_changes.side_effect = fetch_side_effect
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            result = gerrit_utils.resolve_and_sort_cl_dependencies(
+                cls, "gerrit_host", executor
+            )
+
+        self.assertEqual(result, [cl1a, cl2a, cl1b, cl2b])
+        self.assertEqual(mock_fetch_related_changes.call_count, 2)
+        mock_fetch_related_changes.assert_has_calls(
+            [mock.call("gerrit_host", 2), mock.call("gerrit_host", 4)],
+            any_order=True,
+        )
+
+    @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
+    def test_deduplicates_overlapping_chains(
+        self, mock_fetch_related_changes: mock.Mock
+    ) -> None:
+        """Verifies that overlapping dependency chains are deduplicated."""
+        # A (CL 1) is parent of B (CL 2) and C (CL 3).
+        # We request B and C.
+        cl1 = gerrit_utils.CLDetails(project="project/a", cl_number=1)
+        cl2 = gerrit_utils.CLDetails(project="project/a", cl_number=2)
+        cl3 = gerrit_utils.CLDetails(project="project/a", cl_number=3)
+
+        cls = [cl2, cl3]
+
+        def fetch_side_effect(
+            gerrit_host: str, change_id: int
+        ) -> list[gerrit_utils.RelatedChangeInfo]:
+            del gerrit_host  # unused
+            if change_id == cl2.cl_number:
+                return [
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=2,
+                        project="project/a",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=1,
+                        project="project/a",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                ]
+            if change_id == cl3.cl_number:
+                return [
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=3,
+                        project="project/a",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                    gerrit_utils.RelatedChangeInfo(
+                        cl_number=1,
+                        project="project/a",
+                        status=gerrit_utils.CLStatus.NEW,
+                    ),
+                ]
+            return []
+
+        mock_fetch_related_changes.side_effect = fetch_side_effect
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            result = gerrit_utils.resolve_and_sort_cl_dependencies(
+                cls, "gerrit_host", executor
+            )
+
+        # Expected: A (1) is applied first, then B (2) and C (3).
+        # Since both chains start with CL 1, their relative order is based
+        # on thread race.
+        # But both contain 1. Deduped (keeping first) will result in
+        # [1, 2, 3] or [1, 3, 2].
+        # In either case, 1 is first.
+        self.assertEqual(result[0], cl1)
+        self.assertCountEqual(result, [cl1, cl2, cl3])
+        self.assertEqual(len(result), 3)
