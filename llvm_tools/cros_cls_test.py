@@ -74,6 +74,37 @@ class TestFetchCqOrchestratorIds(unittest.TestCase):
         self.assertIn("must have a patchset specified", str(cm.exception))
         mock_fetch.assert_not_called()
 
+    @mock.patch.object(cros_cls, "fetch_bb_ls_info", autospec=True)
+    def test_fetch_cq_orchestrator_ids(self, mock_fetch: mock.Mock) -> None:
+        cl = gerrit_utils.ChangeListURL(cl_id=123, patch_set=1)
+        t1 = datetime.datetime.fromisoformat("2026-05-13T04:00:00Z")
+        t2 = datetime.datetime.fromisoformat("2026-05-13T04:00:01Z")
+        mock_fetch.return_value = [
+            cros_cls.BbLsInfo(
+                1,
+                cros_cls.BuilderStatus.SUCCESS,
+                t1,
+                "cq-orchestrator",
+            ),
+            cros_cls.BbLsInfo(
+                2,
+                cros_cls.BuilderStatus.STARTED,
+                t2,
+                "cq-orchestrator",
+            ),
+        ]
+
+        # Default: exclude running
+        ids = cros_cls.fetch_cq_orchestrator_ids(cl)
+        self.assertEqual(ids, [1])
+        mock_fetch.assert_called_once_with(
+            ls_args=(
+                "-cl",
+                "https://crrev.com/c/123/1",
+                "chromeos/cq/cq-orchestrator",
+            )
+        )
+
 
 class Test(unittest.TestCase):
     """General tests for cros_cls."""
@@ -165,9 +196,9 @@ class TestBbLsInfo(unittest.TestCase):
         )
         self.assertEqual(info, expected)
 
-    @mock.patch.object(cros_cls, "_run_bb_decoding_output")
+    @mock.patch.object(cros_cls, "_run_bb_decoding_output", autospec=True)
     def test_fetch_bb_ls_info(
-        self, mock_run_bb_decoding_output: mock.MagicMock
+        self, mock_run_bb_decoding_output: mock.Mock
     ) -> None:
         t1_str = "2026-05-13T04:00:00Z"
         t2_str = "2026-05-13T04:00:01Z"
@@ -202,7 +233,7 @@ class TestBbLsInfo(unittest.TestCase):
         ]
         self.assertEqual(results, expected)
         mock_run_bb_decoding_output.assert_called_once_with(
-            ["ls", "args"], multiline=True
+            ("ls", "-nopage", "args"), multiline=True
         )
 
     def test_parse_build_id_from_bb_add_output_no_id(self) -> None:
@@ -424,3 +455,36 @@ class TestPartitionChanges(unittest.TestCase):
 
         self.assertEqual(trusted, [changes[0]])
         self.assertEqual(untrusted, [changes[1]])
+
+
+class TestCqAttemptHelpers(unittest.TestCase):
+    """Tests for fetch_cq_attempt_key and fetch_sibling_builds."""
+
+    @mock.patch.object(cros_cls, "_run_bb_decoding_output", autospec=True)
+    def test_fetch_cq_attempt_key(
+        self, mock_run_bb_decoding_output: mock.Mock
+    ) -> None:
+        mock_run_bb_decoding_output.return_value = {
+            "tags": [
+                {"key": "cq_attempt_key", "value": "some_key"},
+                {"key": "other_tag", "value": "other_value"},
+            ]
+        }
+        key = cros_cls.fetch_cq_attempt_key(12345)
+        self.assertEqual(key, "some_key")
+        mock_run_bb_decoding_output.assert_called_once_with(("get", "12345"))
+
+    @mock.patch.object(cros_cls, "_run_bb_decoding_output", autospec=True)
+    def test_fetch_cq_attempt_key_missing(
+        self, mock_run_bb_decoding_output: mock.Mock
+    ) -> None:
+        mock_run_bb_decoding_output.return_value = {"tags": []}
+        key = cros_cls.fetch_cq_attempt_key(12345)
+        self.assertIsNone(key)
+
+    @mock.patch.object(cros_cls, "fetch_bb_ls_info", autospec=True)
+    def test_fetch_sibling_builds(self, mock_fetch: mock.Mock) -> None:
+        cros_cls.fetch_sibling_builds("some_key")
+        mock_fetch.assert_called_once_with(
+            ls_args=("-t", "cq_attempt_key:some_key")
+        )

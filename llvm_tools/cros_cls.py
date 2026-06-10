@@ -14,7 +14,7 @@ import re
 import shlex
 import subprocess
 import time
-from typing import Any, Iterable, Self
+from typing import Any, Iterable, Self, Sequence
 
 from cros_utils import cros_paths
 from cros_utils import gerrit_utils
@@ -23,7 +23,9 @@ from cros_utils import gerrit_utils
 BuildID = int
 
 
-def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
+def _run_bb_decoding_output(
+    command: Sequence[str], multiline: bool = False
+) -> Any:
     """Runs `bb` with the `json` flag, and decodes the command's output.
 
     Args:
@@ -34,7 +36,7 @@ def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
     """
     # `bb` always parses argv[1] as a command, so put `-json` after the first
     # arg to `bb`.
-    run_command = ["bb", command[0], "-json"] + command[1:]
+    run_command = ["bb", command[0], "-json", *command[1:]]
     stdout = subprocess.run(
         run_command,
         check=True,
@@ -129,10 +131,24 @@ class BbLsInfo:
         )
 
 
-def fetch_bb_ls_info(*, ls_args: list[str]) -> list[BbLsInfo]:
+def fetch_bb_ls_info(*, ls_args: Sequence[str]) -> list[BbLsInfo]:
     """Runs `bb ls` with `-json` and returns a list of BbLsInfo."""
-    results = _run_bb_decoding_output(["ls"] + ls_args, multiline=True)
+    results = _run_bb_decoding_output(
+        ("ls", "-nopage", *ls_args), multiline=True
+    )
     return [BbLsInfo.from_dict(r) for r in results]
+
+
+def fetch_cq_attempt_key(build_id: BuildID) -> str | None:
+    """Fetches the cq_attempt_key for a build, if present."""
+    result = _run_bb_decoding_output(("get", str(build_id)))
+    tags = {t["key"]: t["value"] for t in result.get("tags", ())}
+    return tags.get("cq_attempt_key")
+
+
+def fetch_sibling_builds(cq_attempt_key: str) -> list[BbLsInfo]:
+    """Fetches all builds with the given cq_attempt_key."""
+    return fetch_bb_ls_info(ls_args=("-t", f"cq_attempt_key:{cq_attempt_key}"))
 
 
 # Used to parse the build ID from a `bb add` invocation.
@@ -228,7 +244,7 @@ def fetch_builder_steps(build_id: BuildID) -> list[Any]:
 def fetch_cq_orchestrator_ids(
     cl: gerrit_utils.ChangeListURL,
 ) -> list[BuildID]:
-    """Returns the BuildID of completed cq-orchestrator runs on a CL.
+    """Returns the BuildID of cq-orchestrator runs on a CL.
 
     Newer runs are sorted later in the list.
     """
@@ -237,11 +253,11 @@ def fetch_cq_orchestrator_ids(
     if cl.patch_set is None:
         raise ValueError(f"CL {cl} must have a patchset specified.")
     results = fetch_bb_ls_info(
-        ls_args=[
+        ls_args=(
             "-cl",
             str(cl),
             "chromeos/cq/cq-orchestrator",
-        ]
+        )
     )
 
     # We can theoretically filter on a status flag, but it seems to only accept
@@ -353,6 +369,8 @@ class CQOrchestratorOutput:
     status: BuilderStatus
     # A dict of builders that this CQ builder spawned.
     child_builders: dict[str, BuildID]
+    # The CQ attempt key, if present.
+    cq_attempt_key: str | None = None
 
     @classmethod
     def fetch(cls, bot_id: BuildID) -> Self:
@@ -390,7 +408,13 @@ class CQOrchestratorOutput:
                     )
                 results[builder] = int(build_id)
         status = BuilderStatus.parse(decoded["status"])
-        return cls(child_builders=results, status=status)
+        tags = {t["key"]: t["value"] for t in decoded.get("tags", ())}
+        cq_attempt_key = tags.get("cq_attempt_key")
+        return cls(
+            child_builders=results,
+            status=status,
+            cq_attempt_key=cq_attempt_key,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
