@@ -15,7 +15,7 @@ import logging
 import os
 from pathlib import Path
 import re
-from typing import Any, DefaultDict, Generator
+from typing import Any, DefaultDict, Generator, Self
 
 import yaml  # pylint: disable=import-error
 
@@ -79,7 +79,7 @@ class Builder:
         return dataclasses.asdict(self)
 
     @classmethod
-    def from_yaml(cls, s: dict[str, str]) -> "Builder":
+    def from_yaml(cls, s: dict[str, str]) -> Self:
         """Create an instance of this class from an `as_yaml()`."""
         return cls(**s)
 
@@ -99,7 +99,7 @@ class Package:
         return str(self)
 
     @classmethod
-    def from_yaml(cls, s: str) -> "Package":
+    def from_yaml(cls, s: str) -> Self:
         """Create an instance of this class from an `as_yaml()`."""
         if "/" not in s:
             raise ValueError(f"Package should be $CATEGORY/$PN; got {s!r}")
@@ -126,7 +126,7 @@ class YamlPackageWarnings:
         }
 
     @classmethod
-    def from_yaml(cls, s: dict[str, Any]) -> "YamlPackageWarnings":
+    def from_yaml(cls, s: dict[str, Any]) -> Self:
         """Create an instance of this class from an `as_yaml()`."""
         package = Package.from_yaml(s["package"])
         observed_on = [Builder.from_yaml(x) for x in s.get("observed_on", ())]
@@ -199,7 +199,7 @@ class YamlFile:
         return "".join(yaml_file_parts)
 
     @classmethod
-    def from_yaml(cls, s: dict[str, Any]) -> "YamlFile":
+    def from_yaml(cls, s: dict[str, Any]) -> Self:
         """Create an instance of this class from an `as_raw_yaml()`."""
         s = s.copy()
         for k in ("per_package_warnings", "frozen_per_package_warnings"):

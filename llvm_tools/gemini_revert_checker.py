@@ -12,7 +12,7 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
-from typing import Any, Sequence
+from typing import Any, Self, Sequence
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -172,7 +172,7 @@ class GeminiState:
     important_shas: dict[str, int] = dataclasses.field(default_factory=dict)
 
     @classmethod
-    def from_json(cls, json_object: Any) -> "GeminiState":
+    def from_json(cls, json_object: Any) -> Self:
         return cls(
             revert_status={
                 k: GeminiRevertInference.from_json(v)

@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Iterable
+from typing import Iterable, Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -63,7 +63,7 @@ class KernelVersion:
         return f"{self.major}.{self.minor}"
 
     @classmethod
-    def parse(cls, val: str) -> "KernelVersion":
+    def parse(cls, val: str) -> Self:
         m = re.fullmatch(r"(\d+).(\d+)", val)
         if not m:
             raise ValueError(f"{val!r} is an invalid kernel version")
@@ -243,7 +243,7 @@ class KernelGsProfile:
     @classmethod
     def from_file_name(
         cls, timestamp: datetime.datetime, file_name: str
-    ) -> "KernelGsProfile":
+    ) -> Self:
         m = cls._FILE_NAME_PARSE_RE.fullmatch(file_name)
         if not m:
             raise ValueError(f"{file_name!r} doesn't parse as a profile name")

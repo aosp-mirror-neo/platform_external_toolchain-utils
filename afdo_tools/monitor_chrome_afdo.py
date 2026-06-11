@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Iterable
+from typing import Iterable, Self
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -69,7 +69,7 @@ class ProfileArch(enum.Enum):
     AMD64 = "amd64"
 
     @classmethod
-    def parse(cls, arch: str) -> "ProfileArch":
+    def parse(cls, arch: str) -> Self:
         for x in cls:
             if x.value == arch:
                 return x
@@ -86,7 +86,7 @@ class ProfileSubtype(enum.Enum):
     NONE = "none"
 
     @classmethod
-    def parse(cls, subtype: str) -> "ProfileSubtype":
+    def parse(cls, subtype: str) -> Self:
         for x in cls:
             if x.value == subtype:
                 return x
@@ -218,7 +218,7 @@ class ChromeGsProfile:
     @classmethod
     def from_full_name_if_new_enough(
         cls, last_modified: datetime.datetime, full_name: str
-    ) -> "ChromeGsProfile | None":
+    ) -> Self | None:
         m = cls._FULL_NAME_RE.match(full_name)
         if not m:
             raise ValueError(f"{full_name!r} is not parseable as a profile")

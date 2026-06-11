@@ -38,7 +38,7 @@ import subprocess
 import sys
 import tempfile
 import threading
-from typing import Any, Counter, DefaultDict, IO, Iterable, Optional
+from typing import Any, Counter, DefaultDict, IO, Iterable, Self
 
 from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
@@ -71,7 +71,7 @@ class ClangWarningLocation:
         cls,
         location: str,
         canonicalize_board_root: bool = False,
-    ) -> "ClangWarningLocation":
+    ) -> Self:
         split = location.rsplit(":", 2)
         if len(split) == 3:
             file = split[0]
@@ -109,7 +109,7 @@ class ClangWarning:
         cls,
         line: str,
         canonicalize_board_root: bool = False,
-    ) -> Optional["ClangWarning"]:
+    ) -> Self | None:
         # Fast path: we can expect "error: " in interesting lines. Break early
         # if that's not present.
         if "error: " not in line:

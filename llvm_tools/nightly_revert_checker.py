@@ -20,7 +20,7 @@ import pprint
 import re
 import subprocess
 import time
-from typing import Any, Callable, Iterable, NamedTuple
+from typing import Any, Callable, Iterable, NamedTuple, Self
 
 from cros_utils import email_sender
 from cros_utils import git_utils
@@ -56,7 +56,7 @@ class HeadInfo:
     next_notification_timestamp: int
 
     @classmethod
-    def from_json(cls, json_object: Any) -> "HeadInfo":
+    def from_json(cls, json_object: Any) -> Self:
         return cls(**json_object)
 
     def to_json(self) -> Any:
@@ -79,7 +79,7 @@ class State:
     heads: dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
 
     @classmethod
-    def from_json(cls, json_object: Any) -> "State":
+    def from_json(cls, json_object: Any) -> Self:
         return cls(
             seen_reverts=json_object["seen_reverts"],
             last_seen_llvm_shas=json_object.get("last_seen_llvm_shas", {}),

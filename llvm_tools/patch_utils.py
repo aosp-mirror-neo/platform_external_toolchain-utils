@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, Generator, IO, Iterable
+from typing import Any, Callable, Generator, IO, Iterable, Self
 
 from llvm_tools import atomic_write_file
 
@@ -176,7 +176,7 @@ class PatchEntry:
             raise ValueError(f"workdir {self.workdir} is not a directory")
 
     @classmethod
-    def from_dict(cls, workdir: Path, data: dict[str, Any]) -> "PatchEntry":
+    def from_dict(cls, workdir: Path, data: dict[str, Any]) -> Self:
         """Instatiate from a dictionary.
 
         Dictionary must have at least the following key:

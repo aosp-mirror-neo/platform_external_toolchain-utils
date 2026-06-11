@@ -29,7 +29,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -61,22 +61,17 @@ class EbuildVersion:
     patch: int
     rev: int
 
-    def prior_minor_version(self) -> "EbuildVersion":
+    def prior_minor_version(self) -> Self:
         """Returns an EbuildVersion with just the major/minor from this one."""
         return dataclasses.replace(self, minor=self.minor - 1)
 
-    def major_minor_only(self) -> "EbuildVersion":
+    def major_minor_only(self) -> Self:
         """Returns an EbuildVersion with just the major/minor from this one."""
         if not self.rev and not self.patch:
             return self
-        return EbuildVersion(
-            major=self.major,
-            minor=self.minor,
-            patch=0,
-            rev=0,
-        )
+        return dataclasses.replace(self, patch=0, rev=0)
 
-    def without_rev(self) -> "EbuildVersion":
+    def without_rev(self) -> Self:
         if not self.rev:
             return self
         return dataclasses.replace(self, rev=0)

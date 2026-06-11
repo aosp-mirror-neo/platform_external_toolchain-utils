@@ -23,7 +23,7 @@ import re
 import subprocess
 import tempfile
 import textwrap
-from typing import Any, Iterable
+from typing import Any, Iterable, Self
 from urllib import request
 
 from cros_utils import cros_paths
@@ -54,7 +54,7 @@ class LLVMGitRef:
     _rev: git_llvm_rev.Rev | None = None  # Used for caching
 
     @classmethod
-    def from_rev(cls, llvm_dir: Path, rev: git_llvm_rev.Rev) -> "LLVMGitRef":
+    def from_rev(cls, llvm_dir: Path, rev: git_llvm_rev.Rev) -> Self:
         return cls(
             git_llvm_rev.translate_rev_to_sha(
                 git_llvm_rev.LLVMConfig("origin", llvm_dir), rev

@@ -23,7 +23,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Any, Generator
+from typing import Any, Generator, Self
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -84,7 +84,7 @@ class RepoList:
         self._remote_to_local = remote_to_local_map
 
     @classmethod
-    def new_from_repo(cls, cros_root: Path) -> "RepoList":
+    def new_from_repo(cls, cros_root: Path) -> Self:
         # TODO: Ew
         repo_list = subprocess.run(
             ("repo", "list"),

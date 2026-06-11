@@ -14,7 +14,7 @@ import re
 import shlex
 import subprocess
 import time
-from typing import Any, Iterable
+from typing import Any, Iterable, Self
 
 from cros_utils import cros_paths
 from cros_utils import gerrit_utils
@@ -84,7 +84,7 @@ class BuilderStatus(enum.StrEnum):
     CANCELED = "CANCELED"
 
     @classmethod
-    def parse(cls, s: str) -> "BuilderStatus":
+    def parse(cls, s: str) -> Self:
         try:
             # Some statuses come in lower-case, others come in upper-case. The
             # latter is by far the dominant style, so normalize to that.
@@ -120,7 +120,7 @@ class BbLsInfo:
     builder_name: str
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> "BbLsInfo":
+    def from_dict(cls, d: dict[str, Any]) -> Self:
         return cls(
             build_id=BuildID(d["id"]),
             status=BuilderStatus.parse(d["status"]),
@@ -355,7 +355,7 @@ class CQOrchestratorOutput:
     child_builders: dict[str, BuildID]
 
     @classmethod
-    def fetch(cls, bot_id: BuildID) -> "CQOrchestratorOutput":
+    def fetch(cls, bot_id: BuildID) -> Self:
         decoded: dict[str, Any] = _run_bb_decoding_output(
             ["get", "-steps", str(bot_id)]
         )
@@ -405,9 +405,7 @@ class CQBoardBuilderOutput:
     artifacts_link: str | None
 
     @classmethod
-    def fetch_many(
-        cls, bot_ids: Iterable[BuildID]
-    ) -> list["CQBoardBuilderOutput"]:
+    def fetch_many(cls, bot_ids: Iterable[BuildID]) -> list[Self]:
         """Fetches CQBoardBuilderOutput for the given bots."""
         bb_output = _run_bb_decoding_output(
             ["get", "-p"] + [str(x) for x in bot_ids], multiline=True

@@ -43,7 +43,7 @@ import subprocess
 import sys
 import textwrap
 import threading
-from typing import DefaultDict, Iterable, Sequence
+from typing import DefaultDict, Iterable, Self, Sequence
 
 from android_tools import android_paths
 from android_tools import bp_tools
@@ -311,7 +311,7 @@ class ExemptionSummary:
     )
 
     @classmethod
-    def from_file(cls, path: Path) -> "ExemptionSummary":
+    def from_file(cls, path: Path) -> Self:
         """Loads an ExemptionSummary from the given file."""
         with path.open(encoding="utf-8") as f:
             content = json.load(f)

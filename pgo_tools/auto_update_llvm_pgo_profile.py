@@ -21,6 +21,7 @@ import re
 import shlex
 import subprocess
 import textwrap
+from typing import Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -90,7 +91,7 @@ class GsProfileCache:
         return sum(len(x) for x in self.profile_revs.values())
 
     @classmethod
-    def fetch(cls) -> "GsProfileCache":
+    def fetch(cls) -> Self:
         stdout = subprocess.run(
             [
                 "gsutil",

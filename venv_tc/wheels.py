@@ -29,7 +29,7 @@ import shutil
 import subprocess
 import sys
 import time
-from typing import Any, Iterable
+from typing import Any, Iterable, Self
 
 
 # Add `v1` here in case format changes happen in the future. These aren't
@@ -63,7 +63,7 @@ class WheelManifest:
     wheel_hashes: dict[str, str]
 
     @classmethod
-    def from_json(cls, obj: dict[str, Any]) -> "WheelManifest":
+    def from_json(cls, obj: dict[str, Any]) -> Self:
         return cls(wheel_hashes=obj["wheel_hashes"])
 
     def to_json(self) -> dict[str, Any]:

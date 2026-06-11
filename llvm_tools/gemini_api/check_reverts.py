@@ -35,7 +35,7 @@ import subprocess
 import sys
 import time
 import typing
-from typing import Any, IO
+from typing import Any, IO, Self
 
 # `pylint`, run by `cros lint`, is run in its own Python environment, which does
 # not contain `google.genai`. `mypy` can _see_ the module, but complains that it
@@ -153,9 +153,7 @@ class GeminiRevertInference:
     """
 
     @classmethod
-    def from_json_checked(
-        cls, json_object: dict[str, Any]
-    ) -> "GeminiRevertInference":
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
         """Parses 'untrusted' JSON into an instance of this class.
 
         Gemini can generally be trusted to produce JSON that matches this type's

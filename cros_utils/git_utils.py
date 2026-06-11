@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Generator, Iterable, Sequence
+from typing import Generator, Iterable, Self, Sequence
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -44,7 +44,7 @@ class Channel(enum.Enum):
     STABLE = "stable"
 
     @classmethod
-    def parse(cls, val: str) -> "Channel":
+    def parse(cls, val: str) -> Self:
         for x in cls:
             if val == x.value:
                 return x

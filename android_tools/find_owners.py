@@ -17,6 +17,7 @@ import logging
 import multiprocessing.pool
 from pathlib import Path
 import random
+from typing import Self
 import urllib.parse
 
 from android_tools import android_paths
@@ -35,7 +36,7 @@ class RepoCache:
     repos_to_names: dict[str, str]
 
     @classmethod
-    def create_from_manifest(cls, manifest_file: Path) -> "RepoCache":
+    def create_from_manifest(cls, manifest_file: Path) -> Self:
         repos_to_names = {
             project.project_path: project.project_name
             for project in manifest_utils.read_manifest_project_mappings(
