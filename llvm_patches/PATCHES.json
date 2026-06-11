@@ -336,21 +336,6 @@
     "metadata": {
       "author": "George Burgess IV <gbiv@google.com>",
       "info": [],
-      "title": "cros: add user-enumeration patch"
-    },
-    "platforms": [
-      "chromiumos"
-    ],
-    "rel_patch_path": "cros-add-user-enumeration-patch.patch",
-    "version_range": {
-      "from": null,
-      "until": null
-    }
-  },
-  {
-    "metadata": {
-      "author": "George Burgess IV <gbiv@google.com>",
-      "info": [],
       "title": "llvm: don't touch VCS files"
     },
     "platforms": [
