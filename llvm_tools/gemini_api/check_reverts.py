@@ -45,6 +45,9 @@ from google import genai
 from google.genai import types
 
 
+GEMINI_MODEL = "gemini-3.5-flash"
+
+
 T = typing.TypeVar("T")
 
 
@@ -104,6 +107,17 @@ def get_dict_elem_with_type(
                 f"Element {item} of list is {type(item)}, not {arg_type}"
             )
     return typing.cast(T, value)
+
+
+class ParsableFromJSON(typing.Protocol):
+    """Protocol for types that can be parsed from JSON with validation."""
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        """Parses 'untrusted' JSON into an instance of this class."""
+
+
+InferenceT = typing.TypeVar("InferenceT", bound=ParsableFromJSON)
 
 
 # NOTE: The class docstring and per-field docstrings are sent to Gemini, so
@@ -193,6 +207,13 @@ class GeminiRevertInference:
         return dataclasses.asdict(self)
 
 
+@dataclasses.dataclass(frozen=True)
+class SystemPrompts:
+    """System prompts for Gemini queries."""
+
+    initial_classification: str
+
+
 class GeminiResponseIsBrokenError(Exception):
     """Thrown when the Gemini response for a SHA is known to be broken."""
 
@@ -213,8 +234,8 @@ class GeminiResponseIsBrokenError(Exception):
 
 
 def parse_gemini_response(
-    sha: str, response: types.GenerateContentResponse
-) -> GeminiRevertInference:
+    sha: str, response: types.GenerateContentResponse, schema: type[InferenceT]
+) -> InferenceT:
     """Parses the given response from the Gemini API
 
     Raises:
@@ -284,7 +305,7 @@ def parse_gemini_response(
         )
 
     try:
-        return GeminiRevertInference.from_json_checked(parsed_result)
+        return schema.from_json_checked(parsed_result)
     except ValueError as e:
         raise GeminiResponseIsBrokenError(
             f"Gemini produced invalid JSON for query on {sha}: {e}",
@@ -309,22 +330,15 @@ def generate_retry_message(err: GeminiResponseIsBrokenError) -> str:
     )
 
 
-def process_one_sha(
-    client: genai.Client, system_prompt: str, llvm_dir: Path, sha: str
-) -> GeminiRevertInference:
-    """Queries the given genai client for revert info"""
-    commit_info = subprocess.run(
-        ("git", "log", "-n1", "--name-status", sha),
-        check=True,
-        cwd=llvm_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-        errors="replace",
-    ).stdout
-
-    logging.info("Processing commit %s...", sha)
-
+def query_gemini(
+    *,
+    client: genai.Client,
+    system_prompt: str,
+    response_schema: type[InferenceT],
+    prompt_content: str,
+    sha: str,
+) -> InferenceT:
+    """Queries Gemini and handles retries and errors."""
     # This is in a `range(_)` loop for an unfortunate reason: despite attempts
     # to bring randomness to zero, this API still seems to return slightly
     # random results. The docs also explicitly do _not_ promise determinism:
@@ -346,7 +360,7 @@ def process_one_sha(
         system_instruction=system_prompt,
         response_mime_type="application/json",
         tool_config=types.ToolConfig(),
-        response_schema=GeminiRevertInference,
+        response_schema=response_schema,
         thinking_config=types.ThinkingConfig(
             include_thoughts=True,
             # gemini-3.5-flash experimentally sees meaningfully lower quality
@@ -372,17 +386,17 @@ def process_one_sha(
     for i in range(1, retry_limit + 1):
         logging.info("Attempt %d running Gemini on SHA %s", i, sha)
         chat = client.chats.create(
-            model="gemini-3.5-flash",
+            model=GEMINI_MODEL,
             config=chat_config,
         )
 
-        response = chat.send_message(commit_info)
+        response = chat.send_message(prompt_content)
 
         # If we hit an error that isn't about response correctness, it's
         # probably a server error. We'll sleep a bit in hopes that that helps.
         back_off_secs = i * 2
         try:
-            return parse_gemini_response(sha, response)
+            return parse_gemini_response(sha, response, response_schema)
         except GeminiResponseIsBrokenError as e:
             # If there's no partial response (which must be differentiated from
             # an _empty_ one), it's an API error. We can't continue the chat.
@@ -409,7 +423,7 @@ def process_one_sha(
 
         response = chat.send_message(follow_up_message)
         try:
-            return parse_gemini_response(sha, response)
+            return parse_gemini_response(sha, response, response_schema)
         except GeminiResponseIsBrokenError:
             logging.exception(
                 "Gemini failed on follow-up for attempt %d/SHA %s; retrying "
@@ -420,6 +434,34 @@ def process_one_sha(
             time.sleep(back_off_secs)
 
     raise ValueError(f"Hit Gemini retry limit for SHA {sha}")
+
+
+def process_one_sha(
+    client: genai.Client,
+    system_prompts: SystemPrompts,
+    llvm_dir: Path,
+    sha: str,
+) -> GeminiRevertInference:
+    """Queries the given genai client for revert info"""
+    commit_info = subprocess.run(
+        ("git", "log", "-n1", "--name-status", sha),
+        check=True,
+        cwd=llvm_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    ).stdout
+
+    logging.info("Processing commit %s...", sha)
+
+    return query_gemini(
+        client=client,
+        system_prompt=system_prompts.initial_classification,
+        response_schema=GeminiRevertInference,
+        prompt_content=commit_info,
+        sha=sha,
+    )
 
 
 def write_one_result(
@@ -514,8 +556,10 @@ def main(argv: list[str]) -> None:
 
     jobs: int = opts.jobs
     llvm_dir: Path = opts.llvm_dir
-    system_prompt = (my_dir / "check_reverts_system_prompt.md").read_text(
-        encoding="utf-8"
+    system_prompts = SystemPrompts(
+        initial_classification=(
+            my_dir / "check_reverts_system_prompt.md"
+        ).read_text(encoding="utf-8")
     )
 
     if gemini_api_key := opts.gemini_api_key:
@@ -556,7 +600,7 @@ def main(argv: list[str]) -> None:
             )
 
         sha_result = process_one_sha(
-            client, system_prompt, llvm_dir, sha_to_process
+            client, system_prompts, llvm_dir, sha_to_process
         )
         # N.B., not in a `finally`, since an exception may be raised as a result
         # of this client being in a weird state.

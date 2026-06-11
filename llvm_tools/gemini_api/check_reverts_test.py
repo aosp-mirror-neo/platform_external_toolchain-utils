@@ -4,11 +4,66 @@
 
 """Tests for check_reverts."""
 
+import dataclasses
+import json
 import re
-from typing import Any
+import time
+from typing import Any, Self
 import unittest
+from unittest import mock
 
 from llvm_tools.gemini_api import check_reverts
+
+
+def mock_gemini_response(
+    text: str | None = None,
+    thinking_text: str | None = None,
+    has_candidates: bool = True,
+) -> mock.MagicMock:
+    """Helper to create a mock Gemini response."""
+    mock_response = mock.MagicMock()
+    mock_response.usage_metadata = None
+    if not has_candidates:
+        mock_response.candidates = []
+        return mock_response
+
+    mock_candidate = mock.MagicMock()
+    parts = []
+    if thinking_text is not None:
+        mock_thinking_part = mock.MagicMock()
+        mock_thinking_part.thought = True
+        mock_thinking_part.text = thinking_text
+        parts.append(mock_thinking_part)
+    if text is not None:
+        mock_result_part = mock.MagicMock()
+        mock_result_part.thought = False
+        mock_result_part.text = text
+        parts.append(mock_result_part)
+
+    mock_candidate.content.parts = parts
+    mock_response.candidates = [mock_candidate]
+    return mock_response
+
+
+@dataclasses.dataclass(frozen=True)
+class FakeInference:
+    """A fake inference type for testing generic functions."""
+
+    some_string: str
+    some_int: int
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        some_string = check_reverts.get_dict_elem_with_type(
+            json_object, "some_string", str
+        )
+        some_int = check_reverts.get_dict_elem_with_type(
+            json_object, "some_int", int
+        )
+        return cls(some_string=some_string, some_int=some_int)
+
+    def to_json(self) -> Any:
+        return dataclasses.asdict(self)
 
 
 class GetDictElemWithTypeTest(unittest.TestCase):
@@ -84,3 +139,177 @@ class GetDictElemWithTypeTest(unittest.TestCase):
             "Element True of list is <class 'bool'>, not <class 'int'>",
         ):
             check_reverts.get_dict_elem_with_type(d, "a", list[int])
+
+
+class ParseGeminiResponseTest(unittest.TestCase):
+    """Tests for parse_gemini_response."""
+
+    def test_success(self) -> None:
+        mock_response = mock_gemini_response(
+            text=json.dumps({"some_string": "hello", "some_int": 123})
+        )
+
+        result = check_reverts.parse_gemini_response(
+            "some_sha", mock_response, FakeInference
+        )
+        self.assertEqual(
+            result, FakeInference(some_string="hello", some_int=123)
+        )
+
+
+class QueryGeminiTest(unittest.TestCase):
+    """Tests for query_gemini."""
+
+    @mock.patch.object(time, "sleep", autospec=True)
+    def test_query_gemini_success_first_try(
+        self, mock_sleep: mock.MagicMock
+    ) -> None:
+        mock_client = mock.MagicMock()
+        mock_chat = mock.MagicMock()
+        mock_client.chats.create.return_value = mock_chat
+
+        mock_response = mock_gemini_response(
+            text=json.dumps({"some_string": "hello", "some_int": 123})
+        )
+        mock_chat.send_message.return_value = mock_response
+
+        result = check_reverts.query_gemini(
+            client=mock_client,
+            system_prompt="prompt",
+            response_schema=FakeInference,
+            prompt_content="content",
+            sha="sha",
+        )
+
+        self.assertEqual(
+            result, FakeInference(some_string="hello", some_int=123)
+        )
+        mock_client.chats.create.assert_called_once_with(
+            model=check_reverts.GEMINI_MODEL, config=mock.ANY
+        )
+        mock_chat.send_message.assert_called_once_with("content")
+        mock_sleep.assert_not_called()
+
+    @mock.patch.object(time, "sleep", autospec=True)
+    def test_query_gemini_retry_on_broken_response(
+        self, mock_sleep: mock.MagicMock
+    ) -> None:
+        mock_client = mock.MagicMock()
+        mock_chat = mock.MagicMock()
+        mock_client.chats.create.return_value = mock_chat
+
+        mock_response_broken = mock_gemini_response(text="broken json")
+        mock_response_success = mock_gemini_response(
+            text=json.dumps({"some_string": "hello", "some_int": 123})
+        )
+
+        mock_chat.send_message.side_effect = [
+            mock_response_broken,
+            mock_response_success,
+        ]
+
+        result = check_reverts.query_gemini(
+            client=mock_client,
+            system_prompt="prompt",
+            response_schema=FakeInference,
+            prompt_content="content",
+            sha="sha",
+        )
+
+        self.assertEqual(
+            result, FakeInference(some_string="hello", some_int=123)
+        )
+        mock_client.chats.create.assert_called_once_with(
+            model=check_reverts.GEMINI_MODEL, config=mock.ANY
+        )
+        self.assertEqual(mock_chat.send_message.call_count, 2)
+        mock_chat.send_message.assert_has_calls(
+            [mock.call("content"), mock.call(mock.ANY)]
+        )
+        mock_sleep.assert_not_called()
+
+    @mock.patch.object(time, "sleep", autospec=True)
+    def test_query_gemini_retry_loop(self, mock_sleep: mock.MagicMock) -> None:
+        mock_client = mock.MagicMock()
+
+        mock_chat1 = mock.MagicMock()
+        mock_response_broken1 = mock_gemini_response(text="broken 1")
+        mock_response_broken2 = mock_gemini_response(text="broken 2")
+
+        mock_chat1.send_message.side_effect = [
+            mock_response_broken1,
+            mock_response_broken2,
+        ]
+
+        mock_chat2 = mock.MagicMock()
+        mock_response_success = mock_gemini_response(
+            text=json.dumps({"some_string": "hello", "some_int": 123})
+        )
+        mock_chat2.send_message.return_value = mock_response_success
+
+        mock_client.chats.create.side_effect = [mock_chat1, mock_chat2]
+
+        result = check_reverts.query_gemini(
+            client=mock_client,
+            system_prompt="prompt",
+            response_schema=FakeInference,
+            prompt_content="content",
+            sha="sha",
+        )
+
+        self.assertEqual(
+            result, FakeInference(some_string="hello", some_int=123)
+        )
+        mock_client.chats.create.assert_has_calls(
+            [
+                mock.call(model=check_reverts.GEMINI_MODEL, config=mock.ANY),
+                mock.call(model=check_reverts.GEMINI_MODEL, config=mock.ANY),
+            ]
+        )
+        mock_chat1.send_message.assert_has_calls(
+            [mock.call("content"), mock.call(mock.ANY)]
+        )
+        mock_chat2.send_message.assert_called_once_with("content")
+        # Backoff for first failed attempt (i=1).
+        mock_sleep.assert_called_once_with(2)
+
+    @mock.patch.object(time, "sleep", autospec=True)
+    def test_query_gemini_retry_on_api_error_recreates_chat(
+        self, mock_sleep: mock.MagicMock
+    ) -> None:
+        mock_client = mock.MagicMock()
+
+        # Chat 1 returns no candidates (API error).
+        mock_chat1 = mock.MagicMock()
+        mock_response_no_candidates = mock_gemini_response(has_candidates=False)
+        mock_chat1.send_message.return_value = mock_response_no_candidates
+
+        # Chat 2 returns success.
+        mock_chat2 = mock.MagicMock()
+        mock_response_success = mock_gemini_response(
+            text=json.dumps({"some_string": "hello", "some_int": 123})
+        )
+        mock_chat2.send_message.return_value = mock_response_success
+
+        mock_client.chats.create.side_effect = [mock_chat1, mock_chat2]
+
+        result = check_reverts.query_gemini(
+            client=mock_client,
+            system_prompt="prompt",
+            response_schema=FakeInference,
+            prompt_content="content",
+            sha="sha",
+        )
+
+        self.assertEqual(
+            result, FakeInference(some_string="hello", some_int=123)
+        )
+        mock_client.chats.create.assert_has_calls(
+            [
+                mock.call(model=check_reverts.GEMINI_MODEL, config=mock.ANY),
+                mock.call(model=check_reverts.GEMINI_MODEL, config=mock.ANY),
+            ]
+        )
+        mock_chat1.send_message.assert_called_once_with("content")
+        mock_chat2.send_message.assert_called_once_with("content")
+        mock_sleep.assert_called_once_with(2)
