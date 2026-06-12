@@ -24,6 +24,33 @@ HUNK_HEADER_RE = re.compile(r"^@@\s+-(\d+),(\d+)\s+\+(\d+),(\d+)\s+@@")
 HUNK_END_RE = re.compile(r"^--\s*$")
 PATCH_SUBFILE_HEADER_RE = re.compile(r"^\+\+\+ [ab]/(.*)$")
 
+# Don't allow patches to have file names longer than this number of
+# characters. We should have some number here as titles
+# can be broken, but we also need it long enough to ensure
+# unique file names.
+_MAX_PATCH_NAME_LENGTH = 128
+# Used for cleaning patch names.
+_REPLACE_REGEX = re.compile(r"\W+")
+
+
+def _maybe_string_to_int(s: str | None) -> int | None:
+    if s is None:
+        return None
+    if s.strip().lower() in {"null", "none"}:
+        return None
+    return int(s)
+
+
+def _parse_comma_list(
+    commit_metadata: dict[str, str], key: str, default: str
+) -> list[str]:
+    return [
+        p.strip()
+        for p in commit_metadata.get(key, default).split(",")
+        if p.strip()
+    ]
+
+
 # A list of all packages in chromiumos-overlay that deploy subsets of the LLVM
 # source tree we ship.
 CHROMEOS_LLVM_SUBPACKAGES = (
@@ -193,6 +220,68 @@ class PatchEntry:
             data.get("platforms"),
             data["rel_patch_path"],
             data.get("version_range"),
+        )
+
+    @classmethod
+    def from_commit_metadata(
+        cls,
+        workdir: Path,
+        commit_metadata: dict[str, str],
+        subject: str,
+        commit_sha: str,
+        rel_patch_path: str | None = None,
+        verify_workdir: bool = True,
+    ) -> Self:
+        """Constructs a PatchEntry from raw commit message metadata.
+
+        If rel_patch_path is not provided, it will be generated from the
+        metadata.
+        """
+        original_sha = commit_metadata.get("patch.metadata.original_sha")
+
+        if rel_patch_path is None:
+            if (
+                commit_metadata.get("patch.cherry", "false").strip().lower()
+                == "true"
+            ):
+                patch_name = original_sha or commit_sha
+                rel_patch_path = f"cherry/{patch_name}.patch"
+            else:
+                cleaned_name = _REPLACE_REGEX.sub("-", subject)[
+                    :_MAX_PATCH_NAME_LENGTH
+                ]
+                rel_patch_path = f"{cleaned_name}.patch"
+
+        metadata: dict[str, Any] = {
+            "info": _parse_comma_list(
+                commit_metadata, "patch.metadata.info", ""
+            ),
+            "title": subject,
+            "author": commit_metadata.get("patch.metadata.author", "").strip(),
+        }
+        if original_sha:
+            metadata["original_sha"] = original_sha
+
+        platforms = sorted(
+            _parse_comma_list(commit_metadata, "patch.platforms", "chromiumos")
+        )
+
+        version_range = {
+            "from": _maybe_string_to_int(
+                commit_metadata.get("patch.version_range.from")
+            ),
+            "until": _maybe_string_to_int(
+                commit_metadata.get("patch.version_range.until")
+            ),
+        }
+
+        return cls(
+            workdir=workdir,
+            metadata=metadata,
+            platforms=platforms,
+            rel_patch_path=rel_patch_path,
+            version_range=version_range,
+            verify_workdir=verify_workdir,
         )
 
     def to_dict(self) -> dict[str, Any]:
