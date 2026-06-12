@@ -46,6 +46,7 @@ from google.genai import types
 
 
 GEMINI_MODEL = "gemini-3.5-flash"
+PER_FILE_DIFF_BUDGET = 50_000
 
 
 T = typing.TypeVar("T")
@@ -117,6 +118,63 @@ class ParsableFromJSON(typing.Protocol):
         """Parses 'untrusted' JSON into an instance of this class."""
 
 
+@dataclasses.dataclass(frozen=True, eq=True)
+class GeminiRevertClassification:
+    """The results of the classification turn."""
+
+    reverted_shas: list[str]
+    reverted_prs: list[int]
+    is_revert: bool
+    is_reland: bool
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        reverted_shas = get_dict_elem_with_type(
+            json_object, "reverted_shas", list[str]
+        )
+        reverted_prs = get_dict_elem_with_type(
+            json_object, "reverted_prs", list[int]
+        )
+        reverted_shas.sort()
+        reverted_prs.sort()
+        return cls(
+            reverted_shas=reverted_shas,
+            reverted_prs=reverted_prs,
+            is_revert=get_dict_elem_with_type(json_object, "is_revert", bool),
+            is_reland=get_dict_elem_with_type(json_object, "is_reland", bool),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class ChromeOSDoesntCareInference:
+    """Inference result indicating if ChromeOS cares about the commit."""
+
+    chromeos_doesnt_care: bool
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        return cls(
+            chromeos_doesnt_care=get_dict_elem_with_type(
+                json_object, "chromeos_doesnt_care", bool
+            )
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class AndroidDoesntCareInference:
+    """Inference result indicating if Android cares about the commit."""
+
+    android_doesnt_care: bool
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        return cls(
+            android_doesnt_care=get_dict_elem_with_type(
+                json_object, "android_doesnt_care", bool
+            )
+        )
+
+
 InferenceT = typing.TypeVar("InferenceT", bound=ParsableFromJSON)
 
 
@@ -150,20 +208,14 @@ class GeminiRevertInference:
     whether any SHAs or PRs can be identified for it.
     """
 
-    is_amdgpu_only: bool
+    chromeos_doesnt_care: bool
     """
-    Indicates whether the commit exclusively applies to AMDGPU functionality.
-    """
-
-    is_flang_only: bool
-    """
-    Indicates whether the commit exclusively applies to Flang functionality, the
-    Fortran frontend.
+    Indicates whether ChromeOS does not care about this commit.
     """
 
-    is_test_only: bool
+    android_doesnt_care: bool
     """
-    Indicates whether the commit exclusively modifies test-related files.
+    Indicates whether Android does not care about this commit.
     """
 
     @classmethod
@@ -192,14 +244,11 @@ class GeminiRevertInference:
             reverted_prs=reverted_prs,
             is_revert=get_dict_elem_with_type(json_object, "is_revert", bool),
             is_reland=get_dict_elem_with_type(json_object, "is_reland", bool),
-            is_amdgpu_only=get_dict_elem_with_type(
-                json_object, "is_amdgpu_only", bool
+            chromeos_doesnt_care=get_dict_elem_with_type(
+                json_object, "chromeos_doesnt_care", bool
             ),
-            is_flang_only=get_dict_elem_with_type(
-                json_object, "is_flang_only", bool
-            ),
-            is_test_only=get_dict_elem_with_type(
-                json_object, "is_test_only", bool
+            android_doesnt_care=get_dict_elem_with_type(
+                json_object, "android_doesnt_care", bool
             ),
         )
 
@@ -211,7 +260,9 @@ class GeminiRevertInference:
 class SystemPrompts:
     """System prompts for Gemini queries."""
 
-    initial_classification: str
+    classification: str
+    cros_doesnt_care: str
+    android_doesnt_care: str
 
 
 class GeminiResponseIsBrokenError(Exception):
@@ -337,6 +388,7 @@ def query_gemini(
     response_schema: type[InferenceT],
     prompt_content: str,
     sha: str,
+    tools: list[Any] | None = None,
 ) -> InferenceT:
     """Queries Gemini and handles retries and errors."""
     # This is in a `range(_)` loop for an unfortunate reason: despite attempts
@@ -355,11 +407,11 @@ def query_gemini(
 
     chat_config = types.GenerateContentConfig(
         automatic_function_calling=types.AutomaticFunctionCallingConfig(
-            disable=True,
+            disable=not tools,
         ),
         system_instruction=system_prompt,
         response_mime_type="application/json",
-        tool_config=types.ToolConfig(),
+        tools=tools,
         response_schema=response_schema,
         thinking_config=types.ThinkingConfig(
             include_thoughts=True,
@@ -436,15 +488,9 @@ def query_gemini(
     raise ValueError(f"Hit Gemini retry limit for SHA {sha}")
 
 
-def process_one_sha(
-    client: genai.Client,
-    system_prompts: SystemPrompts,
-    llvm_dir: Path,
-    sha: str,
-) -> GeminiRevertInference:
-    """Queries the given genai client for revert info"""
-    commit_info = subprocess.run(
-        ("git", "log", "-n1", "--name-status", sha),
+def get_commit_message(sha: str, llvm_dir: Path) -> str:
+    return subprocess.run(
+        ("git", "log", "-n1", "--format=%B", sha),
         check=True,
         cwd=llvm_dir,
         stdin=subprocess.DEVNULL,
@@ -453,14 +499,111 @@ def process_one_sha(
         errors="replace",
     ).stdout
 
-    logging.info("Processing commit %s...", sha)
 
-    return query_gemini(
+def get_name_status(sha: str, llvm_dir: Path) -> str:
+    return subprocess.run(
+        ("git", "diff-tree", "--no-commit-id", "--name-status", "-r", sha),
+        check=True,
+        cwd=llvm_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    ).stdout
+
+
+def process_one_sha(
+    client: genai.Client,
+    system_prompts: SystemPrompts,
+    llvm_dir: Path,
+    sha: str,
+) -> GeminiRevertInference:
+    """Queries the given genai client for revert info"""
+    commit_message = get_commit_message(sha, llvm_dir)
+    name_status = get_name_status(sha, llvm_dir)
+
+    # 1. Query 1: Classification (No tools)
+    classification = query_gemini(
         client=client,
-        system_prompt=system_prompts.initial_classification,
-        response_schema=GeminiRevertInference,
-        prompt_content=commit_info,
+        system_prompt=system_prompts.classification,
+        response_schema=GeminiRevertClassification,
+        prompt_content=commit_message,
         sha=sha,
+    )
+
+    if not classification.is_revert:
+        return GeminiRevertInference(
+            reverted_shas=classification.reverted_shas,
+            reverted_prs=classification.reverted_prs,
+            is_revert=classification.is_revert,
+            is_reland=classification.is_reland,
+            chromeos_doesnt_care=False,
+            android_doesnt_care=False,
+        )
+
+    def git_diff(file_paths: list[str]) -> str:
+        """Returns the git diff for `file_paths` in the current commit.
+
+        Args:
+            file_paths: The list of file paths to inspect.
+        """
+        if not file_paths:
+            return (
+                "Error: file_paths cannot be empty. Please provide at least "
+                "one file path to inspect."
+            )
+
+        results = []
+        for file_path in file_paths:
+            try:
+                result = subprocess.run(
+                    ("git", "diff", f"{sha}~1", sha, "--", file_path),
+                    cwd=llvm_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=True,
+                    errors="replace",
+                )
+                output = result.stdout
+                if len(output) > PER_FILE_DIFF_BUDGET:
+                    output = (
+                        output[:PER_FILE_DIFF_BUDGET] + "\n... [TRUNCATED] ..."
+                    )
+                results.append(f"--- Diff for {file_path} ---\n{output}")
+            except subprocess.CalledProcessError as e:
+                results.append(
+                    f"--- Diff for {file_path} ---\n"
+                    f"Error running git diff: {e.output}"
+                )
+        return "\n\n".join(results)
+
+    cros_prompt = f"Commit Msg:\n{commit_message}\nFiles:\n{name_status}"
+    cros_doesnt_care = query_gemini(
+        client=client,
+        system_prompt=system_prompts.cros_doesnt_care,
+        response_schema=ChromeOSDoesntCareInference,
+        prompt_content=cros_prompt,
+        sha=sha,
+        tools=[git_diff],
+    )
+
+    android_doesnt_care = query_gemini(
+        client=client,
+        system_prompt=system_prompts.android_doesnt_care,
+        response_schema=AndroidDoesntCareInference,
+        prompt_content=cros_prompt,
+        sha=sha,
+        tools=[git_diff],
+    )
+
+    return GeminiRevertInference(
+        reverted_shas=classification.reverted_shas,
+        reverted_prs=classification.reverted_prs,
+        is_revert=classification.is_revert,
+        is_reland=classification.is_reland,
+        chromeos_doesnt_care=cros_doesnt_care.chromeos_doesnt_care,
+        android_doesnt_care=android_doesnt_care.android_doesnt_care,
     )
 
 
@@ -557,9 +700,15 @@ def main(argv: list[str]) -> None:
     jobs: int = opts.jobs
     llvm_dir: Path = opts.llvm_dir
     system_prompts = SystemPrompts(
-        initial_classification=(
-            my_dir / "check_reverts_system_prompt.md"
-        ).read_text(encoding="utf-8")
+        classification=(my_dir / "check_reverts_system_prompt.md").read_text(
+            encoding="utf-8"
+        ),
+        cros_doesnt_care=(
+            my_dir / "chromeos_doesnt_care_system_prompt.md"
+        ).read_text(encoding="utf-8"),
+        android_doesnt_care=(
+            my_dir / "android_doesnt_care_system_prompt.md"
+        ).read_text(encoding="utf-8"),
     )
 
     if gemini_api_key := opts.gemini_api_key:

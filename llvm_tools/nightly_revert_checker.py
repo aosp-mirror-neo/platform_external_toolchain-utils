@@ -279,12 +279,11 @@ def infer_reverts_with_gemini(
         logging.warning("Commit %s not found precached by Gemini", sha)
     elif gemini_result.is_reland:
         skip_reason = "it's a reland"
-    elif gemini_result.is_amdgpu_only:
-        skip_reason = "it's amdgpu-only"
-    elif gemini_result.is_flang_only:
-        skip_reason = "it's flang-only"
-    elif gemini_result.is_test_only and is_chromeos:
-        skip_reason = "it's test-only"
+    elif is_chromeos:
+        if gemini_result.chromeos_doesnt_care:
+            skip_reason = "ChromeOS doesn't care"
+    elif gemini_result.android_doesnt_care:
+        skip_reason = "Android doesn't care"
 
     if skip_reason:
         logging.info(

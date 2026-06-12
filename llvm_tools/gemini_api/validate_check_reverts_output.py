@@ -309,6 +309,8 @@ def main(argv: list[str]) -> None:
 # This is placed near the bottom of the file, since it's a decent bit of
 # clutter. No one's likely to get value out of reading the entire listing.
 GOLDEN_SHAS: tuple[str, ...] = (
+    # AMDGPU + test change.
+    "dff081c26f11e1679411e7c0b4012e6a740b6cc3",
     # AMDGPU+CUDA change.
     "a03f82d7e582078163bce7ecaf960e8a53fb4744",
     # A revert of said AMDGPU+CUDA change.

@@ -43,9 +43,8 @@ class GeminiRevertInference:
     )
     is_revert: bool = False
     is_reland: bool = False
-    is_amdgpu_only: bool = False
-    is_flang_only: bool = False
-    is_test_only: bool = False
+    chromeos_doesnt_care: bool = False
+    android_doesnt_care: bool = False
 
     def to_json(self) -> dict[str, Any] | None:
         # The vast majority of answers Gemini gives will be `empty`. To reduce
@@ -60,27 +59,41 @@ class GeminiRevertInference:
     ) -> "GeminiRevertInference":
         if json_object is None:
             return _EMPTY_INFERENCE
+
+        # Backward compatibility.
+        #
+        # NOTE: After the `doesnt_care` logic has stuck for a run on
+        # Chrotomation (so at most a week), we can remove this and just swap to
+        # `json_object["chromeos_doesnt_care"]`/etc below.
+        is_amdgpu_only = json_object.get("is_amdgpu_only", False)
+        is_flang_only = json_object.get("is_flang_only", False)
+        is_test_only = json_object.get("is_test_only", False)
+        default_cros_doesnt_care = (
+            is_amdgpu_only or is_flang_only or is_test_only
+        )
+        default_android_doesnt_care = is_amdgpu_only or is_flang_only
+
         return cls(
             reverted_shas=tuple(json_object["reverted_shas"]),
             reverted_prs=tuple(json_object["reverted_prs"]),
             is_revert=json_object["is_revert"],
             is_reland=json_object["is_reland"],
-            # NOTE: These are `.get`s for backwards compat. Once this has run on
-            # Chrotomation successfully, they can be converted to `[]`.
-            is_amdgpu_only=json_object.get("is_amdgpu_only", False),
-            is_flang_only=json_object.get("is_flang_only", False),
-            is_test_only=json_object.get("is_test_only", False),
+            chromeos_doesnt_care=json_object.get(
+                "chromeos_doesnt_care", default_cros_doesnt_care
+            ),
+            android_doesnt_care=json_object.get(
+                "android_doesnt_care", default_android_doesnt_care
+            ),
         )
 
     def is_empty(self) -> bool:
-        return not (
-            self.is_revert
-            or self.is_reland
-            or self.reverted_shas
-            or self.reverted_prs
-            or self.is_amdgpu_only
-            or self.is_flang_only
-            or self.is_test_only
+        return (
+            not self.is_revert
+            and not self.is_reland
+            and not self.reverted_shas
+            and not self.reverted_prs
+            and not self.chromeos_doesnt_care
+            and not self.android_doesnt_care
         )
 
 
@@ -335,9 +348,8 @@ def _normalize_gemini_result(
         reverted_prs=tuple(dedup_prs),
         is_revert=True,
         is_reland=inference.is_reland,
-        is_amdgpu_only=inference.is_amdgpu_only,
-        is_flang_only=inference.is_flang_only,
-        is_test_only=inference.is_test_only,
+        chromeos_doesnt_care=inference.chromeos_doesnt_care,
+        android_doesnt_care=inference.android_doesnt_care,
     )
 
 
