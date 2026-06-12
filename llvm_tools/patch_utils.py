@@ -742,7 +742,13 @@ def _write_json_changes(
     patches: list[dict[str, Any]], file_io: IO[str], indent_len: int = 2
 ) -> None:
     """Write JSON changes to file, does not acquire new file lock."""
-    json.dump(patches, file_io, indent=indent_len, separators=(",", ": "))
+    json.dump(
+        patches,
+        file_io,
+        indent=indent_len,
+        separators=(",", ": "),
+        ensure_ascii=False,
+    )
     # Need to add a newline as json.dump omits it.
     file_io.write("\n")
 

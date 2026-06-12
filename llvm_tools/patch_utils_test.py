@@ -426,6 +426,18 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             removed_paths, [tempdir / "dead.patch", tempdir / "gone.patch"]
         )
 
+    def test_write_json_changes_unicode(self) -> None:
+        patches = [{"metadata": {"title": "Revert …"}}]
+        tempdir = self.make_tempdir()
+        patches_json = tempdir / "PATCHES.json"
+        with patches_json.open("w", encoding="utf-8") as f:
+            # pylint: disable=protected-access
+            pu._write_json_changes(patches, f)
+
+        content = patches_json.read_text(encoding="utf-8")
+        self.assertIn("Revert …", content)
+        self.assertNotIn("Revert \\u2026", content)
+
     @staticmethod
     def _default_json_dict() -> dict:
         return {

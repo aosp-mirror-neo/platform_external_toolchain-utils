@@ -130,6 +130,7 @@ class PatchContext:
                         [pe.to_dict() for pe in old_patch_entries + pes],
                         f,
                         indent=indent_len,
+                        ensure_ascii=False,
                     )
                     f.write("\n")
 

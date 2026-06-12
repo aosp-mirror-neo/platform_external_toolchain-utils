@@ -485,5 +485,6 @@ def main(argv: list[str]) -> None:
             f,
             indent=2,
             sort_keys=True,
+            ensure_ascii=False,
         )
         f.write("\n")
