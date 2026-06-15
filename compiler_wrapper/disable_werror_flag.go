@@ -128,12 +128,9 @@ func disableWerrorFlags(originalArgs, extraFlags []string) []string {
 	for _, flag := range originalArgs {
 		if strings.HasPrefix(flag, "-Werror=") {
 			allExtraFlags = append(allExtraFlags, strings.Replace(flag, "-Werror", "-Wno-error", 1))
-		}
-		// -pedantic-errors can't be overridden later with a `-Wno` variant, so just
-		// replace it with `-pedantic`.
-		if flag == "-pedantic-errors" {
-			newArgs = append(newArgs, "-pedantic")
-			continue
+		} else if flag == "-pedantic-errors" {
+			// -pedantic-errors is effectively `-Wpedantic -Werror=pedantic`.
+			allExtraFlags = append(allExtraFlags, "-Wno-error=pedantic")
 		}
 		if !strings.Contains(flag, "-warnings-as-errors") {
 			newArgs = append(newArgs, flag)

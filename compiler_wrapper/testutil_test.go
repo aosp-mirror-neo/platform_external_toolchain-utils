@@ -70,6 +70,7 @@ func withTestContext(t *testing.T, work func(ctx *testContext)) {
 		cfg:     &config{},
 	}
 	ctx.updateConfig(&config{})
+	ctx.writeFile("/usr/bin/ccache", "")
 
 	defer ctx.maybeReleaseUmaskDependency()
 	work(&ctx)
@@ -179,6 +180,14 @@ func (ctx *testContext) exec(cmd *command) error {
 	return nil
 }
 
+func (ctx *testContext) fileExists(path string) bool {
+	if !filepath.IsAbs(path) || !strings.HasPrefix(path, ctx.tempDir) {
+		path = filepath.Join(ctx.tempDir, path)
+	}
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 func (ctx *testContext) must(exitCode int) *command {
 	if exitCode != 0 {
 		ctx.t.Fatalf("expected no error, but got exit code %d. Stderr: %s",
@@ -209,7 +218,7 @@ func (ctx *testContext) newCommand(path string, args ...string) *command {
 }
 
 func (ctx *testContext) writeFile(fullFileName string, fileContent string) {
-	if !filepath.IsAbs(fullFileName) {
+	if !filepath.IsAbs(fullFileName) || !strings.HasPrefix(fullFileName, ctx.tempDir) {
 		fullFileName = filepath.Join(ctx.tempDir, fullFileName)
 	}
 	if err := os.MkdirAll(filepath.Dir(fullFileName), 0777); err != nil {
@@ -221,16 +230,25 @@ func (ctx *testContext) writeFile(fullFileName string, fileContent string) {
 }
 
 func (ctx *testContext) symlink(oldname string, newname string) {
-	if !filepath.IsAbs(oldname) {
+	if !filepath.IsAbs(oldname) || !strings.HasPrefix(oldname, ctx.tempDir) {
 		oldname = filepath.Join(ctx.tempDir, oldname)
 	}
-	if !filepath.IsAbs(newname) {
+	if !filepath.IsAbs(newname) || !strings.HasPrefix(newname, ctx.tempDir) {
 		newname = filepath.Join(ctx.tempDir, newname)
 	}
 	if err := os.MkdirAll(filepath.Dir(newname), 0777); err != nil {
 		ctx.t.Fatal(err)
 	}
 	if err := os.Symlink(oldname, newname); err != nil {
+		ctx.t.Fatal(err)
+	}
+}
+
+func (ctx *testContext) removeFile(fullFileName string) {
+	if !filepath.IsAbs(fullFileName) || !strings.HasPrefix(fullFileName, ctx.tempDir) {
+		fullFileName = filepath.Join(ctx.tempDir, fullFileName)
+	}
+	if err := os.Remove(fullFileName); err != nil {
 		ctx.t.Fatal(err)
 	}
 }

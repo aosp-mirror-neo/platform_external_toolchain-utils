@@ -106,6 +106,78 @@ func TestDoubleBuildUsesSpecificWnoErrorFlagsForWarningsThatDefaultToErrors(t *t
 	})
 }
 
+func TestDoubleBuildWithPedanticErrorsAndOtherError(t *testing.T) {
+	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				if err := verifyArgCount(cmd, 0, "-Wno-error"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-pedantic-errors"); err != nil {
+					return err
+				}
+				fmt.Fprint(stderr, arbitraryWerrorStderr)
+				return newExitCodeError(1)
+			case 2:
+				if err := verifyArgCount(cmd, 1, "-pedantic-errors"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-Wno-error=pedantic"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-Wno-error"); err != nil {
+					return err
+				}
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, "-pedantic-errors", mainCc)))
+		if ctx.cmdCount != 2 {
+			t.Errorf("expected 2 calls. Got: %d", ctx.cmdCount)
+		}
+	})
+}
+
+func TestDoubleBuildWithPedanticErrorsAndPedanticError(t *testing.T) {
+	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
+		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
+			switch ctx.cmdCount {
+			case 1:
+				if err := verifyArgCount(cmd, 0, "-Wno-error"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-pedantic-errors"); err != nil {
+					return err
+				}
+				fmt.Fprint(stderr, "error: foo [-Wpedantic]")
+				return newExitCodeError(1)
+			case 2:
+				if err := verifyArgCount(cmd, 1, "-pedantic-errors"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 2, "-Wno-error=pedantic"); err != nil {
+					return err
+				}
+				if err := verifyArgCount(cmd, 1, "-Wno-error"); err != nil {
+					return err
+				}
+				return nil
+			default:
+				t.Fatalf("unexpected command: %#v", cmd)
+				return nil
+			}
+		}
+		ctx.must(callCompiler(ctx, ctx.cfg, ctx.newCommand(clangX86_64, "-pedantic-errors", mainCc)))
+		if ctx.cmdCount != 2 {
+			t.Errorf("expected 2 calls. Got: %d", ctx.cmdCount)
+		}
+	})
+}
+
 func TestDoubleBuildDoesntRecompileIfNoObviousWerrorsExist(t *testing.T) {
 	withForceDisableWErrorTestContext(t, func(ctx *testContext) {
 		ctx.cmdMock = func(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
