@@ -131,7 +131,7 @@
     "rel_patch_path": "v7-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
       "from": 571439,
-      "until": 584947
+      "until": 577525
     }
   },
   {
@@ -145,7 +145,7 @@
     ],
     "rel_patch_path": "v8-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
-      "from": 584947,
+      "from": 579548,
       "until": null
     }
   },
@@ -299,7 +299,7 @@
     "rel_patch_path": "v2-libc-Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION_DETECTAB.patch",
     "version_range": {
       "from": 563880,
-      "until": 584947
+      "until": 577525
     }
   },
   {
