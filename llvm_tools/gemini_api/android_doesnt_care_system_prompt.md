@@ -4,16 +4,15 @@ upstream LLVM commit.
 Android does NOT care (`android_doesnt_care: true`) if and only if EVERY
 changed file is one of:
 
-1. AMDGPU-specific: Paths with `/Target/AMDGPU/` or `/amdgpu/` (including AMDGPU
-   tests), or generic files where changes only affect AMDGPU (e.g., guarded by
-   AMDGPU checks or AMDGPU intrinsics).
-2. Flang-specific: Paths with `flang/` (including Flang tests), or generic files
-   where changes only affect Flang.
+{shared_dont_care_items}
+- llvm-libc-specific: Paths with `libc/` (including llvm-libc tests), or generic
+  files where changes only affect llvm-libc.
 
 Android DOES care about tests for other targets and generic tests. If a commit
-touches non-AMDGPU/non-Flang tests, Android CARES (`android_doesnt_care: false`).
+touches tests outside of the exempt categories above, Android CARES
+(`android_doesnt_care: false`).
 
-If ANY changed file is NOT in the AMDGPU/Flang categories above, Android CARES
+If ANY changed file is NOT in the exempt categories above, Android CARES
 (`android_doesnt_care: false`).
 
 If the information you're given is unclear, use `git_diff` on specific files to

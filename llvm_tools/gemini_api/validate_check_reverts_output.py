@@ -392,6 +392,47 @@ GOLDEN_SHAS: tuple[str, ...] = (
     "a85c725952f7eec54552c195353ff0cb6275a2e0",
     # Is neither a revert nor reland, but speaks of another PR being reverted.
     "a14659a2c8c82804b611925fa7a48fd26ef1d135",
+    # CUDA reverts/relands.
+    "5cf20a6c9ed5693e5a075f458380eaea5f3f42c1",
+    "2da234946a4f13a27d4322565cb4103caf9cbff1",
+    "298f1c276f4f9c18b25a79ffe6e619e89c5fbf7e",
+    "52ff58c3300338876ae63126ce0d33331000f1ba",
+    "8ec0552a7f1f50986dda6d13eae310d121d7e3ba",
+    # llvm-libc reverts/relands.
+    "a14d084bbb1a7261d8a71c56120159abb6af330b",
+    "0f679999aae135b388c25fb1acbb030109c6418f",
+    "5a13758207cc0f1e02a0fe0ae492bb98e2d3d070",
+    "4c7dc9c1783fa10e5e99e28ed25103a046c02c7d",
+    "fc99b677598162682f845d31fa3ece5ec9d38b2f",
+    # LoongArch reverts/relands.
+    "06f779b69d8294b296ee9dd14b82f0e2fe59899f",
+    "d93788fcbf585e7cd3866b514bad972765b17e8d",
+    "1d5d18924d185a4267462479307f1ff9911cb112",
+    "a60a5421b60be1bce0272385fa16846ada5eed5e",
+    "63e6bba0c322b6c07a4c66f09e6fd84e786248e6",
+    # libclc reverts/relands.
+    "560e22926804f6ca818952e815ec63c434460039",
+    "295d5484c09943d2af2c45c764157dc045d4a0d9",
+    "2c9efd0177910753008767a8c50e62f676721443",
+    "76befc86dea9cad6be870c04732379f7ecf596dd",
+    "2c980310f67c13dd89c8702d40abeab47a4a2b4b",
+    # COFF/DirectX reverts/relands.
+    "d655054395e2dba2b949e170d7764cc8c9c8a597",
+    "0c3f51c0427022f16129a6ac4d2a11ad83ae7703",
+    "4d800633b2683304a5431d002d8ffc40a1815520",
+    "5d4dd5357076de54d70f8621a39626b393a6e110",
+    "911841f717eb8acaccf4f3deb5f85fbf6903f55f",
+    # MLIR reverts/relands.
+    "862ba4798e09142ae9cf1f259b94301c7438c156",
+    "88afb5af47a95af41451e835be28093a9d1ab333",
+    "7cccf56ce6bb98cd685ad67b8e4db9293768741c",
+    "ce1a9fd76640929fe340c5c5d1bb493ea09ca9bc",
+    "b87be02cc74db3a929b4b72a26f2577dc8b7fa11",
+    # Intersections of dont care categories (reverts/relands).
+    "ce553ab69f0f1bad780c6f0f8b4e14d71121b274",
+    "c25e77436ea44b4c980f4974dee8984298d13a08",
+    "3ed48bf648cb6d94d8385c336bc72aadcd59f4f2",
+    "754d3d0d966423f9d308c6823deed55b02bac9f2",
     # **NOTE: it's recommended that you add SHAs _above_ this block**
     # This script can take a while to run to completion, and the SHAs below are
     # mostly uninteresting non-reverts. See the `--stop-after=` flag for faster

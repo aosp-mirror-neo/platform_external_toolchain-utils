@@ -699,16 +699,19 @@ def main(argv: list[str]) -> None:
 
     jobs: int = opts.jobs
     llvm_dir: Path = opts.llvm_dir
+    shared_items = (my_dir / "shared_dont_care_prompt_items.md").read_text(
+        encoding="utf-8"
+    )
     system_prompts = SystemPrompts(
         classification=(my_dir / "check_reverts_system_prompt.md").read_text(
             encoding="utf-8"
         ),
-        cros_doesnt_care=(
-            my_dir / "chromeos_doesnt_care_system_prompt.md"
-        ).read_text(encoding="utf-8"),
-        android_doesnt_care=(
-            my_dir / "android_doesnt_care_system_prompt.md"
-        ).read_text(encoding="utf-8"),
+        cros_doesnt_care=(my_dir / "chromeos_doesnt_care_system_prompt.md")
+        .read_text(encoding="utf-8")
+        .replace("{shared_dont_care_items}", shared_items),
+        android_doesnt_care=(my_dir / "android_doesnt_care_system_prompt.md")
+        .read_text(encoding="utf-8")
+        .replace("{shared_dont_care_items}", shared_items),
     )
 
     if gemini_api_key := opts.gemini_api_key:
