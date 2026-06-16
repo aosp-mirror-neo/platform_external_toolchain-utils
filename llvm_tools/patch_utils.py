@@ -33,12 +33,17 @@ _MAX_PATCH_NAME_LENGTH = 128
 _REPLACE_REGEX = re.compile(r"\W+")
 
 
-def _maybe_string_to_int(s: str | None) -> int | None:
-    if s is None:
-        return None
-    if s.strip().lower() in {"null", "none"}:
-        return None
-    return int(s)
+_KNOWN_KEYS = frozenset(
+    (
+        "patch.cherry",
+        "patch.version_range.from",
+        "patch.version_range.until",
+        "patch.metadata.original_sha",
+        "patch.metadata.author",
+        "patch.metadata.info",
+        "patch.platforms",
+    )
+)
 
 
 def _parse_comma_list(
@@ -184,6 +189,123 @@ class PatchResult:
         return s
 
 
+class MetadataValueError(ValueError):
+    """Raised when commit metadata has validation errors."""
+
+    def __init__(self, complaints: list[str]) -> None:
+        super().__init__("\n".join(complaints))
+        self.complaints = complaints
+
+
+@dataclasses.dataclass(frozen=True)
+class ParsedCommitMetadata:
+    """Structured, validated representation of commit patch metadata."""
+
+    cherry: bool
+    original_sha: str | None
+    author: str
+    info: list[str]
+    platforms: list[str]
+    version_from: int | None
+    version_until: int | None
+
+    @classmethod
+    def from_dict(cls, commit_metadata: dict[str, str]) -> Self:
+        """Parses and validates a commit metadata dictionary.
+
+        Raises:
+            MetadataValueError: If validation fails.
+        """
+
+        # Note on control flow: To ensure users see all metadata issues in a
+        # single pass, this function avoids early exits and collects all
+        # complaints into `errors`. We use safe defaults so validation
+        # continues despite malformed data.
+        errors = []
+
+        def _maybe_string_to_int(key: str) -> int | None:
+            if key not in commit_metadata:
+                return None
+            val = commit_metadata[key].strip()
+            if val.isdigit():
+                return int(val)
+            if val.lower() in ("null", "none"):
+                return None
+            errors.append(
+                f"{key} must be an integer or 'null'/'none', "
+                f"got '{commit_metadata[key]}'"
+            )
+            return None
+
+        # Check patch.cherry
+        cherry = False
+        if "patch.cherry" in commit_metadata:
+            val = commit_metadata["patch.cherry"].strip().lower()
+            if val == "true":
+                cherry = True
+            elif val == "false":
+                cherry = False
+            else:
+                errors.append(
+                    "patch.cherry must be 'true' or 'false', "
+                    f"got '{commit_metadata['patch.cherry']}'"
+                )
+
+        # Check patch.version_range.from and until
+        version_from = _maybe_string_to_int("patch.version_range.from")
+        version_until = _maybe_string_to_int("patch.version_range.until")
+        if (
+            version_from is not None
+            and version_until is not None
+            and version_from > version_until
+        ):
+            errors.append(
+                f"patch.version_range.from ({version_from}) must be "
+                f"<= patch.version_range.until ({version_until})"
+            )
+
+        # Check patch.metadata.original_sha
+        original_sha = commit_metadata.get("patch.metadata.original_sha")
+        if original_sha is not None:
+            original_sha = original_sha.strip()
+            if not re.match(r"^[0-9a-fA-F]{40}$", original_sha):
+                val = commit_metadata["patch.metadata.original_sha"]
+                errors.append(
+                    "patch.metadata.original_sha must be a 40-character "
+                    f"hex SHA, got '{val}'"
+                )
+            if not cherry:
+                errors.append(
+                    "patch.metadata.original_sha is present, "
+                    "but patch.cherry is false"
+                )
+
+        errors.extend(
+            f"Unknown patch metadata key: '{key}'"
+            for key in commit_metadata
+            if key.startswith("patch.") and key not in _KNOWN_KEYS
+        )
+
+        if errors:
+            raise MetadataValueError(errors)
+
+        author = commit_metadata.get("patch.metadata.author", "").strip()
+        info = _parse_comma_list(commit_metadata, "patch.metadata.info", "")
+        platforms = sorted(
+            _parse_comma_list(commit_metadata, "patch.platforms", "chromiumos")
+        )
+
+        return cls(
+            cherry=cherry,
+            original_sha=original_sha,
+            author=author,
+            info=info,
+            platforms=platforms,
+            version_from=version_from,
+            version_until=version_until,
+        )
+
+
 @dataclasses.dataclass
 class PatchEntry:
     """Object mapping of an entry of PATCHES.json."""
@@ -237,14 +359,11 @@ class PatchEntry:
         If rel_patch_path is not provided, it will be generated from the
         metadata.
         """
-        original_sha = commit_metadata.get("patch.metadata.original_sha")
+        parsed = ParsedCommitMetadata.from_dict(commit_metadata)
 
         if rel_patch_path is None:
-            if (
-                commit_metadata.get("patch.cherry", "false").strip().lower()
-                == "true"
-            ):
-                patch_name = original_sha or commit_sha
+            if parsed.cherry:
+                patch_name = parsed.original_sha or commit_sha
                 rel_patch_path = f"cherry/{patch_name}.patch"
             else:
                 cleaned_name = _REPLACE_REGEX.sub("-", subject)[
@@ -253,32 +372,22 @@ class PatchEntry:
                 rel_patch_path = f"{cleaned_name}.patch"
 
         metadata: dict[str, Any] = {
-            "info": _parse_comma_list(
-                commit_metadata, "patch.metadata.info", ""
-            ),
+            "info": parsed.info,
             "title": subject,
-            "author": commit_metadata.get("patch.metadata.author", "").strip(),
+            "author": parsed.author,
         }
-        if original_sha:
-            metadata["original_sha"] = original_sha
-
-        platforms = sorted(
-            _parse_comma_list(commit_metadata, "patch.platforms", "chromiumos")
-        )
+        if parsed.original_sha:
+            metadata["original_sha"] = parsed.original_sha
 
         version_range = {
-            "from": _maybe_string_to_int(
-                commit_metadata.get("patch.version_range.from")
-            ),
-            "until": _maybe_string_to_int(
-                commit_metadata.get("patch.version_range.until")
-            ),
+            "from": parsed.version_from,
+            "until": parsed.version_until,
         }
 
         return cls(
             workdir=workdir,
             metadata=metadata,
-            platforms=platforms,
+            platforms=parsed.platforms,
             rel_patch_path=rel_patch_path,
             version_range=version_range,
             verify_workdir=verify_workdir,
