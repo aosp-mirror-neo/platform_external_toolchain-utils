@@ -355,3 +355,9 @@ class FormatPatchTest(test_helpers.TempDirTestCase):
             self.foo_contents,
             formatted_patch,
         )
+
+    def test_get_commit_metadata(self) -> None:
+        """Test that we can get commit metadata correctly."""
+        meta = git_utils.get_commit_metadata(self.temp_dir, "HEAD")
+        self.assertNotEqual(meta.author, "")
+        self.assertNotEqual(meta.committer, "")

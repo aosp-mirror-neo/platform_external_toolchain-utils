@@ -391,7 +391,7 @@ def create_worktree(
             )
 
 
-def resolve_ref(git_dir: Path, ref: str) -> str:
+def resolve_ref(git_dir: Path, ref: str, quiet: bool = False) -> str:
     """Resolves the given ref or SHA shorthand to a full SHA.
 
     Raises:
@@ -403,6 +403,7 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL if quiet else None,
         encoding="utf-8",
     ).stdout.strip()
 
@@ -740,20 +741,21 @@ def get_commit_timestamp(git_dir: Path, ref: str) -> int:
     return int(stdout)
 
 
+def get_commit_message_body(git_dir: Path, ref: str) -> str:
+    """Return the commit message's body (excluding subject)."""
+    return subprocess.run(
+        ("git", "show", "--format=%b", "-s", ref),
+        cwd=git_dir,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        check=True,
+    ).stdout
+
+
 def get_commit_message_metadata(git_dir: Path, ref: str) -> dict[str, str]:
     """Return footer information for a given commit."""
-    commit_msg = (
-        subprocess.run(
-            ("git", "show", "--format=%b", "-s", ref),
-            cwd=git_dir,
-            encoding="utf-8",
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            check=True,
-        )
-        .stdout.strip()
-        .splitlines()
-    )
+    commit_msg = get_commit_message_body(git_dir, ref).strip().splitlines()
     return parse_message_metadata(commit_msg)
 
 
@@ -853,6 +855,28 @@ def commit_author_email(git_dir: Path, ref: str) -> str:
         encoding="utf-8",
         check=True,
     ).stdout.strip()
+
+
+@dataclasses.dataclass(frozen=True)
+class CommitMetadata:
+    """Metadata associated with a git commit."""
+
+    author: str
+    committer: str
+
+
+def get_commit_metadata(git_dir: Path, ref: str) -> CommitMetadata:
+    """Return the CommitMetadata of a given git ref."""
+    stdout = subprocess.run(
+        ("git", "show", "--format=%an <%ae>%n%cn <%ce>", "-s", ref),
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
+    author, committer = stdout.splitlines()
+    return CommitMetadata(author=author, committer=committer)
 
 
 def log(
