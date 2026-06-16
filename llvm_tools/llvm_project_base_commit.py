@@ -15,17 +15,6 @@ from cros_utils import git_utils
 from llvm_tools import patch_utils
 
 
-# This isn't a dict to prevent adding a tomli-w dependency.
-PRESUBMIT_CFG_CONTENTS = """\
-[Hook Overrides]
-cros_license_check: True
-long_line_check: True
-
-[Hook Overrides Options]
-cros_license_check: --exclude_regex=.*
-long_line_check: --exclude_regex=.*
-"""
-
 CROS_DIR_README = """\
 # CrOS Directory
 
@@ -82,7 +71,18 @@ def write_base_changes(
     )
     for copy_file in toolchain_utils_copy_files:
         shutil.copy(toolchain_utils_dir / copy_file, llvm_src_dir / copy_file)
-    (llvm_src_dir / "PRESUBMIT.cfg").write_text(PRESUBMIT_CFG_CONTENTS)
+    symlink_files = (
+        "GEMINI.md",
+        "PRESUBMIT.cfg",
+    )
+    for symlink_file in symlink_files:
+        rel_src_path = (
+            f"../{toolchain_utils_dir.name}/llvm_tools/llvm_project_files/"
+            f"{symlink_file}"
+        )
+        dest_path = llvm_src_dir / symlink_file
+        dest_path.unlink(missing_ok=True)
+        dest_path.symlink_to(rel_src_path)
     write_all_gentoo_cmake_hacks(llvm_src_dir, chromiumos_overlay)
     set_up_cros_dir(llvm_src_dir, llvm_svn_revision)
 
