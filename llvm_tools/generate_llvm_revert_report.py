@@ -14,10 +14,13 @@ import csv
 import dataclasses
 import json
 import logging
+from pathlib import Path
 import shlex
 import subprocess
 import sys
 from typing import Any, TextIO
+
+from cros_utils import cros_paths
 
 
 GERRIT = "gerrit"
@@ -45,7 +48,7 @@ class Revert:
             raise
 
 
-def find_reverts_in_gerrit(branch: str) -> str:
+def find_reverts_in_gerrit(branch: str, chromeos_root: Path) -> str:
     """Queries Gerrit for reverts on the given branch."""
     cmd = (
         GERRIT,
@@ -61,6 +64,7 @@ def find_reverts_in_gerrit(branch: str) -> str:
     logging.info("Running: %s", shlex.join(cmd))
     process = subprocess.run(
         cmd,
+        cwd=chromeos_root,
         check=True,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
@@ -69,9 +73,9 @@ def find_reverts_in_gerrit(branch: str) -> str:
     return process.stdout
 
 
-def find_reverts(branch: str) -> list[Revert]:
+def find_reverts(branch: str, chromeos_root: Path) -> list[Revert]:
     """Queries Gerrit for reverts on the given branch."""
-    reverts = find_reverts_in_gerrit(branch)
+    reverts = find_reverts_in_gerrit(branch, chromeos_root)
     return [Revert.from_dict(d) for d in json.loads(reverts)]
 
 
@@ -105,8 +109,10 @@ def main(argv: list[str]) -> None:
         level=logging.DEBUG if opts.debug else logging.INFO,
     )
 
+    chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
+
     reverts = sorted(
-        find_reverts(opts.branch),
+        find_reverts(opts.branch, chromeos_root),
         key=lambda r: r.status,
         reverse=True,
     )

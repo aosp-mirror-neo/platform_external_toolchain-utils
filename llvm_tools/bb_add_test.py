@@ -4,6 +4,7 @@
 
 """Tests for bb_add.py."""
 
+from pathlib import Path
 import unittest
 from unittest import mock
 
@@ -73,6 +74,7 @@ class Test(unittest.TestCase):
 
         result = bb_add.fetch_llvm_next_deps_or_exit(
             main_cl,
+            chromeos_tree=Path("/fake/path"),
             untrusted_reject=False,
             untrusted_ignore=True,
         )
@@ -97,6 +99,7 @@ class Test(unittest.TestCase):
         ):
             result = bb_add.fetch_llvm_next_deps_or_exit(
                 main_cl,
+                chromeos_tree=Path("/fake/path"),
                 untrusted_reject=False,
                 untrusted_ignore=False,
             )

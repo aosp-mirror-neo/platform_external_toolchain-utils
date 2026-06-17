@@ -138,9 +138,12 @@ def compute_new_urls(
 def update_manifest_and_allowlist_urls(
     manifest_cl: gerrit_utils.ChangeListURL,
     owners: list[str],
+    chromeos_root: Path,
 ) -> tuple[str | None, list[str]]:
     """Updates manifest and allowlist URLs by fetching deps and partitioning."""
-    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(manifest_cl)
+    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+        manifest_cl, chromeos_root
+    )
 
     main_cl_in_deps = None
     for change in deps:
@@ -187,6 +190,7 @@ def main(argv: list[str]) -> None:
     )
 
     opts = parse_opts(argv)
+    chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
 
     if not llvm_next.LLVM_NEXT_MANIFEST_CL:
         if not llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST:
@@ -207,7 +211,9 @@ def main(argv: list[str]) -> None:
         owners.extend(llvm_next.TRUSTED_UPLOADERS)
 
         new_manifest_cl, new_allowlist_urls = (
-            update_manifest_and_allowlist_urls(manifest_cl, owners)
+            update_manifest_and_allowlist_urls(
+                manifest_cl, owners, chromeos_root
+            )
         )
 
         current_manifest_str = (

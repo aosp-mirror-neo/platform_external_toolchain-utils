@@ -274,6 +274,7 @@ def fetch_cq_orchestrator_ids(
 
 def fetch_gerrit_deps_of_most_recent_patchset(
     cl_url: gerrit_utils.ChangeListURL,
+    chromiumos_root: Path,
 ) -> list[GerritChange]:
     """Fetches transitive dependencies of the most recent patchset of a CL.
 
@@ -287,6 +288,7 @@ def fetch_gerrit_deps_of_most_recent_patchset(
     logging.info("Running gerrit deps command: %s", shlex.join(cmd))
     stdout = subprocess.run(
         cmd,
+        cwd=chromiumos_root,
         check=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,

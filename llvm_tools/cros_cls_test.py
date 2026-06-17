@@ -276,7 +276,9 @@ class TestFetchGerritDeps(unittest.TestCase):
         mock_run.return_value = mock_run_return_value
 
         cl_url = gerrit_utils.ChangeListURL(cl_id=12345, internal=False)
-        deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
+        deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+            cl_url, chromiumos_root=Path("/fake/path")
+        )
 
         self.assertEqual(
             deps,
@@ -323,7 +325,9 @@ class TestFetchGerritDeps(unittest.TestCase):
         with self.assertRaisesRegex(
             ValueError, "No patch set available for dependency"
         ):
-            cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
+            cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+                cl_url, chromiumos_root=Path("/fake/path")
+            )
 
     @mock.patch.object(subprocess, "run")
     def test_fetch_gerrit_deps_missing_uploader(
@@ -343,7 +347,9 @@ class TestFetchGerritDeps(unittest.TestCase):
         mock_run.return_value = mock_run_return_value
 
         cl_url = gerrit_utils.ChangeListURL(cl_id=12345, internal=False)
-        deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(cl_url)
+        deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+            cl_url, chromiumos_root=Path("/fake/path")
+        )
 
         self.assertEqual(
             deps,

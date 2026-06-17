@@ -82,13 +82,16 @@ def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
 
 def fetch_llvm_next_deps_or_exit(
     main_cl: gerrit_utils.ChangeListURL,
+    chromeos_tree: Path,
     *,
     untrusted_reject: bool,
     untrusted_ignore: bool,
 ) -> list[gerrit_utils.ChangeListURL]:
     """Fetches dependencies for the main CL and handles untrusted CLs."""
     logging.info("Fetching dependencies for main CL: %s", main_cl)
-    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(main_cl)
+    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+        main_cl, chromeos_tree
+    )
     owners = cros_cls.fetch_current_toolchain_owners()
     owners.extend(llvm_next.TRUSTED_UPLOADERS)
 
@@ -254,6 +257,7 @@ def main(argv: list[str]) -> None:
             extra_cls.extend(
                 fetch_llvm_next_deps_or_exit(
                     main_cl,
+                    opts.chromeos_tree,
                     untrusted_reject=opts.untrusted_reject,
                     untrusted_ignore=opts.untrusted_ignore,
                 )
