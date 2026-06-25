@@ -263,6 +263,68 @@ def fetch_cq_orchestrator_ids(
     return [x.build_id for x in finished_results]
 
 
+def parse_gerrit_search_results(
+    stdout: str,
+) -> list[gerrit_utils.ChangeListURL]:
+    """Parses JSON output from gerrit search command."""
+    changes = json.loads(stdout)
+    if not isinstance(changes, list):
+        raise ValueError(
+            f"Expected list from gerrit search, got {type(changes)}"
+        )
+
+    urls = []
+    for change in changes:
+        if not isinstance(change, dict):
+            raise ValueError(
+                "Expected dict element from gerrit search, got "
+                f"{type(change)}"
+            )
+        url_str = change.get("url")
+        if not url_str:
+            raise ValueError(f"Change missing URL: {change!r}")
+        urls.append(gerrit_utils.ChangeListURL.parse(url_str))
+    return urls
+
+
+def fetch_cl_urls_from_gerrit_search(
+    query: str, internal: bool = False
+) -> list[gerrit_utils.ChangeListURL]:
+    """Helper to run gerrit search and return ChangeListURLs."""
+    internal_flag = ("-i",) if internal else ()
+    cmd = ("gerrit", *internal_flag, "--json", "search", query)
+    logging.info("Running gerrit search command: %s", shlex.join(cmd))
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            cwd=cros_paths.script_chromiumos_checkout_or_exit(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+        )
+    except subprocess.CalledProcessError as e:
+        e.add_note(f"stderr: {e.stderr}")
+        raise
+    return parse_gerrit_search_results(result.stdout)
+
+
+def quote_gerrit_query(val: str) -> str:
+    """Quotes and escapes special characters in a Gerrit query value."""
+    escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def fetch_cl_urls_for_topic(topic: str) -> list[gerrit_utils.ChangeListURL]:
+    """Fetches open CLs for a topic from external and internal Gerrit."""
+    query = f"topic:{quote_gerrit_query(topic)} is:open"
+    return [
+        *fetch_cl_urls_from_gerrit_search(query, internal=False),
+        *fetch_cl_urls_from_gerrit_search(query, internal=True),
+    ]
+
+
 def fetch_gerrit_deps_of_most_recent_patchset(
     cl_url: gerrit_utils.ChangeListURL,
     chromiumos_root: Path,

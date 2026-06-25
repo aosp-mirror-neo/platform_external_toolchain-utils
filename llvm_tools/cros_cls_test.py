@@ -535,3 +535,120 @@ class TestCqAttemptHelpers(unittest.TestCase):
         mock_fetch.assert_called_once_with(
             ls_args=("-t", "cq_attempt_key:some_key")
         )
+
+
+class TestGerritSearch(unittest.TestCase):
+    """Tests for Gerrit search and parsing functions."""
+
+    def test_quote_gerrit_query(self) -> None:
+        self.assertEqual(cros_cls.quote_gerrit_query("plain"), '"plain"')
+        self.assertEqual(
+            cros_cls.quote_gerrit_query('with"quotes'), '"with\\"quotes"'
+        )
+        self.assertEqual(
+            cros_cls.quote_gerrit_query("with\\backslash"),
+            '"with\\\\backslash"',
+        )
+        self.assertEqual(
+            cros_cls.quote_gerrit_query('both\\"'), '"both\\\\\\""'
+        )
+
+    def test_parse_gerrit_search_results_valid(self) -> None:
+        stdout = (
+            '[{"url": "https://crrev.com/c/12345"}, '
+            '{"url": "https://crrev.com/i/67890"}]'
+        )
+        expected = [
+            gerrit_utils.ChangeListURL(cl_id=12345, internal=False),
+            gerrit_utils.ChangeListURL(cl_id=67890, internal=True),
+        ]
+        self.assertEqual(cros_cls.parse_gerrit_search_results(stdout), expected)
+
+    def test_parse_gerrit_search_results_not_list(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            cros_cls.parse_gerrit_search_results('{"a": 1}')
+        self.assertIn("Expected list", str(ctx.exception))
+
+    def test_parse_gerrit_search_results_not_dict(self) -> None:
+        with self.assertRaises(ValueError) as ctx:
+            cros_cls.parse_gerrit_search_results("[123]")
+        self.assertIn("Expected dict", str(ctx.exception))
+
+    def test_parse_gerrit_search_results_missing_url(self) -> None:
+        stdout = '[{"no_url": "here"}, {"url": "https://crrev.com/c/12345"}]'
+        with self.assertRaises(ValueError) as ctx:
+            cros_cls.parse_gerrit_search_results(stdout)
+        self.assertIn("Change missing URL", str(ctx.exception))
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_cl_urls_from_gerrit_search_success(
+        self, mock_run: mock.Mock
+    ) -> None:
+        mock_run.return_value = mock.Mock(
+            stdout='[{"url": "https://crrev.com/c/123"}]', returncode=0
+        )
+        res = cros_cls.fetch_cl_urls_from_gerrit_search("query", internal=False)
+        self.assertEqual(res, [gerrit_utils.ChangeListURL(cl_id=123)])
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd, ("gerrit", "--json", "search", "query"))
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_cl_urls_from_gerrit_search_internal_success(
+        self, mock_run: mock.Mock
+    ) -> None:
+        mock_run.return_value = mock.Mock(
+            stdout='[{"url": "https://crrev.com/i/123"}]', returncode=0
+        )
+        res = cros_cls.fetch_cl_urls_from_gerrit_search("query", internal=True)
+        self.assertEqual(
+            res, [gerrit_utils.ChangeListURL(cl_id=123, internal=True)]
+        )
+        mock_run.assert_called_once()
+        cmd = mock_run.call_args[0][0]
+        self.assertEqual(cmd, ("gerrit", "-i", "--json", "search", "query"))
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_cl_urls_from_gerrit_search_external_fail(
+        self, mock_run: mock.Mock
+    ) -> None:
+        mock_run.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd="gerrit", stderr="error"
+        )
+        with self.assertRaises(subprocess.CalledProcessError) as ctx:
+            cros_cls.fetch_cl_urls_from_gerrit_search("query", internal=False)
+        self.assertIn("stderr: error", ctx.exception.__notes__)
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_cl_urls_from_gerrit_search_internal_fail(
+        self, mock_run: mock.Mock
+    ) -> None:
+        mock_run.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd="gerrit", stderr="error"
+        )
+        with self.assertRaises(subprocess.CalledProcessError) as ctx:
+            cros_cls.fetch_cl_urls_from_gerrit_search("query", internal=True)
+        self.assertIn("stderr: error", ctx.exception.__notes__)
+
+    @mock.patch.object(
+        cros_cls, "fetch_cl_urls_from_gerrit_search", autospec=True
+    )
+    def test_fetch_cl_urls_for_topic(self, mock_search: mock.Mock) -> None:
+        mock_search.side_effect = [
+            [gerrit_utils.ChangeListURL(cl_id=1)],
+            [gerrit_utils.ChangeListURL(cl_id=2, internal=True)],
+        ]
+        res = cros_cls.fetch_cl_urls_for_topic("my topic")
+        self.assertEqual(
+            res,
+            [
+                gerrit_utils.ChangeListURL(cl_id=1),
+                gerrit_utils.ChangeListURL(cl_id=2, internal=True),
+            ],
+        )
+        mock_search.assert_has_calls(
+            [
+                mock.call('topic:"my topic" is:open', internal=False),
+                mock.call('topic:"my topic" is:open', internal=True),
+            ]
+        )
