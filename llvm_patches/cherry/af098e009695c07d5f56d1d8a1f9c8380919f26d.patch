@@ -1,0 +1,202 @@
+From 18705b791901b5b5ec3ead4baac29019e57a901f Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 21 Nov 2025 01:09:28 -0800
+Subject: [PATCH] Revert "[ubsan_minimal] Allow UBSan handler from Minimal
+ runtime to accept arguments (#152192)" (#168812)
+
+This partially reverts #152192, keeping updated tests and
+some code reordering in clang/lib/CodeGen/CGExpr.cpp.
+
+compiler-rt/lib/ubsan_minimal/ubsan_minimal_handlers.cpp is exact revert
+(with followup #152419)
+
+We don't have a good use case for that, so revert it before we are stuck
+maintaining this API.
+
+21.x does not have this patch.
+
+This reverts commit a1209d868632b8aea10450cd2323848ab0b6776a.
+
+patch.cherry: true
+patch.metadata.author: Vitaly Buka <vitalybuka@google.com>
+patch.metadata.original_sha: af098e009695c07d5f56d1d8a1f9c8380919f26d
+patch.platforms: chromiumos
+patch.version_range.from: 585605
+patch.version_range.until: 598173
+
+---
+ clang/lib/CodeGen/CGExpr.cpp                  | 14 +----
+ .../ubsan_minimal/ubsan_minimal_handlers.cpp  | 52 +++++--------------
+ .../ubsan_minimal/TestCases/misalignment.cpp  |  2 +-
+ .../test/ubsan_minimal/TestCases/null.cpp     |  2 +-
+ 4 files changed, 17 insertions(+), 53 deletions(-)
+
+diff --git a/clang/lib/CodeGen/CGExpr.cpp b/clang/lib/CodeGen/CGExpr.cpp
+index 01f2161f2755..927dbfd109d5 100644
+--- a/clang/lib/CodeGen/CGExpr.cpp
++++ b/clang/lib/CodeGen/CGExpr.cpp
+@@ -3900,18 +3900,8 @@ void CodeGenFunction::EmitCheck(
+ 
+   // Clear arguments for the MinimalRuntime handler.
+   if (CGM.getCodeGenOpts().SanitizeMinimalRuntime) {
+-    switch (CheckHandler) {
+-    case SanitizerHandler::TypeMismatch:
+-      // Pass value pointer only. It adds minimal overhead.
+-      StaticArgs = {};
+-      assert(DynamicArgs.size() == 1);
+-      break;
+-    default:
+-      // No arguments for other checks.
+-      StaticArgs = {};
+-      DynamicArgs = {};
+-      break;
+-    }
++    StaticArgs = {};
++    DynamicArgs = {};
+   }
+ 
+   // Handler functions take an i8* pointing to the (handler-specific) static
+diff --git a/compiler-rt/lib/ubsan_minimal/ubsan_minimal_handlers.cpp b/compiler-rt/lib/ubsan_minimal/ubsan_minimal_handlers.cpp
+index a2a2e36e8523..ebc36a8583e0 100644
+--- a/compiler-rt/lib/ubsan_minimal/ubsan_minimal_handlers.cpp
++++ b/compiler-rt/lib/ubsan_minimal/ubsan_minimal_handlers.cpp
+@@ -34,16 +34,12 @@ static char *append_hex(uintptr_t d, char *buf, const char *end) {
+   return buf;
+ }
+ 
+-static void format_msg(const char *kind, uintptr_t caller,
+-                       const uintptr_t *address, char *buf, const char *end) {
++static void format_msg(const char *kind, uintptr_t caller, char *buf,
++                       const char *end) {
+   buf = append_str("ubsan: ", buf, end);
+   buf = append_str(kind, buf, end);
+   buf = append_str(" by 0x", buf, end);
+   buf = append_hex(caller, buf, end);
+-  if (address) {
+-    buf = append_str(" address 0x", buf, end);
+-    buf = append_hex(*address, buf, end);
+-  }
+   buf = append_str("\n", buf, end);
+   if (buf == end)
+     --buf; // Make sure we don't cause a buffer overflow.
+@@ -51,7 +47,7 @@ static void format_msg(const char *kind, uintptr_t caller,
+ }
+ 
+ SANITIZER_INTERFACE_WEAK_DEF(void, __ubsan_report_error, const char *kind,
+-                             uintptr_t caller, const uintptr_t *address) {
++                             uintptr_t caller) {
+   if (caller == 0)
+     return;
+   while (true) {
+@@ -84,32 +80,28 @@ SANITIZER_INTERFACE_WEAK_DEF(void, __ubsan_report_error, const char *kind,
+     __sanitizer::atomic_store_relaxed(&caller_pcs[sz], caller);
+ 
+     char msg_buf[128];
+-    format_msg(kind, caller, address, msg_buf, msg_buf + sizeof(msg_buf));
++    format_msg(kind, caller, msg_buf, msg_buf + sizeof(msg_buf));
+     message(msg_buf);
+   }
+ }
+ 
+ SANITIZER_INTERFACE_WEAK_DEF(void, __ubsan_report_error_fatal, const char *kind,
+-                             uintptr_t caller, const uintptr_t *address) {
++                             uintptr_t caller) {
+   // Use another handlers, in case it's already overriden.
+-  __ubsan_report_error(kind, caller, address);
++  __ubsan_report_error(kind, caller);
+ }
+ 
+ #if defined(__ANDROID__)
+ extern "C" __attribute__((weak)) void android_set_abort_message(const char *);
+-static void abort_with_message(const char *kind, uintptr_t caller,
+-                               const uintptr_t *address) {
++static void abort_with_message(const char *kind, uintptr_t caller) {
+   char msg_buf[128];
+-  format_msg(kind, caller, address, msg_buf, msg_buf + sizeof(msg_buf));
++  format_msg(kind, caller, msg_buf, msg_buf + sizeof(msg_buf));
+   if (&android_set_abort_message)
+     android_set_abort_message(msg_buf);
+   abort();
+ }
+ #else
+-static void abort_with_message(const char *kind, uintptr_t caller,
+-                               const uintptr_t *address) {
+-  abort();
+-}
++static void abort_with_message(const char *kind, uintptr_t caller) { abort(); }
+ #endif
+ 
+ #if SANITIZER_DEBUG
+@@ -129,39 +121,21 @@ void NORETURN CheckFailed(const char *file, int, const char *cond, u64, u64) {
+ 
+ #define HANDLER_RECOVER(name, kind)                                            \
+   INTERFACE void __ubsan_handle_##name##_minimal() {                           \
+-    __ubsan_report_error(kind, GET_CALLER_PC(), nullptr);                      \
++    __ubsan_report_error(kind, GET_CALLER_PC());                               \
+   }
+ 
+ #define HANDLER_NORECOVER(name, kind)                                          \
+   INTERFACE void __ubsan_handle_##name##_minimal_abort() {                     \
+     uintptr_t caller = GET_CALLER_PC();                                        \
+-    __ubsan_report_error_fatal(kind, caller, nullptr);                         \
+-    abort_with_message(kind, caller, nullptr);                                 \
++    __ubsan_report_error_fatal(kind, caller);                                  \
++    abort_with_message(kind, caller);                                          \
+   }
+ 
+ #define HANDLER(name, kind)                                                    \
+   HANDLER_RECOVER(name, kind)                                                  \
+   HANDLER_NORECOVER(name, kind)
+ 
+-#define HANDLER_RECOVER_PTR(name, kind)                                        \
+-  INTERFACE void __ubsan_handle_##name##_minimal(const uintptr_t address) {    \
+-    __ubsan_report_error(kind, GET_CALLER_PC(), &address);                     \
+-  }
+-
+-#define HANDLER_NORECOVER_PTR(name, kind)                                      \
+-  INTERFACE void __ubsan_handle_##name##_minimal_abort(                        \
+-      const uintptr_t address) {                                               \
+-    uintptr_t caller = GET_CALLER_PC();                                        \
+-    __ubsan_report_error_fatal(kind, caller, &address);                        \
+-    abort_with_message(kind, caller, &address);                                \
+-  }
+-
+-// A version of a handler that takes a pointer to a value.
+-#define HANDLER_PTR(name, kind)                                                \
+-  HANDLER_RECOVER_PTR(name, kind)                                              \
+-  HANDLER_NORECOVER_PTR(name, kind)
+-
+-HANDLER_PTR(type_mismatch, "type-mismatch")
++HANDLER(type_mismatch, "type-mismatch")
+ HANDLER(alignment_assumption, "alignment-assumption")
+ HANDLER(add_overflow, "add-overflow")
+ HANDLER(sub_overflow, "sub-overflow")
+diff --git a/compiler-rt/test/ubsan_minimal/TestCases/misalignment.cpp b/compiler-rt/test/ubsan_minimal/TestCases/misalignment.cpp
+index cf828792a324..3f01dc844448 100644
+--- a/compiler-rt/test/ubsan_minimal/TestCases/misalignment.cpp
++++ b/compiler-rt/test/ubsan_minimal/TestCases/misalignment.cpp
+@@ -7,7 +7,7 @@ int *t;
+ int main() {
+   int r;
+   t = (int *)(((char *)&r) + 1);
+-  // CHECK: ubsan: type-mismatch by 0x{{[[:xdigit:]]+}} address 0x{{[[:xdigit:]]+$}}
++  // CHECK: ubsan: type-mismatch by 0x{{[[:xdigit:]]+}}
+   // CHECK-NOT: type-mismatch
+   f(*t);
+ }
+diff --git a/compiler-rt/test/ubsan_minimal/TestCases/null.cpp b/compiler-rt/test/ubsan_minimal/TestCases/null.cpp
+index c97527b72cd0..b3d9db2b309d 100644
+--- a/compiler-rt/test/ubsan_minimal/TestCases/null.cpp
++++ b/compiler-rt/test/ubsan_minimal/TestCases/null.cpp
+@@ -5,7 +5,7 @@ void f(int &n) {}
+ int *t;
+ 
+ int main() {
+-  // CHECK: ubsan: type-mismatch by 0x{{[[:xdigit:]]+}} address 0x{{[[:xdigit:]]+$}}
++  // CHECK: ubsan: type-mismatch by 0x{{[[:xdigit:]]+}}
+   // CHECK-NOT: type-mismatch
+   f(*t);
+ }
+-- 
+2.39.5

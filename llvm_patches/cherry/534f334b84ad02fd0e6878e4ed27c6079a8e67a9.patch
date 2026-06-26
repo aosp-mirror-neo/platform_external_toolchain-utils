@@ -1,0 +1,512 @@
+From d9bb7529253602c708d9d706a23f8c34658a4917 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Wed, 17 Dec 2025 22:37:22 +0100
+Subject: [PATCH] Revert "Reland [clang][modules-driver] Add scanner to detect
+ C++20 module presence (#153497)" (2nd Attempt) (#172701)
+
+patch.cherry: true
+patch.metadata.author: Naveen Seth Hanig <naveen.hanig@outlook.com>
+patch.metadata.original_sha: 534f334b84ad02fd0e6878e4ed27c6079a8e67a9
+patch.platforms: chromiumos
+patch.version_range.from: 586924
+patch.version_range.until: 600981
+
+---
+ .../clang/Basic/DiagnosticDriverKinds.td      |   7 -
+ clang/include/clang/Basic/DiagnosticGroups.td |   1 -
+ clang/include/clang/Driver/Driver.h           |  32 ---
+ clang/include/clang/Driver/Options.td         |   7 -
+ .../clang/Lex/DependencyDirectivesScanner.h   |   7 -
+ clang/lib/Driver/Driver.cpp                   |  66 ------
+ clang/lib/Lex/DependencyDirectivesScanner.cpp |  50 -----
+ ...ules-driver-cxx20-module-usage-scanner.cpp | 192 ------------------
+ 8 files changed, 362 deletions(-)
+ delete mode 100644 clang/test/Driver/modules-driver-cxx20-module-usage-scanner.cpp
+
+diff --git a/clang/include/clang/Basic/DiagnosticDriverKinds.td b/clang/include/clang/Basic/DiagnosticDriverKinds.td
+index 83980e3ac35b..de830301cb7b 100644
+--- a/clang/include/clang/Basic/DiagnosticDriverKinds.td
++++ b/clang/include/clang/Basic/DiagnosticDriverKinds.td
+@@ -584,13 +584,6 @@ def err_drv_reduced_module_output_overrided : Warning<
+   "please consider use '-fmodule-output=' to specify the output file for reduced BMI explicitly">,
+   InGroup<DiagGroup<"reduced-bmi-output-overrided">>;
+ 
+-def remark_found_cxx20_module_usage : Remark<
+-  "found C++20 module usage in file '%0'">,
+-  InGroup<ModulesDriver>;
+-def remark_performing_driver_managed_module_build : Remark<
+-  "performing driver managed module build">,
+-  InGroup<ModulesDriver>;
+-
+ def warn_drv_delayed_template_parsing_after_cxx20 : Warning<
+   "-fdelayed-template-parsing is deprecated after C++20">,
+   InGroup<DiagGroup<"delayed-template-parsing-in-cxx20">>;
+diff --git a/clang/include/clang/Basic/DiagnosticGroups.td b/clang/include/clang/Basic/DiagnosticGroups.td
+index 8aa3489a2a62..92a26a7871b7 100644
+--- a/clang/include/clang/Basic/DiagnosticGroups.td
++++ b/clang/include/clang/Basic/DiagnosticGroups.td
+@@ -636,7 +636,6 @@ def ModuleConflict : DiagGroup<"module-conflict">;
+ def ModuleFileExtension : DiagGroup<"module-file-extension">;
+ def ModuleIncludeDirectiveTranslation : DiagGroup<"module-include-translation">;
+ def ModuleMap : DiagGroup<"module-map">;
+-def ModulesDriver : DiagGroup<"modules-driver">;
+ def RoundTripCC1Args : DiagGroup<"round-trip-cc1-args">;
+ def NewlineEOF : DiagGroup<"newline-eof">;
+ def Nullability : DiagGroup<"nullability">;
+diff --git a/clang/include/clang/Driver/Driver.h b/clang/include/clang/Driver/Driver.h
+index b9b187ada8ad..4d32552b7f85 100644
+--- a/clang/include/clang/Driver/Driver.h
++++ b/clang/include/clang/Driver/Driver.h
+@@ -512,9 +512,6 @@ public:
+ 
+   /// BuildActions - Construct the list of actions to perform for the
+   /// given arguments, which are only done for a single architecture.
+-  /// If the compilation is an explicit module build, delegates to
+-  /// BuildDriverManagedModuleBuildActions. Otherwise, BuildDefaultActions is
+-  /// used.
+   ///
+   /// \param C - The compilation that is being built.
+   /// \param Args - The input arguments.
+@@ -799,35 +796,6 @@ private:
+   /// compilation based on which -f(no-)?lto(=.*)? option occurs last.
+   void setLTOMode(const llvm::opt::ArgList &Args);
+ 
+-  /// BuildDefaultActions - Constructs the list of actions to perform
+-  /// for the provided arguments, which are only done for a single architecture.
+-  ///
+-  /// \param C - The compilation that is being built.
+-  /// \param Args - The input arguments.
+-  /// \param Actions - The list to store the resulting actions onto.
+-  void BuildDefaultActions(Compilation &C, llvm::opt::DerivedArgList &Args,
+-                           const InputList &Inputs, ActionList &Actions) const;
+-
+-  /// BuildDriverManagedModuleBuildActions - Performs a dependency
+-  /// scan and constructs the list of actions to perform for dependency order
+-  /// and the provided arguments. This is only done for a single a architecture.
+-  ///
+-  /// \param C - The compilation that is being built.
+-  /// \param Args - The input arguments.
+-  /// \param Actions - The list to store the resulting actions onto.
+-  void BuildDriverManagedModuleBuildActions(Compilation &C,
+-                                            llvm::opt::DerivedArgList &Args,
+-                                            const InputList &Inputs,
+-                                            ActionList &Actions) const;
+-
+-  /// Scans the leading lines of the C++ source inputs to detect C++20 module
+-  /// usage.
+-  ///
+-  /// \returns True if module usage is detected, false otherwise, or an error on
+-  /// read failure.
+-  llvm::ErrorOr<bool>
+-  ScanInputsForCXX20ModulesUsage(const InputList &Inputs) const;
+-
+   /// Retrieves a ToolChain for a particular \p Target triple.
+   ///
+   /// Will cache ToolChains for the life of the driver object, and create them
+diff --git a/clang/include/clang/Driver/Options.td b/clang/include/clang/Driver/Options.td
+index 8bdd06034dcc..2d7710277097 100644
+--- a/clang/include/clang/Driver/Options.td
++++ b/clang/include/clang/Driver/Options.td
+@@ -3351,13 +3351,6 @@ defm modules_reduced_bmi : BoolOption<"f", "modules-reduced-bmi",
+   PosFlag<SetTrue, [], [ClangOption, CC1Option],
+           "Generate the reduced BMI">>;
+ 
+-def fmodules_driver : Flag<["-"], "fmodules-driver">,
+-  Group<f_Group>, Visibility<[ClangOption]>,
+-  HelpText<"Enable support for driver managed module builds (experimental)">;
+-def fno_modules_driver : Flag<["-"], "fno-modules-driver">,
+-  Group<f_Group>, Visibility<[ClangOption]>,
+-  HelpText<"Disable support for driver managed module builds (experimental)">;
+-
+ def experimental_modules_reduced_bmi : Flag<["-"], "fexperimental-modules-reduced-bmi">,
+   Group<f_Group>, Visibility<[ClangOption, CC1Option]>, Alias<fmodules_reduced_bmi>;
+ 
+diff --git a/clang/include/clang/Lex/DependencyDirectivesScanner.h b/clang/include/clang/Lex/DependencyDirectivesScanner.h
+index c0b742d652a0..f9fec3998ca5 100644
+--- a/clang/include/clang/Lex/DependencyDirectivesScanner.h
++++ b/clang/include/clang/Lex/DependencyDirectivesScanner.h
+@@ -135,13 +135,6 @@ void printDependencyDirectivesAsSource(
+     ArrayRef<dependency_directives_scan::Directive> Directives,
+     llvm::raw_ostream &OS);
+ 
+-/// Scan an input source buffer for C++20 named module usage.
+-///
+-/// \param Source The input source buffer.
+-///
+-/// \returns true if any C++20 named modules related directive was found.
+-bool scanInputForCXX20ModulesUsage(StringRef Source);
+-
+ /// Functor that returns the dependency directives for a given file.
+ class DependencyDirectivesGetter {
+ public:
+diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
+index 072e2376fa74..b42711aeda63 100644
+--- a/clang/lib/Driver/Driver.cpp
++++ b/clang/lib/Driver/Driver.cpp
+@@ -66,7 +66,6 @@
+ #include "clang/Driver/Tool.h"
+ #include "clang/Driver/ToolChain.h"
+ #include "clang/Driver/Types.h"
+-#include "clang/Lex/DependencyDirectivesScanner.h"
+ #include "llvm/ADT/ArrayRef.h"
+ #include "llvm/ADT/STLExtras.h"
+ #include "llvm/ADT/SmallSet.h"
+@@ -4217,11 +4216,6 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
+     YcArg = nullptr;
+   }
+ 
+-  if (Args.hasArgNoClaim(options::OPT_fmodules_driver))
+-    // TODO: Check against all incompatible -fmodules-driver arguments
+-    if (!ModulesModeCXX20 && !Args.hasArgNoClaim(options::OPT_fmodules))
+-      Args.eraseArg(options::OPT_fmodules_driver);
+-
+   Arg *FinalPhaseArg;
+   phases::ID FinalPhase = getFinalPhase(Args, &FinalPhaseArg);
+ 
+@@ -4348,33 +4342,6 @@ void Driver::handleArguments(Compilation &C, DerivedArgList &Args,
+   }
+ }
+ 
+-static bool hasCXXModuleInputType(const Driver::InputList &Inputs) {
+-  const auto IsTypeCXXModule = [](const auto &Input) -> bool {
+-    const auto TypeID = Input.first;
+-    return (TypeID == types::TY_CXXModule);
+-  };
+-  return llvm::any_of(Inputs, IsTypeCXXModule);
+-}
+-
+-llvm::ErrorOr<bool>
+-Driver::ScanInputsForCXX20ModulesUsage(const InputList &Inputs) const {
+-  const auto CXXInputs = llvm::make_filter_range(
+-      Inputs, [](const auto &Input) { return types::isCXX(Input.first); });
+-  for (const auto &Input : CXXInputs) {
+-    StringRef Filename = Input.second->getSpelling();
+-    auto ErrOrBuffer = VFS->getBufferForFile(Filename);
+-    if (!ErrOrBuffer)
+-      return ErrOrBuffer.getError();
+-    const auto Buffer = std::move(*ErrOrBuffer);
+-
+-    if (scanInputForCXX20ModulesUsage(Buffer->getBuffer())) {
+-      Diags.Report(diag::remark_found_cxx20_module_usage) << Filename;
+-      return true;
+-    }
+-  }
+-  return false;
+-}
+-
+ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
+                           const InputList &Inputs, ActionList &Actions) const {
+   llvm::PrettyStackTraceString CrashInfo("Building compilation actions");
+@@ -4386,33 +4353,6 @@ void Driver::BuildActions(Compilation &C, DerivedArgList &Args,
+ 
+   handleArguments(C, Args, Inputs, Actions);
+ 
+-  if (Args.hasFlag(options::OPT_fmodules_driver,
+-                   options::OPT_fno_modules_driver, false)) {
+-    // TODO: Move the logic for implicitly enabling explicit-module-builds out
+-    // of -fmodules-driver once it is no longer experimental.
+-    // Currently, this serves diagnostic purposes only.
+-    bool UsesCXXModules = hasCXXModuleInputType(Inputs);
+-    if (!UsesCXXModules) {
+-      const auto ErrOrScanResult = ScanInputsForCXX20ModulesUsage(Inputs);
+-      if (!ErrOrScanResult) {
+-        Diags.Report(diag::err_cannot_open_file)
+-            << ErrOrScanResult.getError().message();
+-        return;
+-      }
+-      UsesCXXModules = *ErrOrScanResult;
+-    }
+-    if (UsesCXXModules || Args.hasArg(options::OPT_fmodules))
+-      BuildDriverManagedModuleBuildActions(C, Args, Inputs, Actions);
+-    return;
+-  }
+-
+-  BuildDefaultActions(C, Args, Inputs, Actions);
+-}
+-
+-void Driver::BuildDefaultActions(Compilation &C, DerivedArgList &Args,
+-                                 const InputList &Inputs,
+-                                 ActionList &Actions) const {
+-
+   bool UseNewOffloadingDriver =
+       C.isOffloadingHostKind(Action::OFK_OpenMP) ||
+       C.isOffloadingHostKind(Action::OFK_SYCL) ||
+@@ -4708,12 +4648,6 @@ void Driver::BuildDefaultActions(Compilation &C, DerivedArgList &Args,
+   Args.ClaimAllArgs(options::OPT_cl_ignored_Group);
+ }
+ 
+-void Driver::BuildDriverManagedModuleBuildActions(
+-    Compilation &C, llvm::opt::DerivedArgList &Args, const InputList &Inputs,
+-    ActionList &Actions) const {
+-  Diags.Report(diag::remark_performing_driver_managed_module_build);
+-}
+-
+ /// Returns the canonical name for the offloading architecture when using a HIP
+ /// or CUDA architecture.
+ static StringRef getCanonicalArchString(Compilation &C,
+diff --git a/clang/lib/Lex/DependencyDirectivesScanner.cpp b/clang/lib/Lex/DependencyDirectivesScanner.cpp
+index eee57c786442..9ccff5e3342d 100644
+--- a/clang/lib/Lex/DependencyDirectivesScanner.cpp
++++ b/clang/lib/Lex/DependencyDirectivesScanner.cpp
+@@ -83,8 +83,6 @@ struct Scanner {
+   /// \returns True on error.
+   bool scan(SmallVectorImpl<Directive> &Directives);
+ 
+-  friend bool clang::scanInputForCXX20ModulesUsage(StringRef Source);
+-
+ private:
+   /// Lexes next token and advances \p First and the \p Lexer.
+   [[nodiscard]] dependency_directives_scan::Token &
+@@ -1077,51 +1075,3 @@ void clang::printDependencyDirectivesAsSource(
+     }
+   }
+ }
+-
+-static void skipUntilMaybeCXX20ModuleDirective(const char *&First,
+-                                               const char *const End) {
+-  assert(First <= End);
+-  while (First != End) {
+-    if (*First == '#') {
+-      ++First;
+-      skipToNewlineRaw(First, End);
+-    }
+-    skipWhitespace(First, End);
+-    if (const auto Len = isEOL(First, End)) {
+-      First += Len;
+-      continue;
+-    }
+-    break;
+-  }
+-}
+-
+-bool clang::scanInputForCXX20ModulesUsage(StringRef Source) {
+-  const char *First = Source.begin();
+-  const char *const End = Source.end();
+-  skipUntilMaybeCXX20ModuleDirective(First, End);
+-  if (First == End)
+-    return false;
+-
+-  // Check if the next token can even be a module directive before creating a
+-  // full lexer.
+-  if (!(*First == 'i' || *First == 'e' || *First == 'm'))
+-    return false;
+-
+-  llvm::SmallVector<dependency_directives_scan::Token> Tokens;
+-  Scanner S(StringRef(First, End - First), Tokens, nullptr, SourceLocation());
+-  S.TheLexer.setParsingPreprocessorDirective(true);
+-  if (S.lexModule(First, End))
+-    return false;
+-  auto IsCXXNamedModuleDirective = [](const DirectiveWithTokens &D) {
+-    switch (D.Kind) {
+-    case dependency_directives_scan::cxx_module_decl:
+-    case dependency_directives_scan::cxx_import_decl:
+-    case dependency_directives_scan::cxx_export_module_decl:
+-    case dependency_directives_scan::cxx_export_import_decl:
+-      return true;
+-    default:
+-      return false;
+-    }
+-  };
+-  return llvm::any_of(S.DirsWithToks, IsCXXNamedModuleDirective);
+-}
+diff --git a/clang/test/Driver/modules-driver-cxx20-module-usage-scanner.cpp b/clang/test/Driver/modules-driver-cxx20-module-usage-scanner.cpp
+deleted file mode 100644
+index a434587a7875..000000000000
+--- a/clang/test/Driver/modules-driver-cxx20-module-usage-scanner.cpp
++++ /dev/null
+@@ -1,192 +0,0 @@
+-// The driver never checks to implicitly enable the explicit module build 
+-// support unless at least two input files are provided.
+-// To trigger the C++20 module usage check, we always pass a second dummy file
+-// as input.
+-// TODO: Remove -fmodules everywhere once implicitly enabled explicit module 
+-// builds are supported.
+-
+-// RUN: split-file %s %t
+-//--- empty.cpp
+-// Nothing here
+-
+-//--- only-global.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/only-global.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK1
+-// CHECK1: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-module;
+-
+-//--- only-import.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/only-import.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK2
+-// CHECK2: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-import A;
+-
+-//--- only-export.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/only-export.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK3
+-// CHECK3: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-export module A;
+-
+-//--- leading-line-comment.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-line-comment.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK4
+-// CHECK4: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-// My line comment
+-import A;
+-
+-//--- leading-block-comment1.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-block-comment1.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK5
+-// CHECK5: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-/*My block comment */
+-import A;
+-
+-//--- leading-block-comment2.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-block-comment2.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK6
+-// CHECK6: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-/*My line comment */ import A;
+-
+-//--- inline-block-comment1.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-block-comment1.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK7
+-// CHECK7: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-export/*a comment*/module/*another comment*/A;
+-
+-//--- inline-block-comment2.cpp
+-// RUN: %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-block-comment2.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK8
+-// CHECK8: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-module/*a comment*/;
+-
+-//--- leading-directives.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-directives.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK9
+-// CHECK9: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-#define A
+-#undef A
+-#if A
+-#ifdef A
+-#elifdef A
+-#elifndef A
+-#endif
+-#ifndef A
+-#elif A
+-#else
+-#endif
+-#endif
+-#pragma once;
+-#include <iostream>
+-import m;
+-
+-//--- multiline-directive.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/multiline-directive.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK10
+-// CHECK10: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-#define MACRO(a,  \
+-              b)  \
+-        call((a), \
+-             (b)
+-import a;
+-
+-//--- leading-line-splice.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-line-splice.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK11
+-// CHECK11: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-\
+-module;
+-
+-//--- leading-line-splice-trailing-whitespace.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/leading-line-splice-trailing-whitespace.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK12
+-// CHECK12: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-// v This backslash has trailing whitespace.
+-   \      
+-export module A;
+-
+-//--- comment-line-splice.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/comment-line-splice.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s  --allow-empty --check-prefix=CHECK13
+-// CHECK13-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-// My comment continues next-line!\
+-import A;
+-
+-//--- comment-line-splice-trailing-whitespace.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/comment-line-splice-trailing-whitespace.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --allow-empty --check-prefix=CHECK14
+-// CHECK14-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-// My comment continues next-line! This backslash has trailing whitespace. -> \   
+-module;
+-
+-//--- line-splice-in-directive1.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/line-splice-in-directive1.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK15
+-// CHECK15: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-
+-module\
+-;
+-
+-//--- line-splice-in-directive2.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/line-splice-in-directive2.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK16
+-// CHECK16: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-
+-export\
+-  module\
+-  A;
+-
+-//--- no-module-usage1.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/no-module-usage1.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s  --allow-empty --check-prefix=CHECK17
+-// CHECK17-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-auto main() -> int {}
+-
+-//--- no-module-usage2.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/no-module-usage2.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s  --allow-empty --check-prefix=CHECK18
+-// CHECK18-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-moduleStruct{};
+-
+-//--- no-module-usage3.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/no-module-usage3.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s  --allow-empty --check-prefix=CHECK19
+-// CHECK19-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-export_struct{};
+-
+-//--- no-module-usage-namespace-import.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/no-module-usage-namespace-import.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s  --allow-empty --check-prefix=CHECK20
+-// CHECK20-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-import::inner xi = {};
+-
+-//--- no-module-usage-namespace-module.cpp
+-// RUN: %clang -std=c++23 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   %t/no-module-usage-namespace-module.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s  --allow-empty --check-prefix=CHECK21
+-// CHECK21-NOT: remark: found C++20 module usage in file '{{.*}}' [-Rmodules-driver]
+-module::inner yi = {};
+-
+-// RUN: not %clang -std=c++20 -ccc-print-phases -fmodules-driver -Rmodules-driver \
+-// RUN:   imaginary-file.cpp %t/empty.cpp 2>&1 \
+-// RUN:   | FileCheck %s --check-prefix=CHECK-NON-EXISTING-FILE-ERR
+-// CHECK-NON-EXISTING-FILE-ERR: clang: error: no such file or directory: 'imaginary-file.cpp'
+-- 
+2.39.5

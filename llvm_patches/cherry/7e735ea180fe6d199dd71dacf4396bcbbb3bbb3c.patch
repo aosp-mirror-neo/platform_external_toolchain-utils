@@ -1,7 +1,7 @@
-From 30fb5c6656f7c7d091e4b300d8a262ec22673a5c Mon Sep 17 00:00:00 2001
+From 21814dc64b1cd18c6f24a660220892c644f6be31 Mon Sep 17 00:00:00 2001
 From: Jordan R AW <ajordanr@google.com>
 Date: Wed, 13 May 2026 16:48:31 -0700
-Subject: [PATCH] [compiler-rt][cmake] Fix check_cxx_compiler_flag calls
+Subject: [PATCH] [compiler-rt][cmake] v2: Fix check_cxx_compiler_flag calls
  (#197529)
 
 check_cxx_compiler_flag, when passing multiple flags, we must separate
@@ -17,6 +17,7 @@ See:
 https://cmake.org/cmake/help/latest/module/CheckCXXCompilerFlag.html
 
 This issue was identified downstream in ChromiumOS.
+
 ChromiumOS Bug:
 https://issuetracker.google.com/507177988
 
@@ -24,16 +25,15 @@ patch.cherry: true
 patch.metadata.author: Jordan R AW <ajordanr@google.com>
 patch.metadata.original_sha: 7e735ea180fe6d199dd71dacf4396bcbbb3bbb3c
 patch.platforms: chromiumos
-patch.version_range.from: 596125
-patch.version_range.until: null
+patch.version_range.from: 584947
+patch.version_range.until: 596125
 
-Change-Id: Id5b608fdf86c6765eae09b388c178f0db2951deb
 ---
- compiler-rt/cmake/config-ix.cmake | 66 +++++++++++++++----------------
- 1 file changed, 33 insertions(+), 33 deletions(-)
+ compiler-rt/cmake/config-ix.cmake | 70 ++++++++++++++++---------------
+ 1 file changed, 37 insertions(+), 33 deletions(-)
 
 diff --git a/compiler-rt/cmake/config-ix.cmake b/compiler-rt/cmake/config-ix.cmake
-index 8dfbdecbd6b9..5b1ae4020f5f 100644
+index e3310b1ff0e2..5daebb450632 100644
 --- a/compiler-rt/cmake/config-ix.cmake
 +++ b/compiler-rt/cmake/config-ix.cmake
 @@ -102,19 +102,19 @@ check_cxx_compiler_flag(-fno-sanitize=safe-stack COMPILER_RT_HAS_FNO_SANITIZE_SA
@@ -61,7 +61,7 @@ index 8dfbdecbd6b9..5b1ae4020f5f 100644
  
  if(NOT WIN32 AND NOT CYGWIN)
    # MinGW warns if -fvisibility-inlines-hidden is used.
-@@ -134,23 +134,23 @@ check_cxx_compiler_flag(/Zi COMPILER_RT_HAS_Zi_FLAG)
+@@ -134,23 +134,27 @@ check_cxx_compiler_flag(/Zi COMPILER_RT_HAS_Zi_FLAG)
  # Warnings.
  check_cxx_compiler_flag(-Wall COMPILER_RT_HAS_WALL_FLAG)
  check_cxx_compiler_flag(-Werror COMPILER_RT_HAS_WERROR_FLAG)
@@ -94,11 +94,15 @@ index 8dfbdecbd6b9..5b1ae4020f5f 100644
  check_cxx_compiler_flag(-Wno-format-pedantic COMPILER_RT_HAS_WNO_FORMAT_PEDANTIC)
  
 -check_cxx_compiler_flag("/experimental:external /external:W0" COMPILER_RT_HAS_EXTERNAL_FLAG)
-+check_cxx_compiler_flag("/experimental:external;/external:W0" COMPILER_RT_HAS_EXTERNAL_FLAG)
++if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
++  check_cxx_compiler_flag("/experimental:external;/external:W0" COMPILER_RT_HAS_EXTERNAL_FLAG)
++else()
++  set(COMPILER_RT_HAS_EXTERNAL_FLAG FALSE)
++endif()
  
  check_cxx_compiler_flag(/W4 COMPILER_RT_HAS_W4_FLAG)
  check_cxx_compiler_flag(/WX COMPILER_RT_HAS_WX_FLAG)
-@@ -162,21 +162,21 @@ check_cxx_compiler_flag(/wd4391 COMPILER_RT_HAS_WD4391_FLAG)
+@@ -162,21 +166,21 @@ check_cxx_compiler_flag(/wd4391 COMPILER_RT_HAS_WD4391_FLAG)
  check_cxx_compiler_flag(/wd4722 COMPILER_RT_HAS_WD4722_FLAG)
  check_cxx_compiler_flag(/wd4800 COMPILER_RT_HAS_WD4800_FLAG)
  
@@ -136,5 +140,4 @@ index 8dfbdecbd6b9..5b1ae4020f5f 100644
  # Symbols.
  check_symbol_exists(__func__ "" COMPILER_RT_HAS_FUNC_SYMBOL)
 -- 
-2.54.0.1013.g208068f2d8-goog
-
+2.39.5

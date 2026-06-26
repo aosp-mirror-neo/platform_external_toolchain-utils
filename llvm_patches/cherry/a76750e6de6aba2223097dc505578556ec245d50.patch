@@ -1,0 +1,547 @@
+From 8826aa263adbb754eb35a9421745a7d14932a626 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Thu, 2 Apr 2026 18:05:26 -0500
+Subject: [PATCH] =?UTF-8?q?Revert=20"[SimplifyCFG]=20Extend=20jump-threadi?=
+ =?UTF-8?q?ng=20to=20allow=20live=20local=20defs=20=E2=80=A6=20(#190269)?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+…(#135079)"
+
+This reverts commit a757f23404c594f4a48b4ddb6625f88b349d11d5. Commit
+causes reduce.cu file in hipcub/warp go from 2 minutes of compilation to
+taking several hours.
+
+patch.cherry: true
+patch.metadata.author: hjagasiaAMD <harsha.jagasia@amd.com>
+patch.metadata.original_sha: a76750e6de6aba2223097dc505578556ec245d50
+patch.platforms: chromiumos
+patch.version_range.from: 584832
+patch.version_range.until: 613309
+
+---
+ clang/test/CodeGenObjC/exceptions.m           |  19 +-
+ llvm/lib/Transforms/Utils/SimplifyCFG.cpp     |  71 +------
+ .../AArch64/avoid-free-ext-promotion.ll       |  36 ++--
+ .../jump-threading-live-on-exit.ll            | 195 ------------------
+ ...hreading-max-jump-threading-live-blocks.ll |  95 ---------
+ 5 files changed, 40 insertions(+), 376 deletions(-)
+ delete mode 100644 llvm/test/Transforms/SimplifyCFG/jump-threading-live-on-exit.ll
+ delete mode 100644 llvm/test/Transforms/SimplifyCFG/jump-threading-max-jump-threading-live-blocks.ll
+
+diff --git a/clang/test/CodeGenObjC/exceptions.m b/clang/test/CodeGenObjC/exceptions.m
+index 66dc0515af03..86d53c1a750c 100644
+--- a/clang/test/CodeGenObjC/exceptions.m
++++ b/clang/test/CodeGenObjC/exceptions.m
+@@ -144,17 +144,18 @@ void f4(void) {
+   // CHECK-NEXT: br label
+   //   -> rethrow
+ 
+-  // finally.call-exit:  Predecessor is the no-match case in the catch mechanism
+-  // which rethrows.
+-  // CHECK:      call void @objc_exception_try_exit(ptr nonnull [[EXNDATA]])
++  // finally.call-exit:  Predecessors are the @try and @catch fallthroughs
++  // as well as the no-match case in the catch mechanism.  The i1 is whether
++  // to rethrow and should be true only in the last case.
++  // CHECK:      phi ptr
++  // CHECK-NEXT: phi i1
++  // CHECK-NEXT: call void @objc_exception_try_exit(ptr nonnull [[EXNDATA]])
+   // CHECK-NEXT: call void @f4_help(i32 noundef 2)
+-  // CHECK-NEXT: br label
+-  //   -> rethrow
++  // CHECK-NEXT: br i1
++  //   -> ret, rethrow
+ 
+-  // finally.end.critedge:  Predecessors are the @try and @catch fallthroughs.
+-  // CHECK:      call void @objc_exception_try_exit(ptr nonnull [[EXNDATA]])
+-  // CHECK-NEXT: call void @f4_help(i32 noundef 2)
+-  // CHECK-NEXT: ret void
++  // ret:
++  // CHECK:      ret void
+ 
+   // Catch mechanism:
+   // CHECK:      call ptr @objc_exception_extract(ptr nonnull [[EXNDATA]])
+diff --git a/llvm/lib/Transforms/Utils/SimplifyCFG.cpp b/llvm/lib/Transforms/Utils/SimplifyCFG.cpp
+index 3a3e3ade2021..c48861df4bbb 100644
+--- a/llvm/lib/Transforms/Utils/SimplifyCFG.cpp
++++ b/llvm/lib/Transforms/Utils/SimplifyCFG.cpp
+@@ -201,11 +201,6 @@ static cl::opt<unsigned> MaxSwitchCasesPerResult(
+     "max-switch-cases-per-result", cl::Hidden, cl::init(16),
+     cl::desc("Limit cases to analyze when converting a switch to select"));
+ 
+-static cl::opt<unsigned> MaxJumpThreadingLiveBlocks(
+-    "max-jump-threading-live-blocks", cl::Hidden, cl::init(24),
+-    cl::desc("Limit number of blocks a define in a threaded block is allowed "
+-             "to be live in"));
+-
+ extern cl::opt<bool> ProfcheckDisableMetadataFixes;
+ 
+ } // end namespace llvm
+@@ -3433,27 +3428,8 @@ bool SimplifyCFGOpt::speculativelyExecuteBB(BranchInst *BI,
+   return true;
+ }
+ 
+-using BlocksSet = SmallPtrSet<BasicBlock *, 8>;
+-
+-// Return false if number of blocks searched is too much.
+-static bool findReaching(BasicBlock *BB, BasicBlock *DefBB,
+-                         BlocksSet &ReachesNonLocalUses) {
+-  if (BB == DefBB)
+-    return true;
+-  if (!ReachesNonLocalUses.insert(BB).second)
+-    return true;
+-
+-  if (ReachesNonLocalUses.size() > MaxJumpThreadingLiveBlocks)
+-    return false;
+-  for (BasicBlock *Pred : predecessors(BB))
+-    if (!findReaching(Pred, DefBB, ReachesNonLocalUses))
+-      return false;
+-  return true;
+-}
+-
+ /// Return true if we can thread a branch across this block.
+-static bool blockIsSimpleEnoughToThreadThrough(BasicBlock *BB,
+-                                               BlocksSet &NonLocalUseBlocks) {
++static bool blockIsSimpleEnoughToThreadThrough(BasicBlock *BB) {
+   int Size = 0;
+   EphemeralValueTracker EphTracker;
+ 
+@@ -3473,16 +3449,12 @@ static bool blockIsSimpleEnoughToThreadThrough(BasicBlock *BB,
+         return false; // Don't clone large BB's.
+     }
+ 
+-    // Record blocks with non-local uses of values defined in the current basic
+-    // block.
++    // We can only support instructions that do not define values that are
++    // live outside of the current basic block.
+     for (User *U : I.users()) {
+       Instruction *UI = cast<Instruction>(U);
+-      BasicBlock *UsedInBB = UI->getParent();
+-      if (UsedInBB == BB) {
+-        if (isa<PHINode>(UI))
+-          return false;
+-      } else
+-        NonLocalUseBlocks.insert(UsedInBB);
++      if (UI->getParent() != BB || isa<PHINode>(UI))
++        return false;
+     }
+ 
+     // Looks ok, continue checking.
+@@ -3541,37 +3513,18 @@ foldCondBranchOnValueKnownInPredecessorImpl(BranchInst *BI, DomTreeUpdater *DTU,
+     return false;
+ 
+   // Now we know that this block has multiple preds and two succs.
+-  // Check that the block is small enough and record which non-local blocks use
+-  // values defined in the block.
+-
+-  BlocksSet NonLocalUseBlocks;
+-  BlocksSet ReachesNonLocalUseBlocks;
+-  if (!blockIsSimpleEnoughToThreadThrough(BB, NonLocalUseBlocks))
++  // Check that the block is small enough and values defined in the block are
++  // not used outside of it.
++  if (!blockIsSimpleEnoughToThreadThrough(BB))
+     return false;
+ 
+-  // Jump-threading can only be done to destinations where no values defined
+-  // in BB are live.
+-
+-  // Quickly check if both destinations have uses.  If so, jump-threading cannot
+-  // be done.
+-  if (NonLocalUseBlocks.contains(BI->getSuccessor(0)) &&
+-      NonLocalUseBlocks.contains(BI->getSuccessor(1)))
+-    return false;
+-
+-  // Search backward from NonLocalUseBlocks to find which blocks
+-  // reach non-local uses.
+-  for (BasicBlock *UseBB : NonLocalUseBlocks)
+-    // Give up if too many blocks are searched.
+-    if (!findReaching(UseBB, BB, ReachesNonLocalUseBlocks))
+-      return false;
+-
+   for (const auto &Pair : KnownValues) {
++    // Okay, we now know that all edges from PredBB should be revectored to
++    // branch to RealDest.
+     ConstantInt *CB = Pair.first;
+     ArrayRef<BasicBlock *> PredBBs = Pair.second.getArrayRef();
+     BasicBlock *RealDest = BI->getSuccessor(!CB->getZExtValue());
+ 
+-    // Okay, we now know that all edges from PredBB should be revectored to
+-    // branch to RealDest.
+     if (RealDest == BB)
+       continue; // Skip self loops.
+ 
+@@ -3581,10 +3534,6 @@ foldCondBranchOnValueKnownInPredecessorImpl(BranchInst *BI, DomTreeUpdater *DTU,
+         }))
+       continue;
+ 
+-    // Only revector to RealDest if no values defined in BB are live.
+-    if (ReachesNonLocalUseBlocks.contains(RealDest))
+-      continue;
+-
+     LLVM_DEBUG({
+       dbgs() << "Condition " << *Cond << " in " << BB->getName()
+              << " has value " << *Pair.first << " in predecessors:\n";
+diff --git a/llvm/test/CodeGen/AArch64/avoid-free-ext-promotion.ll b/llvm/test/CodeGen/AArch64/avoid-free-ext-promotion.ll
+index 5f5b27af5c8c..634d1b90ff90 100644
+--- a/llvm/test/CodeGen/AArch64/avoid-free-ext-promotion.ll
++++ b/llvm/test/CodeGen/AArch64/avoid-free-ext-promotion.ll
+@@ -59,33 +59,37 @@ bb27:                                             ; preds = %bb9, %bb8
+ define void @avoid_promotion_2_and(ptr nocapture noundef %arg) {
+ ; CHECK-LABEL: avoid_promotion_2_and:
+ ; CHECK:       ; %bb.0: ; %entry
+-; CHECK-NEXT:    mov x8, xzr
+-; CHECK-NEXT:    add x9, x0, #32
+-; CHECK-NEXT:  LBB1_1: ; %loop
++; CHECK-NEXT:    add x8, x0, #32
++; CHECK-NEXT:    b LBB1_2
++; CHECK-NEXT:  LBB1_1: ; %latch
++; CHECK-NEXT:    ; in Loop: Header=BB1_2 Depth=1
++; CHECK-NEXT:    cmp w9, #2
++; CHECK-NEXT:    add x8, x8, #56
++; CHECK-NEXT:    b.ls LBB1_4
++; CHECK-NEXT:  LBB1_2: ; %loop
+ ; CHECK-NEXT:    ; =>This Inner Loop Header: Depth=1
+-; CHECK-NEXT:    ldr w10, [x9, #20]
+-; CHECK-NEXT:    cmp w10, #3
+-; CHECK-NEXT:    b.lo LBB1_3
+-; CHECK-NEXT:  ; %bb.2: ; %then
+-; CHECK-NEXT:    ; in Loop: Header=BB1_1 Depth=1
+-; CHECK-NEXT:    ldp w13, w12, [x9, #12]
+-; CHECK-NEXT:    ldr w10, [x9]
++; CHECK-NEXT:    ldr w9, [x8, #20]
++; CHECK-NEXT:    cmp w9, #3
++; CHECK-NEXT:    b.lo LBB1_1
++; CHECK-NEXT:  ; %bb.3: ; %then
++; CHECK-NEXT:    ; in Loop: Header=BB1_2 Depth=1
++; CHECK-NEXT:    ldp w13, w12, [x8, #12]
++; CHECK-NEXT:    ldr w10, [x8]
+ ; CHECK-NEXT:    ldr x11, [x0]
+-; CHECK-NEXT:    add x8, x8, #1
+-; CHECK-NEXT:    ldr w14, [x9, #8]
++; CHECK-NEXT:    ldr w14, [x8, #8]
+ ; CHECK-NEXT:    lsl w10, w10, w13
+ ; CHECK-NEXT:    ldrb w11, [x11, x12]
+ ; CHECK-NEXT:    eor w10, w10, w11
+-; CHECK-NEXT:    ldur w11, [x9, #-24]
++; CHECK-NEXT:    ldur w11, [x8, #-24]
+ ; CHECK-NEXT:    and w10, w10, w14
+-; CHECK-NEXT:    ldp x14, x13, [x9, #-16]
+-; CHECK-NEXT:    str w10, [x9], #56
++; CHECK-NEXT:    ldp x14, x13, [x8, #-16]
++; CHECK-NEXT:    str w10, [x8]
+ ; CHECK-NEXT:    and w11, w11, w12
+ ; CHECK-NEXT:    ldrh w15, [x13, w10, uxtw #1]
+ ; CHECK-NEXT:    strh w15, [x14, w11, uxtw #1]
+ ; CHECK-NEXT:    strh w12, [x13, w10, uxtw #1]
+ ; CHECK-NEXT:    b LBB1_1
+-; CHECK-NEXT:  LBB1_3: ; %exit.critedge
++; CHECK-NEXT:  LBB1_4: ; %exit
+ ; CHECK-NEXT:    ret
+ entry:
+   br label %loop
+diff --git a/llvm/test/Transforms/SimplifyCFG/jump-threading-live-on-exit.ll b/llvm/test/Transforms/SimplifyCFG/jump-threading-live-on-exit.ll
+deleted file mode 100644
+index 32b77191c930..000000000000
+--- a/llvm/test/Transforms/SimplifyCFG/jump-threading-live-on-exit.ll
++++ /dev/null
+@@ -1,195 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt -passes=simplifycfg -S < %s | FileCheck %s
+-
+-; Allow jump-threading when values defined in the block are live outside of the block
+-; to those destinations in which the values are dead.
+-
+-define void @testA(ptr %ptrA, ptr %ptrB, i64 %a, i64 %b) {
+-; CHECK-LABEL: define void @testA(
+-; CHECK-SAME: ptr [[PTRA:%.*]], ptr [[PTRB:%.*]], i64 [[A:%.*]], i64 [[B:%.*]]) {
+-; CHECK-NEXT:  [[MAINA:.*:]]
+-; CHECK-NEXT:    [[COND:%.*]] = icmp slt i64 [[A]], [[B]]
+-; CHECK-NEXT:    br i1 [[COND]], label %[[IFA:.*]], label %[[MAINC:.*]]
+-; CHECK:       [[IFA]]:
+-; CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr [[PTRA]], align 4
+-; CHECK-NEXT:    store i64 [[TMP0]], ptr [[PTRB]], align 4
+-; CHECK-NEXT:    br label %[[MAINC]]
+-; CHECK:       [[MAINC]]:
+-; CHECK-NEXT:    ret void
+-;
+-mainA:
+-  %cond = icmp slt i64 %a, %b
+-  br i1 %cond, label %ifA, label %mainB
+-
+-ifA:
+-  %518 = load i64, ptr %ptrA
+-  br label %mainB
+-
+-; %value is live outside of block mainB, but jump-threading
+-; can still occur to destination mainC, since %value is dead there.
+-; Subsequent CFG simplifications will create one if block.
+-mainB:
+-  %value = phi i64 [ %518, %ifA ], [ zeroinitializer, %mainA ]
+-  br i1 %cond, label %ifB, label %mainC
+-
+-ifB:
+-  store i64 %value, ptr %ptrB
+-  br label %mainC
+-
+-mainC:
+-  ret void
+-}
+-
+-
+-define void @testB(ptr %ptrA, ptr %ptrB, i64 %a, i64 %b, i64 %c) {
+-; CHECK-LABEL: define void @testB(
+-; CHECK-SAME: ptr [[PTRA:%.*]], ptr [[PTRB:%.*]], i64 [[A:%.*]], i64 [[B:%.*]], i64 [[C:%.*]]) {
+-; CHECK-NEXT:  [[MAINA:.*:]]
+-; CHECK-NEXT:    [[COND:%.*]] = icmp slt i64 [[A]], [[B]]
+-; CHECK-NEXT:    br i1 [[COND]], label %[[IFA:.*]], label %[[MAINC:.*]]
+-; CHECK:       [[IFA]]:
+-; CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr [[PTRA]], align 4
+-; CHECK-NEXT:    [[COND2:%.*]] = icmp slt i64 [[A]], [[C]]
+-; CHECK-NEXT:    [[PTR_ARM1:%.*]] = getelementptr i64, ptr [[PTRB]], i64 8
+-; CHECK-NEXT:    [[PTR_ARM2:%.*]] = getelementptr i64, ptr [[PTRB]], i64 16
+-; CHECK-NEXT:    [[PTRC:%.*]] = select i1 [[COND2]], ptr [[PTR_ARM1]], ptr [[PTR_ARM2]]
+-; CHECK-NEXT:    store i64 [[TMP0]], ptr [[PTRC]], align 4
+-; CHECK-NEXT:    br label %[[MAINC]]
+-; CHECK:       [[MAINC]]:
+-; CHECK-NEXT:    ret void
+-;
+-mainA:
+-  %cond = icmp slt i64 %a, %b
+-  br i1 %cond, label %ifA, label %mainB
+-
+-ifA:
+-  %518 = load i64, ptr %ptrA
+-  br label %mainB
+-
+-; Use of %value is not in either immediate destination of mainB.
+-mainB:
+-  %value = phi i64 [ %518, %ifA ], [ zeroinitializer, %mainA ]
+-  br i1 %cond, label %ifB, label %mainC
+-
+-ifB:
+-  %cond2 = icmp slt i64 %a, %c
+-  br i1 %cond2, label %ifB_arm1, label %ifB_arm2
+-
+-ifB_arm1:
+-  %ptr_arm1 = getelementptr i64, ptr %ptrB, i64 8
+-  br label %ifB_join
+-
+-ifB_arm2:
+-  %ptr_arm2 = getelementptr i64, ptr %ptrB, i64 16
+-  br label %ifB_join
+-
+-ifB_join:
+-  %ptrC = phi ptr [ %ptr_arm1, %ifB_arm1 ], [ %ptr_arm2, %ifB_arm2 ]
+-  store i64 %value, ptr %ptrC
+-  br label %mainC
+-
+-mainC:
+-  ret void
+-}
+-
+-
+-; Jump-threading is not done since %value is live in both destinations.
+-define void @testA_negative(ptr %ptrA, ptr %ptrB, ptr %ptrD, i64 %a, i64 %b) {
+-; CHECK-LABEL: define void @testA_negative(
+-; CHECK-SAME: ptr [[PTRA:%.*]], ptr [[PTRB:%.*]], ptr [[PTRD:%.*]], i64 [[A:%.*]], i64 [[B:%.*]]) {
+-; CHECK-NEXT:  [[MAINA:.*]]:
+-; CHECK-NEXT:    [[COND:%.*]] = icmp slt i64 [[A]], [[B]]
+-; CHECK-NEXT:    br i1 [[COND]], label %[[IFA:.*]], label %[[MAINB:.*]]
+-; CHECK:       [[IFA]]:
+-; CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr [[PTRA]], align 4
+-; CHECK-NEXT:    br label %[[MAINB]]
+-; CHECK:       [[MAINB]]:
+-; CHECK-NEXT:    [[VALUE:%.*]] = phi i64 [ [[TMP0]], %[[IFA]] ], [ 0, %[[MAINA]] ]
+-; CHECK-NEXT:    br i1 [[COND]], label %[[IFB:.*]], label %[[MAINC:.*]]
+-; CHECK:       [[IFB]]:
+-; CHECK-NEXT:    store i64 [[VALUE]], ptr [[PTRB]], align 4
+-; CHECK-NEXT:    br label %[[MAINC]]
+-; CHECK:       [[MAINC]]:
+-; CHECK-NEXT:    store i64 [[VALUE]], ptr [[PTRD]], align 4
+-; CHECK-NEXT:    ret void
+-;
+-mainA:
+-  %cond = icmp slt i64 %a, %b
+-  br i1 %cond, label %ifA, label %mainB
+-
+-ifA:
+-  %518 = load i64, ptr %ptrA
+-  br label %mainB
+-
+-mainB:
+-  %value = phi i64 [ %518, %ifA ], [ zeroinitializer, %mainA ]
+-  br i1 %cond, label %ifB, label %mainC
+-
+-ifB:
+-  store i64 %value, ptr %ptrB
+-  br label %mainC
+-
+-mainC:
+-  store i64 %value, ptr %ptrD
+-  ret void
+-}
+-
+-
+-; Jump-threading is not done since %value is live in both destinations.
+-define void @testB_negative(ptr %ptrA, ptr %ptrB, ptr %ptrD, i64 %a, i64 %b, i64 %c) {
+-; CHECK-LABEL: define void @testB_negative(
+-; CHECK-SAME: ptr [[PTRA:%.*]], ptr [[PTRB:%.*]], ptr [[PTRD:%.*]], i64 [[A:%.*]], i64 [[B:%.*]], i64 [[C:%.*]]) {
+-; CHECK-NEXT:  [[MAINA:.*]]:
+-; CHECK-NEXT:    [[COND:%.*]] = icmp slt i64 [[A]], [[B]]
+-; CHECK-NEXT:    br i1 [[COND]], label %[[IFA:.*]], label %[[MAINB:.*]]
+-; CHECK:       [[IFA]]:
+-; CHECK-NEXT:    [[TMP0:%.*]] = load i64, ptr [[PTRA]], align 4
+-; CHECK-NEXT:    br label %[[MAINB]]
+-; CHECK:       [[MAINB]]:
+-; CHECK-NEXT:    [[VALUE:%.*]] = phi i64 [ [[TMP0]], %[[IFA]] ], [ 0, %[[MAINA]] ]
+-; CHECK-NEXT:    br i1 [[COND]], label %[[IFB:.*]], label %[[MAINC:.*]]
+-; CHECK:       [[IFB]]:
+-; CHECK-NEXT:    [[COND2:%.*]] = icmp slt i64 [[A]], [[C]]
+-; CHECK-NEXT:    [[PTR_ARM1:%.*]] = getelementptr i64, ptr [[PTRB]], i64 8
+-; CHECK-NEXT:    [[PTR_ARM2:%.*]] = getelementptr i64, ptr [[PTRB]], i64 16
+-; CHECK-NEXT:    [[PTRC:%.*]] = select i1 [[COND2]], ptr [[PTR_ARM1]], ptr [[PTR_ARM2]]
+-; CHECK-NEXT:    store i64 [[VALUE]], ptr [[PTRC]], align 4
+-; CHECK-NEXT:    br label %[[MAINC]]
+-; CHECK:       [[MAINC]]:
+-; CHECK-NEXT:    store i64 [[VALUE]], ptr [[PTRD]], align 4
+-; CHECK-NEXT:    ret void
+-;
+-mainA:
+-  %cond = icmp slt i64 %a, %b
+-  br i1 %cond, label %ifA, label %mainB
+-
+-ifA:
+-  %518 = load i64, ptr %ptrA
+-  br label %mainB
+-
+-mainB:
+-  %value = phi i64 [ %518, %ifA ], [ zeroinitializer, %mainA ]
+-  br i1 %cond, label %ifB, label %mainC
+-
+-ifB:
+-  %cond2 = icmp slt i64 %a, %c
+-  br i1 %cond2, label %ifB_arm1, label %ifB_arm2
+-
+-ifB_arm1:
+-  %ptr_arm1 = getelementptr i64, ptr %ptrB, i64 8
+-  br label %ifB_join
+-
+-ifB_arm2:
+-  %ptr_arm2 = getelementptr i64, ptr %ptrB, i64 16
+-  br label %ifB_join
+-
+-ifB_join:
+-  %ptrC = phi ptr [ %ptr_arm1, %ifB_arm1 ], [ %ptr_arm2, %ifB_arm2 ]
+-  store i64 %value, ptr %ptrC
+-  br label %mainC
+-
+-mainC:
+-  store i64 %value, ptr %ptrD
+-  ret void
+-}
+-
+diff --git a/llvm/test/Transforms/SimplifyCFG/jump-threading-max-jump-threading-live-blocks.ll b/llvm/test/Transforms/SimplifyCFG/jump-threading-max-jump-threading-live-blocks.ll
+deleted file mode 100644
+index 686869348019..000000000000
+--- a/llvm/test/Transforms/SimplifyCFG/jump-threading-max-jump-threading-live-blocks.ll
++++ /dev/null
+@@ -1,95 +0,0 @@
+-; NOTE: Assertions have been autogenerated by utils/update_test_checks.py UTC_ARGS: --version 5
+-; RUN: opt -passes=simplifycfg -S -max-jump-threading-live-blocks=3 < %s | FileCheck %s --check-prefixes=CHECK_LIMIT_3
+-; RUN: opt -passes=simplifycfg -S -max-jump-threading-live-blocks=4 < %s | FileCheck %s --check-prefixes=CHECK_LIMIT_4
+-
+-; Test option -max-jump-threading-live-blocks=<num>
+-
+-define void @testB(ptr %ptrA, ptr %ptrB, i64 %a, i64 %b, i64 %c) {
+-; CHECK_LIMIT_3-LABEL: define void @testB(
+-; CHECK_LIMIT_3-SAME: ptr [[PTRA:%.*]], ptr [[PTRB:%.*]], i64 [[A:%.*]], i64 [[B:%.*]], i64 [[C:%.*]]) {
+-; CHECK_LIMIT_3-NEXT:  [[MAINA:.*]]:
+-; CHECK_LIMIT_3-NEXT:    [[COND:%.*]] = icmp slt i64 [[A]], [[B]]
+-; CHECK_LIMIT_3-NEXT:    br i1 [[COND]], label %[[IFA:.*]], label %[[MAINB:.*]]
+-; CHECK_LIMIT_3:       [[IFA]]:
+-; CHECK_LIMIT_3-NEXT:    [[TMP0:%.*]] = load i64, ptr [[PTRA]], align 4
+-; CHECK_LIMIT_3-NEXT:    br label %[[MAINB]]
+-; CHECK_LIMIT_3:       [[MAINB]]:
+-; CHECK_LIMIT_3-NEXT:    [[VALUE:%.*]] = phi i64 [ [[TMP0]], %[[IFA]] ], [ 0, %[[MAINA]] ]
+-; CHECK_LIMIT_3-NEXT:    br i1 [[COND]], label %[[IFB:.*]], label %[[MAINC:.*]]
+-; CHECK_LIMIT_3:       [[IFB]]:
+-; CHECK_LIMIT_3-NEXT:    [[COND2:%.*]] = icmp slt i64 [[A]], [[C]]
+-; CHECK_LIMIT_3-NEXT:    br i1 [[COND2]], label %[[IFB_ARM1:.*]], label %[[IFB_ARM2:.*]]
+-; CHECK_LIMIT_3:       [[IFB_ARM1]]:
+-; CHECK_LIMIT_3-NEXT:    [[PTR_ARM1:%.*]] = getelementptr i64, ptr [[PTRB]], i64 8
+-; CHECK_LIMIT_3-NEXT:    store i128 0, ptr [[PTR_ARM1]], align 4
+-; CHECK_LIMIT_3-NEXT:    br label %[[IFB_JOIN:.*]]
+-; CHECK_LIMIT_3:       [[IFB_ARM2]]:
+-; CHECK_LIMIT_3-NEXT:    [[PTR_ARM2:%.*]] = getelementptr i64, ptr [[PTRB]], i64 16
+-; CHECK_LIMIT_3-NEXT:    store i128 0, ptr [[PTR_ARM2]], align 4
+-; CHECK_LIMIT_3-NEXT:    br label %[[IFB_JOIN]]
+-; CHECK_LIMIT_3:       [[IFB_JOIN]]:
+-; CHECK_LIMIT_3-NEXT:    [[PTRC:%.*]] = phi ptr [ [[PTR_ARM1]], %[[IFB_ARM1]] ], [ [[PTR_ARM2]], %[[IFB_ARM2]] ]
+-; CHECK_LIMIT_3-NEXT:    store i64 [[VALUE]], ptr [[PTRC]], align 4
+-; CHECK_LIMIT_3-NEXT:    br label %[[MAINC]]
+-; CHECK_LIMIT_3:       [[MAINC]]:
+-; CHECK_LIMIT_3-NEXT:    ret void
+-;
+-; CHECK_LIMIT_4-LABEL: define void @testB(
+-; CHECK_LIMIT_4-SAME: ptr [[PTRA:%.*]], ptr [[PTRB:%.*]], i64 [[A:%.*]], i64 [[B:%.*]], i64 [[C:%.*]]) {
+-; CHECK_LIMIT_4-NEXT:  [[MAINA:.*:]]
+-; CHECK_LIMIT_4-NEXT:    [[COND:%.*]] = icmp slt i64 [[A]], [[B]]
+-; CHECK_LIMIT_4-NEXT:    br i1 [[COND]], label %[[IFA:.*]], label %[[MAINC:.*]]
+-; CHECK_LIMIT_4:       [[IFA]]:
+-; CHECK_LIMIT_4-NEXT:    [[TMP0:%.*]] = load i64, ptr [[PTRA]], align 4
+-; CHECK_LIMIT_4-NEXT:    [[COND2:%.*]] = icmp slt i64 [[A]], [[C]]
+-; CHECK_LIMIT_4-NEXT:    br i1 [[COND2]], label %[[IFB_ARM1:.*]], label %[[IFB_ARM2:.*]]
+-; CHECK_LIMIT_4:       [[IFB_ARM1]]:
+-; CHECK_LIMIT_4-NEXT:    [[PTR_ARM1:%.*]] = getelementptr i64, ptr [[PTRB]], i64 8
+-; CHECK_LIMIT_4-NEXT:    store i128 0, ptr [[PTR_ARM1]], align 4
+-; CHECK_LIMIT_4-NEXT:    br label %[[IFB_JOIN:.*]]
+-; CHECK_LIMIT_4:       [[IFB_ARM2]]:
+-; CHECK_LIMIT_4-NEXT:    [[PTR_ARM2:%.*]] = getelementptr i64, ptr [[PTRB]], i64 16
+-; CHECK_LIMIT_4-NEXT:    store i128 0, ptr [[PTR_ARM2]], align 4
+-; CHECK_LIMIT_4-NEXT:    br label %[[IFB_JOIN]]
+-; CHECK_LIMIT_4:       [[IFB_JOIN]]:
+-; CHECK_LIMIT_4-NEXT:    [[PTRC:%.*]] = phi ptr [ [[PTR_ARM1]], %[[IFB_ARM1]] ], [ [[PTR_ARM2]], %[[IFB_ARM2]] ]
+-; CHECK_LIMIT_4-NEXT:    store i64 [[TMP0]], ptr [[PTRC]], align 4
+-; CHECK_LIMIT_4-NEXT:    br label %[[MAINC]]
+-; CHECK_LIMIT_4:       [[MAINC]]:
+-; CHECK_LIMIT_4-NEXT:    ret void
+-;
+-mainA:
+-  %cond = icmp slt i64 %a, %b
+-  br i1 %cond, label %ifA, label %mainB
+-
+-ifA:
+-  %518 = load i64, ptr %ptrA
+-  br label %mainB
+-
+-; Use of %value is not in either immediate destination of mainB.
+-mainB:
+-  %value = phi i64 [ %518, %ifA ], [ zeroinitializer, %mainA ]
+-  br i1 %cond, label %ifB, label %mainC
+-
+-ifB:
+-  %cond2 = icmp slt i64 %a, %c
+-  br i1 %cond2, label %ifB_arm1, label %ifB_arm2
+-
+-ifB_arm1:
+-  %ptr_arm1 = getelementptr i64, ptr %ptrB, i64 8
+-  store i128 0, ptr %ptr_arm1
+-  br label %ifB_join
+-
+-ifB_arm2:
+-  %ptr_arm2 = getelementptr i64, ptr %ptrB, i64 16
+-  store i128 0, ptr %ptr_arm2
+-  br label %ifB_join
+-
+-ifB_join:
+-  %ptrC = phi ptr [ %ptr_arm1, %ifB_arm1 ], [ %ptr_arm2, %ifB_arm2 ]
+-  store i64 %value, ptr %ptrC
+-  br label %mainC
+-
+-mainC:
+-  ret void
+-}
+-- 
+2.39.5

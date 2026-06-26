@@ -1,0 +1,252 @@
+From 0cc1f200fced0302899e5ce7ddd962897ac7025c Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Mon, 16 Mar 2026 22:12:05 -0300
+Subject: [PATCH] [clang] use canonical arguments for checking function
+ template constraints (#186889)
+
+This is a partial revert of #161671, restoring the original behaviour
+where the canonical template arguments are used for function template
+constraint checking in diagnostics.
+
+This reverts the fix from #183010, which attempted to fix #182344
+but it causes regressions. These regressions now have test cases
+included.
+
+The attempt at #183010 is flawed because in the general case we can't
+check satisfaction for constraints which have unsubstituted template
+arguments, even if they don't affect the canonical type (ie they are
+purely
+syntactical), because these types can still turn out to be invalid after
+substitution.
+
+This is a problem when directly evaluating a concept specialization, but
+it's not a problem with other template specializations because the
+as-written types are preserved, and will be later substituted, and any
+failures
+here will cause the program to be ill-formed anyway.
+
+The only downside of this revert is the loss of sugar in some
+diagnostics.
+
+This could be improved in the future by adding a new flag which would
+allow ignoring this instantiation dependence in such cases where a
+substitution failure will be handled later anyway.
+
+This is not done in this patch because we want the safest thing
+possible, to help backporting this patch to Clang 22.
+
+This preserves the tests from #183010 and also adds the tests from
+#185608.
+
+Since this fixes a regression since Clang 21 and will be backported to
+Clang 22, there are no release notes.
+
+patch.cherry: true
+patch.metadata.author: Matheus Izvekov <mizvekov@gmail.com>
+patch.metadata.original_sha: 83965ad10c1e8af42fba460152f7c90c0e2aa6f0
+patch.platforms: chromiumos
+patch.version_range.from: 592656
+patch.version_range.until: 611027
+
+---
+ clang/include/clang/Sema/Template.h           |  4 +-
+ clang/lib/Sema/SemaConcept.cpp                |  7 +-
+ clang/lib/Sema/SemaTemplateDeduction.cpp      |  7 +-
+ .../end-primitive-array-root-lifetime.cpp     | 65 +++++++++++++++++++
+ .../expr.prim.req/nested-requirement.cpp      |  2 +-
+ clang/test/SemaCXX/cxx2b-deducing-this.cpp    |  8 +--
+ .../SemaTemplate/concepts-recursive-inst.cpp  |  4 +-
+ 7 files changed, 84 insertions(+), 13 deletions(-)
+ create mode 100644 clang/test/AST/ByteCode/libcxx/end-primitive-array-root-lifetime.cpp
+
+diff --git a/clang/include/clang/Sema/Template.h b/clang/include/clang/Sema/Template.h
+index e963439b05c9..b0170c21feb1 100644
+--- a/clang/include/clang/Sema/Template.h
++++ b/clang/include/clang/Sema/Template.h
+@@ -188,7 +188,9 @@ enum class TemplateSubstitutionKind : char {
+     bool isAnyArgInstantiationDependent() const {
+       for (ArgumentListLevel ListLevel : TemplateArgumentLists)
+         for (const TemplateArgument &TA : ListLevel.Args)
+-          if (TA.isInstantiationDependent())
++          // There might be null template arguments representing unused template
++          // parameter mappings in an MLTAL during concept checking.
++          if (!TA.isNull() && TA.isInstantiationDependent())
+             return true;
+       return false;
+     }
+diff --git a/clang/lib/Sema/SemaConcept.cpp b/clang/lib/Sema/SemaConcept.cpp
+index fb4d0b458268..652ed8e09e72 100644
+--- a/clang/lib/Sema/SemaConcept.cpp
++++ b/clang/lib/Sema/SemaConcept.cpp
+@@ -1132,8 +1132,13 @@ static bool CheckConstraintSatisfaction(
+     return false;
+   }
+ 
++  // In the general case, we can't check satisfaction if the arguments contain
++  // unsubstituted template parameters, even if they are purely syntactic,
++  // because they may still turn out to be invalid after substitution.
++  // This could be permitted in cases where this substitution will still be
++  // attempted later and diagnosed, such as function template specializations,
++  // but that's not the case for concept specializations.
+   if (TemplateArgsLists.isAnyArgInstantiationDependent()) {
+-    // No need to check satisfaction for dependent constraint expressions.
+     Satisfaction.IsSatisfied = true;
+     return false;
+   }
+diff --git a/clang/lib/Sema/SemaTemplateDeduction.cpp b/clang/lib/Sema/SemaTemplateDeduction.cpp
+index 6964242b39d6..7ee458624e68 100644
+--- a/clang/lib/Sema/SemaTemplateDeduction.cpp
++++ b/clang/lib/Sema/SemaTemplateDeduction.cpp
+@@ -3995,12 +3995,11 @@ TemplateDeductionResult Sema::FinishTemplateArgumentDeduction(
+     if (CheckFunctionTemplateConstraints(
+             Info.getLocation(),
+             FunctionTemplate->getCanonicalDecl()->getTemplatedDecl(),
+-            CTAI.SugaredConverted, Info.AssociatedConstraintsSatisfaction))
++            CTAI.CanonicalConverted, Info.AssociatedConstraintsSatisfaction))
+       return TemplateDeductionResult::MiscellaneousDeductionFailure;
+     if (!Info.AssociatedConstraintsSatisfaction.IsSatisfied) {
+-      Info.reset(
+-          TemplateArgumentList::CreateCopy(Context, CTAI.SugaredConverted),
+-          Info.takeCanonical());
++      Info.reset(Info.takeSugared(), TemplateArgumentList::CreateCopy(
++                                         Context, CTAI.CanonicalConverted));
+       return TemplateDeductionResult::ConstraintsNotSatisfied;
+     }
+   }
+diff --git a/clang/test/AST/ByteCode/libcxx/end-primitive-array-root-lifetime.cpp b/clang/test/AST/ByteCode/libcxx/end-primitive-array-root-lifetime.cpp
+new file mode 100644
+index 000000000000..f5ba94d42996
+--- /dev/null
++++ b/clang/test/AST/ByteCode/libcxx/end-primitive-array-root-lifetime.cpp
+@@ -0,0 +1,65 @@
++// RUN: %clang_cc1 -std=c++2c -fexperimental-new-constant-interpreter -verify=expected,both %s
++// RUN: %clang_cc1 -std=c++2c  -verify=ref,both %s
++
++// both-no-diagnostics
++
++namespace std {
++inline namespace {
++template <bool, class _IfRes, class> using conditional_t = _IfRes;
++template <class _Ip>
++concept input_iterator = requires { typename _Ip; };
++auto end = int{};
++namespace ranges {
++template <class>
++concept range = requires { end; };
++template <class _Tp>
++concept input_range = input_iterator<_Tp>;
++template <class>
++concept forward_range = false;
++template <range _Rp> struct owning_view {
++  _Rp __r_;
++};
++} // namespace ranges
++template <int _Size> struct array {
++  int __elems_[_Size];
++};
++template <class> struct allocator {
++  constexpr array<2> *allocate(decltype(sizeof(int))) {
++    return static_cast<array<2> *>(operator new(sizeof(array<2>)));
++  }
++};
++namespace ranges {
++template <input_range _View, forward_range _Pattern> struct join_with_view {
++  join_with_view(_View, _Pattern);
++};
++} // namespace ranges
++template <class> struct vector {
++  constexpr ~vector() {
++    (__end_ - 1)->~array<2>();
++  }
++  constexpr vector() {
++    __end_ = __alloc_.allocate(0);
++    _ConstructTransaction __tx(*this);
++    ++__tx.__pos_;
++  }
++  array<2>* __end_;
++  allocator<array<2>> __alloc_;
++  struct _ConstructTransaction {
++    constexpr _ConstructTransaction(vector &__v)
++        : __v_(__v), __pos_(__v.__end_) {}
++    constexpr ~_ConstructTransaction() { __v_.__end_ = __pos_; }
++    vector __v_;
++    array<2>* __pos_;
++  };
++};
++} // namespace
++} // namespace std
++template <bool RefIsGlvalue, class Inner>
++using VRange = std::conditional_t<RefIsGlvalue, std::vector<Inner>, Inner>;
++template <int RefIsGlvalue> void test_pre_increment() {
++  using V = VRange<RefIsGlvalue, std::array<2>>;
++  using Pattern = std::array<2>;
++  using JWV = std::ranges::join_with_view<std::ranges::owning_view<V>,
++                                          std::ranges::owning_view<Pattern>>;
++  JWV jwv({}, {});
++}
+diff --git a/clang/test/CXX/expr/expr.prim/expr.prim.req/nested-requirement.cpp b/clang/test/CXX/expr/expr.prim/expr.prim.req/nested-requirement.cpp
+index 70a96bed0586..7b58150eaaf8 100644
+--- a/clang/test/CXX/expr/expr.prim/expr.prim.req/nested-requirement.cpp
++++ b/clang/test/CXX/expr/expr.prim/expr.prim.req/nested-requirement.cpp
+@@ -152,7 +152,7 @@ void func() {
+   // expected-note@#bar {{while substituting template arguments into constraint expression here}}
+   // expected-note@#bar {{while checking the satisfaction of nested requirement requested here}}
+   // expected-note@#bar {{candidate template ignored: constraints not satisfied [with T = False]}}
+-  // expected-note@#bar {{because 'X<False>::value' evaluated to false}}
++  // expected-note@#bar {{because 'X<SubstitutionFailureNestedRequires::ErrorExpressions_NotSF::False>::value' evaluated to false}}
+ 
+   bar<int>();
+   // expected-error@-1 {{no matching function for call to 'bar'}} \
+diff --git a/clang/test/SemaCXX/cxx2b-deducing-this.cpp b/clang/test/SemaCXX/cxx2b-deducing-this.cpp
+index 6777dc23c44a..74b3573a0dca 100644
+--- a/clang/test/SemaCXX/cxx2b-deducing-this.cpp
++++ b/clang/test/SemaCXX/cxx2b-deducing-this.cpp
+@@ -1257,13 +1257,13 @@ void f() {
+     (&A::e)(a, a);
+     // expected-error@-1 {{no matching function for call to 'e'}} \
+     // expected-note@#tpl-address-e{{candidate template ignored: constraints not satisfied [with T = A, U = A]}} \
+-    // expected-note@#tpl-address-e{{because '__is_same(A, int)' evaluated to false}}
++    // expected-note@#tpl-address-e{{because '__is_same(tpl_address::A, int)' evaluated to false}}
+ 
+     (&A::e<A>)(a, 0);
+     (&A::e<A>)(a, a);
+     // expected-error@-1 {{no matching function for call to 'e'}} \
+     // expected-note@#tpl-address-e{{candidate template ignored: constraints not satisfied [with T = A, U = A]}} \
+-    // expected-note@#tpl-address-e{{because '__is_same(A, int)' evaluated to false}}
++    // expected-note@#tpl-address-e{{because '__is_same(tpl_address::A, int)' evaluated to false}}
+ 
+     (&A::e<A, int>)(a, 0);
+ 
+@@ -1273,12 +1273,12 @@ void f() {
+     (&A::f<A>)(a);
+     // expected-error@-1 {{no matching function for call to 'f'}} \
+     // expected-note@#tpl-address-f{{candidate template ignored: constraints not satisfied [with T = A]}} \
+-    // expected-note@#tpl-address-f{{because '__is_same(A, int)' evaluated to false}}
++    // expected-note@#tpl-address-f{{because '__is_same(tpl_address::A, int)' evaluated to false}}
+ 
+     (&A::f)(a);
+     // expected-error@-1 {{no matching function for call to 'f'}} \
+     // expected-note@#tpl-address-f{{candidate template ignored: constraints not satisfied [with T = A]}} \
+-    // expected-note@#tpl-address-f{{because '__is_same(A, int)' evaluated to false}}
++    // expected-note@#tpl-address-f{{because '__is_same(tpl_address::A, int)' evaluated to false}}
+ 
+     (&A::g)(a);
+     (&A::g)(a, 0);
+diff --git a/clang/test/SemaTemplate/concepts-recursive-inst.cpp b/clang/test/SemaTemplate/concepts-recursive-inst.cpp
+index 5e1bce5f1568..1a98ded489a5 100644
+--- a/clang/test/SemaTemplate/concepts-recursive-inst.cpp
++++ b/clang/test/SemaTemplate/concepts-recursive-inst.cpp
+@@ -73,8 +73,8 @@ auto it = begin(rng); // #BEGIN_CALL
+ // expected-note@#INF_BEGIN_EXPR {{while substituting deduced template arguments into function template 'begin'}}
+ // expected-note@#INF_BEGIN_EXPR {{in instantiation of requirement here}}
+ // expected-note@#INF_REQ {{while substituting template arguments into constraint expression here}}
+-// expected-note@#INF_BEGIN {{while checking the satisfaction of concept 'Inf<struct my_range>' requested here}}
+-// expected-note@#BEGIN_CALL {{while checking constraint satisfaction for template 'begin<struct my_range>' required here}}
++// expected-note@#INF_BEGIN {{while checking the satisfaction of concept 'Inf<DirectRecursiveCheck::my_range>' requested here}}
++// expected-note@#BEGIN_CALL {{while checking constraint satisfaction for template 'begin<DirectRecursiveCheck::my_range>' required here}}
+ // expected-note@#BEGIN_CALL {{while substituting deduced template arguments into function template}}
+ 
+ // Fallout of the failure is failed lookup, which is necessary to stop odd
+-- 
+2.39.5

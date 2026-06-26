@@ -1433,5 +1433,338 @@
       "from": 596125,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "author": "Eli Friedman <efriedma@qti.qualcomm.com>",
+      "info": [],
+      "original_sha": "9471fabf8ab15b1dc03834a1b7b7d20a038a4656",
+      "title": "[clang] Fix issues with const/pure on varargs function. (#190252)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9471fabf8ab15b1dc03834a1b7b7d20a038a4656.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 613403
+    }
+  },
+  {
+    "metadata": {
+      "author": "Fangrui Song <i@maskray.me>",
+      "info": [],
+      "original_sha": "88bd3f475bd8083bfc8ddc5eaa15ef7ba1d999a4",
+      "title": "[clang] Adjust -pedantic-errors -WX/-Wno-error=X interaction (#184756)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/88bd3f475bd8083bfc8ddc5eaa15ef7ba1d999a4.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 610011
+    }
+  },
+  {
+    "metadata": {
+      "author": "Aiden Grossman <aidengrossman@google.com>",
+      "info": [],
+      "original_sha": "7fb92cdf5fa69423b4b99259057eb8de813c1344",
+      "title": "[Benchmark] Fix warnings around usage of __COUNTER__ (#184524)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/7fb92cdf5fa69423b4b99259057eb8de813c1344.patch",
+    "version_range": {
+      "from": 595908,
+      "until": 609255
+    }
+  },
+  {
+    "metadata": {
+      "author": "Matt Arsenault <Matthew.Arsenault@amd.com>",
+      "info": [],
+      "original_sha": "044e0f041d5c02ae3b4e44bab4647008ff497d9f",
+      "title": "Revert \"IR: Remove null UseList checks in hasNUses methods (#165929)\" (#166500)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/044e0f041d5c02ae3b4e44bab4647008ff497d9f.patch",
+    "version_range": {
+      "from": 596036,
+      "until": 596190
+    }
+  },
+  {
+    "metadata": {
+      "author": "Petr Hosek <phosek@google.com>",
+      "info": [],
+      "original_sha": "7e043364cf1f267380b2be955901b28ede9ca8eb",
+      "title": "Revert \"[DFAJumpThreading] Enable DFAJumpThread by default.\" (#167352)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/7e043364cf1f267380b2be955901b28ede9ca8eb.patch",
+    "version_range": {
+      "from": 596037,
+      "until": 596871
+    }
+  },
+  {
+    "metadata": {
+      "author": "Brad Smith <brad@comstyle.com>",
+      "info": [],
+      "original_sha": "b0e98426f390c3f0d86c3a2c860a6d980a91e5de",
+      "title": "Revert \"[FMV][AArch64] Add initial AT_HWCAP3 / AT_HWCAP4 support (#161595)\" (#171071)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/b0e98426f390c3f0d86c3a2c860a6d980a91e5de.patch",
+    "version_range": {
+      "from": 593099,
+      "until": 599761
+    }
+  },
+  {
+    "metadata": {
+      "author": "Vitaly Buka <vitalybuka@google.com>",
+      "info": [],
+      "original_sha": "af098e009695c07d5f56d1d8a1f9c8380919f26d",
+      "title": "Revert \"[ubsan_minimal] Allow UBSan handler from Minimal runtime to accept arguments (#152192)\" (#168812)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/af098e009695c07d5f56d1d8a1f9c8380919f26d.patch",
+    "version_range": {
+      "from": 585605,
+      "until": 598173
+    }
+  },
+  {
+    "metadata": {
+      "author": "Thurston Dang <thurston@google.com>",
+      "info": [],
+      "original_sha": "f270256b4393bd2406a503f1fa5d7a8f9a51f91b",
+      "title": "[X86] Avoid assertion failure with implicit immediates for AMX tile dimensions (#174128)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/f270256b4393bd2406a503f1fa5d7a8f9a51f91b.patch",
+    "version_range": {
+      "from": 595694,
+      "until": 601944
+    }
+  },
+  {
+    "metadata": {
+      "author": "Joel E. Denny <jdenny.ornl@gmail.com>",
+      "info": [],
+      "original_sha": "b8ef25aa643761233dc5b74d9fb7c38a2064d9c7",
+      "title": "[PGO] Fix zeroed estimated trip count (#167792)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/b8ef25aa643761233dc5b74d9fb7c38a2064d9c7.patch",
+    "version_range": {
+      "from": 590166,
+      "until": 598558
+    }
+  },
+  {
+    "metadata": {
+      "author": "Eli Friedman <efriedma@qti.qualcomm.com>",
+      "info": [],
+      "original_sha": "bd3b163dce306040e2fa8d3bf5eef2385fc0bb37",
+      "title": "Revert \"[InstCombine] Allow freezing multiple operands (#154336)\" (#182769)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/bd3b163dce306040e2fa8d3bf5eef2385fc0bb37.patch",
+    "version_range": {
+      "from": 587792,
+      "until": 608033
+    }
+  },
+  {
+    "metadata": {
+      "author": "Alexander Belyaev <pifon@google.com>",
+      "info": [],
+      "original_sha": "7ee0e0f956ac2c9e601132a9efbb163f5a81893f",
+      "title": "Revert \"[LICM] Sink unused l-invariant loads in preheader. #157559\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/7ee0e0f956ac2c9e601132a9efbb163f5a81893f.patch",
+    "version_range": {
+      "from": 595559,
+      "until": 597375
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
+      "info": [],
+      "original_sha": "9d2303103288f6110622644f78dbd26c8bcf28d5",
+      "title": "[libc++] Only make comparators transparent in __tree if they don't cause a conversion (#179453)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/9d2303103288f6110622644f78dbd26c8bcf28d5.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 606550
+    }
+  },
+  {
+    "metadata": {
+      "author": "Nikolas Klauser <nikolasklauser@berlin.de>",
+      "info": [],
+      "original_sha": "befaa35212dbaac39cd76a8dc748e4df7c90a0d9",
+      "title": "[libc++] Fix passing through object to comparisons in __tree (#186341)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/befaa35212dbaac39cd76a8dc748e4df7c90a0d9.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 611338
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jonathan Thackray <jonathan.thackray@arm.com>",
+      "info": [],
+      "original_sha": "a48159df9ce57c2bf377588b52563966865514a2",
+      "title": "[AArch64][llvm] Remove support for FEAT_MPAMv2_VID (#193191)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/a48159df9ce57c2bf377588b52563966865514a2.patch",
+    "version_range": {
+      "from": 595001,
+      "until": 615887
+    }
+  },
+  {
+    "metadata": {
+      "author": "hjagasiaAMD <harsha.jagasia@amd.com>",
+      "info": [],
+      "original_sha": "a76750e6de6aba2223097dc505578556ec245d50",
+      "title": "Revert \"[SimplifyCFG] Extend jump-threading to allow live local defs … (#190269)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/a76750e6de6aba2223097dc505578556ec245d50.patch",
+    "version_range": {
+      "from": 584832,
+      "until": 613309
+    }
+  },
+  {
+    "metadata": {
+      "author": "Matheus Izvekov <mizvekov@gmail.com>",
+      "info": [],
+      "original_sha": "83965ad10c1e8af42fba460152f7c90c0e2aa6f0",
+      "title": "[clang] use canonical arguments for checking function template constraints (#186889)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/83965ad10c1e8af42fba460152f7c90c0e2aa6f0.patch",
+    "version_range": {
+      "from": 592656,
+      "until": 611027
+    }
+  },
+  {
+    "metadata": {
+      "author": "Naveen Seth Hanig <naveen.hanig@outlook.com>",
+      "info": [],
+      "original_sha": "534f334b84ad02fd0e6878e4ed27c6079a8e67a9",
+      "title": "Revert \"Reland [clang][modules-driver] Add scanner to detect C++20 module presence (#153497)\" (2nd Attempt) (#172701)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/534f334b84ad02fd0e6878e4ed27c6079a8e67a9.patch",
+    "version_range": {
+      "from": 586924,
+      "until": 600981
+    }
+  },
+  {
+    "metadata": {
+      "author": "",
+      "info": [],
+      "title": "Revert \"cros: add user-enumeration patch\""
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "Revert-cros-add-user-enumeration-patch-.patch",
+    "version_range": {
+      "from": null,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan R AW <ajordanr@google.com>",
+      "info": [],
+      "original_sha": "7e735ea180fe6d199dd71dacf4396bcbbb3bbb3c",
+      "title": "[compiler-rt][cmake] v2: Fix check_cxx_compiler_flag calls (#197529)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/7e735ea180fe6d199dd71dacf4396bcbbb3bbb3c.patch",
+    "version_range": {
+      "from": 584947,
+      "until": 596125
+    }
+  },
+  {
+    "metadata": {
+      "author": "Adrian Ratiu <adrian.ratiu@collabora.com>",
+      "info": [],
+      "title": "[compiler-rt][builtins] Enable i386 long double to float128 conversions"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "-compiler-rt-builtins-Enable-i386-long-double-to-float128-conversions.patch",
+    "version_range": {
+      "from": 584947,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "author": "Adrian Ratiu <adrian.ratiu@collabora.com>",
+      "info": [],
+      "title": "[compiler-rt][builtins] Build generic TF builtins for i386"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "-compiler-rt-builtins-Build-generic-TF-builtins-for-i386.patch",
+    "version_range": {
+      "from": 584947,
+      "until": null
+    }
   }
 ]

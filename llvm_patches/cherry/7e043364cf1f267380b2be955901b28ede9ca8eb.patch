@@ -1,0 +1,127 @@
+From b64270fb5e37885c34e51e6121afe83d93605fa4 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Mon, 10 Nov 2025 17:56:03 -0800
+Subject: [PATCH] Revert "[DFAJumpThreading] Enable DFAJumpThread by default."
+ (#167352)
+
+Reverts llvm/llvm-project#157646, DFAJumpThread is causing miscompiles
+when building Clang with PGO, see llvm/llvm-project#166868 for details.
+
+patch.cherry: true
+patch.metadata.author: Petr Hosek <phosek@google.com>
+patch.metadata.original_sha: 7e043364cf1f267380b2be955901b28ede9ca8eb
+patch.platforms: chromiumos
+patch.version_range.from: 596037
+patch.version_range.until: 596871
+
+---
+ llvm/lib/Passes/PassBuilderPipelines.cpp                      | 2 +-
+ llvm/test/Other/new-pm-defaults.ll                            | 1 -
+ llvm/test/Other/new-pm-thinlto-postlink-defaults.ll           | 1 -
+ llvm/test/Other/new-pm-thinlto-postlink-pgo-defaults.ll       | 1 -
+ llvm/test/Other/new-pm-thinlto-postlink-samplepgo-defaults.ll | 1 -
+ llvm/test/Other/new-pm-thinlto-prelink-defaults.ll            | 1 -
+ llvm/test/Other/new-pm-thinlto-prelink-pgo-defaults.ll        | 1 -
+ llvm/test/Other/new-pm-thinlto-prelink-samplepgo-defaults.ll  | 1 -
+ 8 files changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/llvm/lib/Passes/PassBuilderPipelines.cpp b/llvm/lib/Passes/PassBuilderPipelines.cpp
+index 3f41618b18fc..bd03ac090721 100644
+--- a/llvm/lib/Passes/PassBuilderPipelines.cpp
++++ b/llvm/lib/Passes/PassBuilderPipelines.cpp
+@@ -228,7 +228,7 @@ static cl::opt<bool> EnableLoopHeaderDuplication(
+ static cl::opt<bool>
+     EnableDFAJumpThreading("enable-dfa-jump-thread",
+                            cl::desc("Enable DFA jump threading"),
+-                           cl::init(true), cl::Hidden);
++                           cl::init(false), cl::Hidden);
+ 
+ static cl::opt<bool>
+     EnableHotColdSplit("hot-cold-split",
+diff --git a/llvm/test/Other/new-pm-defaults.ll b/llvm/test/Other/new-pm-defaults.ll
+index 62975a3cf8ac..65b96c8b8ef5 100644
+--- a/llvm/test/Other/new-pm-defaults.ll
++++ b/llvm/test/Other/new-pm-defaults.ll
+@@ -208,7 +208,6 @@
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+ ; CHECK-EP-PEEPHOLE-NEXT: Running pass: NoOpFunctionPass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+diff --git a/llvm/test/Other/new-pm-thinlto-postlink-defaults.ll b/llvm/test/Other/new-pm-thinlto-postlink-defaults.ll
+index 012a1ab5802b..3a0fffe426da 100644
+--- a/llvm/test/Other/new-pm-thinlto-postlink-defaults.ll
++++ b/llvm/test/Other/new-pm-thinlto-postlink-defaults.ll
+@@ -133,7 +133,6 @@
+ ; CHECK-O-NEXT: Running pass: BDCEPass
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+diff --git a/llvm/test/Other/new-pm-thinlto-postlink-pgo-defaults.ll b/llvm/test/Other/new-pm-thinlto-postlink-pgo-defaults.ll
+index e021ff3124b6..4623edcaf665 100644
+--- a/llvm/test/Other/new-pm-thinlto-postlink-pgo-defaults.ll
++++ b/llvm/test/Other/new-pm-thinlto-postlink-pgo-defaults.ll
+@@ -118,7 +118,6 @@
+ ; CHECK-O-NEXT: Running pass: BDCEPass
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+diff --git a/llvm/test/Other/new-pm-thinlto-postlink-samplepgo-defaults.ll b/llvm/test/Other/new-pm-thinlto-postlink-samplepgo-defaults.ll
+index 20f94bc2e0f6..590afd925e84 100644
+--- a/llvm/test/Other/new-pm-thinlto-postlink-samplepgo-defaults.ll
++++ b/llvm/test/Other/new-pm-thinlto-postlink-samplepgo-defaults.ll
+@@ -127,7 +127,6 @@
+ ; CHECK-O-NEXT: Running pass: BDCEPass
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+diff --git a/llvm/test/Other/new-pm-thinlto-prelink-defaults.ll b/llvm/test/Other/new-pm-thinlto-prelink-defaults.ll
+index b61edc805108..dd6acd2c51ee 100644
+--- a/llvm/test/Other/new-pm-thinlto-prelink-defaults.ll
++++ b/llvm/test/Other/new-pm-thinlto-prelink-defaults.ll
+@@ -165,7 +165,6 @@
+ ; CHECK-O-NEXT: Running pass: BDCEPass
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+diff --git a/llvm/test/Other/new-pm-thinlto-prelink-pgo-defaults.ll b/llvm/test/Other/new-pm-thinlto-prelink-pgo-defaults.ll
+index acf8c053d0f8..ee054527e20b 100644
+--- a/llvm/test/Other/new-pm-thinlto-prelink-pgo-defaults.ll
++++ b/llvm/test/Other/new-pm-thinlto-prelink-pgo-defaults.ll
+@@ -167,7 +167,6 @@
+ ; CHECK-O-NEXT: Running pass: BDCEPass
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+diff --git a/llvm/test/Other/new-pm-thinlto-prelink-samplepgo-defaults.ll b/llvm/test/Other/new-pm-thinlto-prelink-samplepgo-defaults.ll
+index 6b3c5ca7605d..fd95e94f3c8b 100644
+--- a/llvm/test/Other/new-pm-thinlto-prelink-samplepgo-defaults.ll
++++ b/llvm/test/Other/new-pm-thinlto-prelink-samplepgo-defaults.ll
+@@ -131,7 +131,6 @@
+ ; CHECK-O-NEXT: Running pass: BDCEPass
+ ; CHECK-O-NEXT: Running analysis: DemandedBitsAnalysis
+ ; CHECK-O-NEXT: Running pass: InstCombinePass
+-; CHECK-O23SZ-NEXT: Running pass: DFAJumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running pass: JumpThreadingPass
+ ; CHECK-O23SZ-NEXT: Running analysis: LazyValueAnalysis
+ ; CHECK-O23SZ-NEXT: Running pass: CorrelatedValuePropagationPass
+-- 
+2.39.5
