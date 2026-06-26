@@ -371,7 +371,10 @@ def main(argv: list[str]) -> int:
         for name, path in project_mappings.items():
             logging.debug("Found project %s at path %s", name, path)
 
-    cls = gerrit_utils.fetch_cls_for_topic(opts.gerrit_host, opts.topic)
+    gerrit_client = gerrit_utils.GerritClient.create()
+    cls = gerrit_utils.fetch_cls_for_topic(
+        gerrit_client, opts.gerrit_host, opts.topic
+    )
     if not cls:
         logging.info("No open CLs found for topic %s", opts.topic)
         return 0
@@ -381,7 +384,7 @@ def main(argv: list[str]) -> int:
     ) -> CherrypickDesc | None:
         """Fetches cherry-pick for a change, returning a CherrypickDesc."""
         command = gerrit_utils.fetch_cherry_pick_command(
-            opts.gerrit_host, str(change.cl_number)
+            gerrit_client, opts.gerrit_host, str(change.cl_number)
         )
         if command:
             return CherrypickDesc(
@@ -399,7 +402,9 @@ def main(argv: list[str]) -> int:
     # mindful of Gerrit ratelimits (each thread is expected to perform at most
     # one Gerrit operation at a time).
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        cls = gerrit_utils.resolve_and_sort_cl_dependencies(cls, executor)
+        cls = gerrit_utils.resolve_and_sort_cl_dependencies(
+            gerrit_client, cls, executor
+        )
         results = executor.map(fetch_command_for_change, cls)
         cherry_picks = [pick for pick in results if pick]
 

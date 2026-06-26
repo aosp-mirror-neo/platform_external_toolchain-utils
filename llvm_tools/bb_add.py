@@ -81,6 +81,7 @@ def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
 
 
 def fetch_llvm_next_deps_or_exit(
+    gerrit_client: gerrit_utils.GerritClient,
     main_cl: gerrit_utils.ChangeListURL,
     chromeos_tree: Path,
     *,
@@ -147,6 +148,7 @@ def fetch_llvm_next_deps_or_exit(
     # We use relation chains to resolve and sort them.
     with gerrit_utils.default_gerrit_thread_pool() as executor:
         sorted_changes = gerrit_utils.resolve_and_sort_cl_dependencies(
+            gerrit_client,
             included_changes,
             executor=executor,
         )
@@ -265,9 +267,11 @@ def main(argv: list[str]) -> None:
             logging.error("LLVM_NEXT_MANIFEST_CL is not set in llvm_next.py")
             sys.exit(1)
 
+        gerrit_client = gerrit_utils.GerritClient.create()
         try:
             extra_cls.extend(
                 fetch_llvm_next_deps_or_exit(
+                    gerrit_client,
                     main_cl,
                     opts.chromeos_tree,
                     untrusted_reject=opts.untrusted_reject,

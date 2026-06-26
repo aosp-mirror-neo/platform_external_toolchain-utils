@@ -118,6 +118,7 @@ def _parse_suggestions_for_googlers(
 
 def _fetch_suggested_googler_owners_for_file(
     *,
+    gerrit_client: gerrit_utils.GerritClient,
     gerrit_host: str,
     project_name: str,
     file_in_repo: str,
@@ -153,7 +154,7 @@ def _fetch_suggested_googler_owners_for_file(
         f"{gerrit_host}/projects/{encoded_project_name}/branches/main"
         f"/code_owners/{encoded_file_in_repo}?{encoded_params}"
     )
-    response_body = gerrit_utils.fetch_gob_curl_body_with_retries(url)
+    response_body = gerrit_client.fetch_body_with_retries(url)
     return _parse_suggestions_for_googlers(url, response_body.lstrip())
 
 
@@ -238,6 +239,7 @@ def _find_best_owners_from(
 
 
 def fetch_likely_relevant_code_owner(
+    gerrit_client: gerrit_utils.GerritClient,
     repo_cache: RepoCache,
     gerrit_host: str,
     git_repo: str,
@@ -246,6 +248,7 @@ def fetch_likely_relevant_code_owner(
     """Fetches OWNERS for the given files.
 
     Args:
+        gerrit_client: GerritClient to perform queries with.
         repo_cache: Cache of repo metadata.
         gerrit_host: Gerrit host to perform lookups against.
         git_repo: The git repo to query, relative to the root of the Android
@@ -274,6 +277,7 @@ def fetch_likely_relevant_code_owner(
 
     suggested_owners = [
         _fetch_suggested_googler_owners_for_file(
+            gerrit_client=gerrit_client,
             gerrit_host=gerrit_host,
             project_name=project_name,
             file_in_repo=x,
@@ -302,6 +306,7 @@ def fetch_likely_relevant_code_owner(
 
 
 def fetch_all_likely_relevant_code_owners(
+    gerrit_client: gerrit_utils.GerritClient,
     repo_cache: RepoCache,
     gerrit_host: str,
     per_repo_files_to_check: dict[str, list[str]],
@@ -322,7 +327,11 @@ def fetch_all_likely_relevant_code_owners(
         git_repo: str, files_to_check: list[str]
     ) -> tuple[str, str | None]:
         return git_repo, fetch_likely_relevant_code_owner(
-            repo_cache, gerrit_host, git_repo, files_to_check
+            gerrit_client=gerrit_client,
+            repo_cache=repo_cache,
+            gerrit_host=gerrit_host,
+            git_repo=git_repo,
+            files_to_check=files_to_check,
         )
 
     if len(per_repo_files_to_check) <= 1:
@@ -383,7 +392,9 @@ def main(argv: list[str]) -> None:
         opts.android_tree / ANDROID_MANIFEST_XML_FROM_ROOT
     )
 
+    gerrit_client = gerrit_utils.GerritClient.create()
     owner = fetch_likely_relevant_code_owner(
+        gerrit_client=gerrit_client,
         repo_cache=repo_cache,
         gerrit_host=opts.gerrit_host,
         git_repo=opts.git_repo,

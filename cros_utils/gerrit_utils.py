@@ -190,47 +190,57 @@ class CLDetails:
         return self.cl_url.cl_id
 
 
-def fetch_gob_curl_body_with_retries(url: str) -> str:
-    """Runs gob-curl, returning its output as a `str`.
+@dataclasses.dataclass(frozen=True)
+class GerritClient:
+    """Client for interacting with Gerrit."""
 
-    Retries to work around Gerrit flakes, if any.
-    """
-    max_tries = 5
-    i = 1
-    while True:
-        result = subprocess.run(
-            (
-                "gob-curl",
-                # Follow redirects.
-                "--location",
-                # Exit with nonzero code if the response code indicates failure.
-                "--fail",
+    @classmethod
+    def create(cls) -> Self:
+        """Creates a GerritClient."""
+        return cls()
+
+    def fetch_body_with_retries(self, url: str) -> str:
+        """Runs gob-curl, returning its output as a `str`.
+
+        Retries to work around Gerrit flakes, if any.
+        """
+        max_tries = 5
+        i = 1
+        while True:
+            result = subprocess.run(
+                (
+                    "gob-curl",
+                    # Follow redirects.
+                    "--location",
+                    # Exit with nonzero code if the response code indicates failure.
+                    "--fail",
+                    url,
+                ),
+                check=False,
+                encoding="utf-8",
+                errors="replace",
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            if not result.returncode:
+                return result.stdout
+
+            logging.warning(
+                "Failed attempt %d/%d running gob-curl on %s; "
+                "stdout:\n%s\n\nstderr:\n%s",
+                i,
+                max_tries,
                 url,
-            ),
-            check=False,
-            encoding="utf-8",
-            errors="replace",
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        if not result.returncode:
-            return result.stdout
+                result.stdout,
+                result.stderr,
+            )
+            # Reraise if we're at the limit, but make sure to log stdout/stderr
+            # above so they're not dropped.
+            if i == max_tries:
+                result.check_returncode()
+            i += 1
 
-        logging.warning(
-            "Failed attempt %d/%d running gob-curl on %s; "
-            "stdout:\n%s\n\nstderr:\n%s",
-            i,
-            max_tries,
-            url,
-            result.stdout,
-            result.stderr,
-        )
-        # Reraise if we're at the limit, but make sure to log stdout/stderr
-        # above so they're not dropped.
-        if i == max_tries:
-            result.check_returncode()
-        i += 1
 
 
 def parse_gerrit_response(response_body: str) -> Any:
@@ -243,11 +253,15 @@ def parse_gerrit_response(response_body: str) -> Any:
     return json.loads(response_body[len(json_response_pre) :])
 
 
-def fetch_related_changes(gerrit_host: str, change_id: int) -> list[CLDetails]:
+def fetch_related_changes(
+    gerrit_client: GerritClient,
+    gerrit_host: str,
+    change_id: int,
+) -> list[CLDetails]:
     """Fetches related changes for a given change."""
     logging.info("Fetching related changes for %d", change_id)
     url = f"{gerrit_host}/changes/{change_id}/revisions/current/related"
-    response_body = fetch_gob_curl_body_with_retries(url)
+    response_body = gerrit_client.fetch_body_with_retries(url)
     related = parse_gerrit_response(response_body)
 
     changes = related.get("changes")
@@ -288,6 +302,7 @@ def _cl_key(cl: CLDetails) -> tuple[str, int]:
 
 
 def resolve_and_sort_cl_dependencies(
+    gerrit_client: GerritClient,
     cls: list[CLDetails],
     executor: concurrent.futures.ThreadPoolExecutor,
 ) -> list[CLDetails]:
@@ -340,7 +355,9 @@ def resolve_and_sort_cl_dependencies(
                 return
 
         chain_info = fetch_related_changes(
-            cl_detail.cl_url.gerrit_host, cl_detail.cl_number
+            gerrit_client,
+            cl_detail.cl_url.gerrit_host,
+            cl_detail.cl_number,
         )
 
         # Note that chains are returned in order from children to parents. For
@@ -427,14 +444,18 @@ def resolve_and_sort_cl_dependencies(
     return deduped_cls
 
 
-def fetch_cls_for_topic(gerrit_host: str, topic: str) -> list[CLDetails]:
+def fetch_cls_for_topic(
+    gerrit_client: GerritClient,
+    gerrit_host: str,
+    topic: str,
+) -> list[CLDetails]:
     """Fetches CL details for a given topic."""
     # https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#list-changes
     # Include `is:open` under the assumption that merged/abandoned things are
     # undesirable to cherrypick.
     encoded_query = urllib.parse.urlencode({"q": f'topic:"{topic}" is:open'})
     url = f"{gerrit_host}/changes/?{encoded_query}"
-    response_body = fetch_gob_curl_body_with_retries(url)
+    response_body = gerrit_client.fetch_body_with_retries(url)
 
     changes = parse_gerrit_response(response_body)
     results = []
@@ -473,7 +494,11 @@ def _get_cherry_pick_command(fetch_info: dict) -> str | None:
     return None
 
 
-def fetch_cherry_pick_command(gerrit_host: str, change_id: str) -> str | None:
+def fetch_cherry_pick_command(
+    gerrit_client: GerritClient,
+    gerrit_host: str,
+    change_id: str,
+) -> str | None:
     """Fetches the cherry-pick command for a given change."""
     logging.info("Fetching cherry-pick command for %s", change_id)
     encoded_params = urllib.parse.urlencode({"o": "DOWNLOAD_COMMANDS"})
@@ -481,7 +506,7 @@ def fetch_cherry_pick_command(gerrit_host: str, change_id: str) -> str | None:
         f"{gerrit_host}/a/changes/{change_id}/revisions/current"
         f"?{encoded_params}"
     )
-    response_body = fetch_gob_curl_body_with_retries(url)
+    response_body = gerrit_client.fetch_body_with_retries(url)
 
     revision_details = parse_gerrit_response(response_body)
 

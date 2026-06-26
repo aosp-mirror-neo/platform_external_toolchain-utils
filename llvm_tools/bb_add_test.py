@@ -82,7 +82,9 @@ class Test(unittest.TestCase):
         ]
         mock_owners.return_value = ["owner@google.com"]
 
+        mock_client = mock.MagicMock(spec=gerrit_utils.GerritClient)
         result = bb_add.fetch_llvm_next_deps_or_exit(
+            mock_client,
             main_cl,
             chromeos_tree=Path("/fake/path"),
             untrusted_reject=False,
@@ -122,7 +124,9 @@ class Test(unittest.TestCase):
         with mock.patch.object(
             llvm_next, "TRUSTED_UPLOADERS", ("trusted@uploader.com",)
         ):
+            mock_client = mock.MagicMock(spec=gerrit_utils.GerritClient)
             result = bb_add.fetch_llvm_next_deps_or_exit(
+                mock_client,
                 main_cl,
                 chromeos_tree=Path("/fake/path"),
                 untrusted_reject=False,
@@ -172,7 +176,9 @@ class Test(unittest.TestCase):
             ),
         ]
 
+        mock_client = mock.MagicMock(spec=gerrit_utils.GerritClient)
         result = bb_add.fetch_llvm_next_deps_or_exit(
+            mock_client,
             main_cl=cl_child,
             chromeos_tree=Path("/fake/path"),
             untrusted_reject=False,

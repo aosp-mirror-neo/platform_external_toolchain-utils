@@ -35,11 +35,7 @@ class CLStatusTest(unittest.TestCase):
 class FetchRelatedChangesTest(unittest.TestCase):
     """Tests for fetch_related_changes."""
 
-    @mock.patch.object(gerrit_utils, "fetch_gob_curl_body_with_retries")
-    def test_invalid_status_raises(
-        self,
-        mock_fetch_gob_curl_body_with_retries: mock.Mock,
-    ) -> None:
+    def test_invalid_status_raises(self) -> None:
         """Test that an invalid status raises a ValueError."""
         gerrit_response = {
             "changes": [
@@ -50,12 +46,13 @@ class FetchRelatedChangesTest(unittest.TestCase):
                 }
             ]
         }
-        mock_fetch_gob_curl_body_with_retries.return_value = (
+        mock_client = mock.MagicMock(spec=gerrit_utils.GerritClient)
+        mock_client.fetch_body_with_retries.return_value = (
             f")]}}'\n{json.dumps(gerrit_response)}"
         )
 
         with self.assertRaises(ValueError):
-            gerrit_utils.fetch_related_changes("gerrit_host", 123)
+            gerrit_utils.fetch_related_changes(mock_client, "gerrit_host", 123)
 
 
 class TestChangeListURL(unittest.TestCase):
@@ -326,6 +323,10 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
     gerrit_host = gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST
 
+    def setUp(self) -> None:
+        super().setUp()
+        self.mock_client = mock.MagicMock(spec=gerrit_utils.GerritClient)
+
     def _make_cl(
         self,
         project: str,
@@ -363,11 +364,13 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, executor
+                self.mock_client, cls, executor
             )
 
         self.assertEqual(result, [cl1, cl2, cl3])
-        mock_fetch_related_changes.assert_called_once_with(self.gerrit_host, 1)
+        mock_fetch_related_changes.assert_called_once_with(
+            self.mock_client, self.gerrit_host, 1
+        )
 
     @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
     def test_no_truncation_if_child_most_is_last(
@@ -388,11 +391,13 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, executor
+                self.mock_client, cls, executor
             )
 
         self.assertEqual(result, [cl1, cl2, cl3])
-        mock_fetch_related_changes.assert_called_once_with(self.gerrit_host, 1)
+        mock_fetch_related_changes.assert_called_once_with(
+            self.mock_client, self.gerrit_host, 1
+        )
 
     @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
     def test_single_cl_from_chain(
@@ -412,11 +417,13 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, executor
+                self.mock_client, cls, executor
             )
 
         self.assertEqual(result, [cl1, cl2])
-        mock_fetch_related_changes.assert_called_once_with(self.gerrit_host, 2)
+        mock_fetch_related_changes.assert_called_once_with(
+            self.mock_client, self.gerrit_host, 2
+        )
 
     @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
     def test_standalone_cl(self, mock_fetch_related_changes: mock.Mock) -> None:
@@ -427,11 +434,13 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, executor
+                self.mock_client, cls, executor
             )
 
         self.assertEqual(result, [cl1])
-        mock_fetch_related_changes.assert_called_once_with(self.gerrit_host, 1)
+        mock_fetch_related_changes.assert_called_once_with(
+            self.mock_client, self.gerrit_host, 1
+        )
 
     @mock.patch.object(gerrit_utils, "fetch_related_changes", autospec=True)
     def test_multiple_cls_and_projects(
@@ -446,9 +455,11 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
         cls = [cl2a, cl2b]
 
         def fetch_side_effect(
-            gerrit_host: str, change_id: int
+            gerrit_client: gerrit_utils.GerritClient,
+            gerrit_host: str,
+            change_id: int,
         ) -> list[gerrit_utils.CLDetails]:
-            del gerrit_host  # unused
+            del gerrit_client, gerrit_host  # unused
             if change_id == cl2a.cl_number:
                 return [
                     self._make_cl("project/a", 2),
@@ -465,13 +476,16 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, executor
+                self.mock_client, cls, executor
             )
 
         self.assertEqual(result, [cl1a, cl2a, cl1b, cl2b])
         self.assertEqual(mock_fetch_related_changes.call_count, 2)
         mock_fetch_related_changes.assert_has_calls(
-            [mock.call(self.gerrit_host, 2), mock.call(self.gerrit_host, 4)],
+            [
+                mock.call(self.mock_client, self.gerrit_host, 2),
+                mock.call(self.mock_client, self.gerrit_host, 4),
+            ],
             any_order=True,
         )
 
@@ -489,9 +503,11 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
         cls = [cl2, cl3]
 
         def fetch_side_effect(
-            gerrit_host: str, change_id: int
+            gerrit_client: gerrit_utils.GerritClient,
+            gerrit_host: str,
+            change_id: int,
         ) -> list[gerrit_utils.CLDetails]:
-            del gerrit_host  # unused
+            del gerrit_client, gerrit_host  # unused
             if change_id == cl2.cl_number:
                 return [
                     self._make_cl("project/a", 2),
@@ -508,7 +524,7 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             result = gerrit_utils.resolve_and_sort_cl_dependencies(
-                cls, executor
+                self.mock_client, cls, executor
             )
 
         # Expected: A (1) is applied first, then B (2) and C (3).

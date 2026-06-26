@@ -79,12 +79,14 @@ def format_bug_body(
 
 
 def lookup_owners_for_git_repos(
+    gerrit_client: gerrit_utils.GerritClient,
     android_tree: Path,
     targets_by_repo: Mapping[Path, Iterable[str]],
 ) -> dict[Path, str]:
     """Looks up OWNERS for the given git repos.
 
     Args:
+        gerrit_client: GerritClient to perform queries with.
         android_tree: Path to the root of an Android repo.
         targets_by_repo: A mapping of
             `{git_repo_root: list_of_targets_owners_are_needed_for}`.
@@ -116,6 +118,7 @@ def lookup_owners_for_git_repos(
         check_files[str(git_repo)] = modified_files
 
     all_results = find_owners.fetch_all_likely_relevant_code_owners(
+        gerrit_client,
         repo_cache,
         gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST,
         check_files,
@@ -214,7 +217,9 @@ def main(argv: list[str]) -> None:
             all_targets.extend(bp_summary.per_target_warnings)
         targets_by_repo[Path(repo_path_str)] = all_targets
 
+    gerrit_client = gerrit_utils.GerritClient.create()
     repo_owners = lookup_owners_for_git_repos(
+        gerrit_client,
         opts.android_tree,
         targets_by_repo,
     )
