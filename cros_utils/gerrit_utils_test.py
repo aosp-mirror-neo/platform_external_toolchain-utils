@@ -6,10 +6,14 @@
 
 import concurrent.futures
 import json
+from pathlib import Path
+import shutil
+import subprocess
 import unittest
 from unittest import mock
 
 from cros_utils import gerrit_utils
+from llvm_tools import test_helpers
 
 
 class CLStatusTest(unittest.TestCase):
@@ -536,3 +540,72 @@ class ResolveAndSortClDependenciesTest(unittest.TestCase):
         self.assertEqual(result[0], cl1)
         self.assertCountEqual(result, [cl1, cl2, cl3])
         self.assertEqual(len(result), 3)
+
+
+class GerritClientTest(test_helpers.TempDirTestCase):
+    """Tests for GerritClient.create."""
+
+    @mock.patch.object(shutil, "which", autospec=True)
+    def test_create_default_with_gob_curl(self, mock_which: mock.Mock) -> None:
+        mock_which.return_value = "/path/to/gob-curl"
+        client = gerrit_utils.GerritClient.create()
+        self.assertIsNone(client.cookie_files)
+
+    @mock.patch.object(shutil, "which", autospec=True)
+    def test_create_fallback(self, mock_which: mock.Mock) -> None:
+        mock_which.return_value = None
+        temp_path = self.make_tempdir()
+        gitcookies_file = temp_path / ".gitcookies"
+        gitcookies_file.touch()
+
+        client = gerrit_utils.GerritClient.create(home=temp_path)
+        self.assertEqual(client.cookie_files, (gitcookies_file,))
+        self.assertIsNotNone(client.cookie_files)
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_body_with_retries_gob_curl(
+        self, mock_run: mock.Mock
+    ) -> None:
+        client = gerrit_utils.GerritClient(cookie_files=None)
+        mock_run.return_value = mock.MagicMock(returncode=0, stdout="success")
+
+        result = client.fetch_body_with_retries("https://example.com")
+        self.assertEqual(result, "success")
+        mock_run.assert_called_once_with(
+            ("gob-curl", "--location", "--fail", "https://example.com"),
+            check=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_body_with_retries_fallback(
+        self, mock_run: mock.Mock
+    ) -> None:
+        fake_cookie = Path("/fake/cookie")
+        client = gerrit_utils.GerritClient(cookie_files=(fake_cookie,))
+        mock_run.return_value = mock.MagicMock(returncode=0, stdout="success")
+
+        result = client.fetch_body_with_retries("https://example.com")
+        self.assertEqual(result, "success")
+        mock_run.assert_called_once_with(
+            (
+                "curl",
+                "--proto",
+                "=https",
+                "--fail",
+                "--location",
+                "-b",
+                str(fake_cookie),
+                "https://example.com",
+            ),
+            check=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )

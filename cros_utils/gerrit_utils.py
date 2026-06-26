@@ -9,7 +9,10 @@ import dataclasses
 import enum
 import json
 import logging
+from pathlib import Path
 import re
+import shlex
+import shutil
 import subprocess
 import threading
 from typing import Any, Self
@@ -194,53 +197,119 @@ class CLDetails:
 class GerritClient:
     """Client for interacting with Gerrit."""
 
-    @classmethod
-    def create(cls) -> Self:
-        """Creates a GerritClient."""
-        return cls()
+    # None indicates we should use gob-curl.
+    # A tuple (even empty) indicates we should use curl fallback.
+    cookie_files: tuple[Path, ...] | None
+
+    def _fetch_with_gob_curl(self, url: str) -> str:
+        """Runs gob-curl, returning its output as a `str`.
+
+        Raises:
+            subprocess.CalledProcessError: If the fetch failed.
+        """
+        result = subprocess.run(
+            (
+                "gob-curl",
+                # Follow redirects.
+                "--location",
+                # Exit with nonzero code if the response code indicates failure.
+                "--fail",
+                url,
+            ),
+            check=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.stdout
+
+    def _fetch_with_curl(self, url: str) -> str:
+        """Runs standard curl with fallback authentication.
+
+        Raises:
+            subprocess.CalledProcessError: If the fetch failed.
+        """
+        # Ensure we only use HTTPS
+        cookies: list[str] = []
+        if self.cookie_files:
+            for path in self.cookie_files:
+                cookies.extend(("-b", str(path)))
+        cmd = (
+            "curl",
+            "--proto",
+            "=https",
+            "--fail",
+            "--location",
+            *cookies,
+            url,
+        )
+
+        logging.info("Running fallback curl command: %s", shlex.join(cmd))
+
+        result = subprocess.run(
+            cmd,
+            check=True,
+            encoding="utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        return result.stdout
 
     def fetch_body_with_retries(self, url: str) -> str:
-        """Runs gob-curl, returning its output as a `str`.
+        """Runs gob-curl or curl fallback, returning its output as a `str`.
 
         Retries to work around Gerrit flakes, if any.
         """
+        fetch_fn = (
+            self._fetch_with_gob_curl
+            if self.cookie_files is None
+            else self._fetch_with_curl
+        )
         max_tries = 5
         i = 1
         while True:
-            result = subprocess.run(
-                (
-                    "gob-curl",
-                    # Follow redirects.
-                    "--location",
-                    # Exit with nonzero code if the response code indicates failure.
-                    "--fail",
+            try:
+                return fetch_fn(url)
+            except subprocess.CalledProcessError as e:
+                logging.warning(
+                    "Failed attempt %d/%d fetching %s; stderr: %s",
+                    i,
+                    max_tries,
                     url,
-                ),
-                check=False,
-                encoding="utf-8",
-                errors="replace",
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-            if not result.returncode:
-                return result.stdout
-
-            logging.warning(
-                "Failed attempt %d/%d running gob-curl on %s; "
-                "stdout:\n%s\n\nstderr:\n%s",
-                i,
-                max_tries,
-                url,
-                result.stdout,
-                result.stderr,
-            )
-            # Reraise if we're at the limit, but make sure to log stdout/stderr
-            # above so they're not dropped.
-            if i == max_tries:
-                result.check_returncode()
+                    e.stderr,
+                )
+                if i == max_tries:
+                    raise
             i += 1
 
+    @classmethod
+    def create(
+        cls, force_fallback: bool = False, home: Path | None = None
+    ) -> Self:
+        """Creates a GerritClient with the appropriate authentication."""
+        if not force_fallback and shutil.which("gob-curl"):
+            return cls(cookie_files=None)
+
+        if home is None:
+            home = Path.home()
+
+        cookie_files = []
+        for rel_path in (".gitcookies", ".git-credential-cache/cookie"):
+            cookie_path = home / rel_path
+            if cookie_path.is_file():
+                cookie_files.append(cookie_path)
+
+        if not cookie_files:
+            logging.warning(
+                "GerritClient: falling back to curl but no gitcookies found. "
+                "Authenticated requests may fail."
+            )
+
+        return cls(cookie_files=tuple(cookie_files))
 
 
 def parse_gerrit_response(response_body: str) -> Any:
