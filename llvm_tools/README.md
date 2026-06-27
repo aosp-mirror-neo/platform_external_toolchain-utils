@@ -180,12 +180,6 @@ $ ./patch_manager.py \
   --continue_bisection True
 ```
 
-## LLVM Bisection
-
-### `llvm_simple_bisect.py`
-
-TODO(ryanbeltran): Please write some docs here.
-
 ## Other Helpful Scripts
 
 ### `get_llvm_hash.py`
