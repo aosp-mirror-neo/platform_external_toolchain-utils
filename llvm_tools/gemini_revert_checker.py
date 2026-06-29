@@ -60,30 +60,13 @@ class GeminiRevertInference:
         if json_object is None:
             return _EMPTY_INFERENCE
 
-        # Backward compatibility.
-        #
-        # NOTE: After the `doesnt_care` logic has stuck for a run on
-        # Chrotomation (so at most a week), we can remove this and just swap to
-        # `json_object["chromeos_doesnt_care"]`/etc below.
-        is_amdgpu_only = json_object.get("is_amdgpu_only", False)
-        is_flang_only = json_object.get("is_flang_only", False)
-        is_test_only = json_object.get("is_test_only", False)
-        default_cros_doesnt_care = (
-            is_amdgpu_only or is_flang_only or is_test_only
-        )
-        default_android_doesnt_care = is_amdgpu_only or is_flang_only
-
         return cls(
             reverted_shas=tuple(json_object["reverted_shas"]),
             reverted_prs=tuple(json_object["reverted_prs"]),
             is_revert=json_object["is_revert"],
             is_reland=json_object["is_reland"],
-            chromeos_doesnt_care=json_object.get(
-                "chromeos_doesnt_care", default_cros_doesnt_care
-            ),
-            android_doesnt_care=json_object.get(
-                "android_doesnt_care", default_android_doesnt_care
-            ),
+            chromeos_doesnt_care=json_object["chromeos_doesnt_care"],
+            android_doesnt_care=json_object["android_doesnt_care"],
         )
 
     def is_empty(self) -> bool:
