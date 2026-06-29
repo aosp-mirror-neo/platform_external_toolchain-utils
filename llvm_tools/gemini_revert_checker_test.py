@@ -70,6 +70,45 @@ class Test(test_helpers.TempDirTestCase):
         new_state = gemini_revert_checker.GeminiState.from_json(state_json)
         self.assertEqual(state, new_state)
 
+    def test_gemini_state_invalidation_on_version_mismatch(self) -> None:
+        # Test that when version changes, non-empty results are invalidated.
+        old_version = gemini_revert_checker.CURRENT_VERSION - 1
+        state_json = {
+            "version": old_version,
+            "revert_status": {
+                "sha_non_empty": {
+                    "reverted_shas": ["sha1"],
+                    "reverted_prs": [],
+                    "is_revert": True,
+                    "is_reland": False,
+                    "chromeos_doesnt_care": False,
+                    "android_doesnt_care": False,
+                },
+                # Maps to _EMPTY_INFERENCE, which is_empty() -> True
+                "sha_empty": None,
+            },
+            "important_shas": {"sha_non_empty": 12345, "sha_empty": 67890},
+        }
+
+        new_state = gemini_revert_checker.GeminiState.from_json(state_json)
+
+        # The non-empty inference should be gone.
+        self.assertNotIn("sha_non_empty", new_state.revert_status)
+        # The empty inference should still be there.
+        self.assertIn("sha_empty", new_state.revert_status)
+        self.assertTrue(new_state.revert_status["sha_empty"].is_empty())
+
+        # important_shas should be preserved.
+        self.assertEqual(
+            new_state.important_shas,
+            {"sha_non_empty": 12345, "sha_empty": 67890},
+        )
+
+        # Version should be updated to CURRENT_VERSION.
+        self.assertEqual(
+            new_state.version, gemini_revert_checker.CURRENT_VERSION
+        )
+
 
 class DiscardOldShasTest(test_helpers.TempDirTestCase):
     """Tests for discard_old_shas."""

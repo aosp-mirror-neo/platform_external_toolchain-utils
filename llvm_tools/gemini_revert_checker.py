@@ -18,6 +18,17 @@ from cros_utils import cros_paths
 from cros_utils import git_utils
 
 
+# GeminiState version number.
+#
+# Bump this number if:
+# - Prompts for identifying reverts or "dont care"s has changed significantly
+# - The model evaluating prompts has changed significantly
+# - We want to re-run inference on all known reverts for any other reason.
+#
+# See comments in GeminiState.from_json for a more thorough description of _why_
+# this works as it does.
+CURRENT_VERSION = 1
+
 # How long to wait before discarding inference results for SHAs that are no
 # longer referenced.
 #
@@ -167,13 +178,43 @@ class GeminiState:
     #    these cases.
     important_shas: dict[str, int] = dataclasses.field(default_factory=dict)
 
+    version: int = CURRENT_VERSION
+
     @classmethod
     def from_json(cls, json_object: Any) -> Self:
+        version = json_object.get("version", 0)
+        revert_status = {
+            k: GeminiRevertInference.from_json(v)
+            for k, v in json_object.get("revert_status", {}).items()
+        }
+
+        # This functionality is the result of a series of practical compromises:
+        # 1. We do not try to _automatically_ bump this because running
+        #    inference on tons of commits is expensive. A small, targeted tweak
+        #    to Gemini's inference is unlikely to warrant this.
+        # 2. When this _is_ bumped, it's most likely because
+        #    chromeos_doesnt_care/android_doesnt_care have changed in a
+        #    meaningful way. Rerunning inference on non-reverts is pointless in
+        #    this case.
+        # 3. Reverts make up 1/25th of the commits we analyze, and our state
+        #    file can grow to have 50K+ entries.
+        #
+        # IOW, this is a convenience feature for the happy path. If one desires
+        # a more thorough invalidation, they'll need to do more than increment a
+        # number.
+        if version != CURRENT_VERSION:
+            logging.info(
+                "GeminiState version changed from %d to %d; invalidating "
+                "non-empty results",
+                version,
+                CURRENT_VERSION,
+            )
+            revert_status = {
+                k: v for k, v in revert_status.items() if v.is_empty()
+            }
+
         return cls(
-            revert_status={
-                k: GeminiRevertInference.from_json(v)
-                for k, v in json_object.get("revert_status", {}).items()
-            },
+            revert_status=revert_status,
             important_shas=json_object.get("important_shas", {}),
         )
 
@@ -183,6 +224,7 @@ class GeminiState:
                 k: v.to_json() for k, v in self.revert_status.items()
             },
             "important_shas": self.important_shas,
+            "version": self.version,
         }
 
     def cached_inference_result_for(
