@@ -52,6 +52,24 @@ class Test(test_helpers.TempDirTestCase):
         new_state = gemini_revert_checker.GeminiState.from_json(state_json)
         self.assertEqual(state, new_state)
 
+    def test_gemini_state_serialization_nulls_empty_inferences(self) -> None:
+        state = gemini_revert_checker.GeminiState(
+            revert_status={
+                "sha_revert": gemini_revert_checker.GeminiRevertInference(
+                    reverted_shas=("sha456",),
+                    is_revert=True,
+                ),
+                "sha_empty": gemini_revert_checker.GeminiRevertInference(),
+            }
+        )
+        state_json = state.to_json()
+        self.assertIsNone(state_json["revert_status"]["sha_empty"])
+        self.assertIsNotNone(state_json["revert_status"]["sha_revert"])
+
+        # Also ensure round-trip still works
+        new_state = gemini_revert_checker.GeminiState.from_json(state_json)
+        self.assertEqual(state, new_state)
+
 
 class DiscardOldShasTest(test_helpers.TempDirTestCase):
     """Tests for discard_old_shas."""

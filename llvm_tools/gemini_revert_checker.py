@@ -178,7 +178,12 @@ class GeminiState:
         )
 
     def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
+        return {
+            "revert_status": {
+                k: v.to_json() for k, v in self.revert_status.items()
+            },
+            "important_shas": self.important_shas,
+        }
 
     def cached_inference_result_for(
         self, sha: str
