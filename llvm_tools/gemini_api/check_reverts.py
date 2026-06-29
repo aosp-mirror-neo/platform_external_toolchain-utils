@@ -38,15 +38,21 @@ import typing
 from typing import Any, IO, Self
 
 # `pylint`, run by `cros lint`, is run in its own Python environment, which does
-# not contain `google.genai`. `mypy` can _see_ the module, but complains that it
-# doesn't have correct typing markers.
+# not contain `google.genai` or `httpx`. `mypy` can _see_ the module, but
+# complains that it doesn't have correct typing markers.
 # pylint:disable=import-error
 from google import genai
 from google.genai import types
+import httpx
 
 
 GEMINI_MODEL = "gemini-3.5-flash"
 PER_FILE_DIFF_BUDGET = 50_000
+
+# b/529292846: Gemini's API was observed to (very rarely) just leave
+# connections hanging for a while. Have a generous timeout for requests to
+# catch this so we can retry.
+_QUERY_TIMEOUT_MILLIS = (2 * 60 + 30) * 1000
 
 
 T = typing.TypeVar("T")
@@ -433,6 +439,9 @@ def query_gemini(
         # temperature/etc. So don't.
         # https://ai.google.dev/gemini-api/docs/interactions/whats-new-gemini-3.5#parameter-updates
         seed=0,
+        http_options=types.HttpOptions(
+            timeout=_QUERY_TIMEOUT_MILLIS,
+        ),
     )
 
     for i in range(1, retry_limit + 1):
@@ -442,11 +451,21 @@ def query_gemini(
             config=chat_config,
         )
 
-        response = chat.send_message(prompt_content)
+        back_off_secs = i * 2
+        try:
+            response = chat.send_message(prompt_content)
+        except httpx.TimeoutException:
+            logging.exception(
+                "Gemini send_message timed out on attempt %d for SHA %s; "
+                "retrying soon",
+                i,
+                sha,
+            )
+            time.sleep(back_off_secs)
+            continue
 
         # If we hit an error that isn't about response correctness, it's
         # probably a server error. We'll sleep a bit in hopes that that helps.
-        back_off_secs = i * 2
         try:
             return parse_gemini_response(sha, response, response_schema)
         except GeminiResponseIsBrokenError as e:
@@ -473,7 +492,18 @@ def query_gemini(
             )
             follow_up_message = generate_retry_message(e)
 
-        response = chat.send_message(follow_up_message)
+        try:
+            response = chat.send_message(follow_up_message)
+        except httpx.TimeoutException:
+            logging.exception(
+                "Gemini follow-up send_message timed out on attempt %d "
+                "for SHA %s; retrying soon",
+                i,
+                sha,
+            )
+            time.sleep(back_off_secs)
+            continue
+
         try:
             return parse_gemini_response(sha, response, response_schema)
         except GeminiResponseIsBrokenError:
