@@ -1766,5 +1766,20 @@
       "from": 584947,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [libc++] Add Android assertion handler (#198831)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/6ce05ad8384d6e18f7b22c2b2f6e05678f4911d3.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 624472
+    }
   }
 ]

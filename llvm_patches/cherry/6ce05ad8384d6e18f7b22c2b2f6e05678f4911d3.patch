@@ -1,0 +1,96 @@
+From 6ce05ad8384d6e18f7b22c2b2f6e05678f4911d3 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <george.burgess.iv@gmail.com>
+Date: Wed, 1 Jul 2026 12:36:15 -0400
+Subject: [PATCH] [libc++] Add Android assertion handler (#198831)
+
+We're in the process of increasing the use of libc++ hardening in
+Android. The handlers we're using deviate from the defaults in two ways:
+
+- All handlers are `nomerge` for better postmortem crash attribution
+- `_LIBCPP_VERBOSE_ABORT` is wrapped by a `NOINLINE` function to reduce
+  binary size overhead slightly (on x86_64, the diff is ~9B per call
+  to _LIBCPP_VERBOSE_ABORT).
+
+This patch introduces a custom handler for Android with these properties.
+---
+ libcxx/cmake/caches/AndroidNDK.cmake          |  1 +
+ .../android/android_assertion_handler.in      | 58 +++++++++++++++++++
+ 2 files changed, 59 insertions(+)
+ create mode 100644 libcxx/vendor/android/android_assertion_handler.in
+
+diff --git a/libcxx/cmake/caches/AndroidNDK.cmake b/libcxx/cmake/caches/AndroidNDK.cmake
+index 1a04b7fbb217..515078c8396d 100644
+--- a/libcxx/cmake/caches/AndroidNDK.cmake
++++ b/libcxx/cmake/caches/AndroidNDK.cmake
+@@ -35,3 +35,4 @@ set(CMAKE_CXX_COMPILER_WORKS ON CACHE BOOL "")
+ # them.
+ set(LIBCXX_TEST_CONFIG "llvm-libc++-android.cfg.in" CACHE STRING "")
+ set(LIBCXXABI_TEST_CONFIG "llvm-libc++abi-android.cfg.in" CACHE STRING "")
++set(LIBCXX_ASSERTION_HANDLER_FILE "vendor/android/android_assertion_handler.in" CACHE STRING "")
+diff --git a/libcxx/vendor/android/android_assertion_handler.in b/libcxx/vendor/android/android_assertion_handler.in
+new file mode 100644
+index 000000000000..d48036bd84ad
+--- /dev/null
++++ b/libcxx/vendor/android/android_assertion_handler.in
+@@ -0,0 +1,58 @@
++// -*- C++ -*-
++//===----------------------------------------------------------------------===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++#ifndef __LIBCPP_ANDROID_ASSERTION_HANDLER
++#define __LIBCPP_ANDROID_ASSERTION_HANDLER
++
++#include <__config>
++#include <__log_hardening_failure>
++#include <__verbose_abort>
++#include <__verbose_trap>
++
++#if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
++#  pragma GCC system_header
++#endif
++
++#if _LIBCPP_ASSERTION_SEMANTIC == _LIBCPP_ASSERTION_SEMANTIC_IGNORE
++#  define _LIBCPP_ASSERTION_HANDLER(message) ((void)0)
++
++#elif _LIBCPP_ASSERTION_SEMANTIC == _LIBCPP_ASSERTION_SEMANTIC_OBSERVE
++#  define _LIBCPP_ASSERTION_HANDLER(message) _LIBCPP_LOG_HARDENING_FAILURE(message)
++
++#elif _LIBCPP_ASSERTION_SEMANTIC == _LIBCPP_ASSERTION_SEMANTIC_QUICK_ENFORCE
++
++// Require `nomerge` for better crash attribution.
++#  define _LIBCPP_ASSERTION_HANDLER(message) \
++  ({ [[_Clang::__nomerge__]] _LIBCPP_VERBOSE_TRAP(message); })
++
++#elif _LIBCPP_ASSERTION_SEMANTIC == _LIBCPP_ASSERTION_SEMANTIC_ENFORCE
++_LIBCPP_BEGIN_NAMESPACE_STD
++
++// Calling this saves code size compared to
++// `__libcpp_verbose_abort("%s", "error message")`.
++[[_Clang::__nomerge__]] [[__noreturn__]]
++inline void __libcpp_android_verbose_abort(const char *__message) {
++  _LIBCPP_VERBOSE_ABORT("%s", __message);
++}
++_LIBCPP_END_NAMESPACE_STD
++
++#  define _LIBCPP_ASSERTION_HANDLER(message) \
++  ::std::__libcpp_android_verbose_abort(message)
++
++#else
++
++#  error _LIBCPP_ASSERTION_SEMANTIC must be set to one of the following values: \
++_LIBCPP_ASSERTION_SEMANTIC_IGNORE, \
++_LIBCPP_ASSERTION_SEMANTIC_OBSERVE, \
++_LIBCPP_ASSERTION_SEMANTIC_QUICK_ENFORCE, \
++_LIBCPP_ASSERTION_SEMANTIC_ENFORCE
++
++#endif // _LIBCPP_ASSERTION_SEMANTIC == _LIBCPP_ASSERTION_SEMANTIC_IGNORE
++
++#endif // __LIBCPP_ANDROID_ASSERTION_HANDLER
+-- 
+2.55.0.rc2.803.g1fd1e6609c-goog
+
