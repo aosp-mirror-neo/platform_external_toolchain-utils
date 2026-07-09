@@ -804,6 +804,21 @@ def main(argv: list[str]) -> None:
         default=cros_checkout / cros_paths.CHROMIUMOS_OVERLAY,
     )
     parser.add_argument(
+        "--add-new",
+        action="store_true",
+        help="Add new rust-bootstrap version ebuilds if available.",
+    )
+    parser.add_argument(
+        "--upload-prebuilts",
+        action="store_true",
+        help="Update rust-bootstrap ebuilds with new prebuilts from GS.",
+    )
+    parser.add_argument(
+        "--gc",
+        action="store_true",
+        help="Delete old, unneeded rust-bootstrap ebuilds.",
+    )
+    parser.add_argument(
         "action",
         choices=("dry-run", "commit", "upload"),
         help="""
@@ -813,6 +828,12 @@ def main(argv: list[str]) -> None:
         """,
     )
     opts = parser.parse_args(argv)
+
+    if not (opts.add_new or opts.upload_prebuilts or opts.gc):
+        parser.error(
+            "At least one action flag must be specified: "
+            "--add-new, --upload-prebuilts, or --gc"
+        )
 
     if opts.action == "dry-run":
         dry_run = True
@@ -831,41 +852,44 @@ def main(argv: list[str]) -> None:
     )
 
     had_recoverable_error = False
-    # Ensure prebuilts are up to date first, since it allows
-    # `ensure_newest_rust_bootstrap_ebuild_exists` to succeed in edge cases.
-    logging.info(
-        "Trying to add new prebuilts to existing rust-bootstrap versions..."
-    )
-    made_changes = maybe_add_newest_prebuilts(
-        copy_rust_bootstrap_script=copy_rust_bootstrap_script,
-        chromiumos_checkout=cros_checkout,
-        chromiumos_overlay=opts.chromiumos_overlay,
-        rust_bootstrap_dir=rust_bootstrap_dir,
-        dry_run=dry_run,
-    )
+    made_changes = False
 
-    logging.info(
-        "Trying to add new rust-bootstrap versions based on available "
-        "src tarballs..."
-    )
-    made_changes |= maybe_add_new_rust_bootstrap_version(
-        chromiumos_overlay=opts.chromiumos_overlay,
-        chromiumos_checkout=cros_checkout,
-        rust_bootstrap_dir=rust_bootstrap_dir,
-        dry_run=dry_run,
-    )
+    if opts.upload_prebuilts:
+        logging.info(
+            "Trying to add new prebuilts to existing rust-bootstrap versions..."
+        )
+        made_changes |= maybe_add_newest_prebuilts(
+            copy_rust_bootstrap_script=copy_rust_bootstrap_script,
+            chromiumos_checkout=cros_checkout,
+            chromiumos_overlay=opts.chromiumos_overlay,
+            rust_bootstrap_dir=rust_bootstrap_dir,
+            dry_run=dry_run,
+        )
 
-    try:
-        logging.info("Trying to delete old rust-bootstrap versions...")
-        made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
+    if opts.add_new:
+        logging.info(
+            "Trying to add new rust-bootstrap versions based on available "
+            "src tarballs..."
+        )
+        made_changes |= maybe_add_new_rust_bootstrap_version(
             chromiumos_overlay=opts.chromiumos_overlay,
             chromiumos_checkout=cros_checkout,
             rust_bootstrap_dir=rust_bootstrap_dir,
             dry_run=dry_run,
         )
-    except OldEbuildIsLinkedToError:
-        logging.exception("An old ebuild is linked to; can't remove it")
-        had_recoverable_error = True
+
+    if opts.gc:
+        try:
+            logging.info("Trying to delete old rust-bootstrap versions...")
+            made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
+                chromiumos_overlay=opts.chromiumos_overlay,
+                chromiumos_checkout=cros_checkout,
+                rust_bootstrap_dir=rust_bootstrap_dir,
+                dry_run=dry_run,
+            )
+        except OldEbuildIsLinkedToError:
+            logging.exception("An old ebuild is linked to; can't remove it")
+            had_recoverable_error = True
 
     if upload:
         if made_changes:
