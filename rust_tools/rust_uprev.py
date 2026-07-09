@@ -40,6 +40,7 @@ from cros_utils import cros_paths
 from cros_utils import git_utils
 from llvm_tools import chroot
 from pgo_tools_rust import pgo_rust
+from rust_tools import auto_update_rust_bootstrap
 
 
 T = TypeVar("T")
@@ -641,6 +642,18 @@ def create_rust_uprev(
     # required files yourself, verify their checksums, then upload them
     # to the mirror.
     run_step("fetch rust distfiles", lambda: fetch_rust_distfiles(rust_version))
+    run_step(
+        "ensure rust-bootstrap ebuild for new version",
+        lambda: auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+            target_version=auto_update_rust_bootstrap.EbuildVersion(
+                rust_version.major, rust_version.minor, rust_version.patch, 0
+            ),
+            chromiumos_overlay=ebuild_prefix(),
+            chromiumos_checkout=get_source_root(),
+            rust_bootstrap_dir=ebuild_prefix() / "dev-lang/rust-bootstrap",
+            dry_run=False,
+        ),
+    )
     run_step(
         "update cros-rustc.eclass bootstrap version",
         lambda: update_ebuild_variable_version(
