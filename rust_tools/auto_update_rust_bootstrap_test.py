@@ -260,77 +260,6 @@ class Test(test_helpers.TempDirTestCase):
         with self.assertRaises(ValueError):
             auto_update_rust_bootstrap.parse_ebuild_version("2.80.3_pre1234")
 
-    def test_ensure_newest_version_does_nothing_if_no_new_rust_version(
-        self,
-    ) -> None:
-        rust = self.tempdir / "rust"
-        rust.mkdir()
-        (rust / "rust-1.70.0-r1.ebuild").touch()
-        rust_bootstrap = self.tempdir / "rust-bootstrap"
-        rust_bootstrap.mkdir()
-        (rust_bootstrap / "rust-bootstrap-1.70.0.ebuild").touch()
-
-        self.assertFalse(
-            auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                chromiumos_overlay=self.tempdir,
-                chromiumos_checkout=self.tempdir,
-                rust_bootstrap_dir=rust_bootstrap,
-                dry_run=True,
-            )
-        )
-
-    @mock.patch.object(
-        auto_update_rust_bootstrap, "update_ebuild_manifest_in_chroot"
-    )
-    def test_ensure_newest_version_upgrades_rust_bootstrap_properly(
-        self, update_ebuild_manifest_in_chroot: mock.MagicMock
-    ) -> None:
-        rust = self.tempdir / "rust"
-        rust.mkdir()
-        (rust / "rust-1.71.0-r1.ebuild").touch()
-        rust_bootstrap = self.tempdir / "rust-bootstrap"
-        rust_bootstrap.mkdir()
-        rust_bootstrap_1_70 = rust_bootstrap / "rust-bootstrap-1.70.0-r2.ebuild"
-
-        rust_bootstrap_contents = textwrap.dedent(
-            """
-            # Some copyright
-            FOO=bar
-
-            THIS_VERSION_PREBUILT_NAME=foo
-            PRIOR_RUST_BOOTSTRAP_VERSION="1.69.0"
-            """
-        )
-        rust_bootstrap_1_70.write_text(
-            rust_bootstrap_contents, encoding="utf-8"
-        )
-
-        self.assertTrue(
-            auto_update_rust_bootstrap.maybe_add_new_rust_bootstrap_version(
-                chromiumos_overlay=self.tempdir,
-                chromiumos_checkout=self.tempdir,
-                rust_bootstrap_dir=rust_bootstrap,
-                dry_run=False,
-                commit=False,
-            )
-        )
-        update_ebuild_manifest_in_chroot.assert_called_once()
-        rust_bootstrap_1_71 = rust_bootstrap / "rust-bootstrap-1.71.0.ebuild"
-
-        self.assertTrue(
-            rust_bootstrap_1_70.read_text(encoding="utf-8"),
-            rust_bootstrap_contents,
-        )
-        new_contents = rust_bootstrap_1_71.read_text(encoding="utf-8")
-        self.assertIn(
-            "THIS_VERSION_PREBUILT_NAME=\n",
-            new_contents,
-        )
-        self.assertIn(
-            'PRIOR_RUST_BOOTSTRAP_VERSION="1.70.0"\n',
-            new_contents,
-        )
-
     def test_version_deletion_does_nothing_if_all_versions_are_needed(
         self,
     ) -> None:
@@ -493,3 +422,158 @@ class Test(test_helpers.TempDirTestCase):
             TEST=CQ"""
             ),
         )
+
+    @mock.patch.object(
+        auto_update_rust_bootstrap,
+        "update_ebuild_manifest_in_chroot",
+        autospec=True,
+    )
+    @mock.patch.object(auto_update_rust_bootstrap.gs, "ls", autospec=True)
+    def test_ensure_rust_bootstrap_version_creates_ebuild(
+        self,
+        mock_gs_ls: mock.MagicMock,
+        mock_update_manifest: mock.MagicMock,
+    ) -> None:
+        rust_bootstrap = self.tempdir / "rust-bootstrap"
+        rust_bootstrap.mkdir()
+        rust_bootstrap_1_95 = rust_bootstrap / "rust-bootstrap-1.95.0.ebuild"
+        rust_bootstrap_1_95.write_text(
+            "THIS_VERSION_PREBUILT_NAME=foo\n"
+            'PRIOR_RUST_BOOTSTRAP_VERSION="1.94.0"\n',
+            encoding="utf-8",
+        )
+
+        mock_gs_ls.return_value = [
+            auto_update_rust_bootstrap.gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/"
+                    "rustc-1.96.0-src.tar.gz"
+                ),
+            )
+        ]
+
+        self.assertTrue(
+            auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+                target_version=auto_update_rust_bootstrap.EbuildVersion(
+                    1, 96, 0, 0
+                ),
+                chromiumos_overlay=self.tempdir,
+                chromiumos_checkout=self.tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=False,
+                commit=False,
+            )
+        )
+        mock_update_manifest.assert_called_once()
+
+        rust_bootstrap_1_96 = rust_bootstrap / "rust-bootstrap-1.96.0.ebuild"
+        self.assertTrue(rust_bootstrap_1_96.exists())
+        contents = rust_bootstrap_1_96.read_text(encoding="utf-8")
+        self.assertIn('PRIOR_RUST_BOOTSTRAP_VERSION="1.95.0"', contents)
+        self.assertIn("THIS_VERSION_PREBUILT_NAME=\n", contents)
+
+    def test_ensure_rust_bootstrap_version_is_nop_if_already_exists(
+        self,
+    ) -> None:
+        rust_bootstrap = self.tempdir / "rust-bootstrap"
+        rust_bootstrap.mkdir()
+        (rust_bootstrap / "rust-bootstrap-1.95.0.ebuild").touch()
+
+        self.assertFalse(
+            auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+                target_version=auto_update_rust_bootstrap.EbuildVersion(
+                    1, 95, 0, 0
+                ),
+                chromiumos_overlay=self.tempdir,
+                chromiumos_checkout=self.tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
+            )
+        )
+
+    @mock.patch.object(auto_update_rust_bootstrap.gs, "ls", autospec=True)
+    def test_ensure_rust_bootstrap_version_handles_major_version_bump(
+        self, mock_gs_ls: mock.MagicMock
+    ) -> None:
+        rust_bootstrap = self.tempdir / "rust-bootstrap"
+        rust_bootstrap.mkdir()
+        (rust_bootstrap / "rust-bootstrap-1.99.0.ebuild").write_text(
+            "THIS_VERSION_PREBUILT_NAME=foo\n"
+            'PRIOR_RUST_BOOTSTRAP_VERSION="1.98.0"\n',
+            encoding="utf-8",
+        )
+        mock_gs_ls.return_value = [
+            auto_update_rust_bootstrap.gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/"
+                    "rustc-2.0.0-src.tar.gz"
+                ),
+            )
+        ]
+
+        self.assertTrue(
+            auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+                target_version=auto_update_rust_bootstrap.EbuildVersion(
+                    2, 0, 0, 0
+                ),
+                chromiumos_overlay=self.tempdir,
+                chromiumos_checkout=self.tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
+            )
+        )
+
+    def test_ensure_rust_bootstrap_version_raises_on_empty_dir(self) -> None:
+        rust_bootstrap = self.tempdir / "rust-bootstrap"
+        rust_bootstrap.mkdir()
+
+        with self.assertRaises(ValueError):
+            auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+                target_version=auto_update_rust_bootstrap.EbuildVersion(
+                    1, 96, 0, 0
+                ),
+                chromiumos_overlay=self.tempdir,
+                chromiumos_checkout=self.tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
+            )
+
+    def test_ensure_rust_bootstrap_version_raises_on_discontiguous_gap(
+        self,
+    ) -> None:
+        rust_bootstrap = self.tempdir / "rust-bootstrap"
+        rust_bootstrap.mkdir()
+        (rust_bootstrap / "rust-bootstrap-1.95.0.ebuild").touch()
+
+        with self.assertRaises(ValueError):
+            auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+                target_version=auto_update_rust_bootstrap.EbuildVersion(
+                    1, 97, 0, 0
+                ),
+                chromiumos_overlay=self.tempdir,
+                chromiumos_checkout=self.tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
+            )
+
+    @mock.patch.object(auto_update_rust_bootstrap.gs, "ls", autospec=True)
+    def test_ensure_rust_bootstrap_version_raises_if_source_missing(
+        self, mock_gs_ls: mock.MagicMock
+    ) -> None:
+        rust_bootstrap = self.tempdir / "rust-bootstrap"
+        rust_bootstrap.mkdir()
+        (rust_bootstrap / "rust-bootstrap-1.95.0.ebuild").touch()
+        mock_gs_ls.return_value = []
+
+        with self.assertRaises(ValueError):
+            auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+                target_version=auto_update_rust_bootstrap.EbuildVersion(
+                    1, 96, 0, 0
+                ),
+                chromiumos_overlay=self.tempdir,
+                chromiumos_checkout=self.tempdir,
+                rust_bootstrap_dir=rust_bootstrap,
+                dry_run=True,
+            )
