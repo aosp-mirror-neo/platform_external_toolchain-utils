@@ -501,6 +501,30 @@ def fetch(
     )
 
 
+def check_remote_if_ref_or_sha_exists(
+    git_dir: Path,
+    remote: str,
+    ref_or_sha: str,
+) -> bool:
+    """Queries a remote to check whether a ref or commit SHA exists on it.
+
+    Performs a shallow dry-run fetch (`git fetch --depth=1 --dry-run`) so that
+    no objects are downloaded or written to the local repository.
+    """
+    try:
+        subprocess.run(
+            ("git", "fetch", "--depth=1", "--dry-run", remote, ref_or_sha),
+            check=True,
+            cwd=git_dir,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def checkout(
     git_dir: Path, ref: str | None, paths: Sequence[str | os.PathLike] = ()
 ) -> None:
@@ -763,12 +787,18 @@ def parse_message_metadata(message_lines: Iterable[str]) -> dict[str, str]:
     """Return a dictionary of commit message lines' directives."""
     regex = re.compile(r"([-\w.]+):(.+)")
     result = {}
+    duplicates: set[str] = set()
     for line in message_lines:
         # Must not lstrip the line, as leading whitespace here is important.
         line = line.rstrip()
         if match := regex.match(line):
             key, value = match.groups()
+            if key in result and key.startswith("patch."):
+                duplicates.add(key)
             result[key] = value.strip()
+    if duplicates:
+        dups_str = ", ".join(sorted(duplicates))
+        raise ValueError(f"Duplicate patch metadata key(s) found: {dups_str}")
     return result
 
 

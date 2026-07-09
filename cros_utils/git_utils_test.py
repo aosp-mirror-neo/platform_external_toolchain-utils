@@ -4,6 +4,8 @@
 
 """Tests for git_utils."""
 
+from pathlib import Path
+import re
 import subprocess
 import textwrap
 from unittest import mock
@@ -159,6 +161,66 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(parsed["patch.version_range.from"], "1245")
         self.assertEqual(parsed["patch.version_range.until"], "null")
         self.assertEqual(parsed.get("BUG"), None)
+
+    def test_parse_message_metadata_duplicate_patch_key(self) -> None:
+        """Test ValueError is raised on duplicate patch keys."""
+        # Non-patch duplicate keys (e.g., Reviewed-by:) should not raise.
+        parsed = git_utils.parse_message_metadata(
+            [
+                "Reviewed-by: Alice <a@example.com>",
+                "Reviewed-by: Bob <b@example.com>",
+            ]
+        )
+        self.assertEqual(parsed["Reviewed-by"], "Bob <b@example.com>")
+
+        with self.assertRaisesRegex(
+            ValueError,
+            re.escape(
+                "Duplicate patch metadata key(s) found: patch.cherry, "
+                "patch.version_range.from"
+            ),
+        ):
+            git_utils.parse_message_metadata(
+                [
+                    "patch.version_range.from: 100",
+                    "patch.cherry: true",
+                    "patch.cherry: false",
+                    "patch.version_range.from: 200",
+                ]
+            )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_check_remote_if_ref_or_sha_exists(
+        self, mock_run: mock.MagicMock
+    ) -> None:
+        """Test check_remote_if_ref_or_sha_exists shallow dry-run query."""
+        fake_dir = Path("/fake/dir")
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=[], returncode=0
+        )
+        self.assertTrue(
+            git_utils.check_remote_if_ref_or_sha_exists(
+                fake_dir, "cros", "a" * 40
+            )
+        )
+        mock_run.assert_called_once_with(
+            ("git", "fetch", "--depth=1", "--dry-run", "cros", "a" * 40),
+            check=True,
+            cwd=fake_dir,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+        mock_run.reset_mock()
+        mock_run.side_effect = subprocess.CalledProcessError(
+            returncode=128, cmd="git fetch"
+        )
+        self.assertFalse(
+            git_utils.check_remote_if_ref_or_sha_exists(
+                fake_dir, "cros", "a" * 40
+            )
+        )
 
     def test_channel_parsing(self) -> None:
         with self.assertRaisesRegex(ValueError, "No such channel.*"):

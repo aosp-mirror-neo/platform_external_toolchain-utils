@@ -31,10 +31,14 @@ TOP_LEVEL_LOCAL_FILES = frozenset(
 )
 
 
-def verify_original_sha(llvm_dir: Path, original_sha: str) -> bool:
-    """Verifies that original_sha exists in llvm_dir.
+def verify_original_sha(
+    llvm_dir: Path,
+    original_sha: str,
+    remote: str = git_utils.CROS_EXTERNAL_REMOTE,
+) -> bool:
+    """Verifies that original_sha exists in llvm_dir or upstream remote.
 
-    If not found initially, attempts a git fetch and checks again.
+    If not found locally, queries the remote directly via shallow dry-run fetch.
     """
     commit_ref = f"{original_sha}^{{commit}}"
     try:
@@ -42,22 +46,15 @@ def verify_original_sha(llvm_dir: Path, original_sha: str) -> bool:
         return True
     except subprocess.CalledProcessError:
         logging.info(
-            "SHA %s not found locally in %s. Fetching...",
+            "SHA %s not found locally in %s. Querying remote %s...",
             original_sha,
             llvm_dir,
+            remote,
         )
 
-    try:
-        git_utils.fetch(llvm_dir)
-    except subprocess.CalledProcessError:
-        logging.exception("git fetch failed in %s", llvm_dir)
-        return False
-
-    try:
-        git_utils.resolve_ref(llvm_dir, commit_ref, quiet=True)
-        return True
-    except subprocess.CalledProcessError:
-        return False
+    return git_utils.check_remote_if_ref_or_sha_exists(
+        llvm_dir, remote, original_sha
+    )
 
 
 def validate_parsed_metadata(
@@ -84,8 +81,8 @@ def validate_parsed_metadata(
 
     if parsed.original_sha and not original_sha_valid:
         errors.append(
-            "patch.metadata.original_sha "
-            f"'{parsed.original_sha}' not found in {llvm_dir}"
+            f"patch.metadata.original_sha '{parsed.original_sha}' "
+            f"not found locally in {llvm_dir} or on upstream remote"
         )
 
     if llvm_rev_content is None:
@@ -230,7 +227,17 @@ def main(argv: list[str]) -> int:
         )
         return 0
 
-    metadata = git_utils.parse_message_metadata(commit_body.splitlines())
+    try:
+        metadata = git_utils.parse_message_metadata(commit_body.splitlines())
+    except ValueError as e:
+        logging.error("Commit metadata error: %s", e)
+        logging.error(
+            "Put `%s=<reason>` in your commit message "
+            "to skip this preupload check",
+            LLVM_NO_METADATA_TAG,
+        )
+        logging.error("Verification failed.")
+        return 1
 
     patch_metadata = {
         k: v for k, v in metadata.items() if k.startswith("patch.")

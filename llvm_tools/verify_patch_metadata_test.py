@@ -271,11 +271,16 @@ class TestVerifyPatchMetadata(test_helpers.TempDirTestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("Unknown patch metadata key", errors[0])
 
+    @mock.patch.object(
+        git_utils, "check_remote_if_ref_or_sha_exists", autospec=True
+    )
     @mock.patch.object(git_utils, "resolve_ref", autospec=True)
-    @mock.patch.object(git_utils, "fetch", autospec=True)
     def test_verify_original_sha_local_success(
-        self, mock_fetch: mock.MagicMock, mock_resolve_ref: mock.MagicMock
+        self,
+        mock_resolve_ref: mock.MagicMock,
+        mock_check_remote: mock.MagicMock,
     ) -> None:
+        """Test returns True immediately when SHA resolves locally."""
         mock_resolve_ref.return_value = "a" * 40
         sha = "a" * 40
 
@@ -285,50 +290,59 @@ class TestVerifyPatchMetadata(test_helpers.TempDirTestCase):
         mock_resolve_ref.assert_called_once_with(
             self.mock_dir, f"{sha}^{{commit}}", quiet=True
         )
-        mock_fetch.assert_not_called()
+        mock_check_remote.assert_not_called()
 
+    @mock.patch.object(
+        git_utils, "check_remote_if_ref_or_sha_exists", autospec=True
+    )
     @mock.patch.object(git_utils, "resolve_ref", autospec=True)
-    @mock.patch.object(git_utils, "fetch", autospec=True)
     def test_verify_original_sha_fetch_success(
-        self, mock_fetch: mock.MagicMock, mock_resolve_ref: mock.MagicMock
+        self,
+        mock_resolve_ref: mock.MagicMock,
+        mock_check_remote: mock.MagicMock,
     ) -> None:
-        # First call raises error, second succeeds
-        mock_resolve_ref.side_effect = [
-            subprocess.CalledProcessError(returncode=1, cmd="git rev-parse"),
-            "a" * 40,
-        ]
+        """Test queries remote when local SHA resolution fails."""
+        mock_resolve_ref.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd="git rev-parse"
+        )
+        mock_check_remote.return_value = True
         sha = "a" * 40
 
         self.assertTrue(
             verify_patch_metadata.verify_original_sha(self.mock_dir, sha)
         )
-        self.assertEqual(mock_resolve_ref.call_count, 2)
-        mock_resolve_ref.assert_has_calls(
-            [mock.call(self.mock_dir, f"{sha}^{{commit}}", quiet=True)] * 2
+        mock_resolve_ref.assert_called_once_with(
+            self.mock_dir, f"{sha}^{{commit}}", quiet=True
         )
-        mock_fetch.assert_called_once_with(self.mock_dir)
+        mock_check_remote.assert_called_once_with(
+            self.mock_dir, git_utils.CROS_EXTERNAL_REMOTE, sha
+        )
 
+    @mock.patch.object(
+        git_utils, "check_remote_if_ref_or_sha_exists", autospec=True
+    )
     @mock.patch.object(git_utils, "resolve_ref", autospec=True)
-    @mock.patch.object(git_utils, "fetch", autospec=True)
-    def test_verify_original_sha_resolve_after_fetch_failure(
+    def test_verify_original_sha_fetch_failure(
         self,
-        mock_fetch: mock.MagicMock,
         mock_resolve_ref: mock.MagicMock,
+        mock_check_remote: mock.MagicMock,
     ) -> None:
-        # Both resolve_ref calls fail, fetch succeeds
+        """Test returns False when both local and remote queries fail."""
         mock_resolve_ref.side_effect = subprocess.CalledProcessError(
             returncode=1, cmd="git rev-parse"
         )
+        mock_check_remote.return_value = False
         sha = "a" * 40
 
         self.assertFalse(
             verify_patch_metadata.verify_original_sha(self.mock_dir, sha)
         )
-        self.assertEqual(mock_resolve_ref.call_count, 2)
-        mock_resolve_ref.assert_has_calls(
-            [mock.call(self.mock_dir, f"{sha}^{{commit}}", quiet=True)] * 2
+        mock_resolve_ref.assert_called_once_with(
+            self.mock_dir, f"{sha}^{{commit}}", quiet=True
         )
-        mock_fetch.assert_called_once_with(self.mock_dir)
+        mock_check_remote.assert_called_once_with(
+            self.mock_dir, git_utils.CROS_EXTERNAL_REMOTE, sha
+        )
 
     @mock.patch.object(git_utils, "get_commit_metadata", autospec=True)
     @mock.patch.object(
@@ -364,7 +378,7 @@ class TestVerifyPatchMetadata(test_helpers.TempDirTestCase):
             metadata, llvm_dir=self.mock_dir
         )
         self.assertEqual(len(errors), 1)
-        self.assertIn(f"not found in {self.mock_dir}", errors[0])
+        self.assertIn(f"not found locally in {self.mock_dir}", errors[0])
         mock_verify_original_sha.assert_called_once_with(self.mock_dir, sha)
 
     def test_verify_metadata_llvm_rev(self) -> None:
