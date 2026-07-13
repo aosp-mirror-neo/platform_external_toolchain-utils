@@ -1306,5 +1306,20 @@
       "from": 596125,
       "until": 624472
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "[UPSTREAM] [compiler-rt][sanitizer] Remove linux/scc.h (#194116)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/3dc4fd6dd41100f051a63642f449b16324389c96.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 616013
+    }
   }
 ]
