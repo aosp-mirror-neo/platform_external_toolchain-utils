@@ -1321,5 +1321,20 @@
       "from": 596125,
       "until": 616013
     }
+  },
+  {
+    "metadata": {
+      "author": "",
+      "info": [],
+      "title": "symlink presubmit to toolchain-utils"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "symlink-presubmit-to-toolchain-utils.patch",
+    "version_range": {
+      "from": 596125,
+      "until": 596126
+    }
   }
 ]

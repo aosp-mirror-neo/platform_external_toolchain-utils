@@ -1,0 +1,57 @@
+From a4deac0107330202c7973527828f61c3222e8e43 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Fri, 10 Jul 2026 13:29:29 -0600
+Subject: [PATCH] symlink presubmit to toolchain-utils
+
+This makes these easier to update, and nothing about our
+presubmit config is tied to LLVM versions. This is also
+the behavior that ready_llvm_branch will apply in the
+future.
+
+Also, symlink GEMINI.md for convenience.
+
+CL by Gemini, reviewed by me
+
+BUG=b:523311513
+TEST=cherry-picked this and crrev.com/c/7953198, tried to
+TEST=`repo upload` a CL without patch metadata. Preuploads
+TEST=complained.
+
+---
+ GEMINI.md     | 1 +
+ PRESUBMIT.cfg | 8 +-------
+ 2 files changed, 2 insertions(+), 7 deletions(-)
+ create mode 120000 GEMINI.md
+ mode change 100644 => 120000 PRESUBMIT.cfg
+
+diff --git a/GEMINI.md b/GEMINI.md
+new file mode 120000
+index 000000000000..cec3c979c106
+--- /dev/null
++++ b/GEMINI.md
+@@ -0,0 +1 @@
++../toolchain-utils/llvm_tools/llvm_project_files/GEMINI.md
+\ No newline at end of file
+diff --git a/PRESUBMIT.cfg b/PRESUBMIT.cfg
+deleted file mode 100644
+index de0ae9bfada7..000000000000
+--- a/PRESUBMIT.cfg
++++ /dev/null
+@@ -1,7 +0,0 @@
+-[Hook Overrides]
+-cros_license_check: True
+-long_line_check: True
+-
+-[Hook Overrides Options]
+-cros_license_check: --exclude_regex=.*
+-long_line_check: --exclude_regex=.*
+diff --git a/PRESUBMIT.cfg b/PRESUBMIT.cfg
+new file mode 120000
+index 000000000000..3461fbf725b9
+--- /dev/null
++++ b/PRESUBMIT.cfg
+@@ -0,0 +1 @@
++../toolchain-utils/llvm_tools/llvm_project_files/PRESUBMIT.cfg
+\ No newline at end of file
+-- 
+2.39.5
