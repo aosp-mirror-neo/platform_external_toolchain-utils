@@ -443,7 +443,7 @@ def add_suppression_comments_to_diff(
     # This is the comment to add before every warning suppression. `bpfmt` is
     # expected to indent it properly. It's kept short because it may need to be
     # indented a fair amount, and don't want to go over the line limit.
-    add_comemnt = f"+// Temporarily suppressed for b/{bug_number}\n"
+    add_comment = f"+// Bulk-suppressed; see b/{bug_number} for details\n"
 
     # Since these diffs are well-formed (and have no commentary at the top), we
     # can assume that all lines are either metadata, or start with one of ("-",
@@ -461,7 +461,7 @@ def add_suppression_comments_to_diff(
             if hunk_line.startswith("+"):
                 if any(x in hunk_line for x in exempted_literals):
                     added_lines += 1
-                    new_hunk_lines.append(add_comemnt)
+                    new_hunk_lines.append(add_comment)
             new_hunk_lines.append(hunk_line)
         new_hunk_header = update_hunk_header_for_added_lines(
             hunk_header, added_lines, preexisting_added_lines
@@ -637,6 +637,92 @@ def map_files_to_git_repos(
     return dict(zip(files, toplevels))
 
 
+def extract_core_warning_name(warning_flag: str) -> str:
+    """Extracts core warning name from string like '-Wno-foo' or '-Wfoo'."""
+    for prefix in ("-Wno-error=", "-Werror=", "-Wno-", "-W"):
+        if warning_flag.startswith(prefix):
+            return warning_flag.removeprefix(prefix)
+    return warning_flag
+
+
+def format_exemption_commit_message(
+    bug_number: int,
+    warning_names: Iterable[str],
+    for_soong: bool = False,
+) -> str:
+    """Formats a commit message for warning exemptions."""
+    formatted_warnings = sorted(
+        {
+            f"-W{core_w}"
+            for w in warning_names
+            if (core_w := extract_core_warning_name(w))
+        }
+    )
+
+    if not formatted_warnings:
+        raise ValueError("No warnings provided")
+    if len(formatted_warnings) == 1:
+        desc = formatted_warnings[0]
+    else:
+        desc = f"{len(formatted_warnings)} warnings"
+
+    prefix = "cc: set no-error for " if for_soong else "mass-exempt "
+    subject = f"{prefix}{desc}"
+
+    warnings_section = (
+        ["Warnings exempted:", *(f"- {w}" for w in formatted_warnings), ""]
+        if len(formatted_warnings) > 1
+        else []
+    )
+
+    if for_soong:
+        explanation = [
+            "Set -Wno-error for these temporarily in case CI didn't catch",
+            "everything. See go/android-llvm-warning-suppression for",
+            "more details.",
+            "",
+            f"Bug: {bug_number}",
+            "Test: TreeHugger",
+        ]
+    else:
+        explanation = [
+            "Warnings will soon be introduced here due to a larger change.",
+            "Preemptively suppress those. Please see the bug or contact the",
+            "author for more information & notes on how to remove these",
+            "suppressions.",
+            "",
+            "Use 'EXEMPT BUGFIX' for Flag, since this CL only disables",
+            "warnings (soon to be build errors, if not for this CL) here.",
+            "It would be nice to fix these, but disabling them is a nop.",
+            "",
+            f"Bug: {bug_number}",
+            "Test: TreeHugger",
+            "Flag: EXEMPT BUGFIX",
+        ]
+
+    body_lines = (
+        subject,
+        "",
+        *warnings_section,
+        *explanation,
+    )
+    return "\n".join(body_lines) + "\n"
+
+
+def map_repos_to_warnings(
+    updated_targets: dict[str, list[str]],
+    file_to_repo: dict[Path, Path],
+) -> dict[Path, set[str]]:
+    """Maps repo paths to the set of warnings exempted within them."""
+    bp_to_targets = group_targets_by_bp_file(updated_targets)
+    repo_to_warnings: dict[Path, set[str]] = collections.defaultdict(set)
+    for bp_path, target_tuples in bp_to_targets.items():
+        repo = file_to_repo[bp_path]
+        for _, full_target in target_tuples:
+            repo_to_warnings[repo].update(updated_targets[full_target])
+    return repo_to_warnings
+
+
 def commit_new_exemptions(
     bug_number: int,
     android_tree: Path,
@@ -644,6 +730,7 @@ def commit_new_exemptions(
     updated_android_bp_files: list[Path],
     branch_name: str,
     file_to_repo: dict[Path, Path],
+    updated_targets: dict[str, list[str]],
 ) -> list[Path]:
     """Commits all new exemptions.
 
@@ -653,28 +740,17 @@ def commit_new_exemptions(
     rel_git_repos = sorted({file_to_repo[f] for f in updated_android_bp_files})
     git_repos = [android_tree / x for x in rel_git_repos]
 
-    exemption_commit_message = textwrap.dedent(
-        f"""\
-        automatically add warning exemptions
-
-        Warnings will soon be introduced here due to a larger change.
-        Preemptively suppress those. Please see the bug or contact the author
-        for more information & notes on how to remove these suppressions.
-
-        Use 'EXEMPT BUGFIX' for Flag, since this CL only disables warnings (soon
-        to be build errors, if not for this CL) here. It would be nice to fix
-        these, but disabling them is a nop.
-
-        Bug: {bug_number}
-        Test: TreeHugger
-        Flag: EXEMPT BUGFIX
-        """
-    )
+    repo_to_warnings = map_repos_to_warnings(updated_targets, file_to_repo)
 
     def do_commit(repo: Path) -> None:
+        rel_repo = repo.relative_to(android_tree)
+        warnings = repo_to_warnings.get(rel_repo)
+        if not warnings:
+            raise ValueError(f"No warnings found for repository {rel_repo}")
+        message = format_exemption_commit_message(bug_number, warnings)
         git_utils.commit_all_changes(
             git_dir=repo,
-            message=exemption_commit_message,
+            message=message,
             quiet=True,
         )
         git_utils.create_branch(repo, branch_name)
@@ -1016,6 +1092,7 @@ def main(argv: list[str]) -> None:
             updated_android_bp_files=apply_results.successfully_updated_files,
             branch_name=branch_name,
             file_to_repo=file_to_repo,
+            updated_targets=apply_results.updated_targets,
         )
         logging.info(
             "Successfully made commits in %d repos", len(repos_with_commit)

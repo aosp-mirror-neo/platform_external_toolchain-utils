@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import textwrap
 from typing import Any
+import unittest
 
 from android_tools import parse_and_apply_warning_exemptions as pa
 from android_tools import warning_suppression
@@ -270,13 +271,13 @@ class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
             @@ -1,2 +1,4 @@
              cc_library {
                  name: "libfoo",
-            +// Temporarily suppressed for b/12345
+            +// Bulk-suppressed; see b/12345 for details
             +    cflags: ["-Wno-foo"],
              }
             @@ -10,3 +12,5 @@
              cc_library {
                  name: "libbar",
-            +// Temporarily suppressed for b/12345
+            +// Bulk-suppressed; see b/12345 for details
             +    cflags: ["-Wno-bar"],
              } """
         )
@@ -479,3 +480,47 @@ class TestPopulateAndWriteSummary(test_helpers.TempDirTestCase):
             },
         )
         self.assertEqual(summary, expected_summary)
+
+
+class TestExtractCoreWarningName(unittest.TestCase):
+    """Tests for extract_core_warning_name."""
+
+    def test_extract_core_warning_name(self) -> None:
+        self.assertEqual(pa.extract_core_warning_name("-Wno-foo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("-Wfoo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("-Werror=foo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("-Wno-error=foo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("foo"), "foo")
+
+
+class TestFormatExemptionCommitMessage(unittest.TestCase):
+    """Tests for format_exemption_commit_message."""
+
+    def test_empty_warnings_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            pa.format_exemption_commit_message(12345, [])
+
+    def test_single_warning(self) -> None:
+        msg = pa.format_exemption_commit_message(12345, ["gcc-compat"])
+        self.assertTrue(
+            msg.startswith("mass-exempt -Wgcc-compat\n\nWarnings will soon")
+        )
+        self.assertNotIn("Warnings exempted:", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+    def test_multiple_warnings(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["gcc-compat", "format-security"]
+        )
+        self.assertTrue(msg.startswith("mass-exempt 2 warnings\n\n"))
+        self.assertIn(
+            "Warnings exempted:\n- -Wformat-security\n- -Wgcc-compat\n\n", msg
+        )
+        self.assertIn("Bug: 12345\n", msg)
+
+    def test_deduplication_and_sorting(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["-Wno-foo", "foo", "-Wbar"]
+        )
+        self.assertTrue(msg.startswith("mass-exempt 2 warnings\n\n"))
+        self.assertIn("Warnings exempted:\n- -Wbar\n- -Wfoo\n\n", msg)
