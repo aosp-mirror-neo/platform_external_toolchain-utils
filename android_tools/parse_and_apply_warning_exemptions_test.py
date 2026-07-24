@@ -9,6 +9,7 @@ from pathlib import Path
 import textwrap
 from typing import Any
 import unittest
+from unittest import mock
 
 from android_tools import parse_and_apply_warning_exemptions as pa
 from android_tools import warning_suppression
@@ -524,3 +525,146 @@ class TestFormatExemptionCommitMessage(unittest.TestCase):
         )
         self.assertTrue(msg.startswith("mass-exempt 2 warnings\n\n"))
         self.assertIn("Warnings exempted:\n- -Wbar\n- -Wfoo\n\n", msg)
+
+    def test_for_soong_single_warning(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["gcc-compat"], for_soong=True
+        )
+        self.assertTrue(
+            msg.startswith(
+                "cc: set no-error for -Wgcc-compat\n\nSet -Wno-error"
+            )
+        )
+        self.assertNotIn("Warnings exempted:", msg)
+        self.assertNotIn("Flag: EXEMPT BUGFIX", msg)
+        self.assertIn("See go/android-llvm-warning-suppression", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+    def test_for_soong_multiple_warnings(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["gcc-compat", "format-security"], for_soong=True
+        )
+        self.assertTrue(msg.startswith("cc: set no-error for 2 warnings\n\n"))
+        self.assertIn(
+            "Warnings exempted:\n- -Wformat-security\n- -Wgcc-compat\n\n", msg
+        )
+        self.assertNotIn("Flag: EXEMPT BUGFIX", msg)
+        self.assertIn("See go/android-llvm-warning-suppression", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+
+class TestUpdateGlobalGoContent(unittest.TestCase):
+    """Tests for update_global_go_content."""
+
+    def test_update_global_go_content_success(self) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tnoOverrideGlobalCflags = []string{
+            \t\t"-Werror=address-of-temporary",
+            \t}
+            )
+            """
+        )
+        updated = pa.update_global_go_content(
+            initial, 12345, ["foo", "-Wbar", "-Wno-baz"]
+        )
+        self.assertIn(
+            "// Temporarily force no-error for these as part of suppression "
+            "for b/12345",
+            updated,
+        )
+        self.assertIn('"-Wno-error=bar",', updated)
+        self.assertIn('"-Wno-error=baz",', updated)
+        self.assertIn('"-Wno-error=foo",', updated)
+
+    def test_update_global_go_content_missing_start_brace(self) -> None:
+        initial = "package config\n"
+        with self.assertRaisesRegex(
+            ValueError, "noOverrideGlobalCflags not found in content"
+        ):
+            pa.update_global_go_content(initial, 12345, ["foo"])
+
+    def test_update_global_go_content_missing_end_brace(self) -> None:
+        initial = "package config\nvar noOverrideGlobalCflags = []string{\n"
+        with self.assertRaisesRegex(
+            ValueError, "Closing brace for noOverrideGlobalCflags not found"
+        ):
+            pa.update_global_go_content(initial, 12345, ["foo"])
+
+    def test_update_global_go_content_single_warning(self) -> None:
+        initial = (
+            "package config\n\nvar noOverrideGlobalCflags = []string{\n}\n"
+        )
+        updated = pa.update_global_go_content(initial, 12345, ["foo"])
+        self.assertIn(
+            "// Temporarily force no-error for this as part of suppression "
+            "for b/12345",
+            updated,
+        )
+        self.assertIn('"-Wno-error=foo",', updated)
+        self.assertTrue(updated.endswith("}\n"))
+
+    def test_update_global_go_content_comment_occurrence_not_confused(
+        self,
+    ) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+            // -Wno-error=foo in comment should not prevent adding to slice
+            var (
+            \tnoOverrideGlobalCflags = []string{
+            \t\t"-Werror=address-of-temporary",
+            \t}
+            )
+            """
+        )
+        updated = pa.update_global_go_content(initial, 12345, ["foo"])
+        self.assertIn('"-Wno-error=foo",', updated)
+
+
+class TestAddGlobalNoErrorPostflags(test_helpers.TempDirTestCase):
+    """Tests for add_global_no_error_postflags."""
+
+    def test_add_global_no_error_postflags_success(self) -> None:
+        android_tree = self.make_tempdir()
+        global_go_dir = android_tree / "build/soong/cc/config"
+        global_go_dir.mkdir(parents=True)
+        global_go_file = global_go_dir / "global.go"
+        global_go_file.write_text(
+            textwrap.dedent(
+                """\
+                package config
+
+                var (
+                \tnoOverrideGlobalCflags = []string{
+                \t\t"-Werror=address-of-temporary",
+                \t}
+                )
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        with mock.patch.object(pa, "checked_subprocess_run"):
+            result = pa.add_global_no_error_postflags(
+                android_tree, 12345, ["foo", "-Wbar", "-Wno-baz"]
+            )
+        self.assertEqual(result, Path("build/soong/cc/config/global.go"))
+
+        content = global_go_file.read_text(encoding="utf-8")
+        self.assertIn(
+            "// Temporarily force no-error for these as part of suppression "
+            "for b/12345",
+            content,
+        )
+        self.assertIn('"-Wno-error=bar",', content)
+        self.assertIn('"-Wno-error=baz",', content)
+        self.assertIn('"-Wno-error=foo",', content)
+
+    def test_add_global_no_error_postflags_missing_file(self) -> None:
+        android_tree = self.make_tempdir()
+        with self.assertRaises(FileNotFoundError):
+            pa.add_global_no_error_postflags(android_tree, 12345, ["foo"])

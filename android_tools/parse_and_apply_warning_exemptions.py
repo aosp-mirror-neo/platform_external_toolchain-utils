@@ -645,6 +645,82 @@ def extract_core_warning_name(warning_flag: str) -> str:
     return warning_flag
 
 
+_NO_OVERRIDE_GLOBAL_CFLAGS_START = re.compile(
+    r"^\s*(?:var\s+)?noOverrideGlobalCflags\s*=\s*\[\]string\{", re.MULTILINE
+)
+_NO_OVERRIDE_GLOBAL_CFLAGS_END = re.compile(r"^\s*\}", re.MULTILINE)
+_GOFMT_BIN = Path("prebuilts") / "go" / "linux-x86" / "bin" / "gofmt"
+
+
+def update_global_go_content(
+    content: str,
+    bug_number: int,
+    warning_names: Iterable[str],
+) -> str:
+    """Updates global.go content with -Wno-error=<warning> postflags.
+
+    Returns:
+        Updated content string.
+    """
+    unique_core_warnings = sorted(
+        {
+            core_w
+            for w in warning_names
+            if (core_w := extract_core_warning_name(w))
+        }
+    )
+
+    match_start = _NO_OVERRIDE_GLOBAL_CFLAGS_START.search(content)
+    if not match_start:
+        raise ValueError("noOverrideGlobalCflags not found in content")
+
+    match_end = _NO_OVERRIDE_GLOBAL_CFLAGS_END.search(
+        content, match_start.end()
+    )
+    if not match_end:
+        raise ValueError("Closing brace for noOverrideGlobalCflags not found")
+
+    this_or_these = "this" if len(unique_core_warnings) == 1 else "these"
+    lines_to_insert = [
+        f"// Temporarily force no-error for {this_or_these} as part of "
+        f"suppression for b/{bug_number}"
+    ]
+    for core_w in unique_core_warnings:
+        lines_to_insert.append(f'"-Wno-error={core_w}",')
+
+    insertion_text = "\n".join(lines_to_insert) + "\n"
+    return (
+        content[: match_end.start()]
+        + insertion_text
+        + content[match_end.start() :]
+    )
+
+
+def add_global_no_error_postflags(
+    android_tree: Path,
+    bug_number: int,
+    warning_names: Iterable[str],
+) -> Path:
+    """Adds -Wno-error=<warning> flags to noOverrideGlobalCflags in build/soong.
+
+    Returns:
+        Path to global.go relative to android_tree.
+    """
+    global_go_rel = Path("build/soong/cc/config/global.go")
+    global_go_path = android_tree / global_go_rel
+    content = global_go_path.read_text(encoding="utf-8")
+
+    new_content = update_global_go_content(content, bug_number, warning_names)
+
+    global_go_path.write_text(new_content, encoding="utf-8")
+    logging.info("Updated -Wno-error flags in %s", global_go_path)
+
+    gofmt_bin = android_tree / _GOFMT_BIN
+    checked_subprocess_run((gofmt_bin, "-w", global_go_path), cwd=android_tree)
+
+    return global_go_rel
+
+
 def format_exemption_commit_message(
     bug_number: int,
     warning_names: Iterable[str],
@@ -742,12 +818,22 @@ def commit_new_exemptions(
 
     repo_to_warnings = map_repos_to_warnings(updated_targets, file_to_repo)
 
+    global_go_rel = Path("build/soong/cc/config/global.go")
+    soong_global_modified = global_go_rel in updated_android_bp_files
+    if soong_global_modified:
+        soong_repo = Path("build/soong")
+        for target_warnings in updated_targets.values():
+            repo_to_warnings[soong_repo].update(target_warnings)
+
     def do_commit(repo: Path) -> None:
         rel_repo = repo.relative_to(android_tree)
         warnings = repo_to_warnings.get(rel_repo)
         if not warnings:
             raise ValueError(f"No warnings found for repository {rel_repo}")
-        message = format_exemption_commit_message(bug_number, warnings)
+        for_soong = soong_global_modified and rel_repo == Path("build/soong")
+        message = format_exemption_commit_message(
+            bug_number, warnings, for_soong=for_soong
+        )
         git_utils.commit_all_changes(
             git_dir=repo,
             message=message,
@@ -1084,6 +1170,17 @@ def main(argv: list[str]) -> None:
         file_to_repo = map_files_to_git_repos(
             android_tree, thread_pool, apply_results.successfully_updated_files
         )
+
+        all_warnings: set[str] = set()
+        for target_warnings in apply_results.updated_targets.values():
+            all_warnings.update(target_warnings)
+
+        if all_warnings:
+            soong_file = add_global_no_error_postflags(
+                android_tree, bug_number, all_warnings
+            )
+            apply_results.successfully_updated_files.append(soong_file)
+            file_to_repo[soong_file] = Path("build/soong")
 
         repos_with_commit = commit_new_exemptions(
             bug_number,
