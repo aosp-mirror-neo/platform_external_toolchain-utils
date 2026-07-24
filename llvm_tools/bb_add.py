@@ -23,7 +23,12 @@ class UntrustedCLsError(Exception):
     """Raised when untrusted CLs are detected and not allowed."""
 
 
-DEFAULT_LLVM_NEXT_BUILDERS = ("chromeos/staging/staging-build-chromiumos-sdk",)
+DEFAULT_LLVM_NEXT_BUILDERS = (
+    "chromeos/staging/staging-amd64-generic-asan",
+    "chromeos/staging/staging-amd64-generic-msan-fuzzer",
+    "chromeos/staging/staging-amd64-generic-ubsan",
+    "chromeos/staging/staging-build-chromiumos-sdk",
+)
 
 
 def generate_bb_add_command(
