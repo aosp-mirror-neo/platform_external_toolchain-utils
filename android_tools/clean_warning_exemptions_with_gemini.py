@@ -167,19 +167,27 @@ class DiffHunk:
                 f"read {new_lines_read} new lines, want {new_len}."
             )
 
-        # Checked for a zero-length hunk above, so the loop must have iterated.
-        assert i, "Zero-length hunk that wasn't caught earlier?"
+        assert i is not None, "Zero-length hunk that wasn't caught earlier?"
+        if i < len(lines) and lines[i].startswith(
+            "\\ No newline at end of file"
+        ):
+            hunk_lines = lines[hunk_start_idx : i + 1]
+            next_idx = i + 1
+        else:
+            hunk_lines = lines[hunk_start_idx:i]
+            next_idx = i
+
         return (
             DiffHunk(
                 header=hunk_header,
-                lines=lines[hunk_start_idx:i],
+                lines=hunk_lines,
                 old_start=old_start,
                 old_len=old_len,
                 new_start=new_start,
                 new_len=new_len,
                 rest=rest,
             ),
-            i,
+            next_idx,
         )
 
 
@@ -312,20 +320,10 @@ def remove_blank_lines_from_diff(git_diff: str) -> str:
 
 @dataclasses.dataclass(frozen=True)
 class RunConfig:
-    """Shared attributes between clean-up runs."""
+    """Configuration for a cleanup run."""
 
     android_tree: Path
-    gemini_prompt: str
     bpfmt: Path
-
-
-def read_gemini_prompt() -> str:
-    prompt_md = (
-        android_paths.script_toolchain_utils_root()
-        / "android_tools"
-        / "clean_warning_exemptions_prompt.md"
-    )
-    return prompt_md.read_text(encoding="utf-8")
 
 
 _DASH_W_NO_STRING_RE = re.compile(r'"(-Wno-[^"]+)"')
@@ -359,171 +357,24 @@ def diff_trivially_has_no_dedupe_potential(file_diff: str) -> bool:
     return True
 
 
-class RetryableRunOnFileError(Exception):
-    """Raised when `run_on_file` fails in a way that may be retryable."""
-
-
 def run_bpfmt(
     config: RunConfig,
     git_repo_path: Path,
     files: list[Path],
 ) -> None:
     try:
-        cmd: list[str | Path] = [config.bpfmt, "-w"]
-        cmd += files
         subprocess.run(
-            cmd,
-            cwd=git_repo_path,
-            check=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-    except subprocess.CalledProcessError as e:
-        # bpfmt should be deterministic, but Gemini will (very) rarely insert
-        # syntax errors. `bpfmt` failing is indicative of a syntax error.
-        logging.error(
-            "Formatting failed on %s; stdout/stderr:\n%s",
-            files,
-            e.stdout,
-        )
-        raise
-
-
-def run_gemini_on_file(
-    config: RunConfig,
-    git_repo: Path,
-    file_in_repo: Path,
-) -> None:
-    """Runs transformations on a specific file in a git repo.
-
-    Args:
-        config: RunConfig for the cleanups.
-        git_repo: Git repo inside of the Android tree to modify.
-        file_in_repo: File to modify.
-    """
-    git_file = git_repo / file_in_repo
-    git_repo_path = config.android_tree / git_repo
-
-    file_diff = git_utils.diff(
-        git_dir=git_repo_path,
-        ref_start="HEAD~",
-        ref_end="HEAD",
-        only_files=(file_in_repo,),
-    )
-
-    logging.info("Running Gemini on %s...", git_file)
-    # Use gemini-cli rather than Gemini's API, since gemini-cli has the
-    # built-in ability to edit files/etc.
-    try:
-        gemini_run_result = subprocess.run(
-            (
-                "gemini",
-                # This isn't an interactive session; approve all edits, but
-                # stop short of running anything else.
-                "--approval-mode=auto_edit",
-                "\n\n".join((config.gemini_prompt, "```", file_diff, "```")),
-            ),
+            (config.bpfmt, "-w", *files),
             cwd=git_repo_path,
             check=True,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             encoding="utf-8",
-            errors="replace",
         )
     except subprocess.CalledProcessError as e:
-        logging.error(
-            "Gemini failed on %s; stdout/stderr:\n%s",
-            git_file,
-            e.stdout,
-        )
-        raise RetryableRunOnFileError from e
-
-    logging.debug(
-        "Gemini's output on %s was:\n%s",
-        git_file,
-        gemini_run_result.stdout,
-    )
-
-    # Format all modified files. This is nice for cleanliness, but also helps
-    # catch if Gemini introduced syntax errors.
-    unstaged_files = [
-        Path(x)
-        for x in git_utils.list_unstaged_files_changed(git_repo_path)
-        if x.endswith("Android.bp")
-    ]
-    if not unstaged_files:
-        logging.info(
-            "Gemini made no changes to %s; skipping formatting", git_file
-        )
-        return
-
-    logging.info("Formatting %s in %s...", unstaged_files, git_repo)
-    try:
-        run_bpfmt(config, git_repo_path, unstaged_files)
-    except subprocess.CalledProcessError as e:
-        raise RetryableRunOnFileError from e
-
-
-def run_gemini_on_file_with_retries(
-    config: RunConfig,
-    git_repo: Path,
-    file_in_repo: Path,
-    max_retries: int = 5,
-    retry_backoff_secs: int = 1,
-) -> None:
-    """Runs Gemini on the given file, retrying as needed.
-
-    Note that this will stage _some_ files in the given repository.
-    """
-    # Arbitrarily selected retry limit.
-    max_retries = 5
-    retry_backoff_secs = 1
-
-    git_repo_path = config.android_tree / git_repo
-    git_file = git_repo_path / file_in_repo
-
-    # Stage the state of the repo before we start. `run_on_file` likely
-    # modifies `file_in_repo`, and if it fails, we want to reset to the state we
-    # were in before we started.
-    #
-    # In rare cases, Gemini may modify _multiple_ files in `run_on_file` (e.g.,
-    # if the `defaults` is in a distant-but-still-in-repo Android.bp), so the
-    # full repo is analyzed rather than just `file_in_repo`.
-    git_utils.stage_all_unstaged_changes(git_repo_path, quiet=True)
-
-    for i in itertools.count():
-        try:
-            run_gemini_on_file(config, git_repo, file_in_repo)
-        except RetryableRunOnFileError as e:
-            if i == max_retries:
-                # It's a bug if these don't have a `__cause__`, but type
-                # definitions say `__cause__` can be None, so placate mypy.
-                #
-                # Simultaneously, disable `pylint`. For some reason, it asserts
-                # that `e.__cause__` has a constant value, which makes the
-                # conditional pointless.
-                #
-                # pylint: disable=using-constant-test
-                if e.__cause__:
-                    raise e.__cause__
-                raise e
-            logging.exception(
-                "Caught exception running on file %s, retrying in %ds",
-                git_file,
-                retry_backoff_secs,
-            )
-        else:
-            return
-
-        time.sleep(retry_backoff_secs)
-        retry_backoff_secs *= 2
-
-        # Restore repo state to what was staged above.
-        git_utils.checkout(git_repo_path, ref=None, paths=(".",))
-
-    assert False, "Unreachable"
+        e.add_note(f"Formatting failed on {files}")
+        raise
 
 
 def amend_head_if_necessary(run_config: RunConfig, git_repo: Path) -> bool:
@@ -536,154 +387,6 @@ def amend_head_if_necessary(run_config: RunConfig, git_repo: Path) -> bool:
     logging.debug("Changes made to %s; amending", git_repo_path)
     git_utils.amend_head_with_all_changes(git_repo_path, quiet=True)
     return True
-
-
-def run_on_repo(config: RunConfig, git_repo: Path) -> bool:
-    """Runs the cleanup process on a single repository.
-
-    Args:
-        config: RunConfig for this clean_warning_exemptions_prompt invocation.
-        git_repo: Git repository relative to Android's root.
-
-    Returns:
-        True if the repository was amended, False otherwise.
-    """
-    git_repo_path = config.android_tree / git_repo
-    changed_files = git_utils.list_files_changed_by_commit(
-        git_dir=git_repo_path, ref="HEAD"
-    )
-
-    initial_diff = git_utils.diff(
-        git_dir=git_repo_path,
-        ref_start="HEAD~",
-    )
-    if diff_trivially_has_no_dedupe_potential(initial_diff):
-        logging.info(
-            "Skipping Gemini on files in %s; no dedupe potential exists.",
-            git_repo,
-        )
-    else:
-        # NOTE: Fixing up individual files in a repo is _almost_ something we
-        # can parallelize, but it is not easy to do so.
-        #
-        # 1. Gemini performs _much_ better at this task if it's asked to
-        #    evaluate a single file at a time, so `gemini-cli` is only asked to
-        #    edit one file per invocation.
-        # 2. `git` operations in `run_on_file_with_retries` will sometimes break
-        #    if run concurrently with other `git` operations.
-        # 3. `gemini-cli` may edit a file **elsewhere in a git repo** if it
-        #    determines that doing so allows for dedupe (b/455912162#comment12).
-        for file in changed_files:
-            if Path(file).name != "Android.bp":
-                logging.warning(
-                    "Weird: found non-Android.bp file update to %s. Ignoring.",
-                    git_repo / file,
-                )
-                continue
-
-            run_gemini_on_file_with_retries(config, git_repo, Path(file))
-
-    # ...Now we've made an arbitrary set of changes to an arbitrary set of
-    # Android.bp files. Some formatted, some not. Fix blank lines up as
-    # necessary.
-    full_diff = git_utils.diff(
-        git_dir=git_repo_path,
-        ref_start="HEAD~",
-    )
-
-    cleaned_diff = remove_blank_lines_from_diff(full_diff)
-    if full_diff != cleaned_diff:
-        logging.info("Cleaning up blank lines in %s...", git_repo)
-        git_utils.checkout(git_repo_path, "HEAD~", paths=(".",))
-        try:
-            git_utils.apply_patch_contents(git_repo_path, cleaned_diff)
-        except subprocess.CalledProcessError:
-            logging.error("Failed applying patch:\n%s", cleaned_diff)
-            raise
-
-    # Finally, run a formatting pass. All files should be syntactically valid,
-    # since:
-    # - Gemini introducing syntax errors raises an exception.
-    # - The only other room to add a syntax error is blank line removal, and
-    #   that _shouldn't_ introduce issues.
-    all_bp_files_with_changes = [
-        Path(x)
-        for x in git_utils.list_uncommitted_files_changed(git_repo_path)
-        if x.endswith("Android.bp")
-    ]
-
-    if all_bp_files_with_changes:
-        all_bp_files_with_changes.sort()
-        logging.info(
-            "Running final formatting pass on:%s",
-            "".join(f"\n  {git_repo / x}" for x in all_bp_files_with_changes),
-        )
-        run_bpfmt(config, git_repo_path, all_bp_files_with_changes)
-
-    return amend_head_if_necessary(config, git_repo)
-
-
-def parse_args(argv: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-    )
-    parser.add_argument(
-        "--debug", action="store_true", help="Enable debug logging"
-    )
-    parser.add_argument(
-        "--android-tree",
-        type=Path,
-        help="""
-        Android tree to modify. If not specified, autodetection from this
-        script's directory will be attempted.
-        """,
-    )
-    parser.add_argument(
-        "--jobs",
-        type=int,
-        default=8,
-        help="""
-        Max jobs to run at once. Generally speaking, these jobs will spend most
-        of their wall time an invocation of `gemini-cli`. To avoid
-        rate-limiting, this is kept pretty low.
-        """,
-    )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
-        "--only-repo",
-        type=Path,
-        help="""
-        Only run on the repository given here. This repository should be
-        relative to the Android root, e.g., `bionic/`.
-        """,
-    )
-    group.add_argument(
-        "--summary-file",
-        type=Path,
-        help="""
-        The --update-summary-file generated by the warning suppression script.
-        """,
-    )
-    upload_group = parser.add_mutually_exclusive_group(required=True)
-    upload_group.add_argument(
-        "--upload",
-        action="store_true",
-        help="Run `repo upload` on changed repos.",
-    )
-    upload_group.add_argument(
-        "--no-upload",
-        action="store_true",
-        help="Do not upload changes to Gerrit.",
-    )
-    opts = parser.parse_args(argv)
-
-    if opts.android_tree:
-        android_paths.assert_is_valid_android_tree_root(
-            parser, opts.android_tree
-        )
-
-    return opts
 
 
 def upload_changes(
@@ -741,105 +444,3 @@ def upload_changes(
         )
 
     return [x for x, _ in exceptions]
-
-
-def main(argv: list[str]) -> None:
-    opts = parse_args(argv)
-    logging.basicConfig(
-        format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
-        "%(message)s",
-        level=logging.DEBUG if opts.debug else logging.INFO,
-    )
-
-    android_tree: Path = (
-        opts.android_tree or android_paths.script_android_checkout_or_exit()
-    )
-    summary_file_path: Path = opts.summary_file
-    only_repo: Path | None = opts.only_repo
-
-    if only_repo:
-        only_repo_git_dir = android_tree / only_repo / ".git"
-        if not only_repo_git_dir.exists():
-            sys.exit(
-                f"Path at {only_repo_git_dir} doesn't exist; check that "
-                "`--only-repo`'s value is correct."
-            )
-
-        repos_to_run_on = [only_repo]
-    else:
-        summary_file = parse_and_apply.ExemptionSummary.from_file(
-            summary_file_path
-        )
-        repos_to_run_on = [Path(x) for x in summary_file.exemptions]
-
-    bpfmt_path = bp_tools.bpfmt_path(android_tree)
-    if not bpfmt_path.exists():
-        sys.exit(
-            f"No bpfmt found at {bpfmt_path} - are you using the tree you "
-            "ran parse_and_apply_warning_exemptions on? Reminder that you can "
-            "always build it via `m blueprint_tools`."
-        )
-
-    run_config = RunConfig(
-        android_tree=android_tree,
-        gemini_prompt=read_gemini_prompt(),
-        bpfmt=bpfmt_path,
-    )
-
-    with concurrent.futures.ThreadPoolExecutor(
-        max_workers=opts.jobs
-    ) as thread_pool:
-        future_to_repo = {
-            thread_pool.submit(run_on_repo, run_config, repo): repo
-            for repo in repos_to_run_on
-        }
-
-        amended_repos = []
-        exceptions = []
-
-        for future in concurrent.futures.as_completed(future_to_repo):
-            repo = future_to_repo[future]
-            try:
-                amended = future.result()
-                if amended:
-                    amended_repos.append(repo)
-            except Exception as e:
-                exceptions.append((repo, e))
-
-        failed_uploads = []
-        if opts.upload and amended_repos:
-            failed_uploads = upload_changes(
-                android_tree,
-                thread_pool,
-                amended_repos,
-            )
-        elif not amended_repos:
-            logging.info("No repos amended, so nothing to upload.")
-
-        # Log exceptions/errors in a batch afterward, so they don't get lost in
-        # any logging output above.
-        for repo, exc in exceptions:
-            if isinstance(exc, subprocess.CalledProcessError):
-                logging.error(
-                    "Exception caught making changes to %s; stdstreams:\n%s",
-                    repo,
-                    exc.stdout,
-                    exc_info=exc,
-                )
-            else:
-                logging.error(
-                    "Exception caught making changes to %s",
-                    repo,
-                    exc_info=exc,
-                )
-
-        if failed_uploads:
-            logging.error(
-                "Uploading failed for repo(s):%s",
-                "".join(f"\n- {x}" for x in failed_uploads),
-            )
-
-        had_failures = exceptions or failed_uploads
-
-        logging.info("Applied updates to %d repos", len(amended_repos))
-        sys.exit(1 if had_failures else 0)

@@ -12,10 +12,14 @@ more compiler warnings enabled.
 
 You should carefully apply the following rules when simplifying:
 
-1. If the file only has one target with `cflags` added, do nothing to that file.
+1. If the file only has one target with `cflags` added, do nothing to that file unless Cross-File Hoisting (Rule 3) applies across the repository.
 2. If the file has multiple targets with common `cflags` added, try to identify
    a common `defaults` between at least two of the targets, and move the
    `cflags` from the targets to the `defaults`.
+3. **Cross-File Defaults Hoisting Rule**: If a shared `defaults` module cannot be found within the same `Android.bp` file, search parent directories within the **current git repository** for an ancestor `defaults` (such as a repository-wide `<repo>_defaults` or `Android.bp` root default). **CRITICAL**: You MUST only consider `Android.bp` files within the current git repository and MUST NOT traverse into other repositories. Hoist the flag to the cross-file `defaults` if $2^N > M$, where:
+   - $N$ = Number of individual target suppressions removed in the current repository.
+   - $M$ = Estimated number of unaffected targets in the current repository inheriting that `defaults`.
+   If $2^N > M$, move the flag and its associated comment to the shared ancestor `defaults` and remove the individual target `cflags` across the repository.
 
 You are **only** to make changes to `cflags` fields of `Android.bp` targets,
 and their related comments. Under no circumstances should you modify fields or
