@@ -2,11 +2,11 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Tracks recent SDK builder invocations.
+"""Tracks recent llvm-next builder invocations.
 
-This script prints the status of the N most recent SDK builder invocations, and
+This script prints the status of the N most recent builder invocations, and
 fails if all of them fail. The intent is for Chrotomation to run this regularly,
-so the mage can be alerted if these builders are consistently failing.
+so the team can be alerted if these builders are consistently failing.
 """
 
 import argparse
@@ -14,8 +14,31 @@ import json
 import logging
 import sys
 
+from llvm_tools import bb_add
 from llvm_tools import cros_cls
 from llvm_tools import llvm_next
+
+
+BUILDER_NICKNAMES: dict[str, str] = {
+    "asan": "chromeos/staging/staging-amd64-generic-asan",
+    "msan-fuzzer": "chromeos/staging/staging-amd64-generic-msan-fuzzer",
+    "ubsan": "chromeos/staging/staging-amd64-generic-ubsan",
+    "sdk": "chromeos/staging/staging-build-chromiumos-sdk",
+}
+
+
+def resolve_builder_name(name_or_nickname: str) -> str:
+    """Resolves a builder nickname or full builder name to its full form."""
+    if name_or_nickname in BUILDER_NICKNAMES:
+        return BUILDER_NICKNAMES[name_or_nickname]
+    if name_or_nickname in bb_add.DEFAULT_LLVM_NEXT_BUILDERS:
+        return name_or_nickname
+    valid = sorted(
+        (*BUILDER_NICKNAMES.keys(), *bb_add.DEFAULT_LLVM_NEXT_BUILDERS)
+    )
+    raise argparse.ArgumentTypeError(
+        f"Unknown builder {name_or_nickname!r}. Valid options: {valid}"
+    )
 
 
 def main(argv: list[str]) -> None:
@@ -32,6 +55,17 @@ def main(argv: list[str]) -> None:
         default=5,
         help="Number of builds to check (default: %(default)s)",
     )
+    parser.add_argument(
+        "-b",
+        "--builder",
+        default="sdk",
+        type=resolve_builder_name,
+        help="""
+        Builder to monitor, either a nickname (e.g., 'sdk') or full name
+        (e.g., 'chromeos/staging/staging-build-chromiumos-sdk')
+        (default: %(default)s).
+        """,
+    )
     opts = parser.parse_args(argv)
 
     if not llvm_next.LLVM_NEXT_MANIFEST_CL:
@@ -39,6 +73,7 @@ def main(argv: list[str]) -> None:
         return
 
     ls_args: list[str] = []
+    project, bucket, builder_name = opts.builder.split("/", 2)
 
     # `ls` will show running/started builds, which we want to ignore.
     #
@@ -51,6 +86,11 @@ def main(argv: list[str]) -> None:
             continue
         predicate = json.dumps(
             {
+                "builder": {
+                    "project": project,
+                    "bucket": bucket,
+                    "builder": builder_name,
+                },
                 "tags": [
                     {"key": "toolchain", "value": "non-cq-llvm-next-testing"}
                 ],
