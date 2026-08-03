@@ -26,6 +26,75 @@ class Test(test_helpers.TempDirTestCase):
         self.assertEqual(roundtrip_rev, rev)
         return sha
 
+    def test_parse_rev(self) -> None:
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("r1234"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=1234),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("clang-r339409"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("clang-r339409b"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("clang-r339409b1"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("clang-r339409c"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("clang-r339409c1"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("r339409b"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("r339409b1"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("(main, r1234)"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=1234),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("(main, clang-r339409b)"),
+            git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=339409),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("(upstream/release/9.x, r366427)"),
+            git_llvm_rev.Rev(branch="upstream/release/9.x", number=366427),
+        )
+        self.assertEqual(
+            git_llvm_rev.Rev.parse("(upstream/release/9.x, clang-r366427b1)"),
+            git_llvm_rev.Rev(branch="upstream/release/9.x", number=366427),
+        )
+
+    def test_parse_rev_invalid(self) -> None:
+        invalid_revs = (
+            "",
+            "1234",
+            "clang-1234",
+            "r",
+            "clang-r",
+            "invalid",
+            "(main, )",
+            "(main, invalid)",
+            "r123456--foo=bar",
+            "r123456b3--foo=bar",
+            "r339409b1c1",
+            "clang-r339409b1c1",
+        )
+        for invalid_rev in invalid_revs:
+            with self.subTest(rev=invalid_rev), self.assertRaises(ValueError):
+                git_llvm_rev.Rev.parse(invalid_rev)
+
     def test_sha_to_rev_on_base_sha_works(self) -> None:
         sha = self.rev_to_sha_with_round_trip(
             git_llvm_rev.Rev(

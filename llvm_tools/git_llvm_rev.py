@@ -5,7 +5,8 @@
 """Maps LLVM git SHAs to synthetic revision numbers and back.
 
 Revision numbers are all of the form '(branch_name, r1234)'. As a shorthand,
-r1234 is parsed as '(main, 1234)'.
+r1234 is parsed as '(main, 1234)'. Revisions may also have an optional 'clang-'
+prefix and optional build suffix (e.g., clang-r339409b).
 """
 
 import argparse
@@ -16,6 +17,10 @@ from typing import IO, Iterable, NamedTuple
 
 
 MAIN_BRANCH = "main"
+
+_REV_TUPLE_RE = re.compile(r"^\((.+),\s*(.+)\)$")
+_REV_SPEC_RE = re.compile(r"^(?:clang-)?r(\d+)(?:[a-z]\d*)?$")
+_LLVM_SVN_RE = re.compile(r"^llvm-svn: (\d+)$")
 
 # Note that after base_llvm_sha, we reach The Wild West(TM) of commits.
 # So reasonable input that could break us includes:
@@ -68,18 +73,20 @@ class Rev(NamedTuple("Rev", (("branch", str), ("number", int)))):
         # pairs.
         #
         # We support r${commits_since_base_commit} as shorthand for
-        # (main, r${commits_since_base_commit}).
-        if rev.startswith("r"):
-            branch_name = MAIN_BRANCH
-            rev_string = rev[1:]
+        # (main, r${commits_since_base_commit}), with an optional 'clang-'
+        # prefix and optional build suffix (e.g., clang-r339409b).
+        if match := _REV_TUPLE_RE.match(rev):
+            branch_name, rev_spec = match.groups()
         else:
-            match = re.match(r"\((.+), r(\d+)\)", rev)
-            if not match:
-                raise ValueError("%r isn't a valid revision" % rev)
+            branch_name = MAIN_BRANCH
+            rev_spec = rev
 
-            branch_name, rev_string = match.groups()
+        if rev_match := _REV_SPEC_RE.match(rev_spec):
+            return Rev(branch=branch_name, number=int(rev_match.group(1)))
 
-        return Rev(branch=branch_name, number=int(rev_string))
+        raise ValueError(
+            f"{rev!r} isn't a valid revision; must match {_REV_SPEC_RE.pattern}"
+        )
 
     def __str__(self) -> str:
         branch_name, number = self
@@ -122,9 +129,7 @@ def translate_prebase_sha_to_rev_number(
         cwd=llvm_config.dir,
     )
     last_line = commit_message.strip().splitlines()[-1]
-    svn_match = re.match(r"^llvm-svn: (\d+)$", last_line)
-
-    if not svn_match:
+    if not (svn_match := _LLVM_SVN_RE.match(last_line)):
         raise ValueError(
             f"No llvm-svn line found for {sha}, which... shouldn't happen?"
         )
