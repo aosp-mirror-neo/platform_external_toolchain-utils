@@ -52,7 +52,7 @@ known_llvm_rev_sha_pairs: tuple[tuple[int, str], ...] = (
 # Represents an LLVM git checkout:
 #  - |dir| is the directory of the LLVM checkout
 #  - |remote| is the name of the LLVM remote. Generally it's "origin".
-LLVMConfig = NamedTuple("LLVMConfig", (("remote", str), ("dir", Path | str)))
+LLVMConfig = NamedTuple("LLVMConfig", (("remote", str), ("dir", Path)))
 
 
 class Rev(NamedTuple("Rev", (("branch", str), ("number", int)))):
@@ -97,7 +97,7 @@ def is_git_sha(xs: str) -> bool:
     )
 
 
-def check_output(command: list[str], cwd: Path | str) -> str:
+def check_output(command: list[str], cwd: Path) -> str:
     """Shorthand for subprocess.check_output. Auto-decodes any stdout."""
     result = subprocess.run(
         command,
@@ -432,7 +432,7 @@ def translate_rev_to_sha(llvm_config: LLVMConfig, rev: Rev) -> str:
     assert False, "Couldn't find a base SHA for a rev on main?"
 
 
-def find_root_llvm_dir(root_dir: str = ".") -> str:
+def find_root_llvm_dir(root_dir: Path = Path(".")) -> Path:
     """Finds the root of an LLVM directory starting at |root_dir|.
 
     Raises a subprocess.CalledProcessError if no git directory is found.
@@ -441,13 +441,14 @@ def find_root_llvm_dir(root_dir: str = ".") -> str:
         ["git", "rev-parse", "--show-toplevel"],
         cwd=root_dir,
     )
-    return result.strip()
+    return Path(result.strip())
 
 
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--llvm_dir",
+        type=Path,
         help="LLVM directory to consult for git history, etc. Autodetected "
         "if cwd is inside of an LLVM tree",
     )
@@ -474,7 +475,7 @@ def main(argv: list[str]) -> None:
 
     config = LLVMConfig(
         remote=opts.upstream,
-        dir=opts.llvm_dir or find_root_llvm_dir(),
+        dir=llvm_dir,
     )
 
     if opts.sha:
