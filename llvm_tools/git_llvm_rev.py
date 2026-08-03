@@ -46,6 +46,7 @@ known_llvm_rev_sha_pairs: tuple[tuple[int, str], ...] = (
     (550000, "e5bc842a9c56c1d83543f0232a888db6210efd85"),
     (575000, "d5b170c39bcd18f875d1bb5eb8800ed62a5fb47d"),
     (600000, "9b12f8fcaeb4e9f8a03de6e982e94e525a9a4dc6"),
+    (625000, "5dfc35a50514aaa62a34cb17f5be5c6396caf4fb"),
 )
 
 # Represents an LLVM git checkout:
