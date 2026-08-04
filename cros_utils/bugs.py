@@ -36,6 +36,37 @@ class WellKnownComponents(enum.IntEnum):
     AndroidRustToolchain = -3
 
 
+class IssueType(enum.StrEnum):
+    """Supported issue types for bug creation."""
+
+    BUG = "BUG"
+    PROCESS = "PROCESS"
+    TASK = "TASK"
+    FEATURE_REQUEST = "FEATURE_REQUEST"
+    INTERNAL_CLEANUP = "INTERNAL_CLEANUP"
+    CUSTOMER_ISSUE = "CUSTOMER_ISSUE"
+
+
+class Priority(enum.StrEnum):
+    """Supported issue priorities."""
+
+    P0 = "P0"
+    P1 = "P1"
+    P2 = "P2"
+    P3 = "P3"
+    P4 = "P4"
+
+
+class Severity(enum.StrEnum):
+    """Supported issue severities."""
+
+    S0 = "S0"
+    S1 = "S1"
+    S2 = "S2"
+    S3 = "S3"
+    S4 = "S4"
+
+
 class _FileNameGenerator:
     """Generates unique file names. This container is thread-safe.
 
@@ -141,6 +172,9 @@ def CreateNewBug(
     cc: list[str] | None = None,
     local_directory: os.PathLike | None = None,
     parent_bug: int = 0,
+    issue_type: IssueType = IssueType.BUG,
+    priority: Priority = Priority.P2,
+    severity: Severity = Severity.S2,
 ) -> None:
     """Sends a request to create a new bug.
 
@@ -157,11 +191,18 @@ def CreateNewBug(
             uploads to gs instead.
         parent_bug: The parent bug number for this bug. If none should be
             specified, pass the value 0.
+        issue_type: Issue type (e.g. IssueType.PROCESS). Defaults to
+            IssueType.BUG.
+        priority: Priority (e.g. Priority.P2). Defaults to Priority.P2.
+        severity: Severity (e.g. Severity.S2). Defaults to Severity.S2.
     """
     obj = {
         "component_id": component_id,
         "subject": title,
         "body": body,
+        "issue_type": issue_type.value,
+        "priority": priority.value,
+        "severity": severity.value,
     }
 
     if assignee:
@@ -222,16 +263,17 @@ def format_bug(
     component: int,
     parent: int,
     assignee: str | None = None,
-    priority: int = 2,
-    severity: int = 2,
+    priority: Priority = Priority.P2,
+    severity: Severity = Severity.S2,
+    issue_type: IssueType = IssueType.INTERNAL_CLEANUP,
 ) -> str:
     """Turns args into a `bugged`-compatible bug report."""
     bug_pieces = [title, "\n\n", body, "\n\n"]
     metadata = [
         ("COMPONENT", str(component)),
-        ("TYPE", "INTERNAL_CLEANUP"),
-        ("PRIORITY", f"P{priority}"),
-        ("SEVERITY", f"S{severity}"),
+        ("TYPE", issue_type.value),
+        ("PRIORITY", priority.value),
+        ("SEVERITY", severity.value),
     ]
 
     if assignee:

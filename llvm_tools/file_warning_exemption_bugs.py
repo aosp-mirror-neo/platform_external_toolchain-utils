@@ -403,7 +403,11 @@ def format_bug_from_package_warnings(
         component=component or bugs.INTERNAL_CROSTC_COMPONENT,
         assignee=None if component else crostc_contact,
         parent=parent_bug,
-        priority=1 if any(x in severe_warnings for x in warnings) else 2,
+        priority=(
+            bugs.Priority.P1
+            if any(x in severe_warnings for x in warnings)
+            else bugs.Priority.P2
+        ),
     )
 
 
