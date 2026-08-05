@@ -12,173 +12,9 @@ import logging
 from pathlib import Path
 import shlex
 import subprocess
-import threading
-import urllib.parse
 
-from android_tools import gerrit_utils
+from cros_utils import gerrit_utils
 from llvm_tools import manifest_utils
-
-
-@dataclasses.dataclass(frozen=True)
-class CLDetails:
-    """CL details fetched from Gerrit."""
-
-    project: str
-    cl_number: int
-
-
-def resolve_and_sort_cl_dependencies(
-    cls: list[CLDetails],
-    gerrit_host: str,
-    executor: concurrent.futures.ThreadPoolExecutor,
-) -> list[CLDetails]:
-    """Resolves and sorts all CL dependencies."""
-    # So Gerrit's relation chains list every CL with some sort of parent-child
-    # relationship to any other CL in the same relation chain.
-    #
-    # That means if we have a tree of CLs:
-    #   - A is the parent of B
-    #   - A is the parent of C
-    #   - C is the parent of D
-    #
-    # Then getting the relation chain for _any_ of these CLs will get the
-    # relation chain for _all_ of these CLs. The ordering in this list of B and
-    # C will be indeterminate, _but_ since A is the central parent, it is
-    # guaranteed to be before all of the other CLs (and C is guaranteed to be
-    # before D).
-    #
-    # The idea here is then pretty simple: grab all unique relation chains
-    # (where an empty relation chain for CL E is just a relation chain of E),
-    # chop out obviously unnecessary entries, and then return a flattened list
-    # of relation chains.
-    #
-    # The "unnecessary entries" are elements that extend past the end of any
-    # element in `cls`. So going back to the above example, if `cls` just
-    # contained C, we would capture either [A, B, C], or [A, C], depending on
-    # how Gerrit sorted it.
-    #
-    # TODO: This _does_ mean that B _may_ be included when it shouldn't, but
-    # scanning to figure that out is a bit of a pain.
-
-    # All of this state is protected by `lock`.
-    cl_map = {cl.cl_number: cl for cl in cls}
-    processed_cl_numbers = set()
-    all_chains: list[list[CLDetails]] = []
-
-    lock = threading.Lock()
-
-    def _fetch_dep_chain(cl_detail: CLDetails) -> None:
-        """Fetches the dependency chain for the given CL.
-
-        Updates captured state above appropriately.
-        """
-        with lock:
-            # As mentioned above, multiple CLs in the same chain will return the
-            # same chain. Skip this request if we've seen this CL during another
-            # request.
-            if cl_detail.cl_number in processed_cl_numbers:
-                return
-
-        chain_info = gerrit_utils.fetch_related_changes(
-            gerrit_host, cl_detail.cl_number
-        )
-
-        # Note that chains are returned in order from children to parents. For
-        # simplicity later, make it parents-first.
-        chain_info.reverse()
-
-        with lock:
-            # It could be that we had racing `fetch_related_changes` invocations
-            # for the same chain; bail if we've already processed this chain.
-            if cl_detail.cl_number in processed_cl_numbers:
-                return
-
-            if not chain_info:
-                processed_cl_numbers.add(cl_detail.cl_number)
-                all_chains.append([cl_detail])
-                return
-
-            # Truncate the chain to the child-most CL that was actually
-            # requested.
-            child_most_cl_idx = next(
-                (
-                    i
-                    for i in reversed(range(len(chain_info)))
-                    if chain_info[i].cl_number in cl_map
-                ),
-                None,
-            )
-            assert child_most_cl_idx is not None, (
-                "Could not find any of the requested CLs in the relation "
-                f"chain for {cl_detail.cl_number}."
-            )
-            del chain_info[child_most_cl_idx + 1 :]
-
-            processed_cl_numbers.update(c.cl_number for c in chain_info)
-
-            current_chain: list[CLDetails] = []
-            for related_cl_info in chain_info:
-                status = related_cl_info.status
-                if not status.is_open():
-                    logging.info(
-                        "Skipping CL %d with status %s from a relation chain.",
-                        related_cl_info.cl_number,
-                        status.value,
-                    )
-                    continue
-
-                cl_to_add = cl_map.get(related_cl_info.cl_number)
-                if not cl_to_add:
-                    logging.info(
-                        "Discovered new, unmerged CL %d from relation chain "
-                        "of %d",
-                        related_cl_info.cl_number,
-                        cl_detail.cl_number,
-                    )
-                    cl_to_add = CLDetails(
-                        project=related_cl_info.project,
-                        cl_number=related_cl_info.cl_number,
-                    )
-                    cl_map[related_cl_info.cl_number] = cl_to_add
-
-                current_chain.append(cl_to_add)
-
-            if current_chain:
-                all_chains.append(current_chain)
-
-    logging.info("Resolving CL dependencies using relation chains...")
-    futures = [executor.submit(_fetch_dep_chain, cl) for cl in cls]
-    for f in futures:
-        # `f.result()` reraises any exception the future encountered.
-        f.result()
-
-    # The chain ordering will be deterministic (sourced from Gerrit), but
-    # threads will race to add to this list. Sort by the CL number for
-    # determinism.
-    all_chains.sort(key=lambda chain: chain[0].cl_number)
-    logging.debug("Final CL chains after parent resolution: %s", all_chains)
-    return [cl for chain in all_chains for cl in chain]
-
-
-def fetch_cls_for_topic(gerrit_host: str, topic: str) -> list[CLDetails]:
-    """Fetches CL details for a given topic."""
-    # https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#list-changes
-    # Include `is:open` under the assumption that merged/abandoned things are
-    # undesirable to cherrypick.
-    encoded_query = urllib.parse.urlencode({"q": f'topic:"{topic}" is:open'})
-    url = f"{gerrit_host}/changes/?{encoded_query}"
-    response_body = gerrit_utils.fetch_gob_curl_body_with_retries(url)
-
-    changes = gerrit_utils.parse_gerrit_response(response_body)
-    results = []
-    for change in changes:
-        project = change.get("project")
-        cl_number = change.get("_number")
-        if not project or not cl_number:
-            logging.warning("Change %s is missing project or number", change)
-            continue
-        results.append(CLDetails(project=project, cl_number=cl_number))
-    return results
 
 
 @dataclasses.dataclass(frozen=True)
@@ -242,56 +78,6 @@ class TagOrBranch:
             return False
 
 
-def _get_cherry_pick_command(fetch_info: dict) -> str | None:
-    """Gets the cherry-pick command from the fetch_info dictionary."""
-
-    def try_get_cmd(key: str) -> str | None:
-        if obj := fetch_info.get(key):
-            if commands := obj.get("commands"):
-                if cherry_pick := commands.get("Cherry Pick"):
-                    return cherry_pick
-        return None
-
-    # Prefer sso if possible, since that's git.
-    if cmd := try_get_cmd("sso"):
-        return cmd
-
-    # Otherwise, take what we can get.
-    for key in fetch_info:
-        if cmd := try_get_cmd(key):
-            return cmd
-
-    return None
-
-
-def fetch_cherry_pick_command(gerrit_host: str, change_id: str) -> str | None:
-    """Fetches the cherry-pick command for a given change."""
-    logging.info("Fetching cherry-pick command for %s", change_id)
-    encoded_params = urllib.parse.urlencode({"o": "DOWNLOAD_COMMANDS"})
-    url = (
-        f"{gerrit_host}/a/changes/{change_id}/revisions/current"
-        f"?{encoded_params}"
-    )
-    response_body = gerrit_utils.fetch_gob_curl_body_with_retries(url)
-
-    revision_details = gerrit_utils.parse_gerrit_response(response_body)
-
-    fetch_info = revision_details.get("fetch")
-    if not fetch_info:
-        logging.warning("No fetch_info for %s", change_id)
-        return None
-
-    command = _get_cherry_pick_command(fetch_info)
-    if command:
-        logging.info(
-            "Successfully fetched cherry-pick command for %s", change_id
-        )
-        return command
-
-    logging.warning("No Cherry-Pick command found for %s", change_id)
-    return None
-
-
 def _generate_bash_cherry_pick_commands(
     cherry_picks: list[CherrypickDesc],
     project_mappings: dict[str, str],
@@ -302,43 +88,30 @@ def _generate_bash_cherry_pick_commands(
     """Generates the cherry-pick commands."""
     commands = [f"# Cherry-pick commands for topic: {topic}"]
 
-    # Sort these by project so we can just print a tag command at the end of a
-    # project.
-    cherry_picks = sorted(cherry_picks, key=lambda x: (x.project, x.cl_number))
-    last_cherry_pick_path: Path | None = None
-
-    def note_cherry_pick_path(p: Path | None) -> None:
-        """Note a cherry-pick will be performed at `p`.
-
-        If `p` is None, no more cherry-picks will be performed.
-        """
-        nonlocal last_cherry_pick_path
-        if last_cherry_pick_path and last_cherry_pick_path != p:
-            if tag_or_branch:
-                cmd = " ".join(
-                    shlex.quote(x) for x in tag_or_branch.get_command()
-                )
-                commands.append(
-                    f"(cd {shlex.quote(str(last_cherry_pick_path))} && {cmd})"
-                )
-
-        last_cherry_pick_path = p
-
+    project_to_picks = collections.defaultdict(list)
     for pick in cherry_picks:
-        project_path = project_mappings.get(pick.project)
+        project_to_picks[pick.project].append(pick)
+
+    # Sort projects by name for determinism in output
+    for project in sorted(project_to_picks.keys()):
+        picks = project_to_picks[project]
+        # picks are now in correct dependency order
+        project_path = project_mappings.get(project)
         if not project_path:
             logging.warning(
-                "Project %s not found in manifest, skipping.", pick.project
+                "Project %s not found in manifest, skipping.", project
             )
             continue
 
         full_path = android_tree / project_path
-        note_cherry_pick_path(full_path)
-        commands.append(
-            f"(cd {shlex.quote(str(full_path))} && {pick.cherrypick_command})"
-        )
+        quoted_path = shlex.quote(str(full_path))
+        for pick in picks:
+            commands.append(f"(cd {quoted_path} && {pick.cherrypick_command})")
 
-    note_cherry_pick_path(None)
+        if tag_or_branch:
+            cmd = " ".join(shlex.quote(x) for x in tag_or_branch.get_command())
+            commands.append(f"(cd {quoted_path} && {cmd})")
+
     return commands
 
 
@@ -527,7 +300,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "--gerrit-host",
-        default=gerrit_utils.INTERNAL_GERRIT_HOST,
+        default=gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST,
         help="Gerrit host to query",
     )
     parser.add_argument(
@@ -598,15 +371,20 @@ def main(argv: list[str]) -> int:
         for name, path in project_mappings.items():
             logging.debug("Found project %s at path %s", name, path)
 
-    cls = fetch_cls_for_topic(opts.gerrit_host, opts.topic)
+    gerrit_client = gerrit_utils.GerritClient.create()
+    cls = gerrit_utils.fetch_cls_for_topic(
+        gerrit_client, opts.gerrit_host, opts.topic
+    )
     if not cls:
         logging.info("No open CLs found for topic %s", opts.topic)
         return 0
 
-    def fetch_command_for_change(change: CLDetails) -> CherrypickDesc | None:
+    def fetch_command_for_change(
+        change: gerrit_utils.CLDetails,
+    ) -> CherrypickDesc | None:
         """Fetches cherry-pick for a change, returning a CherrypickDesc."""
-        command = fetch_cherry_pick_command(
-            opts.gerrit_host, str(change.cl_number)
+        command = gerrit_utils.fetch_cherry_pick_command(
+            gerrit_client, opts.gerrit_host, str(change.cl_number)
         )
         if command:
             return CherrypickDesc(
@@ -624,7 +402,9 @@ def main(argv: list[str]) -> int:
     # mindful of Gerrit ratelimits (each thread is expected to perform at most
     # one Gerrit operation at a time).
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
-        cls = resolve_and_sort_cl_dependencies(cls, opts.gerrit_host, executor)
+        cls = gerrit_utils.resolve_and_sort_cl_dependencies(
+            gerrit_client, cls, executor
+        )
         results = executor.map(fetch_command_for_change, cls)
         cherry_picks = [pick for pick in results if pick]
 

@@ -5,20 +5,27 @@
 """Tools for interacting with CrOS CLs, and the CQ in particular."""
 
 import dataclasses
+import datetime
 import enum
 import json
 import logging
+from pathlib import Path
 import re
 import shlex
 import subprocess
 import time
-from typing import Any, Iterable
+from typing import Any, Iterable, Self, Sequence
+
+from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 
 
 BuildID = int
 
 
-def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
+def _run_bb_decoding_output(
+    command: Sequence[str], multiline: bool = False
+) -> Any:
     """Runs `bb` with the `json` flag, and decodes the command's output.
 
     Args:
@@ -29,7 +36,7 @@ def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
     """
     # `bb` always parses argv[1] as a command, so put `-json` after the first
     # arg to `bb`.
-    run_command = ["bb", command[0], "-json"] + command[1:]
+    run_command = ["bb", command[0], "-json", *command[1:]]
     stdout = subprocess.run(
         run_command,
         check=True,
@@ -59,80 +66,6 @@ def _run_bb_decoding_output(command: list[str], multiline: bool = False) -> Any:
     return parse_or_log(stdout)
 
 
-@dataclasses.dataclass(frozen=True, eq=True)
-class ChangeListURL:
-    """A consistent representation of a CL URL.
-
-    The __str__s always converts to a crrev.com URL.
-    """
-
-    cl_id: int
-    patch_set: int | None = None
-    internal: bool = False
-
-    _URL_PARSE_RE = re.compile(
-        # Match an optional https:// header.
-        r"(?:https?://)?"
-        # Leaving the CL number and patch set as the next parts, match either
-        # crrev...
-        r"(crrev\.com/[ci]/"
-        # ...or chromium-review URLs. Note that chromium-review can either be
-        # served by googlesource or git.corp.google hosts.
-        r"|(?:chromium|chrome-internal)-review\."
-        r"(?:git\.corp\.google|googlesource)\.com/.*/\+/)"
-        # Match the CL number...
-        r"(\d+)"
-        # and (optionally) the patch-set, as well as consuming any of the
-        # path after the patch-set.
-        r"(?:/(\d+)?(?:/.*)?)?"
-        # Validate any sort of GET params for completeness.
-        r"(?:$|[?&].*)"
-    )
-
-    @classmethod
-    def parse(cls, url: str) -> "ChangeListURL":
-        m = cls._URL_PARSE_RE.fullmatch(url)
-        if not m:
-            raise ValueError(
-                f"URL {url!r} was not recognized. Supported URL formats are "
-                "crrev.com/c/${cl_number}/${patch_set_number}, and "
-                "chromium-review.googlesource.com/c/project/path/+/"
-                "${cl_number}/${patch_set_number}. The patch-set number is "
-                "optional, and there may be a preceding http:// or https://. "
-                "Internal CL links are also supported."
-            )
-        host, cl_id, maybe_patch_set = m.groups()
-        internal = host.startswith("chrome-internal-review") or host.startswith(
-            "crrev.com/i/"
-        )
-        if maybe_patch_set is not None:
-            maybe_patch_set = int(maybe_patch_set)
-        return cls(int(cl_id), maybe_patch_set, internal)
-
-    @classmethod
-    def parse_with_patch_set(cls, url: str) -> "ChangeListURL":
-        """parse(), but raises a ValueError if no patchset is specified."""
-        result = cls.parse(url)
-        if result.patch_set is None:
-            raise ValueError("A patchset number must be specified.")
-        return result
-
-    def crrev_url_without_http(self) -> str:
-        namespace = "i" if self.internal else "c"
-        result = f"crrev.com/{namespace}/{self.cl_id}"
-        if self.patch_set is not None:
-            result += f"/{self.patch_set}"
-        return result
-
-    @property
-    def gerrit_tool_id(self) -> str:
-        """Returns an identifier for this CL for use with the 'gerrit' tool."""
-        return f"*{self.cl_id}" if self.internal else f"{self.cl_id}"
-
-    def __str__(self) -> str:
-        return f"https://{self.crrev_url_without_http()}"
-
-
 class BuilderStatus(enum.StrEnum):
     """Statuses from builders."""
 
@@ -144,7 +77,7 @@ class BuilderStatus(enum.StrEnum):
     CANCELED = "CANCELED"
 
     @classmethod
-    def parse(cls, s: str) -> "BuilderStatus":
+    def parse(cls, s: str) -> Self:
         try:
             # Some statuses come in lower-case, others come in upper-case. The
             # latter is by far the dominant style, so normalize to that.
@@ -168,6 +101,45 @@ class BuilderStatus(enum.StrEnum):
 def builder_url(build_id: BuildID) -> str:
     """Returns a builder URL given a build ID."""
     return f"https://ci.chromium.org/b/{build_id}"
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class BbLsInfo:
+    """A class representing the output of a `bb ls` command."""
+
+    build_id: BuildID
+    status: BuilderStatus
+    create_time: datetime.datetime
+    builder_name: str
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> Self:
+        return cls(
+            build_id=BuildID(d["id"]),
+            status=BuilderStatus.parse(d["status"]),
+            create_time=datetime.datetime.fromisoformat(d["createTime"]),
+            builder_name=d["builder"]["builder"],
+        )
+
+
+def fetch_bb_ls_info(*, ls_args: Sequence[str]) -> list[BbLsInfo]:
+    """Runs `bb ls` with `-json` and returns a list of BbLsInfo."""
+    results = _run_bb_decoding_output(
+        ("ls", "-nopage", *ls_args), multiline=True
+    )
+    return [BbLsInfo.from_dict(r) for r in results]
+
+
+def fetch_cq_attempt_key(build_id: BuildID) -> str | None:
+    """Fetches the cq_attempt_key for a build, if present."""
+    result = _run_bb_decoding_output(("get", str(build_id)))
+    tags = {t["key"]: t["value"] for t in result.get("tags", ())}
+    return tags.get("cq_attempt_key")
+
+
+def fetch_sibling_builds(cq_attempt_key: str) -> list[BbLsInfo]:
+    """Fetches all builds with the given cq_attempt_key."""
+    return fetch_bb_ls_info(ls_args=("-t", f"cq_attempt_key:{cq_attempt_key}"))
 
 
 # Used to parse the build ID from a `bb add` invocation.
@@ -198,7 +170,7 @@ def parse_build_id_from_bb_add_output(output: str) -> BuildID:
 
 def spawn_bot(
     bot_name: str,
-    cls: Iterable[ChangeListURL] = (),
+    cls: Iterable[gerrit_utils.ChangeListURL] = (),
 ) -> BuildID:
     """Uses `bb add` to spawn a builder with the given params."""
     cmd = ["bb", "add"]
@@ -261,34 +233,199 @@ def fetch_builder_steps(build_id: BuildID) -> list[Any]:
 
 
 def fetch_cq_orchestrator_ids(
-    cl: ChangeListURL,
+    cl: gerrit_utils.ChangeListURL,
 ) -> list[BuildID]:
-    """Returns the BuildID of completed cq-orchestrator runs on a CL.
+    """Returns the BuildID of cq-orchestrator runs on a CL.
 
     Newer runs are sorted later in the list.
     """
-    results: list[dict[str, Any]] = _run_bb_decoding_output(
-        [
-            "ls",
+    # This is a requirement of `bb` itself; the error message is mildly clearer
+    # if we `raise` it here.
+    if cl.patch_set is None:
+        raise ValueError(f"CL {cl} must have a patchset specified.")
+    results = fetch_bb_ls_info(
+        ls_args=(
             "-cl",
             str(cl),
             "chromeos/cq/cq-orchestrator",
-        ],
-        multiline=True,
+        )
     )
 
     # We can theoretically filter on a status flag, but it seems to only accept
     # at most one value. Filter here instead; parsing one or two extra JSON
     # objects is cheap.
-    finished_results = [
-        x for x in results if not BuilderStatus(x["status"]).is_running
-    ]
+    finished_results = [x for x in results if not x.status.is_running]
 
     # Sort by createTime. Fall back to build ID if a tie needs to be broken.
     # While `createTime` is a string, it's formatted so it can be sorted
     # correctly without parsing.
-    finished_results.sort(key=lambda x: (x["createTime"], x["id"]))
-    return [int(x["id"]) for x in finished_results]
+    finished_results.sort(key=lambda x: (x.create_time, x.build_id))
+    return [x.build_id for x in finished_results]
+
+
+def parse_gerrit_search_results(
+    stdout: str,
+) -> list[gerrit_utils.ChangeListURL]:
+    """Parses JSON output from gerrit search command."""
+    changes = json.loads(stdout)
+    if not isinstance(changes, list):
+        raise ValueError(
+            f"Expected list from gerrit search, got {type(changes)}"
+        )
+
+    urls = []
+    for change in changes:
+        if not isinstance(change, dict):
+            raise ValueError(
+                "Expected dict element from gerrit search, got "
+                f"{type(change)}"
+            )
+        url_str = change.get("url")
+        if not url_str:
+            raise ValueError(f"Change missing URL: {change!r}")
+        urls.append(gerrit_utils.ChangeListURL.parse(url_str))
+    return urls
+
+
+def fetch_cl_urls_from_gerrit_search(
+    query: str, internal: bool = False
+) -> list[gerrit_utils.ChangeListURL]:
+    """Helper to run gerrit search and return ChangeListURLs."""
+    internal_flag = ("-i",) if internal else ()
+    cmd = ("gerrit", *internal_flag, "--json", "search", query)
+    logging.info("Running gerrit search command: %s", shlex.join(cmd))
+    try:
+        result = subprocess.run(
+            cmd,
+            check=True,
+            cwd=cros_paths.script_chromiumos_checkout_or_exit(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+        )
+    except subprocess.CalledProcessError as e:
+        e.add_note(f"stderr: {e.stderr}")
+        raise
+    return parse_gerrit_search_results(result.stdout)
+
+
+def quote_gerrit_query(val: str) -> str:
+    """Quotes and escapes special characters in a Gerrit query value."""
+    escaped = val.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped}"'
+
+
+def fetch_cl_urls_for_topic(topic: str) -> list[gerrit_utils.ChangeListURL]:
+    """Fetches open CLs for a topic from external and internal Gerrit."""
+    query = f"topic:{quote_gerrit_query(topic)} is:open"
+    return [
+        *fetch_cl_urls_from_gerrit_search(query, internal=False),
+        *fetch_cl_urls_from_gerrit_search(query, internal=True),
+    ]
+
+
+def fetch_gerrit_deps_of_most_recent_patchset(
+    cl_url: gerrit_utils.ChangeListURL,
+    chromiumos_root: Path,
+) -> list[gerrit_utils.CLDetails]:
+    """Fetches transitive dependencies of the most recent patchset of a CL.
+
+    This dependency list is fetched by 'gerrit deps'; in short, it's the
+    transitive list of `Cq-Depend`s and not-merged-yet parents of the given
+    `cl_url`.
+    """
+    internal_flag = ("-i",) if cl_url.internal else ()
+    cmd = ("gerrit", *internal_flag, "--json", "deps", str(cl_url.cl_id))
+
+    logging.info("Running gerrit deps command: %s", shlex.join(cmd))
+    stdout = subprocess.run(
+        cmd,
+        cwd=chromiumos_root,
+        check=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+    ).stdout
+
+    deps_json = json.loads(stdout)
+    results = []
+    for dep in deps_json:
+        url_str = dep.get("url")
+        if not url_str:
+            logging.warning("No URL found for dependency in JSON: %r", dep)
+            continue
+
+        project = dep.get("project")
+        if not project:
+            logging.warning("No project found for dependency in JSON: %r", dep)
+            continue
+
+        current_ps = dep.get("currentPatchSet", {})
+        url = gerrit_utils.ChangeListURL.parse(url_str)
+        if url.patch_set is None:
+            ps_str = current_ps.get("number")
+            if not ps_str:
+                raise ValueError(
+                    f"No patch set available for dependency {url_str}"
+                )
+            url = dataclasses.replace(url, patch_set=int(ps_str))
+
+        uploader = current_ps.get("uploader", {}).get("email")
+        if not uploader:
+            logging.warning(
+                "No uploader email found for dependency in JSON: %r", dep
+            )
+            uploader = None
+
+        status = gerrit_utils.CLStatus.parse(dep["status"])
+        results.append(
+            gerrit_utils.CLDetails(
+                project=project,
+                cl_url=url,
+                status=status,
+                uploader=uploader,
+            )
+        )
+
+    return results
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class GerritInspectResult:
+    """Result of running gerrit inspect on a CL."""
+
+    branch: str
+    current_patch_set: int
+    ref: str
+
+
+def gerrit_inspect(
+    cl: gerrit_utils.ChangeListURL, chromiumos_root: Path
+) -> GerritInspectResult:
+    """Returns the result of running gerrit inspect on a CL."""
+    internal_flag = ("-i",) if cl.internal else ()
+    cmd = ("gerrit", *internal_flag, "--json", "inspect", str(cl.cl_id))
+    results = json.loads(
+        subprocess.run(
+            cmd,
+            cwd=chromiumos_root,
+            check=True,
+            stdout=subprocess.PIPE,
+            stdin=subprocess.DEVNULL,
+            encoding="utf-8",
+        ).stdout
+    )
+    if len(results) != 1:
+        raise ValueError(
+            f"Expected exactly 1 result from gerrit inspect, got {len(results)}"
+        )
+    res = results[0]
+    return GerritInspectResult(
+        branch=res["branch"],
+        current_patch_set=int(res["currentPatchSet"]["number"]),
+        ref=res["currentPatchSet"]["ref"],
+    )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -299,9 +436,11 @@ class CQOrchestratorOutput:
     status: BuilderStatus
     # A dict of builders that this CQ builder spawned.
     child_builders: dict[str, BuildID]
+    # The CQ attempt key, if present.
+    cq_attempt_key: str | None = None
 
     @classmethod
-    def fetch(cls, bot_id: BuildID) -> "CQOrchestratorOutput":
+    def fetch(cls, bot_id: BuildID) -> Self:
         decoded: dict[str, Any] = _run_bb_decoding_output(
             ["get", "-steps", str(bot_id)]
         )
@@ -336,7 +475,13 @@ class CQOrchestratorOutput:
                     )
                 results[builder] = int(build_id)
         status = BuilderStatus.parse(decoded["status"])
-        return cls(child_builders=results, status=status)
+        tags = {t["key"]: t["value"] for t in decoded.get("tags", ())}
+        cq_attempt_key = tags.get("cq_attempt_key")
+        return cls(
+            child_builders=results,
+            status=status,
+            cq_attempt_key=cq_attempt_key,
+        )
 
 
 @dataclasses.dataclass(frozen=True)
@@ -351,9 +496,7 @@ class CQBoardBuilderOutput:
     artifacts_link: str | None
 
     @classmethod
-    def fetch_many(
-        cls, bot_ids: Iterable[BuildID]
-    ) -> list["CQBoardBuilderOutput"]:
+    def fetch_many(cls, bot_ids: Iterable[BuildID]) -> list[Self]:
         """Fetches CQBoardBuilderOutput for the given bots."""
         bb_output = _run_bb_decoding_output(
             ["get", "-p"] + [str(x) for x in bot_ids], multiline=True
@@ -395,3 +538,69 @@ def parse_release_from_builder_artifacts_link(artifacts_link: str) -> str:
             f"Expected one release version in {artifacts_link}; got: {results}"
         )
     return results[0]
+
+
+_DIRECT_OWNERS_REGEX = re.compile(
+    r"^[ \t]*([^ \t\n#]+@[^ \t\n#]+)[ \t]*(?:#.*)?$", re.MULTILINE
+)
+
+
+def parse_direct_owners_from_file(file_contents: str) -> list[str]:
+    """Parses unrestricted OWNERS emails from the given file contents."""
+    # We only care about accounts _directly mentioned_ with unrestricted access
+    # because that's the only case we'll realistically encounter at the moment.
+    # This ignores directives like `include` or `per-file`.
+    return _DIRECT_OWNERS_REGEX.findall(file_contents)
+
+
+def fetch_current_toolchain_owners(
+    owners_file: Path | None = None,
+) -> list[str]:
+    """Fetches current toolchain owners from the given file.
+
+    If owners_file is None, it defaults to
+    cros_paths.script_toolchain_utils_root() / "OWNERS.toolchain".
+
+    For each email ending in '@chromium.org', it also adds a corresponding
+    '@google.com' email, since in practice, those are interchangeable. It does
+    *not* add an '@chromium.org' email for '@google.com' emails, since new
+    chromium.org emails are discouraged.
+    """
+    if owners_file is None:
+        owners_file = (
+            cros_paths.script_toolchain_utils_root() / "OWNERS.toolchain"
+        )
+
+    if not owners_file.exists():
+        raise ValueError(
+            f"Handed path to nonexistent OWNERS file: {owners_file}"
+        )
+
+    owners = parse_direct_owners_from_file(
+        owners_file.read_text(encoding="utf-8")
+    )
+    results = []
+    for email in owners:
+        results.append(email)
+        if email.endswith("@chromium.org"):
+            prefix = email.split("@")[0]
+            results.append(f"{prefix}@google.com")
+    return results
+
+
+def partition_changes_by_uploader_trust(
+    changes: list[gerrit_utils.CLDetails],
+    owners: list[str],
+    trusted_allowlist: Iterable[gerrit_utils.ChangeListURL] = (),
+) -> tuple[list[gerrit_utils.CLDetails], list[gerrit_utils.CLDetails]]:
+    """Partitions changes by whether the uploader is a toolchain owner."""
+    trusted_set = set(trusted_allowlist)
+    trusted = []
+    untrusted = []
+    owners_set = set(owners)
+    for change in changes:
+        if change.uploader in owners_set or change.cl_url in trusted_set:
+            trusted.append(change)
+        else:
+            untrusted.append(change)
+    return trusted, untrusted

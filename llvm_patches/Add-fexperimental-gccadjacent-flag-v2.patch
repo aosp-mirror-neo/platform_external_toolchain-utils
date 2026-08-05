@@ -1,0 +1,163 @@
+From c4750c384af6a72d730362bdac31c8252615724d Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Mon, 1 Jun 2026 16:43:24 -0600
+Subject: [PATCH] Add -fexperimental-gccadjacent flag
+
+This applies only to the BareMetal driver, and is intended
+to target specifically ARM baremetal targets.
+
+This flag allows us to include libgcc runtimes, which we don't
+want with our baremetal toolchain builds.
+BUG=b:491530153
+TEST=Built and ran fpmcu targets with this change on LLVM r584947
+
+patch.cherry: false
+patch.metadata.author: Jordan Abrahams-Whitehead <ajordanr@google.com>
+patch.platforms: chromiumos
+patch.version_range.from: 596125
+patch.version_range.until: null
+
+Change-Id: I21c42374cb58d6282d8f06de9294f3e407ce57c3
+---
+ clang/include/clang/Driver/Options.td     |  2 ++
+ clang/lib/Driver/ToolChains/BareMetal.cpp | 33 ++++++++++++-----------
+ clang/lib/Driver/ToolChains/BareMetal.h   |  2 ++
+ 3 files changed, 22 insertions(+), 15 deletions(-)
+
+diff --git a/clang/include/clang/Driver/Options.td b/clang/include/clang/Driver/Options.td
+index 11e81e032d5f..8bdd06034dcc 100644
+--- a/clang/include/clang/Driver/Options.td
++++ b/clang/include/clang/Driver/Options.td
+@@ -6031,6 +6031,8 @@ def o : JoinedOrSeparate<["-"], "o">,
+   Visibility<[ClangOption, CC1Option, CC1AsOption, FC1Option, FlangOption]>,
+   HelpText<"Write output to <file>">, MetaVarName<"<file>">,
+   MarshallingInfoString<FrontendOpts<"OutputFile">>;
++def fexperimental_gccadjacent : Flag <["-"], "fexperimental-gccadjacent">,
++  Group<f_Group>, HelpText<"Experimental flag to auto-detect adding GCC runtimes for baremetal">;
+ def object_file_name_EQ : Joined<["-"], "object-file-name=">,
+   Visibility<[ClangOption, CC1Option, CC1AsOption, CLOption, DXCOption]>,
+   HelpText<"Set the output <file> for debug infos">, MetaVarName<"<file>">,
+diff --git a/clang/lib/Driver/ToolChains/BareMetal.cpp b/clang/lib/Driver/ToolChains/BareMetal.cpp
+index 3d63c38a95b6..b05d9d8e9c4d 100644
+--- a/clang/lib/Driver/ToolChains/BareMetal.cpp
++++ b/clang/lib/Driver/ToolChains/BareMetal.cpp
+@@ -143,25 +143,28 @@ bool BareMetal::initGCCInstallation(const llvm::Triple &Triple,
+ }
+ 
+ // This logic is adapted from RISCVToolChain.cpp as part of the ongoing effort
+-// to merge RISCVToolChain into the Baremetal toolchain. It infers the presence
++// to merge RISCVToolChain into the Baremetal toolchain.
++// By default, this function just returns false. However, if
++// -fexperimental-gccadjacent is passed, it infers the presence
+ // of a valid GCC toolchain by checking whether the `crt0.o` file exists in the
+ // `bin/../<target-triple>/lib` directory.
+-static bool detectGCCToolchainAdjacent(const Driver &D) {
++static bool detectGCCToolchainAdjacent(const Driver &D,
++                                       const llvm::opt::ArgList &Args) {
++  if (!Args.hasArg(options::OPT_fexperimental_gccadjacent))
++    return false;
+   SmallString<128> GCCDir;
+   llvm::sys::path::append(GCCDir, D.Dir, "..", D.getTargetTriple(),
+                           "lib/crt0.o");
+   return llvm::sys::fs::exists(GCCDir);
+ }
+ 
+-// If no sysroot is provided the driver will first attempt to infer it from the
+-// values of `--gcc-install-dir` or `--gcc-toolchain`, which specify the
+-// location of a GCC toolchain.
+-// If neither flag is used, the sysroot defaults to either:
++// If no sysroot is provided, the driver will look for clang-runtimes first
++// unless clang is passed --gcc-install-dir, --gcc-toolchain, or the
++// -fexperimental-gccadjacent flags.
++// If no flag is used, the sysroot defaults to either:
+ //    - `bin/../<target-triple>`
+ //    - `bin/../lib/clang-runtimes/<target-triple>`
+ //
+-// To use the `clang-runtimes` path, ensure that `../<target-triple>/lib/crt0.o`
+-// does not exist relative to the driver.
+ std::string BareMetal::computeSysRoot() const {
+   // Use Baremetal::sysroot if it has already been set.
+   if (!SysRoot.empty())
+@@ -179,7 +182,7 @@ std::string BareMetal::computeSysRoot() const {
+   if (IsGCCInstallationValid) {
+     llvm::sys::path::append(inferredSysRoot, GCCInstallation.getParentLibPath(),
+                             "..", GCCInstallation.getTriple().str());
+-  } else if (detectGCCToolchainAdjacent(D)) {
++  } else if (IsGCCToolchainAdjacent) {
+     // Use the triple as provided to the driver. Unlike the parsed triple
+     // this has not been normalized to always contain every field.
+     llvm::sys::path::append(inferredSysRoot, D.Dir, "..", D.getTargetTriple());
+@@ -194,7 +197,7 @@ std::string BareMetal::computeSysRoot() const {
+ 
+ std::string BareMetal::getCompilerRTPath() const {
+   const Driver &D = getDriver();
+-  if (IsGCCInstallationValid || detectGCCToolchainAdjacent(getDriver())) {
++  if (IsGCCInstallationValid || IsGCCToolchainAdjacent) {
+     SmallString<128> Path(D.ResourceDir);
+     llvm::sys::path::append(Path, "lib");
+     return std::string(Path.str());
+@@ -219,6 +222,7 @@ BareMetal::BareMetal(const Driver &D, const llvm::Triple &Triple,
+                      const ArgList &Args)
+     : Generic_ELF(D, Triple, Args) {
+   IsGCCInstallationValid = initGCCInstallation(Triple, Args);
++  IsGCCToolchainAdjacent = detectGCCToolchainAdjacent(D, Args);
+   std::string ComputedSysRoot = computeSysRoot();
+   if (IsGCCInstallationValid) {
+     if (!isRISCVBareMetal(Triple))
+@@ -340,7 +344,7 @@ void BareMetal::findMultilibs(const Driver &D, const llvm::Triple &Triple,
+     Multilibs = Result.Multilibs;
+     MultilibMacroDefines.append(CustomFlagMacroDefines.begin(),
+                                 CustomFlagMacroDefines.end());
+-  } else if (isRISCVBareMetal(Triple) && !detectGCCToolchainAdjacent(D)) {
++  } else if (isRISCVBareMetal(Triple) && !IsGCCToolchainAdjacent) {
+     if (findRISCVMultilibs(D, Triple, Args, Result)) {
+       SelectedMultilibs = Result.SelectedMultilibs;
+       Multilibs = Result.Multilibs;
+@@ -599,7 +603,7 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
+         crt = "rcrt1.o";
+       CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(crt)));
+     }
+-    if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D)) {
++    if (TC.hasValidGCCInstallation() || TC.isGCCToolchainAdjacent()) {
+       auto RuntimeLib = TC.GetRuntimeLibType(Args);
+       switch (RuntimeLib) {
+       case (ToolChain::RLT_Libgcc): {
+@@ -650,13 +654,12 @@ void baremetal::Linker::ConstructJob(Compilation &C, const JobAction &JA,
+     AddRunTimeLibs(TC, D, CmdArgs, Args);
+     if (!Args.hasArg(options::OPT_nolibc))
+       CmdArgs.push_back("-lc");
+-    if (TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D))
++    if (TC.hasValidGCCInstallation() || TC.isGCCToolchainAdjacent())
+       CmdArgs.push_back("-lgloss");
+     CmdArgs.push_back("--end-group");
+   }
+ 
+-  if ((TC.hasValidGCCInstallation() || detectGCCToolchainAdjacent(D)) &&
+-      NeedCRTs)
++  if ((TC.hasValidGCCInstallation() || TC.isGCCToolchainAdjacent()) && NeedCRTs)
+     CmdArgs.push_back(Args.MakeArgString(TC.GetFilePath(CRTEnd)));
+ 
+   // The R_ARM_TARGET2 relocation must be treated as R_ARM_REL32 on arm*-*-elf
+diff --git a/clang/lib/Driver/ToolChains/BareMetal.h b/clang/lib/Driver/ToolChains/BareMetal.h
+index d3d415b337a0..8e8607e0bc1e 100644
+--- a/clang/lib/Driver/ToolChains/BareMetal.h
++++ b/clang/lib/Driver/ToolChains/BareMetal.h
+@@ -39,6 +39,7 @@ public:
+   bool initGCCInstallation(const llvm::Triple &Triple,
+                            const llvm::opt::ArgList &Args);
+   bool hasValidGCCInstallation() const { return IsGCCInstallationValid; }
++  bool isGCCToolchainAdjacent() const { return IsGCCToolchainAdjacent; }
+   bool isBareMetal() const override { return true; }
+   bool isCrossCompiling() const override { return true; }
+   bool HasNativeLLVMSupport() const override { return true; }
+@@ -89,6 +90,7 @@ private:
+ 
+   std::string SysRoot;
+ 
++  bool IsGCCToolchainAdjacent;
+   bool IsGCCInstallationValid;
+ 
+   SmallVector<std::string> MultilibMacroDefines;
+-- 
+2.54.0.929.g9b7fa37559-goog
+

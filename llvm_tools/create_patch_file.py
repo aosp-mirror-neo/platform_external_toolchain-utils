@@ -35,12 +35,6 @@ from llvm_tools import llvm_next
 from llvm_tools import patch_utils
 
 
-# Don't allow patches to have file names longer than this number of
-# characters. We should have some number here as titles
-# can be broken, but we also need it long enough to ensure
-# unique file names.
-_MAX_PATCH_NAME_LENGTH = 128
-
 # Default branch pattern to look for.
 _DEFAULT_BRANCH_PATTERN = "*/chromeos/llvm-*"
 
@@ -89,40 +83,6 @@ class BranchContext:
         return [p.entry for p in self.patch_entry_combos]
 
 
-def _maybe_string_to_int(s: str | None) -> int | None:
-    if s is None:
-        return None
-    if s.lower() in {"null", "none"}:
-        return None
-    return int(s)
-
-
-def _get_platforms(commit_metadata: dict[str, str]) -> list[str]:
-    return sorted(
-        p.strip()
-        for p in commit_metadata.get("patch.platforms", "chromiumos").split(",")
-        if p.strip()
-    )
-
-
-def _get_metadata_info(commit_metadata: dict[str, str]) -> list[str]:
-    return [
-        p.strip()
-        for p in commit_metadata.get("patch.metadata.info", "").split(",")
-        if p.strip()
-    ]
-
-
-def _get_metadata_author(commit_metadata: dict[str, str]) -> str:
-    return commit_metadata.get("patch.metadata.author", "").strip()
-
-
-def _get_metadata_original_sha(
-    commit_metadata: dict[str, str],
-) -> str | None:
-    return commit_metadata.get("patch.metadata.original_sha")
-
-
 @functools.lru_cache
 def _translate_sha_to_rev_cached(
     llvm_config: git_llvm_rev.LLVMConfig, sha: str
@@ -149,8 +109,6 @@ def create_branch_contexts(
 ) -> list[BranchContext]:
     """Package all LLVM branch data into an easily usable BranchContext."""
 
-    # Compile this regex outside of the O(nm) loop.
-    replace_regex = re.compile(r"\W+")
     entries: list[BranchContext] = []
     for branch_ref in patch_context.branch_refs:
         merge_base = git_utils.merge_base(
@@ -205,37 +163,11 @@ def create_branch_contexts(
             # This information is sometimes available in the metadata.
             # We usually try to use the original_sha as the filename too,
             # when available.
-            original_sha = _get_metadata_original_sha(commit_metadata)
-            if commit_metadata.get("patch.cherry", "false").lower() == "true":
-                if original_sha:
-                    rel_patch_path = f"cherry/{original_sha}.patch"
-                else:
-                    rel_patch_path = f"cherry/{commit_sha}.patch"
-            else:
-                cleaned_name = replace_regex.sub("-", subject)[
-                    : _MAX_PATCH_NAME_LENGTH + 1
-                ]
-                rel_patch_path = f"{cleaned_name}.patch"
-            metadata = {
-                "info": _get_metadata_info(commit_metadata),
-                "title": subject,
-                "author": _get_metadata_author(commit_metadata),
-            }
-            if original_sha:
-                metadata["original_sha"] = original_sha
-            entry = patch_utils.PatchEntry(
+            entry = patch_utils.PatchEntry.from_commit_metadata(
                 workdir=patch_context.patch_dir,
-                metadata=metadata,
-                rel_patch_path=rel_patch_path,
-                platforms=_get_platforms(commit_metadata),
-                version_range={
-                    "from": _maybe_string_to_int(
-                        commit_metadata.get("patch.version_range.from")
-                    ),
-                    "until": _maybe_string_to_int(
-                        commit_metadata.get("patch.version_range.until")
-                    ),
-                },
+                commit_metadata=commit_metadata,
+                subject=subject,
+                commit_sha=commit_sha,
             )
             this_branch_combos.append(PatchCombo(entry, patch_raw_data))
         entries.append(
@@ -485,5 +417,6 @@ def main(argv: list[str]) -> None:
             f,
             indent=2,
             sort_keys=True,
+            ensure_ascii=False,
         )
         f.write("\n")

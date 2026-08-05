@@ -12,11 +12,22 @@ from pathlib import Path
 import shlex
 import subprocess
 import tempfile
-from typing import Any, Sequence
+from typing import Any, Self, Sequence
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
 
+
+# GeminiState version number.
+#
+# Bump this number if:
+# - Prompts for identifying reverts or "dont care"s has changed significantly
+# - The model evaluating prompts has changed significantly
+# - We want to re-run inference on all known reverts for any other reason.
+#
+# See comments in GeminiState.from_json for a more thorough description of _why_
+# this works as it does.
+CURRENT_VERSION = 1
 
 # How long to wait before discarding inference results for SHAs that are no
 # longer referenced.
@@ -43,6 +54,8 @@ class GeminiRevertInference:
     )
     is_revert: bool = False
     is_reland: bool = False
+    chromeos_doesnt_care: bool = False
+    android_doesnt_care: bool = False
 
     def to_json(self) -> dict[str, Any] | None:
         # The vast majority of answers Gemini gives will be `empty`. To reduce
@@ -57,19 +70,24 @@ class GeminiRevertInference:
     ) -> "GeminiRevertInference":
         if json_object is None:
             return _EMPTY_INFERENCE
+
         return cls(
             reverted_shas=tuple(json_object["reverted_shas"]),
             reverted_prs=tuple(json_object["reverted_prs"]),
             is_revert=json_object["is_revert"],
             is_reland=json_object["is_reland"],
+            chromeos_doesnt_care=json_object["chromeos_doesnt_care"],
+            android_doesnt_care=json_object["android_doesnt_care"],
         )
 
     def is_empty(self) -> bool:
-        return not (
-            self.is_revert
-            or self.is_reland
-            or self.reverted_shas
-            or self.reverted_prs
+        return (
+            not self.is_revert
+            and not self.is_reland
+            and not self.reverted_shas
+            and not self.reverted_prs
+            and not self.chromeos_doesnt_care
+            and not self.android_doesnt_care
         )
 
 
@@ -160,18 +178,54 @@ class GeminiState:
     #    these cases.
     important_shas: dict[str, int] = dataclasses.field(default_factory=dict)
 
+    version: int = CURRENT_VERSION
+
     @classmethod
-    def from_json(cls, json_object: Any) -> "GeminiState":
+    def from_json(cls, json_object: Any) -> Self:
+        version = json_object.get("version", 0)
+        revert_status = {
+            k: GeminiRevertInference.from_json(v)
+            for k, v in json_object.get("revert_status", {}).items()
+        }
+
+        # This functionality is the result of a series of practical compromises:
+        # 1. We do not try to _automatically_ bump this because running
+        #    inference on tons of commits is expensive. A small, targeted tweak
+        #    to Gemini's inference is unlikely to warrant this.
+        # 2. When this _is_ bumped, it's most likely because
+        #    chromeos_doesnt_care/android_doesnt_care have changed in a
+        #    meaningful way. Rerunning inference on non-reverts is pointless in
+        #    this case.
+        # 3. Reverts make up 1/25th of the commits we analyze, and our state
+        #    file can grow to have 50K+ entries.
+        #
+        # IOW, this is a convenience feature for the happy path. If one desires
+        # a more thorough invalidation, they'll need to do more than increment a
+        # number.
+        if version != CURRENT_VERSION:
+            logging.info(
+                "GeminiState version changed from %d to %d; invalidating "
+                "non-empty results",
+                version,
+                CURRENT_VERSION,
+            )
+            revert_status = {
+                k: v for k, v in revert_status.items() if v.is_empty()
+            }
+
         return cls(
-            revert_status={
-                k: GeminiRevertInference.from_json(v)
-                for k, v in json_object.get("revert_status", {}).items()
-            },
+            revert_status=revert_status,
             important_shas=json_object.get("important_shas", {}),
         )
 
     def to_json(self) -> dict[str, Any]:
-        return dataclasses.asdict(self)
+        return {
+            "revert_status": {
+                k: v.to_json() for k, v in self.revert_status.items()
+            },
+            "important_shas": self.important_shas,
+            "version": self.version,
+        }
 
     def cached_inference_result_for(
         self, sha: str
@@ -324,6 +378,8 @@ def _normalize_gemini_result(
         reverted_prs=tuple(dedup_prs),
         is_revert=True,
         is_reland=inference.is_reland,
+        chromeos_doesnt_care=inference.chromeos_doesnt_care,
+        android_doesnt_care=inference.android_doesnt_care,
     )
 
 

@@ -11,7 +11,10 @@ Note that this needs to be run from inside a ChromeOS tree. Otherwise, the
 import argparse
 import enum
 import logging
+from pathlib import Path
 import subprocess
+
+from cros_utils import cros_paths
 
 
 class GerritSearchType(enum.Enum):
@@ -33,7 +36,7 @@ def gerrit_cmd(internal: bool) -> list[str]:
 
 
 def enumerate_old_cls(
-    old_days: int, search_type: GerritSearchType
+    old_days: int, search_type: GerritSearchType, chromeos_root: Path
 ) -> list[int]:
     """Returns CL numbers that haven't been updated in `old_days` days."""
     search_string = f"owner:me status:open age:{old_days}d"
@@ -50,6 +53,7 @@ def enumerate_old_cls(
     is_internal = search_type.is_internal()
     stdout = subprocess.run(
         gerrit_cmd(is_internal) + ["--raw", "search", search_string],
+        cwd=chromeos_root,
         check=True,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
@@ -66,9 +70,10 @@ def enumerate_old_cls(
     return sorted(int(x) for x in lines)
 
 
-def abandon_cls(cls: list[int], internal: bool) -> None:
+def abandon_cls(cls: list[int], internal: bool, chromeos_root: Path) -> None:
     subprocess.run(
         gerrit_cmd(internal) + ["abandon"] + [str(x) for x in cls],
+        cwd=chromeos_root,
         check=True,
         stdin=subprocess.DEVNULL,
     )
@@ -78,8 +83,9 @@ def detect_and_abandon_cls(
     old_days: int,
     dry_run: bool,
     search_type: GerritSearchType,
+    chromeos_root: Path,
 ) -> None:
-    old_cls = enumerate_old_cls(old_days, search_type)
+    old_cls = enumerate_old_cls(old_days, search_type, chromeos_root)
     if not old_cls:
         logging.info("No CLs less than %d days old found; quit", old_days)
         return
@@ -93,7 +99,7 @@ def detect_and_abandon_cls(
         logging.info("--dry-run specified; skip the actual abandon part")
         return
 
-    abandon_cls(old_cls, is_internal)
+    abandon_cls(old_cls, is_internal, chromeos_root)
 
 
 def main(argv: list[str]) -> None:
@@ -132,21 +138,26 @@ def main(argv: list[str]) -> None:
     )
     opts = parser.parse_args(argv)
 
+    chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
+
     logging.info("Checking for external, non-LLVM CLs...")
     detect_and_abandon_cls(
         old_days=opts.old_days,
         dry_run=opts.dry_run,
         search_type=GerritSearchType.EXTERNAL_NO_LLVM,
+        chromeos_root=chromeos_root,
     )
     logging.info("Checking for external LLVM CLs...")
     detect_and_abandon_cls(
         old_days=opts.old_days_llvm,
         dry_run=opts.dry_run,
         search_type=GerritSearchType.LLVM_ONLY,
+        chromeos_root=chromeos_root,
     )
     logging.info("Checking for internal CLs...")
     detect_and_abandon_cls(
         old_days=opts.old_days,
         dry_run=opts.dry_run,
         search_type=GerritSearchType.INTERNAL_ONLY,
+        chromeos_root=chromeos_root,
     )

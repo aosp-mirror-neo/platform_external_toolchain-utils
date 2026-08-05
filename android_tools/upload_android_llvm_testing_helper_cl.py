@@ -17,15 +17,24 @@ import logging
 from pathlib import Path
 import re
 import subprocess
+import sys
+import textwrap
 
 from android_tools import android_paths
+from android_tools import bp_tools
 from cros_utils import git_utils
 
 
-_ANDROID_INTERNAL_REMOTE = "goog"
+_HIDL_MARKER_FLAG = "-D_ANDROID_HIDL_BUILD=1"
 
-_COMMIT_MESSAGE = """\
-DO NOT COMMIT: android-llvm-testing helper CL
+_ANDROID_INTERNAL_REMOTE = "goog"
+_SUPPRESS_WARNING_FLAG = "-D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout"
+_OPT_LEVEL_FLAG_RE = re.compile(r'^(\s+)"-O.",\s*$')
+
+
+def generate_commit_message(repo_name: str) -> str:
+    return f"""\
+DO NOT COMMIT: android-llvm-testing helper CL ({repo_name})
 
 This CL was automatically generated to facilitate LLVM testing.
 The script that generated this is located at
@@ -34,9 +43,6 @@ external/toolchain-utils/android_tools/upload_llvm_testing_helper_cl.py.
 Bug: None
 Test: None
 """
-
-_SUPPRESS_WARNING_FLAG = "-D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout"
-_OPT_LEVEL_FLAG_RE = re.compile(r'^(\s+)"-O.",\s*$')
 
 
 def add_flag_after_optimization_level(file_contents: str, flag: str) -> str:
@@ -125,7 +131,52 @@ def create_helper_cl_commit_in_worktree_of(soong_repo: Path, tot: bool) -> str:
                 cwd=worktree,
                 encoding="utf-8",
             )
-        return git_utils.commit_all_changes(worktree, _COMMIT_MESSAGE)
+        return git_utils.commit_all_changes(
+            worktree, generate_commit_message(repo_name="soong")
+        )
+
+
+def create_hidl_helper_cl_commit_in_worktree_of(
+    android_tree: Path, hidl_repo: Path, tot: bool
+) -> str:
+    """Creates a commit containing the HIDL helper CL diff. Returns the SHA."""
+    with git_utils.create_worktree(hidl_repo) as worktree:
+        if tot:
+            git_utils.fetch_and_checkout(
+                worktree,
+                remote=_ANDROID_INTERNAL_REMOTE,
+                branch="main",
+            )
+
+        android_bp = worktree / "Android.bp"
+        subprocess.run(
+            (
+                bp_tools.bpmodify_path(android_tree),
+                "-w",
+                "-m",
+                "hidl-module-defaults",
+                "-property",
+                "cflags",
+                "-add-literal",
+                f'"{_HIDL_MARKER_FLAG}"',
+                android_bp,
+            ),
+            check=True,
+            stdin=subprocess.DEVNULL,
+            cwd=worktree,
+            encoding="utf-8",
+        )
+
+        subprocess.run(
+            (bp_tools.bpfmt_path(android_tree), "-w", android_bp),
+            check=True,
+            stdin=subprocess.DEVNULL,
+            cwd=worktree,
+            encoding="utf-8",
+        )
+        return git_utils.commit_all_changes(
+            worktree, generate_commit_message(repo_name="hidl")
+        )
 
 
 def main(argv: list[str]) -> None:
@@ -149,9 +200,23 @@ def main(argv: list[str]) -> None:
         """,
     )
     parser.add_argument(
+        "--autobuild",
+        action="store_true",
+        help="""
+        If passed, needed tooling (e.g., bpmodify) will be automatically built
+        by this script. This may mess with your out/ dir, so is not the default.
+        This does nothing if `--hidl` is not specified.
+        """,
+    )
+    upload_group = parser.add_mutually_exclusive_group()
+    upload_group.add_argument(
         "--no-upload",
         action="store_true",
         help="Commit changes, but don't actually upload them.",
+    )
+    upload_group.add_argument(
+        "--upload-with-topic",
+        help="Upload all CLs applying suppressions using the given topic name.",
     )
     parser.add_argument(
         "--tot",
@@ -160,6 +225,14 @@ def main(argv: list[str]) -> None:
         If passed, modified repos will be `git fetch`ed and this script will
         work on their main branches, rather than working on the version you
         have locally.
+        """,
+    )
+    parser.add_argument(
+        "--hidl",
+        action="store_true",
+        help="""
+        Also upload a HIDL warning helper CL, which helps identify builds of
+        HIDL-generated C/C++ files.
         """,
     )
     opts = parser.parse_args(argv)
@@ -183,20 +256,69 @@ def main(argv: list[str]) -> None:
     if not soong_repo.is_dir():
         raise ValueError(f"{soong_repo} is not a directory.")
 
+    hidl_repo = android_tree / android_paths.BUILD_HIDL_SUBDIR
+    if opts.hidl and not hidl_repo.is_dir():
+        raise ValueError(f"{hidl_repo} is not a directory.")
+
+    if opts.hidl and bp_tools.need_autobuild(android_tree):
+        if not opts.autobuild:
+            sys.exit(
+                textwrap.dedent(
+                    f"""\
+                    No bpmodify/bpfmt binary and --autobuild not specified. This
+                    tooling is needed for creating the hidl CL. Please either
+                    build these in your android tree at {android_tree} via `m
+                    blueprint_tools`, or pass --autobuild (though note that
+                    `--autobuild` chooses its own lunch combo, so may mess with
+                    your out/ dir).
+                    """
+                ).rstrip()
+            )
+        logging.info(
+            "Automatically building bp tooling; this may take a few minutes..."
+        )
+        bp_tools.autobuild_bp_tooling(android_tree)
+
+    logging.info("Creating soong commit...")
     helper_sha = create_helper_cl_commit_in_worktree_of(
         soong_repo, tot=opts.tot
     )
+
+    hidl_sha = None
+    if opts.hidl:
+        logging.info("Creating hidl commit...")
+        hidl_sha = create_hidl_helper_cl_commit_in_worktree_of(
+            android_tree, hidl_repo, tot=opts.tot
+        )
+
     if opts.no_upload:
+        hidl_ext = ""
+        if hidl_sha:
+            hidl_ext = f", nor hidl commit ({hidl_sha})"
         logging.info(
-            "--no-upload specified; not uploading new commit (%s).",
+            "--no-upload specified; not uploading new soong commit (%s)%s.",
             helper_sha,
+            hidl_ext,
         )
         return
 
+    logging.info("Uploading soong CL...")
     git_utils.upload_to_gerrit(
         git_repo=soong_repo,
         remote=_ANDROID_INTERNAL_REMOTE,
         branch="main",
         ref=helper_sha,
         wip=True,
+        topic=opts.upload_with_topic,
     )
+
+    if hidl_sha:
+        logging.info("Uploading hidl CL...")
+        git_utils.upload_to_gerrit(
+            git_repo=hidl_repo,
+            remote=_ANDROID_INTERNAL_REMOTE,
+            branch="main",
+            ref=hidl_sha,
+            wip=True,
+            topic=opts.upload_with_topic,
+        )

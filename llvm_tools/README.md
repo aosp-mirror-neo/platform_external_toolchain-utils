@@ -2,14 +2,14 @@
 
 ## Overview
 
-These scripts helps automate tasks such as updating the LLVM next hash,
-determing whether a new patch applies correctly, and patch management.
+These scripts help automate tasks such as updating the LLVM next hash,
+determining whether a new patch applies correctly, and patch management.
 
 In addition, there are scripts that automate the process of retrieving the
 git hash of LLVM from either google3, top of trunk, or for a specific SVN
 version.
 
-**NOTE: All scripts must must be run outside the chroot**
+**NOTE: All scripts must be run outside the chroot**
 
 **NOTE: sudo must be permissive (i.e. **`cros_sdk`** should NOT prompt for a
 password)**
@@ -180,12 +180,6 @@ $ ./patch_manager.py \
   --continue_bisection True
 ```
 
-## LLVM Bisection
-
-### `llvm_simple_bisect.py`
-
-TODO(ryanbeltran): Please write some docs here.
-
 ## Other Helpful Scripts
 
 ### `get_llvm_hash.py`
@@ -317,47 +311,6 @@ PYTHONPATH=../ ./nightly_revert_checker.py \
   --llvm_dir llvm-project-copy \
   --chromeos_dir ../../../../
 ```
-
-### `bisect_clang_crashes.py`
-
-This script downloads clang crash diagnoses from
-gs://chromeos-toolchain-artifacts/clang-crash-diagnoses and sends them to 4c for
-bisection.
-
-Usage example:
-
-```
-$ ./bisect_clang_crashes.py --4c 4c-cli --state_file ./output/state.json
-```
-
-The above command downloads the artifacts of clang crash diagnoses and send them
-to 4c server for bisection. The summary of submitted jobs will be saved in
-output/state.json under the current path. The output directory will be created
-automatically if it does not exist yet. To get more information of the submitted
-jobs, please refer to go/4c-cli.
-
-### `upload_lexan_crashes_to_forcey.py`
-
-This script downloads clang crash diagnoses from Lexan's bucket and sends them
-to 4c for bisection.
-
-Usage example:
-
-```
-$ ./upload_lexan_crashes_to_forcey.py --4c 4c-cli \
-    --state_file ./output/state.json
-```
-
-The above command downloads the artifacts of clang crash diagnoses and send them
-to 4c server for bisection. The summary of submitted jobs will be saved in
-output/state.json under the current path. The output directory will be created
-automatically if it does not exist yet. To get more information of the submitted
-jobs, please refer to go/4c-cli.
-
-Note that it's recommended to 'seed' the state file with a most recent upload
-date. This can be done by running this tool *once* with a `--last_date` flag.
-This flag has the script override whatever's in the state file (if anything) and
-start submitting all crashes uploaded starting at the given day.
 
 ### `werror_logs.py`
 

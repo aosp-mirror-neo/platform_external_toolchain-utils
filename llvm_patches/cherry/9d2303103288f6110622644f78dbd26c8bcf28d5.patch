@@ -1,0 +1,148 @@
+From 2fd28eb50f358c9122bcb2853646fcb9f8366473 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Thu, 4 Jun 2026 14:41:42 -0600
+Subject: [PATCH] [libc++] Only make comparators transparent in __tree if they
+ don't cause a conversion (#179453)
+
+We're currently unwrapping `less<T>` even if the `key_type` isn't `T`.
+This causes the removal of an implicit conversion to `const T&` if the
+types mismatch. Making `less<T>` transparent in that case changes
+overload resolution and makes it fail potentially.
+
+Fixes #179319
+
+patch.cherry: true
+patch.metadata.author: Nikolas Klauser <nikolasklauser@berlin.de>
+patch.metadata.original_sha: 9d2303103288f6110622644f78dbd26c8bcf28d5
+patch.platforms: chromiumos
+patch.version_range.from: 596125
+patch.version_range.until: 606550
+
+BUG=b:520067203
+TEST=sudo emerge dev-util/bazel
+
+---
+ libcxx/include/__functional/operations.h       |  4 ++--
+ libcxx/include/__tree                          |  5 +++--
+ .../include/__type_traits/make_transparent.h   | 18 +++++++++++-------
+ libcxx/include/map                             |  4 ++--
+ .../associative/map/map.ops/find.pass.cpp      | 12 ++++++++++++
+ 5 files changed, 30 insertions(+), 13 deletions(-)
+
+diff --git a/libcxx/include/__functional/operations.h b/libcxx/include/__functional/operations.h
+index 7f315ca851c0..c0e719bb581b 100644
+--- a/libcxx/include/__functional/operations.h
++++ b/libcxx/include/__functional/operations.h
+@@ -380,7 +380,7 @@ struct less<void> {
+ };
+ 
+ template <class _Tp>
+-struct __make_transparent<less<_Tp> > {
++struct __make_transparent<_Tp, less<_Tp> > {
+   using type _LIBCPP_NODEBUG = less<>;
+ };
+ 
+@@ -478,7 +478,7 @@ template <class _Tp, class _Up>
+ inline const bool __desugars_to_v<__greater_tag, greater<>, _Tp, _Up> = true;
+ 
+ template <class _Tp>
+-struct __make_transparent<greater<_Tp>> {
++struct __make_transparent<_Tp, greater<_Tp>> {
+   using type _LIBCPP_NODEBUG = greater<>;
+ };
+ 
+diff --git a/libcxx/include/__tree b/libcxx/include/__tree
+index 694796922c91..f3d7c8ccd897 100644
+--- a/libcxx/include/__tree
++++ b/libcxx/include/__tree
+@@ -1793,8 +1793,9 @@ __tree<_Tp, _Compare, _Allocator>::__find_equal(const _Key& __v) {
+   }
+ 
+   __node_base_pointer* __node_ptr = __root_ptr();
+-  auto&& __transparent            = std::__as_transparent(value_comp());
+-  auto __comp = __lazy_synth_three_way_comparator<__make_transparent_t<_Compare>, _Key, value_type>(__transparent);
++  auto&& __transparent            = std::__as_transparent<_Key>(value_comp());
++  auto __comp =
++      __lazy_synth_three_way_comparator<__make_transparent_t<_Key, _Compare>, _Key, value_type>(__transparent);
+ 
+   while (true) {
+     auto __comp_res = __comp(__v, __nd->__get_value());
+diff --git a/libcxx/include/__type_traits/make_transparent.h b/libcxx/include/__type_traits/make_transparent.h
+index 4d3207a807fa..c2edf126d499 100644
+--- a/libcxx/include/__type_traits/make_transparent.h
++++ b/libcxx/include/__type_traits/make_transparent.h
+@@ -24,23 +24,27 @@ _LIBCPP_BEGIN_NAMESPACE_STD
+ // `less<>` from `less<T>`. This is useful in cases where conversions can be avoided (e.g. a string literal to a
+ // std::string).
+ 
+-template <class _Comparator>
++template <class _Tp, class _Comparator>
+ struct __make_transparent {
+   using type _LIBCPP_NODEBUG = _Comparator;
+ };
+ 
+-template <class _Comparator>
+-using __make_transparent_t _LIBCPP_NODEBUG = typename __make_transparent<_Comparator>::type;
++template <class _Tp, class _Comparator>
++using __make_transparent_t _LIBCPP_NODEBUG = typename __make_transparent<_Tp, _Comparator>::type;
+ 
+-template <class _Comparator, __enable_if_t<is_same<_Comparator, __make_transparent_t<_Comparator> >::value, int> = 0>
++template <class _Tp,
++          class _Comparator,
++          __enable_if_t<is_same<_Comparator, __make_transparent_t<_Tp, _Comparator> >::value, int> = 0>
+ _LIBCPP_HIDE_FROM_ABI _Comparator& __as_transparent(_Comparator& __comp) {
+   return __comp;
+ }
+ 
+-template <class _Comparator, __enable_if_t<!is_same<_Comparator, __make_transparent_t<_Comparator> >::value, int> = 0>
+-_LIBCPP_HIDE_FROM_ABI __make_transparent_t<_Comparator> __as_transparent(_Comparator&) {
++template <class _Tp,
++          class _Comparator,
++          __enable_if_t<!is_same<_Comparator, __make_transparent_t<_Tp, _Comparator> >::value, int> = 0>
++_LIBCPP_HIDE_FROM_ABI __make_transparent_t<_Tp, _Comparator> __as_transparent(_Comparator&) {
+   static_assert(is_empty<_Comparator>::value);
+-  return __make_transparent_t<_Comparator>();
++  return __make_transparent_t<_Tp, _Comparator>();
+ }
+ 
+ _LIBCPP_END_NAMESPACE_STD
+diff --git a/libcxx/include/map b/libcxx/include/map
+index cc8b8769189d..21bd697d2cee 100644
+--- a/libcxx/include/map
++++ b/libcxx/include/map
+@@ -668,8 +668,8 @@ public:
+ };
+ 
+ template <class _Key, class _MapValueT, class _Compare>
+-struct __make_transparent<__map_value_compare<_Key, _MapValueT, _Compare> > {
+-  using type _LIBCPP_NODEBUG = __map_value_compare<_Key, _MapValueT, __make_transparent_t<_Compare> >;
++struct __make_transparent<_Key, __map_value_compare<_Key, _MapValueT, _Compare> > {
++  using type _LIBCPP_NODEBUG = __map_value_compare<_Key, _MapValueT, __make_transparent_t<_Key, _Compare> >;
+ };
+ 
+ #  if _LIBCPP_STD_VER >= 14
+diff --git a/libcxx/test/std/containers/associative/map/map.ops/find.pass.cpp b/libcxx/test/std/containers/associative/map/map.ops/find.pass.cpp
+index 63dbcda51280..85811046c004 100644
+--- a/libcxx/test/std/containers/associative/map/map.ops/find.pass.cpp
++++ b/libcxx/test/std/containers/associative/map/map.ops/find.pass.cpp
+@@ -222,6 +222,18 @@ int main(int, char**) {
+     assert(r == std::next(m.begin(), 8));
+   }
+ #endif
++  { // Make sure we only make the comparator transparent if it's not converting the arguments
++    struct S {
++      int i_;
++
++      S(int i) : i_(i) {}
++      bool operator<(S lhs) const { return lhs.i_ < i_; }
++    };
++    // less<S> causes an implicit conversion from reference_wrapper<S> to const S&, making the `<` lookup succeed
++    std::map<std::reference_wrapper<S>, void*, std::less<S> > m;
++    S v(1);
++    assert(m.find(v) == m.end());
++  }
+ 
+   return 0;
+ }
+-- 
+2.39.5

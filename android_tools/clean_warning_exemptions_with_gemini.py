@@ -419,10 +419,6 @@ def run_gemini_on_file(
         gemini_run_result = subprocess.run(
             (
                 "gemini",
-                # TODO(b/462692566): Gemini 3 is new, and has a lower rate-limit
-                # (in requests per day) than 2.5. Prefer 2.5 until that
-                # improves.
-                "--model=gemini-2.5-pro",
                 # This isn't an interactive session; approve all edits, but
                 # stop short of running anything else.
                 "--approval-mode=auto_edit",

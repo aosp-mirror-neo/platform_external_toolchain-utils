@@ -1,0 +1,128 @@
+From 5ed875a06cb0a6d543f719ad72df2a1660e42cb9 Mon Sep 17 00:00:00 2001
+From: Gabriele Mondada <gab@ijk.ch>
+Date: Sat, 28 Feb 2026 21:13:18 +0100
+Subject: [BACKPORT] [lldb][lldb-server] Fix zip file lookup ignoring last entry
+ in the zip file (#173966)
+
+Command qModuleInfo (GDB server protocol) can be used to request
+metadata of shared libraries stored in a ZIP archive on the target. This
+is typically used for retrieving SO files bundled in a APK file on
+Android.
+
+Requesting the last entry in the ZIP file often fails because of a bug
+in the entry search mechanism. This PR fixes this.
+
+NOTES:
+* The bug appears only if the entry in the zip file has no extra field
+or comment
+* This is part on an effort to get lldb working for debugging Swift on
+Android: https://github.com/swiftlang/llvm-project/issues/10831
+---
+[nd: note the upstream commit adds a binary file,
+zip-test-no-extras.zip. I had to drop that because our build scripts use
+GNU patch to apply this diff, and GNU patch does not support git style
+binary diffs. Also dropped the corresponding cmake change, and unit test
+change.]
+
+ lldb/source/Utility/ZipFile.cpp               |   2 +-
+ lldb/unittests/Host/common/CMakeLists.txt     |   1 +
+ .../Host/common/Inputs/zip-test-no-extras.zip | Bin 0 -> 3950 bytes
+ .../Host/common/ZipFileResolverTest.cpp       |  50 ++++++++++++------
+ 4 files changed, 37 insertions(+), 16 deletions(-)
+ create mode 100644 lldb/unittests/Host/common/Inputs/zip-test-no-extras.zip
+
+diff --git a/lldb/source/Utility/ZipFile.cpp b/lldb/source/Utility/ZipFile.cpp
+index b8ed956cbfcb..e47c690e65b0 100644
+--- a/lldb/source/Utility/ZipFile.cpp
++++ b/lldb/source/Utility/ZipFile.cpp
+@@ -144,7 +144,7 @@ bool FindFile(lldb::DataBufferSP zip_data, const EocdRecord *eocd,
+     // Sanity check the file name values.
+     auto file_name = reinterpret_cast<const char *>(cd + 1);
+     size_t file_name_length = cd->file_name_length;
+-    if (file_name + file_name_length >= reinterpret_cast<const char *>(eocd) ||
++    if (file_name + file_name_length > reinterpret_cast<const char *>(eocd) ||
+         file_name_length == 0)
+       return false;
+ 
+diff --git a/lldb/unittests/Host/common/ZipFileResolverTest.cpp b/lldb/unittests/Host/common/ZipFileResolverTest.cpp
+index 12aba3141130..58b652f612ca 100644
+--- a/lldb/unittests/Host/common/ZipFileResolverTest.cpp
++++ b/lldb/unittests/Host/common/ZipFileResolverTest.cpp
+@@ -15,12 +15,30 @@ using namespace lldb_private;
+ using namespace llvm;
+ 
+ namespace {
++struct ZipFileDesc {
++  std::string zip_name;
++  std::string lib_path;
++  size_t lib_offset;
++  size_t lib_size;
++};
++
+ class ZipFileResolverTest : public ::testing::Test {
+   SubsystemRAII<FileSystem> subsystems;
+ };
+ 
+-std::string TestZipPath() {
+-  FileSpec zip_spec(GetInputFilePath("zip-test.zip"));
++std::vector<ZipFileDesc> TestZipFiles() {
++  return {
++      // Simple uncompressed zip file, making use of extra fields
++      {"zip-test.zip", "lib/arm64-v8a/libzip-test.so", 4096, 3600},
++
++      // Simple uncompressed zip file, where the shared library is the last
++      // entry, and the entry has no extra field or comment
++      // ND commented this out {"zip-test-no-extras.zip", "lib/arm64-v8a/libzip-test.so", 140, 3600},
++  };
++}
++
++std::string TestZipPath(const ZipFileDesc &desc) {
++  FileSpec zip_spec(GetInputFilePath(desc.zip_name));
+   FileSystem::Instance().Resolve(zip_spec);
+   return zip_spec.GetPath();
+ }
+@@ -43,7 +61,7 @@ TEST_F(ZipFileResolverTest, ResolveSharedLibraryPathWithNormalFile) {
+ }
+ 
+ TEST_F(ZipFileResolverTest, ResolveSharedLibraryPathWithZipMissing) {
+-  const std::string zip_path = TestZipPath();
++  const std::string zip_path = TestZipPath(TestZipFiles().at(0));
+   const FileSpec file_spec(zip_path + "!/lib/arm64-v8a/libmissing.so");
+ 
+   ZipFileResolver::FileKind file_kind;
+@@ -55,18 +73,20 @@ TEST_F(ZipFileResolverTest, ResolveSharedLibraryPathWithZipMissing) {
+ }
+ 
+ TEST_F(ZipFileResolverTest, ResolveSharedLibraryPathWithZipExisting) {
+-  const std::string zip_path = TestZipPath();
+-  const FileSpec file_spec(zip_path + "!/lib/arm64-v8a/libzip-test.so");
++  for (const auto &zip_desc : TestZipFiles()) {
++    const std::string zip_path = TestZipPath(zip_desc);
++    const FileSpec file_spec(zip_path + "!/" + zip_desc.lib_path);
+ 
+-  ZipFileResolver::FileKind file_kind;
+-  std::string file_path;
+-  lldb::offset_t file_offset;
+-  lldb::offset_t file_size;
+-  ASSERT_TRUE(ZipFileResolver::ResolveSharedLibraryPath(
+-      file_spec, file_kind, file_path, file_offset, file_size));
++    ZipFileResolver::FileKind file_kind;
++    std::string file_path;
++    lldb::offset_t file_offset;
++    lldb::offset_t file_size;
++    ASSERT_TRUE(ZipFileResolver::ResolveSharedLibraryPath(
++        file_spec, file_kind, file_path, file_offset, file_size));
+ 
+-  EXPECT_EQ(file_kind, ZipFileResolver::FileKind::eFileKindZip);
+-  EXPECT_EQ(file_path, zip_path);
+-  EXPECT_EQ(file_offset, 4096UL);
+-  EXPECT_EQ(file_size, 3600UL);
++    EXPECT_EQ(file_kind, ZipFileResolver::FileKind::eFileKindZip);
++    EXPECT_EQ(file_path, zip_path);
++    EXPECT_EQ(file_offset, zip_desc.lib_offset);
++    EXPECT_EQ(file_size, zip_desc.lib_size);
++  }
+ }
+-- 
+2.54.0.545.g6539524ca2-goog
+

@@ -10,6 +10,7 @@ import time
 import unittest
 from unittest import mock
 
+from cros_utils import bugs
 from cros_utils import tiny_render
 from llvm_tools import git_llvm_rev
 from llvm_tools import nightly_revert_checker
@@ -26,130 +27,146 @@ ARBITRARY_LLVM_CONFIG = git_llvm_rev.LLVMConfig(
 class Test(unittest.TestCase):
     """Tests for nightly_revert_checker."""
 
-    def test_email_rendering_works_for_singular_revert(self) -> None:
-        def prettify_sha(sha: str) -> tiny_render.Piece:
-            return "pretty_" + sha
+    def test_bug_rendering_works_for_singular_revert(self) -> None:
+        rev_map = {
+            "sha_main": 100000,
+            "sha_revert_0": 100005,
+            "sha_reverted0": 100001,
+        }
 
-        def get_sha_description(sha: str) -> tiny_render.Piece:
-            return "subject_" + sha
-
-        email = nightly_revert_checker._generate_revert_email(
-            repository_name="${repo}",
-            friendly_name="${name}",
-            sha="${sha}",
-            prettify_sha=prettify_sha,
-            get_sha_description=get_sha_description,
+        title, body = nightly_revert_checker._generate_revert_bug(
+            friendly_name="goog/main",
+            sha="sha_main",
+            get_sha_rev=rev_map.__getitem__,
+            get_sha_description=lambda sha: f"subject_{sha}",
             new_reverts=[
                 nightly_revert_checker.MultiRevert(
-                    revert_sha="${revert_sha}",
-                    reverted_shas=["${reverted_sha}"],
+                    revert_sha="sha_revert_0",
+                    reverted_shas=["sha_reverted0"],
                 )
             ],
         )
 
-        expected_email = nightly_revert_checker._Email(
-            subject="[revert-checker/${repo}] new revert discovered across "
-            "${name}",
-            body=[
-                "It looks like there may be a new revert across ${name} (",
-                "pretty_${sha}",
-                ").",
-                tiny_render.line_break,
-                tiny_render.line_break,
-                "That is:",
-                tiny_render.UnorderedList(
-                    [
-                        [
-                            "pretty_${revert_sha}",
-                            " (appears to revert ",
-                            ["pretty_${reverted_sha}"],
-                            "): ",
-                            "subject_${revert_sha}",
-                        ]
-                    ]
-                ),
-                tiny_render.line_break,
-                "PTAL and consider reverting them locally.",
-            ],
+        self.assertEqual(
+            title,
+            "[revert-checker/android] Cherrypick new revert for r100000",
         )
+        expected_body = (
+            "It looks like there may be a new revert across goog/main "
+            "for r100000.\n"
+            "\n"
+            "That is:\n"
+            "  - r100005 (appears to revert r100001): "
+            "subject_sha_revert_0 [sha_revert_0]\n"
+            "\n"
+            "PTAL and cherrypick the revert needed."
+        )
+        self.assertEqual(body, expected_body)
 
-        self.assertEqual(email, expected_email)
+    def test_bug_rendering_works_for_multiple_reverts(self) -> None:
+        rev_map = {
+            "sha_main": 100000,
+            "sha_revert_0": 100002,
+            "sha_reverted0": 100001,
+            "sha_revert_1": 100005,
+            "sha_revert1a": 100003,
+            "sha_revert1b": 100004,
+        }
 
-    def test_email_rendering_works_for_multiple_reverts(self) -> None:
-        def prettify_sha(sha: str) -> tiny_render.Piece:
-            return "pretty_" + sha
-
-        def get_sha_description(sha: str) -> tiny_render.Piece:
-            return "subject_" + sha
-
-        email = nightly_revert_checker._generate_revert_email(
-            repository_name="${repo}",
-            friendly_name="${name}",
-            sha="${sha}",
-            prettify_sha=prettify_sha,
-            get_sha_description=get_sha_description,
+        title, body = nightly_revert_checker._generate_revert_bug(
+            friendly_name="goog/main",
+            sha="sha_main",
+            get_sha_rev=rev_map.__getitem__,
+            get_sha_description=lambda sha: f"subject_{sha}",
             new_reverts=[
                 nightly_revert_checker.MultiRevert(
-                    revert_sha="${revert_sha1}",
-                    reverted_shas=["${reverted_sha1}"],
+                    revert_sha="sha_revert_1",
+                    reverted_shas=["sha_revert1a", "sha_revert1b"],
                 ),
                 nightly_revert_checker.MultiRevert(
-                    revert_sha="${revert_sha2}",
-                    reverted_shas=["${reverted_sha2a}", "${reverted_sha2b}"],
-                ),
-                # Keep this out-of-order to check that we sort based on SHAs
-                nightly_revert_checker.MultiRevert(
-                    revert_sha="${revert_sha0}",
-                    reverted_shas=["${reverted_sha0}"],
+                    revert_sha="sha_revert_0",
+                    reverted_shas=["sha_reverted0"],
                 ),
             ],
         )
 
-        expected_email = nightly_revert_checker._Email(
-            subject="[revert-checker/${repo}] new reverts discovered across "
-            "${name}",
-            body=[
-                "It looks like there may be new reverts across ${name} (",
-                "pretty_${sha}",
-                ").",
-                tiny_render.line_break,
-                tiny_render.line_break,
-                "These are:",
-                tiny_render.UnorderedList(
-                    [
-                        [
-                            "pretty_${revert_sha0}",
-                            " (appears to revert ",
-                            ["pretty_${reverted_sha0}"],
-                            "): ",
-                            "subject_${revert_sha0}",
-                        ],
-                        [
-                            "pretty_${revert_sha1}",
-                            " (appears to revert ",
-                            ["pretty_${reverted_sha1}"],
-                            "): ",
-                            "subject_${revert_sha1}",
-                        ],
-                        [
-                            "pretty_${revert_sha2}",
-                            " (appears to revert ",
-                            [
-                                "pretty_${reverted_sha2a}",
-                                ", ",
-                                "pretty_${reverted_sha2b}",
-                            ],
-                            "): ",
-                            "subject_${revert_sha2}",
-                        ],
-                    ]
-                ),
-                tiny_render.line_break,
-                "PTAL and consider reverting them locally.",
+        self.assertEqual(
+            title,
+            "[revert-checker/android] Cherrypick new reverts for r100000",
+        )
+        expected_body = (
+            "It looks like there may be new reverts across goog/main "
+            "for r100000.\n"
+            "\n"
+            "These are:\n"
+            "  - r100002 (appears to revert r100001): "
+            "subject_sha_revert_0 [sha_revert_0]\n"
+            "  - r100005 (appears to revert r100003, r100004): "
+            "subject_sha_revert_1 [sha_revert_1]\n"
+            "\n"
+            "PTAL and cherrypick the reverts needed."
+        )
+        self.assertEqual(body, expected_body)
+
+    @mock.patch.object(
+        nightly_revert_checker,
+        "locate_new_reverts_across_shas",
+        autospec=True,
+    )
+    @mock.patch.object(
+        nightly_revert_checker,
+        "_generate_revert_bug",
+        autospec=True,
+    )
+    @mock.patch.object(
+        nightly_revert_checker.bugs,
+        "CreateNewBug",
+        autospec=True,
+    )
+    def test_do_file_bugs_files_bug(
+        self,
+        mock_create_new_bug: mock.Mock,
+        mock_gen_bug: mock.Mock,
+        mock_locate: mock.Mock,
+    ) -> None:
+        mock_locate.return_value = (
+            nightly_revert_checker.State(),
+            [
+                nightly_revert_checker.NewRevertInfo(
+                    friendly_name="goog/main",
+                    sha="sha123",
+                    new_reverts=[],
+                )
             ],
         )
+        mock_gen_bug.return_value = ("Bug Title", "Bug Body")
 
-        self.assertEqual(email, expected_email)
+        recipients = nightly_revert_checker._EmailRecipients(
+            well_known=[], direct=["android-llvm-dev@google.com"]
+        )
+
+        nightly_revert_checker.do_file_bugs(
+            is_dry_run=False,
+            llvm_config=ARBITRARY_LLVM_CONFIG,
+            upstream_main_branch="main",
+            repository="android",
+            interesting_shas=[("goog/main", "sha123")],
+            state=nightly_revert_checker.State(),
+            recipients=recipients,
+            gemini_state=None,
+            is_chromeos=False,
+        )
+
+        mock_create_new_bug.assert_called_once_with(
+            component_id=bugs.INTERNAL_ANDROID_COMPONENT,
+            title="Bug Title",
+            body="Bug Body",
+            assignee="android-llvm-bug-triage@google.com",
+            cc=["android-llvm-dev@google.com"],
+            issue_type=bugs.IssueType.PROCESS,
+            priority=bugs.Priority.P4,
+            severity=bugs.Severity.S4,
+        )
 
     def test_sha_prettification_for_email(self) -> None:
         sha = "a" * 40

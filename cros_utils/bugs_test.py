@@ -77,45 +77,42 @@ class Tests(test_helpers.TempDirTestCase):
         self, mock_write_json_file: mock.MagicMock
     ) -> None:
         """Tests CreateNewBug."""
-        test_case_additions: tuple[dict[str, Any], ...] = (
-            {},
-            {
-                "component_id": bugs.WellKnownComponents.CrOSToolchainPublic,
-            },
-            {
-                "assignee": "foo@gbiv.com",
-                "cc": ["bar@baz.com"],
-            },
-            {
-                "parent_bug": 123,
-            },
+        test_cases: tuple[tuple[dict[str, Any], dict[str, Any]], ...] = (
+            # 1. Default test case (defaults to BUG, P2, S2)
+            (
+                {"component_id": 123, "title": "foo", "body": "bar"},
+                {
+                    "component_id": 123,
+                    "subject": "foo",
+                    "body": "bar",
+                    "issue_type": "BUG",
+                    "priority": "P2",
+                    "severity": "S2",
+                },
+            ),
+            # 2. String Enum test case
+            (
+                {
+                    "component_id": 123,
+                    "title": "foo",
+                    "body": "bar",
+                    "issue_type": bugs.IssueType.PROCESS,
+                    "priority": bugs.Priority.P4,
+                    "severity": bugs.Severity.S4,
+                },
+                {
+                    "component_id": 123,
+                    "subject": "foo",
+                    "body": "bar",
+                    "issue_type": "PROCESS",
+                    "priority": "P4",
+                    "severity": "S4",
+                },
+            ),
         )
 
-        for additions in test_case_additions:
-            test_case = {
-                "component_id": 123,
-                "title": "foo",
-                "body": "bar",
-                **additions,
-            }
-
-            bugs.CreateNewBug(**test_case)
-
-            expected_output = {
-                "component_id": test_case["component_id"],
-                "subject": test_case["title"],
-                "body": test_case["body"],
-            }
-
-            if assignee := test_case.get("assignee"):
-                expected_output["assignee"] = assignee
-
-            if cc := test_case.get("cc"):
-                expected_output["cc"] = cc
-
-            if parent_bug := test_case.get("parent_bug"):
-                expected_output["parent_bug"] = parent_bug
-
+        for input_kwargs, expected_output in test_cases:
+            bugs.CreateNewBug(**input_kwargs)
             mock_write_json_file.assert_called_once_with(
                 "FileNewBugRequest",
                 expected_output,
@@ -252,7 +249,7 @@ class Tests(test_helpers.TempDirTestCase):
             component=123,
             assignee="[assignee]",
             parent=321,
-            priority=1,
+            priority=bugs.Priority.P1,
         )
         expected_body = textwrap.dedent(
             """\

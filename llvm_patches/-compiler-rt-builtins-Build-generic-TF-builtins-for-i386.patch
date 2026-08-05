@@ -1,0 +1,73 @@
+From 3be14270fdad0fc8efe618468739c8d1b0823924 Mon Sep 17 00:00:00 2001
+From: Adrian Ratiu <adrian.ratiu@collabora.com>
+Date: Mon, 1 Jun 2026 16:06:29 +0300
+Subject: [PATCH] [compiler-rt][builtins] Build generic TF builtins for i386
+
+GCC >= 15.x forces glibc >= 2.26 to always enable float128 support
+for i386, causing clang builds linking against glibc and compiler-rt
+to fail with undefined symbols like:
+
+ld.lld: error: undefined symbol: __unordtf2
+>>> referenced by printf_fphex.c:123 (../stdio-common/printf_fphex.c:123)
+>>>               printf_fphex.o:(__printf_fphex_buffer) in archive /usr/i686-cros-linux-gnu/usr/lib/libc.a
+>>> referenced by printf_fp.c:222
+>>>               printf_fp.o:(__printf_fp_buffer_1.constprop.0.isra.0) in archive /usr/i686-cros-linux-gnu/usr/lib/libc.a
+
+The generic 128-bit float routines live in GENERIC_TF_SOURCES which
+was not part of the i386 build. They also require __int128, which
+clang does not enable by default on 32-bit x86.
+
+So we add GENERIC_TF_SOURCES to i386_SOURCES and force-enable int128
+for i386 as already done for riscv32 and 32-bit sparc (only when not
+building with GCC), after which the symbols are emitted:
+
+nm libclang_rt.builtins-i386.a | grep -E '__(unordtf2|addtf3|letf2)'
+00000000 T __addtf3
+00000000 T __letf2
+00000000 T __unordtf2
+
+Fixes: #121757
+Based on https://github.com/llvm/llvm-project/pull/122658
+Co-authored-by: zhangtianhao6 <zhangtianhao6@huawei.com>
+
+BUG=b:493144630
+TEST=Local builds against GCC 15 and glibc 2.43; CQ.
+
+patch.cherry: false
+patch.metadata.author: Adrian Ratiu <adrian.ratiu@collabora.com>
+patch.platforms: chromiumos
+patch.version_range.from: 584947
+patch.version_range.until: null
+
+---
+ compiler-rt/lib/builtins/CMakeLists.txt | 8 +++++---
+ 1 file changed, 5 insertions(+), 3 deletions(-)
+
+diff --git a/compiler-rt/lib/builtins/CMakeLists.txt b/compiler-rt/lib/builtins/CMakeLists.txt
+index 1dadb6a810ef..80a7efb3d709 100644
+--- a/compiler-rt/lib/builtins/CMakeLists.txt
++++ b/compiler-rt/lib/builtins/CMakeLists.txt
+@@ -362,6 +362,7 @@ if (NOT MSVC)
+   set(i386_SOURCES
+     ${GENERIC_SOURCES}
+     ${x86_ARCH_SOURCES}
++    ${GENERIC_TF_SOURCES}
+     i386/ashldi3.S
+     i386/ashrdi3.S
+     i386/divdi3.S
+@@ -954,9 +955,10 @@ else ()
+         list(APPEND BUILTIN_CFLAGS_${arch} -fomit-frame-pointer -DCOMPILER_RT_ARMHF_TARGET)
+       endif()
+ 
+-      # For RISCV32, we must force enable int128 for compiling long
+-      # double routines.
+-      if(COMPILER_RT_ENABLE_SOFTWARE_INT128 OR "${arch}" STREQUAL "riscv32")
++      # For RISCV32, 32-bit SPARC and i386, we must force enable int128 for
++      # compiling long double routines.
++      if (COMPILER_RT_ENABLE_SOFTWARE_INT128 OR ("${arch}" MATCHES "riscv32|sparc$|i386"
++        AND NOT CMAKE_COMPILER_IS_GNUCC))
+         list(APPEND BUILTIN_CFLAGS_${arch} -fforce-enable-int128)
+       endif()
+ 
+-- 
+2.39.5

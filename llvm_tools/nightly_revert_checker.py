@@ -20,8 +20,9 @@ import pprint
 import re
 import subprocess
 import time
-from typing import Any, Callable, Iterable, NamedTuple
+from typing import Any, Callable, Iterable, NamedTuple, Self
 
+from cros_utils import bugs
 from cros_utils import email_sender
 from cros_utils import git_utils
 from cros_utils import tiny_render
@@ -56,7 +57,7 @@ class HeadInfo:
     next_notification_timestamp: int
 
     @classmethod
-    def from_json(cls, json_object: Any) -> "HeadInfo":
+    def from_json(cls, json_object: Any) -> Self:
         return cls(**json_object)
 
     def to_json(self) -> Any:
@@ -79,7 +80,7 @@ class State:
     heads: dict[str, HeadInfo] = dataclasses.field(default_factory=dict)
 
     @classmethod
-    def from_json(cls, json_object: Any) -> "State":
+    def from_json(cls, json_object: Any) -> Self:
         return cls(
             seen_reverts=json_object["seen_reverts"],
             last_seen_llvm_shas=json_object.get("last_seen_llvm_shas", {}),
@@ -145,59 +146,59 @@ _Email = NamedTuple(
 )
 
 
-def _generate_revert_email(
-    repository_name: str,
+def _generate_revert_bug(
     friendly_name: str,
     sha: str,
-    prettify_sha: Callable[[str], tiny_render.Piece],
-    get_sha_description: Callable[[str], tiny_render.Piece],
+    get_sha_rev: Callable[[str], int],
+    get_sha_description: Callable[[str], str],
     new_reverts: list[MultiRevert],
-) -> _Email:
-    email_pieces = [
-        "It looks like there may be %s across %s ("
-        % (
-            "a new revert" if len(new_reverts) == 1 else "new reverts",
-            friendly_name,
-        ),
-        prettify_sha(sha),
-        ").",
-        tiny_render.line_break,
-        tiny_render.line_break,
-        "That is:" if len(new_reverts) == 1 else "These are:",
+) -> tuple[str, str]:
+    """Generates title and body for an Android revert bug report."""
+    main_rev = get_sha_rev(sha)
+    revert_word = "revert" if len(new_reverts) == 1 else "reverts"
+
+    title = (
+        f"[revert-checker/android] Cherrypick new {revert_word} for r{main_rev}"
+    )
+
+    if len(new_reverts) == 1:
+        intro = (
+            f"It looks like there may be a new revert across {friendly_name} "
+            f"for r{main_rev}."
+        )
+    else:
+        intro = (
+            f"It looks like there may be new reverts across {friendly_name} "
+            f"for r{main_rev}."
+        )
+    list_header = "That is:" if len(new_reverts) == 1 else "These are:"
+
+    lines = [
+        intro,
+        "",
+        list_header,
     ]
 
-    revert_listing = []
     for revert in sorted(new_reverts, key=lambda r: r.revert_sha):
-        prettified_shas: list[tiny_render.Piece] = []
-        for s in revert.reverted_shas:
-            if prettified_shas:
-                prettified_shas.append(", ")
-            prettified_shas.append(prettify_sha(s))
-
-        revert_listing.append(
-            [
-                prettify_sha(revert.revert_sha),
-                " (appears to revert ",
-                prettified_shas,
-                "): ",
-                get_sha_description(revert.revert_sha),
-            ]
+        revert_rev = get_sha_rev(revert.revert_sha)
+        reverted_revs = ", ".join(
+            f"r{get_sha_rev(s)}" for s in revert.reverted_shas
+        )
+        desc = get_sha_description(revert.revert_sha)
+        short_sha = revert.revert_sha[:12]
+        lines.append(
+            f"  - r{revert_rev} (appears to revert {reverted_revs}): "
+            f"{desc} [{short_sha}]"
         )
 
-    email_pieces.append(tiny_render.UnorderedList(items=revert_listing))
-    email_pieces += [
-        tiny_render.line_break,
-        "PTAL and consider reverting them locally.",
-    ]
-    return _Email(
-        subject="[revert-checker/%s] new %s discovered across %s"
-        % (
-            repository_name,
-            "revert" if len(new_reverts) == 1 else "reverts",
-            friendly_name,
-        ),
-        body=email_pieces,
+    lines.extend(
+        (
+            "",
+            f"PTAL and cherrypick the {revert_word} needed.",
+        )
     )
+
+    return title, "\n".join(lines)
 
 
 _EmailRecipients = NamedTuple(
@@ -265,6 +266,8 @@ def infer_reverts_with_gemini(
     gemini_state: gemini_revert_checker.GeminiState,
     sha: str,
     commit_message: str,
+    *,
+    is_chromeos: bool,
 ) -> revert_checker.CommitMessageReverts:
     empty_result = lambda: revert_checker.CommitMessageReverts(
         potential_shas=[],
@@ -272,11 +275,22 @@ def infer_reverts_with_gemini(
     )
 
     gemini_result = gemini_state.cached_inference_result_for(sha)
+    skip_reason: str | None = None
     if not gemini_result:
         logging.warning("Commit %s not found precached by Gemini", sha)
     elif gemini_result.is_reland:
+        skip_reason = "it's a reland"
+    elif is_chromeos:
+        if gemini_result.chromeos_doesnt_care:
+            skip_reason = "ChromeOS doesn't care"
+    elif gemini_result.android_doesnt_care:
+        skip_reason = "Android doesn't care"
+
+    if skip_reason:
         logging.info(
-            "Skipping reporting of commit %s - Gemini notes it's a reland.", sha
+            "Skipping reporting of commit %s - Gemini notes %s.",
+            sha,
+            skip_reason,
         )
         return empty_result()
 
@@ -379,6 +393,8 @@ def locate_new_reverts_across_shas(
     interesting_shas: list[tuple[str, str]],
     state: State,
     gemini_state: gemini_revert_checker.GeminiState | None,
+    *,
+    is_chromeos: bool,
 ) -> tuple[State, list[NewRevertInfo]]:
     """Locates and returns yet-unseen reverts across `interesting_shas`."""
     new_state = State()
@@ -386,7 +402,7 @@ def locate_new_reverts_across_shas(
 
     if gemini_state:
         infer_reverts = lambda sha, msg: infer_reverts_with_gemini(
-            gemini_state, sha, msg
+            gemini_state, sha, msg, is_chromeos=is_chromeos
         )
     else:
         infer_reverts = None
@@ -510,6 +526,7 @@ def do_cherrypick(
     reviewers: list[str],
     cc: list[str],
     gemini_state: gemini_revert_checker.GeminiState | None,
+    is_chromeos: bool,
 ) -> State:
     def prettify_sha(sha: str) -> tiny_render.Piece:
         rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
@@ -522,6 +539,7 @@ def do_cherrypick(
         interesting_shas,
         state,
         gemini_state=gemini_state,
+        is_chromeos=is_chromeos,
     )
     llvm_config_dir = Path(llvm_config.dir)
 
@@ -819,7 +837,7 @@ def maybe_email_about_stale_heads(
     return True
 
 
-def do_email(
+def do_file_bugs(
     *,
     is_dry_run: bool,
     llvm_config: git_llvm_rev.LLVMConfig,
@@ -829,17 +847,18 @@ def do_email(
     state: State,
     recipients: _EmailRecipients,
     gemini_state: gemini_revert_checker.GeminiState | None,
+    is_chromeos: bool,
 ) -> State:
-    def prettify_sha(sha: str) -> tiny_render.Piece:
-        rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
-        return prettify_sha_for_email(sha, rev)
-
-    def get_sha_description(sha: str) -> tiny_render.Piece:
+    def get_sha_description(sha: str) -> str:
         return subprocess.check_output(
-            ["git", "log", "-n1", "--format=%s", sha],
+            ("git", "log", "-n1", "--format=%s", sha),
             cwd=llvm_config.dir,
+            stdin=subprocess.DEVNULL,
             encoding="utf-8",
         ).strip()
+
+    def get_sha_rev(sha: str) -> int:
+        return git_llvm_rev.translate_sha_to_rev(llvm_config, sha).number
 
     new_state, new_reverts = locate_new_reverts_across_shas(
         llvm_config,
@@ -847,27 +866,40 @@ def do_email(
         interesting_shas,
         state,
         gemini_state=gemini_state,
+        is_chromeos=is_chromeos,
     )
 
     for revert_info in new_reverts:
-        email = _generate_revert_email(
-            repository,
-            revert_info.friendly_name,
-            revert_info.sha,
-            prettify_sha,
-            get_sha_description,
-            revert_info.new_reverts,
+        title, body = _generate_revert_bug(
+            friendly_name=revert_info.friendly_name,
+            sha=revert_info.sha,
+            get_sha_rev=get_sha_rev,
+            get_sha_description=get_sha_description,
+            new_reverts=revert_info.new_reverts,
         )
         if is_dry_run:
             logging.info(
-                "Would send email:\nSubject: %s\nBody:\n%s\n",
-                email.subject,
-                tiny_render.render_text_pieces(email.body),
+                "Would file bug:\nTitle: %s\nBody:\n%s\n",
+                title,
+                body,
             )
         else:
-            logging.info("Sending email with subject %r...", email.subject)
-            _send_revert_email(recipients, email)
-            logging.info("Email sent.")
+            logging.info("Filing bug with title %r...", title)
+            bugs.CreateNewBug(
+                component_id=bugs.INTERNAL_ANDROID_COMPONENT,
+                title=title,
+                body=body,
+                assignee="android-llvm-bug-triage@google.com",
+                cc=recipients.direct,
+                issue_type=bugs.IssueType.PROCESS,
+                priority=bugs.Priority.P4,
+                severity=bugs.Severity.S4,
+            )
+            logging.info("Bug request created.")
+
+    def prettify_sha(sha: str) -> tiny_render.Piece:
+        rev = get_llvm_hash.GetVersionFrom(llvm_config.dir, sha)
+        return prettify_sha_for_email(sha, rev)
 
     maybe_email_about_stale_heads(
         new_state, repository, recipients, prettify_sha, is_dry_run
@@ -925,9 +957,11 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument(
         "action",
-        choices=["cherry-pick", "email", "dry-run"],
-        help="Automatically cherry-pick upstream reverts, send an email, or "
-        "write to stdout.",
+        choices=["cherry-pick", "file-bug", "dry-run"],
+        help="""
+        Automatically cherry-pick upstream reverts, file a bug, or write to
+        stdout.
+        """,
     )
     parser.add_argument(
         "--state_file", required=True, help="File to store persistent state in."
@@ -1031,7 +1065,8 @@ def main(argv: list[str]) -> int:
     reviewers = opts.reviewers if opts.reviewers else []
     cc = opts.cc if opts.cc else []
 
-    if opts.repository == "chromeos":
+    is_chromeos = opts.repository == "chromeos"
+    if is_chromeos:
         chromeos_path = opts.chromeos_dir
         interesting_shas = _find_interesting_chromeos_shas(chromeos_path)
         recipients = _EmailRecipients(well_known=["mage"], direct=cc)
@@ -1085,7 +1120,7 @@ def main(argv: list[str]) -> int:
     # We want to be as free of obvious side-effects as possible in case
     # something above breaks. Hence, action as late as possible.
     if action == "cherry-pick":
-        if repository != "chromeos":
+        if not is_chromeos:
             raise RuntimeError(
                 "only chromeos supports automatic cherry-picking."
             )
@@ -1100,9 +1135,13 @@ def main(argv: list[str]) -> int:
             reviewers=reviewers,
             cc=cc,
             gemini_state=gemini_state,
+            is_chromeos=is_chromeos,
         )
     else:
-        new_state = do_email(
+        if is_chromeos:
+            raise RuntimeError("chromeos only supports 'cherry-pick' action.")
+        assert action in ("file-bug", "dry-run"), f"Unknown action {action}"
+        new_state = do_file_bugs(
             is_dry_run=action == "dry-run",
             llvm_config=llvm_config,
             upstream_main_branch=upstream_main_branch,
@@ -1111,6 +1150,7 @@ def main(argv: list[str]) -> int:
             state=state,
             recipients=recipients,
             gemini_state=gemini_state,
+            is_chromeos=is_chromeos,
         )
 
     _write_state(state_file, new_state)

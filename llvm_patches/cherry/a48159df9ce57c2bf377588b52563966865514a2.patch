@@ -1,0 +1,534 @@
+From 33ed7d38238a84349c5a743e3c3a3985766a1fc7 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 24 Apr 2026 12:01:32 +0100
+Subject: [PATCH] [AArch64][llvm] Remove support for FEAT_MPAMv2_VID (#193191)
+
+`FEAT_MPAMv2_VID` instructions and system registers, as introduced
+in change d30f18d2c, are being removed at this time, as they've been
+removed from the latest Arm ARM, which doesn't preclude them returning
+in some form in future.
+
+Other system registers introduced with `FEAT_MPAMv2` are unaffected,
+and these continue to be ungated, but since `+mpamv2` gating is now
+empty,
+I'm removing this superfluous gating code.
+
+patch.cherry: true
+patch.metadata.author: Jonathan Thackray <jonathan.thackray@arm.com>
+patch.metadata.original_sha: a48159df9ce57c2bf377588b52563966865514a2
+patch.platforms: chromiumos
+patch.version_range.from: 595001
+patch.version_range.until: 615887
+
+---
+ clang/test/Driver/aarch64-v97a.c              |   4 -
+ llvm/lib/Target/AArch64/AArch64Features.td    |   3 -
+ llvm/lib/Target/AArch64/AArch64InstrInfo.td   |   2 -
+ .../Target/AArch64/AArch64SystemOperands.td   |  36 ------
+ .../AArch64/AsmParser/AArch64AsmParser.cpp    |  22 +---
+ .../MCTargetDesc/AArch64InstPrinter.cpp       |  14 +--
+ .../Target/AArch64/Utils/AArch64BaseInfo.cpp  |   5 -
+ .../Target/AArch64/Utils/AArch64BaseInfo.h    |   8 --
+ .../CodeGen/AArch64/aarch64-sys-intrinsic.ll  | 116 ++++++++++++++++++
+ .../MC/AArch64/armv9.7a-mpamv2-diagnostics.s  |  18 ---
+ llvm/test/MC/AArch64/armv9.7a-mpamv2.s        |  91 +-------------
+ 11 files changed, 128 insertions(+), 191 deletions(-)
+ create mode 100644 llvm/test/CodeGen/AArch64/aarch64-sys-intrinsic.ll
+ delete mode 100644 llvm/test/MC/AArch64/armv9.7a-mpamv2-diagnostics.s
+
+diff --git a/clang/test/Driver/aarch64-v97a.c b/clang/test/Driver/aarch64-v97a.c
+index 1e54e6bbe3ec..e90f14f11d9b 100644
+--- a/clang/test/Driver/aarch64-v97a.c
++++ b/clang/test/Driver/aarch64-v97a.c
+@@ -46,10 +46,6 @@
+ // RUN: %clang -target aarch64 -march=armv9.7-a+tlbid -### -c %s 2>&1 | FileCheck -check-prefix=V97A-TLBID %s
+ // V97A-TLBID: "-cc1"{{.*}} "-triple" "aarch64{{.*}}" "-target-cpu" "generic" "-target-feature" "+v9.7a"{{.*}} "-target-feature" "+tlbid"
+ 
+-// RUN: %clang -target aarch64 -march=armv9.7a+mpamv2 -### -c %s 2>&1 | FileCheck -check-prefix=V97A-MPAMv2 %s
+-// RUN: %clang -target aarch64 -march=armv9.7-a+mpamv2 -### -c %s 2>&1 | FileCheck -check-prefix=V97A-MPAMv2 %s
+-// V97A-MPAMv2: "-cc1"{{.*}} "-triple" "aarch64{{.*}}" "-target-cpu" "generic" "-target-feature" "+v9.7a"{{.*}} "-target-feature" "+mpamv2"
+-
+ // RUN: %clang -target aarch64 -march=armv9.7a+mtetc -### -c %s 2>&1 | FileCheck -check-prefix=V97A-MTETC %s
+ // RUN: %clang -target aarch64 -march=armv9.7-a+mtetc -### -c %s 2>&1 | FileCheck -check-prefix=V97A-MTETC %s
+ // V97A-MTETC: "-cc1"{{.*}} "-triple" "aarch64{{.*}}" "-target-cpu" "generic" "-target-feature" "+v9.7a"{{.*}} "-target-feature" "+mtetc"
+diff --git a/llvm/lib/Target/AArch64/AArch64Features.td b/llvm/lib/Target/AArch64/AArch64Features.td
+index 0e94b78d11d8..d71e50da0552 100644
+--- a/llvm/lib/Target/AArch64/AArch64Features.td
++++ b/llvm/lib/Target/AArch64/AArch64Features.td
+@@ -598,9 +598,6 @@ def FeatureLSCP : ExtensionWithMArch<"lscp", "LSCP", "FEAT_LSCP",
+ def FeatureTLBID: ExtensionWithMArch<"tlbid", "TLBID", "FEAT_TLBID",
+   "Enable Armv9.7-A TLBI Domains extension">;
+ 
+-def FeatureMPAMv2: ExtensionWithMArch<"mpamv2", "MPAMv2", "FEAT_MPAMv2",
+-  "Enable Armv9.7-A MPAMv2 Lookaside Buffer Invalidate instructions">;
+-
+ def FeatureMTETC: ExtensionWithMArch<"mtetc", "MTETC", "FEAT_MTETC",
+   "Enable Virtual Memory Tagging Extension">;
+ 
+diff --git a/llvm/lib/Target/AArch64/AArch64InstrInfo.td b/llvm/lib/Target/AArch64/AArch64InstrInfo.td
+index 2871a20e28b6..00dbc44ee327 100644
+--- a/llvm/lib/Target/AArch64/AArch64InstrInfo.td
++++ b/llvm/lib/Target/AArch64/AArch64InstrInfo.td
+@@ -399,8 +399,6 @@ def HasCPA           : Predicate<"Subtarget->hasCPA()">,
+                                  AssemblerPredicateWithAll<(all_of FeatureCPA), "cpa">;
+ def HasTLBID         : Predicate<"Subtarget->hasTLBID()">,
+                                  AssemblerPredicateWithAll<(all_of FeatureTLBID), "tlbid">;
+-def HasMPAMv2        : Predicate<"Subtarget->hasMPAMv2()">,
+-                                 AssemblerPredicateWithAll<(all_of FeatureMPAMv2), "mpamv2">;
+ def HasMTETC         : Predicate<"Subtarget->hasMTETC()">,
+                                  AssemblerPredicateWithAll<(all_of FeatureMTETC), "mtetc">;
+ def HasGCIE          : Predicate<"Subtarget->hasGCIE()">,
+diff --git a/llvm/lib/Target/AArch64/AArch64SystemOperands.td b/llvm/lib/Target/AArch64/AArch64SystemOperands.td
+index ae46d717d0cb..290f18c01cda 100644
+--- a/llvm/lib/Target/AArch64/AArch64SystemOperands.td
++++ b/llvm/lib/Target/AArch64/AArch64SystemOperands.td
+@@ -2349,9 +2349,6 @@ def : RWSysReg<"MPAMCTL_EL1",   0b11, 0b000, 0b1010, 0b0101, 0b010>;
+ def : RWSysReg<"MPAMCTL_EL12",  0b11, 0b101, 0b1010, 0b0101, 0b010>;
+ def : RWSysReg<"MPAMCTL_EL2",   0b11, 0b100, 0b1010, 0b0101, 0b010>;
+ def : RWSysReg<"MPAMCTL_EL3",   0b11, 0b110, 0b1010, 0b0101, 0b010>;
+-def : RWSysReg<"MPAMVIDCR_EL2", 0b11, 0b100, 0b1010, 0b0111, 0b000>;
+-def : RWSysReg<"MPAMVIDSR_EL2", 0b11, 0b100, 0b1010, 0b0111, 0b001>;
+-def : RWSysReg<"MPAMVIDSR_EL3", 0b11, 0b110, 0b1010, 0b0111, 0b001>;
+ 
+ //===----------------------------------------------------------------------===//
+ // FEAT_SRMASK v9.6a registers
+@@ -2460,39 +2457,6 @@ foreach n = 0-3 in {
+ 
+ def : ROSysReg<"TLBIDIDR_EL1",      0b11,  0b000, 0b1010, 0b0100, 0b110>;
+ 
+-// MPAM Lookaside Buffer Invalidate (MLBI) instructions
+-class MLBI<string name, bits<3> op1, bits<4> crn, bits<4> crm, bits<3> op2, bit needsreg> {
+-  string Name = name;
+-  bits<14> Encoding;
+-  let Encoding{13-11} = op1;
+-  let Encoding{10-7} = crn;
+-  let Encoding{6-3} = crm;
+-  let Encoding{2-0} = op2;
+-  bit NeedsReg = needsreg;
+-  string RequiresStr = [{ {AArch64::FeatureMPAMv2} }];
+-}
+-
+-def MLBITable : GenericTable {
+-  let FilterClass = "MLBI";
+-  let CppTypeName = "MLBI";
+-  let Fields = ["Name", "Encoding", "NeedsReg", "RequiresStr"];
+-
+-  let PrimaryKey = ["Encoding"];
+-  let PrimaryKeyName = "lookupMLBIByEncoding";
+-}
+-
+-def lookupMLBIByName : SearchIndex {
+-  let Table = MLBITable;
+-  let Key = ["Name"];
+-}
+-
+-//                     Op1    CRn     CRm     Op2    needsReg
+-def : MLBI<"ALLE1",    0b100, 0b0111, 0b0000, 0b100, 0>;
+-def : MLBI<"VMALLE1",  0b100, 0b0111, 0b0000, 0b101, 0>;
+-def : MLBI<"VPIDE1",   0b100, 0b0111, 0b0000, 0b110, 1>;
+-def : MLBI<"VPMGE1",   0b100, 0b0111, 0b0000, 0b111, 1>;
+-
+-
+ // v9.7-A GICv5 (FEAT_GCIE)
+ // CPU Interface Registers
+ //                                        Op0   Op1    CRn     CRm     Op2
+diff --git a/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp b/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp
+index 6273cfc1005d..6c8ec58cf637 100644
+--- a/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp
++++ b/llvm/lib/Target/AArch64/AsmParser/AArch64AsmParser.cpp
+@@ -3887,7 +3887,6 @@ static const struct Extension {
+     {"cmh", {AArch64::FeatureCMH}},
+     {"lscp", {AArch64::FeatureLSCP}},
+     {"tlbid", {AArch64::FeatureTLBID}},
+-    {"mpamv2", {AArch64::FeatureMPAMv2}},
+     {"mtetc", {AArch64::FeatureMTETC}},
+     {"gcie", {AArch64::FeatureGCIE}},
+     {"sme2p3", {AArch64::FeatureSME2p3}},
+@@ -3968,9 +3967,9 @@ void AArch64AsmParser::createSysAlias(uint16_t Encoding, OperandVector &Operands
+       AArch64Operand::CreateImm(Expr, S, getLoc(), getContext()));
+ }
+ 
+-/// parseSysAlias - The IC, DC, AT, TLBI, MLBI and GIC{R} and GSB instructions
+-/// are simple aliases for the SYS instruction. Parse them specially so that
+-/// we create a SYS MCInst.
++/// parseSysAlias - The IC, DC, AT, TLBI and GIC{R} and GSB instructions are
++/// simple aliases for the SYS instruction. Parse them specially so that we
++/// create a SYS MCInst.
+ bool AArch64AsmParser::parseSysAlias(StringRef Name, SMLoc NameLoc,
+                                    OperandVector &Operands) {
+   if (Name.contains('.'))
+@@ -4032,17 +4031,6 @@ bool AArch64AsmParser::parseSysAlias(StringRef Name, SMLoc NameLoc,
+       OptionalRegister = TLBI->OptionalReg;
+     }
+     createSysAlias(TLBI->Encoding, Operands, S);
+-  } else if (Mnemonic == "mlbi") {
+-    const AArch64MLBI::MLBI *MLBI = AArch64MLBI::lookupMLBIByName(Op);
+-    if (!MLBI)
+-      return TokError("invalid operand for MLBI instruction");
+-    else if (!MLBI->haveFeatures(getSTI().getFeatureBits())) {
+-      std::string Str("MLBI " + std::string(MLBI->Name) + " requires: ");
+-      setRequiredFeatureString(MLBI->getRequiredFeatures(), Str);
+-      return TokError(Str);
+-    }
+-    ExpectRegister = MLBI->NeedsReg;
+-    createSysAlias(MLBI->Encoding, Operands, S);
+   } else if (Mnemonic == "gic") {
+     const AArch64GIC::GIC *GIC = AArch64GIC::lookupGICByName(Op);
+     if (!GIC)
+@@ -5439,11 +5427,11 @@ bool AArch64AsmParser::parseInstruction(ParseInstructionInfo &Info,
+   size_t Start = 0, Next = Name.find('.');
+   StringRef Head = Name.slice(Start, Next);
+ 
+-  // IC, DC, AT, TLBI, MLBI, GIC{R}, GSB and Prediction invalidation
++  // IC, DC, AT, TLBI, GIC{R}, GSB and Prediction invalidation
+   // instructions are aliases for the SYS instruction.
+   if (Head == "ic" || Head == "dc" || Head == "at" || Head == "tlbi" ||
+       Head == "cfp" || Head == "dvp" || Head == "cpp" || Head == "cosp" ||
+-      Head == "mlbi" || Head == "gic" || Head == "gsb")
++      Head == "gic" || Head == "gsb")
+     return parseSysAlias(Head, NameLoc, Operands);
+ 
+   // GICR instructions are aliases for the SYSL instruction.
+diff --git a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64InstPrinter.cpp b/llvm/lib/Target/AArch64/MCTargetDesc/AArch64InstPrinter.cpp
+index 4cd51d6701d9..5e560695b327 100644
+--- a/llvm/lib/Target/AArch64/MCTargetDesc/AArch64InstPrinter.cpp
++++ b/llvm/lib/Target/AArch64/MCTargetDesc/AArch64InstPrinter.cpp
+@@ -922,18 +922,8 @@ bool AArch64InstPrinter::printSysAlias(const MCInst *MI,
+ 
+   if (CnVal == 7) {
+     switch (CmVal) {
+-    default: return false;
+-    // MLBI aliases
+-    case 0: {
+-      const AArch64MLBI::MLBI *MLBI =
+-          AArch64MLBI::lookupMLBIByEncoding(Encoding);
+-      if (!MLBI || !MLBI->haveFeatures(STI.getFeatureBits()))
+-        return false;
+-
+-      NeedsReg = MLBI->NeedsReg;
+-      Ins = "mlbi\t";
+-      Name = std::string(MLBI->Name);
+-    } break;
++    default:
++      return false;
+     // Maybe IC, maybe Prediction Restriction
+     case 1:
+       switch (Op1Val) {
+diff --git a/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.cpp b/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.cpp
+index 268a22968f8a..87a854ea0757 100644
+--- a/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.cpp
++++ b/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.cpp
+@@ -197,11 +197,6 @@ namespace AArch64TLBIP {
+ #define GET_TLBIPTable_IMPL
+ #include "AArch64GenSystemOperands.inc"
+ } // namespace AArch64TLBIP
+-
+-namespace AArch64MLBI {
+-#define GET_MLBITable_IMPL
+-#include "AArch64GenSystemOperands.inc"
+-} // namespace AArch64MLBI
+ } // namespace llvm
+ 
+ namespace llvm {
+diff --git a/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.h b/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.h
+index 27812e94a351..00568f104a26 100644
+--- a/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.h
++++ b/llvm/lib/Target/AArch64/Utils/AArch64BaseInfo.h
+@@ -821,14 +821,6 @@ struct TLBIP : SysAliasOptionalReg {
+ #include "AArch64GenSystemOperands.inc"
+ } // namespace AArch64TLBIP
+ 
+-namespace AArch64MLBI {
+-struct MLBI : SysAliasReg {
+-  using SysAliasReg::SysAliasReg;
+-};
+-#define GET_MLBITable_DECL
+-#include "AArch64GenSystemOperands.inc"
+-} // namespace AArch64MLBI
+-
+ namespace AArch64GIC {
+ struct GIC : SysAliasReg {
+   using SysAliasReg::SysAliasReg;
+diff --git a/llvm/test/CodeGen/AArch64/aarch64-sys-intrinsic.ll b/llvm/test/CodeGen/AArch64/aarch64-sys-intrinsic.ll
+new file mode 100644
+index 000000000000..8fe497dcb2f5
+--- /dev/null
++++ b/llvm/test/CodeGen/AArch64/aarch64-sys-intrinsic.ll
+@@ -0,0 +1,116 @@
++; RUN: llc < %s -mtriple=aarch64 -asm-verbose=false | FileCheck %s --check-prefix=CHECK
++; RUN: llc < %s -mtriple=aarch64 -mattr=+predres -asm-verbose=false | FileCheck %s --check-prefix=PREDRES
++; RUN: llc < %s -mtriple=aarch64 -mattr=+specres2 -asm-verbose=false | FileCheck %s --check-prefix=SPECRES2
++; RUN: llc < %s -mtriple=aarch64 -mattr=+gcie -asm-verbose=false | FileCheck %s --check-prefix=GCIE
++; RUN: llc < %s -mtriple=aarch64 -mattr=+poe2 -asm-verbose=false | FileCheck %s --check-prefix=POE2
++
++declare void @llvm.aarch64.sys(i32 immarg, i32 immarg, i32 immarg, i32 immarg,
++                               i64)
++
++define void @sys_random(i64 %x) {
++; CHECK-LABEL: sys_random:
++; CHECK:       sys #0, c7, c10, #6, x0
++; CHECK-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 0, i32 7, i32 10, i32 6, i64 %x)
++  ret void
++}
++
++define void @sys_ic_iallu() {
++; CHECK-LABEL: sys_ic_iallu:
++; CHECK:       ic iallu
++; CHECK-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 0, i32 7, i32 5, i32 0, i64 0)
++  ret void
++}
++
++define void @sys_dc_cvac(i64 %x) {
++; CHECK-LABEL: sys_dc_cvac:
++; CHECK:       dc cvac, x0
++; CHECK-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 3, i32 7, i32 10, i32 1, i64 %x)
++  ret void
++}
++
++define void @sys_at_s1e2w(i64 %x) {
++; CHECK-LABEL: sys_at_s1e2w:
++; CHECK:       at s1e2w, x0
++; CHECK-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 4, i32 7, i32 8, i32 1, i64 %x)
++  ret void
++}
++
++define void @sys_tlbi_vmalle1() {
++; CHECK-LABEL: sys_tlbi_vmalle1:
++; CHECK:       tlbi vmalle1
++; CHECK-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 0, i32 8, i32 7, i32 0, i64 0)
++  ret void
++}
++
++define void @sys_cfp_rctx(i64 %x) {
++; PREDRES-LABEL: sys_cfp_rctx:
++; PREDRES:       cfp rctx, x0
++; PREDRES-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 3, i32 7, i32 3, i32 4, i64 %x)
++  ret void
++}
++
++define void @sys_dvp_rctx(i64 %x) {
++; PREDRES-LABEL: sys_dvp_rctx:
++; PREDRES:       dvp rctx, x0
++; PREDRES-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 3, i32 7, i32 3, i32 5, i64 %x)
++  ret void
++}
++
++define void @sys_cpp_rctx(i64 %x) {
++; PREDRES-LABEL: sys_cpp_rctx:
++; PREDRES:       cpp rctx, x0
++; PREDRES-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 3, i32 7, i32 3, i32 7, i64 %x)
++  ret void
++}
++
++define void @sys_cosp_rctx(i64 %x) {
++; SPECRES2-LABEL: sys_cosp_rctx:
++; SPECRES2:       cosp rctx, x0
++; SPECRES2-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 3, i32 7, i32 3, i32 6, i64 %x)
++  ret void
++}
++
++define void @sys_gic_cdaff(i64 %x) {
++; GCIE-LABEL: sys_gic_cdaff:
++; GCIE:       gic cdaff, x0
++; GCIE-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 0, i32 12, i32 1, i32 3, i64 %x)
++  ret void
++}
++
++define void @sys_gsb_sys() {
++; GCIE-LABEL: sys_gsb_sys:
++; GCIE:       gsb sys
++; GCIE-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 0, i32 12, i32 0, i32 0, i64 0)
++  ret void
++}
++
++define void @sys_plbi_vmalle1() {
++; POE2-LABEL: sys_plbi_vmalle1:
++; POE2:       plbi vmalle1
++; POE2-NEXT:  ret
++entry:
++  call void @llvm.aarch64.sys(i32 0, i32 10, i32 7, i32 0, i64 0)
++  ret void
++}
+diff --git a/llvm/test/MC/AArch64/armv9.7a-mpamv2-diagnostics.s b/llvm/test/MC/AArch64/armv9.7a-mpamv2-diagnostics.s
+deleted file mode 100644
+index 54fdc230a3a1..000000000000
+--- a/llvm/test/MC/AArch64/armv9.7a-mpamv2-diagnostics.s
++++ /dev/null
+@@ -1,18 +0,0 @@
+-// RUN: not llvm-mc -triple=aarch64 -mattr=+mpamv2 -show-encoding < %s 2>&1 \
+-// RUN:        | FileCheck %s --check-prefix=CHECK-ERROR
+-
+-//------------------------------------------------------------------------------
+-// Armv9.7-A FEAT_MPAMV2 Extensions
+-//------------------------------------------------------------------------------
+-
+-mlbi alle1, x30
+-// CHECK-ERROR: error: specified mlbi op does not use a register
+-
+-mlbi vmalle1, x30
+-// CHECK-ERROR: error: specified mlbi op does not use a register
+-
+-mlbi vpide1
+-// CHECK-ERROR: error: specified mlbi op requires a register
+-
+-mlbi vpmge1
+-// CHECK-ERROR: error: specified mlbi op requires a register
+diff --git a/llvm/test/MC/AArch64/armv9.7a-mpamv2.s b/llvm/test/MC/AArch64/armv9.7a-mpamv2.s
+index b8b21e96869f..c114b3f4d15c 100644
+--- a/llvm/test/MC/AArch64/armv9.7a-mpamv2.s
++++ b/llvm/test/MC/AArch64/armv9.7a-mpamv2.s
+@@ -1,15 +1,11 @@
+-// RUN: llvm-mc -triple=aarch64 -show-encoding -mattr=+mpamv2 < %s \
++// RUN: llvm-mc -triple=aarch64 -show-encoding < %s \
+ // RUN:        | FileCheck %s --check-prefixes=CHECK-ENCODING,CHECK-INST
+-// RUN: not llvm-mc -triple=aarch64 -show-encoding < %s 2>&1 \
+-// RUN:        | FileCheck %s --check-prefix=CHECK-ERROR
+-// RUN: llvm-mc -triple=aarch64 -filetype=obj -mattr=+mpamv2 < %s \
+-// RUN:        | llvm-objdump -d --mattr=+mpamv2 --no-print-imm-hex - | FileCheck %s --check-prefix=CHECK-INST
+-// RUN: llvm-mc -triple=aarch64 -filetype=obj -mattr=+mpamv2 < %s \
+-// RUN:        | llvm-objdump -d --mattr=-mpamv2 --no-print-imm-hex - | FileCheck %s --check-prefix=CHECK-UNKNOWN
++// RUN: llvm-mc -triple=aarch64 -filetype=obj < %s \
++// RUN:        | llvm-objdump -d --no-print-imm-hex - | FileCheck %s --check-prefix=CHECK-INST
+ // Disassemble encoding and check the re-encoding (-show-encoding) matches.
+-// RUN: llvm-mc -triple=aarch64 -show-encoding -mattr=+mpamv2 < %s \
++// RUN: llvm-mc -triple=aarch64 -show-encoding < %s \
+ // RUN:        | sed '/.text/d' | sed 's/.*encoding: //g' \
+-// RUN:        | llvm-mc -triple=aarch64 -mattr=+mpamv2 -disassemble -show-encoding \
++// RUN:        | llvm-mc -triple=aarch64 -disassemble -show-encoding \
+ // RUN:        | FileCheck %s --check-prefixes=CHECK-ENCODING,CHECK-INST
+ 
+ //------------------------------------------------------------------------------
+@@ -19,108 +15,31 @@
+ msr MPAMCTL_EL1, x0
+ // CHECK-INST:    msr MPAMCTL_EL1, x0
+ // CHECK-ENCODING: [0x40,0xa5,0x18,0xd5]
+-// CHECK-UNKNOWN: d518a540
+ 
+ msr MPAMCTL_EL12, x0
+ // CHECK-INST:   msr MPAMCTL_EL12, x0
+ // CHECK-ENCODING: [0x40,0xa5,0x1d,0xd5]
+-// CHECK-UNKNOWN: d51da540
+ 
+ msr MPAMCTL_EL2, x0
+ // CHECK-INST:    msr     MPAMCTL_EL2, x0
+ // CHECK-ENCODING: [0x40,0xa5,0x1c,0xd5]
+-// CHECK-UNKNOWN: d51ca540
+ 
+ msr MPAMCTL_EL3, x0
+ // CHECK-INST:    msr     MPAMCTL_EL3, x0
+ // CHECK-ENCODING: [0x40,0xa5,0x1e,0xd5]
+-// CHECK-UNKNOWN: d51ea540
+-
+-msr MPAMVIDCR_EL2, x0
+-// CHECK-INST:    msr     MPAMVIDCR_EL2, x0
+-// CHECK-ENCODING: [0x00,0xa7,0x1c,0xd5]
+-// CHECK-UNKNOWN: d51ca700
+-
+-msr MPAMVIDSR_EL2, x0
+-// CHECK-INST:    msr     MPAMVIDSR_EL2, x0
+-// CHECK-ENCODING: [0x20,0xa7,0x1c,0xd5]
+-// CHECK-UNKNOWN: d51ca720
+-
+-msr MPAMVIDSR_EL3, x0
+-// CHECK-INST:    msr     MPAMVIDSR_EL3, x0
+-// CHECK-ENCODING: [0x20,0xa7,0x1e,0xd5]
+-// CHECK-UNKNOWN: d51ea720
+-
+ 
+ mrs x0, MPAMCTL_EL1
+ // CHECK-INST:        mrs     x0, MPAMCTL_EL1
+ // CHECK-ENCODING: [0x40,0xa5,0x38,0xd5]
+-// CHECK-UNKNOWN: d538a540
+ 
+ mrs x0, MPAMCTL_EL12
+ // CHECK-INST:   mrs     x0, MPAMCTL_EL12
+ // CHECK-ENCODING: [0x40,0xa5,0x3d,0xd5]
+-// CHECK-UNKNOWN: d53da540
+ 
+ mrs x0, MPAMCTL_EL2
+ // CHECK-INST:   mrs     x0, MPAMCTL_EL2
+ // CHECK-ENCODING: [0x40,0xa5,0x3c,0xd5]
+-// CHECK-UNKNOWN: d53ca540
+ 
+ mrs x0, MPAMCTL_EL3
+ // CHECK-INST:   mrs     x0, MPAMCTL_EL3
+ // CHECK-ENCODING: [0x40,0xa5,0x3e,0xd5]
+-// CHECK-UNKNOWN: d53ea540
+-
+-mrs x0, MPAMVIDCR_EL2
+-// CHECK-INST:   mrs     x0, MPAMVIDCR_EL2
+-// CHECK-ENCODING: [0x00,0xa7,0x3c,0xd5]
+-// CHECK-UNKNOWN: d53ca700
+-
+-mrs x0, MPAMVIDSR_EL2
+-// CHECK-INST:   mrs     x0, MPAMVIDSR_EL2
+-// CHECK-ENCODING: [0x20,0xa7,0x3c,0xd5]
+-// CHECK-UNKNOWN: d53ca720
+-
+-mrs x0, MPAMVIDSR_EL3
+-// CHECK-INST:   mrs     x0, MPAMVIDSR_EL3
+-// CHECK-ENCODING: [0x20,0xa7,0x3e,0xd5]
+-// CHECK-UNKNOWN: d53ea720
+-
+-
+-//------------------------------------------------------------------------------
+-// Armv9.7-A FEAT_MPAMV2_VID Extensions
+-//------------------------------------------------------------------------------
+-
+-mlbi vmalle1
+-// CHECK-INST:    mlbi vmalle1
+-// CHECK-ENCODING: [0xbf,0x70,0x0c,0xd5]
+-// CHECK-UNKNOWN: d50c70bf sys	#4, c7, c0, #5
+-// CHECK-ERROR: error: MLBI VMALLE1 requires: mpamv2
+-
+-mlbi vpide1, x0
+-// CHECK-INST:    mlbi vpide1, x0
+-// CHECK-ENCODING: [0xc0,0x70,0x0c,0xd5]
+-// CHECK-UNKNOWN: d50c70c0 sys	#4, c7, c0, #6, x0
+-// CHECK-ERROR: error: MLBI VPIDE1 requires: mpamv2
+-
+-mlbi vpmge1, x0
+-// CHECK-INST:    mlbi vpmge1, x0
+-// CHECK-ENCODING: [0xe0,0x70,0x0c,0xd5]
+-// CHECK-UNKNOWN: d50c70e0 sys	#4, c7, c0, #7, x0
+-// CHECK-ERROR: error: MLBI VPMGE1 requires: mpamv2
+-
+-// Check that invalid encodings are rendered as SYS aliases
+-// [0x9f,0x70,0x0c,0xd5] -> mlbi alle1
+-// [0x9e,0x70,0x0c,0xd5] -> sys #4, c7, c0, #4, x30
+-
+-mlbi alle1
+-// CHECK-INST:    mlbi alle1
+-// CHECK-ENCODING: [0x9f,0x70,0x0c,0xd5]
+-// CHECK-UNKNOWN: d50c709f sys	#4, c7, c0, #4
+-// CHECK-ERROR: error: MLBI ALLE1 requires: mpamv2
+-
+-sys #4, c7, c0, #4, x30
+-// CHECK-INST: sys #4, c7, c0, #4, x30
+-// CHECK-ENCODING: [0x9e,0x70,0x0c,0xd5]
+-// CHECK-UNKNOWN: d50c709e sys #4, c7, c0, #4, x30
+-- 
+2.39.5

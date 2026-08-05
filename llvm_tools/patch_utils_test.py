@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import subprocess
 from typing import Any
+import unittest
 from unittest import mock
 
 from llvm_tools import patch_utils as pu
@@ -426,6 +427,18 @@ Hunk #1 SUCCEEDED at 96 with fuzz 1.
             removed_paths, [tempdir / "dead.patch", tempdir / "gone.patch"]
         )
 
+    def test_write_json_changes_unicode(self) -> None:
+        patches = [{"metadata": {"title": "Revert …"}}]
+        tempdir = self.make_tempdir()
+        patches_json = tempdir / "PATCHES.json"
+        with patches_json.open("w", encoding="utf-8") as f:
+            # pylint: disable=protected-access
+            pu._write_json_changes(patches, f)
+
+        content = patches_json.read_text(encoding="utf-8")
+        self.assertIn("Revert …", content)
+        self.assertNotIn("Revert \\u2026", content)
+
     @staticmethod
     def _default_json_dict() -> dict:
         return {
@@ -494,3 +507,79 @@ index c5fd68299eb..4c6e15eeeb9 100644
    // Now we need to do some global optimization transforms.
    // FIXME: It would seem like these should come first in the optimization
 """
+
+
+class TestParsedCommitMetadata(unittest.TestCase):
+    """Tests for ParsedCommitMetadata."""
+
+    def test_valid_metadata(self) -> None:
+        raw = {
+            "patch.cherry": "true",
+            "patch.version_range.from": "100",
+            "patch.version_range.until": "200",
+            "patch.metadata.author": "Someone",
+            "patch.metadata.info": "b/123, b/456",
+            "patch.metadata.original_sha": "a" * 40,
+            "patch.platforms": "chromiumos, android",
+            "Change-Id": "I123",
+        }
+        parsed = pu.ParsedCommitMetadata.from_dict(raw)
+        self.assertTrue(parsed.cherry)
+        self.assertEqual(parsed.version_from, 100)
+        self.assertEqual(parsed.version_until, 200)
+        self.assertEqual(parsed.author, "Someone")
+        self.assertEqual(parsed.info, ["b/123", "b/456"])
+        self.assertEqual(parsed.original_sha, "a" * 40)
+        self.assertEqual(parsed.platforms, ["android", "chromiumos"])
+
+        # Test null/none in version range
+        raw["patch.version_range.from"] = "null"
+        raw["patch.version_range.until"] = "none"
+        parsed2 = pu.ParsedCommitMetadata.from_dict(raw)
+        self.assertIsNone(parsed2.version_from)
+        self.assertIsNone(parsed2.version_until)
+
+    def test_invalid_metadata_raises(self) -> None:
+        raw = {
+            "patch.cherry": "invalid_bool",
+            "patch.version_range.from": "not_int",
+            "patch.metadata.original_sha": "short",
+            "patch.unknown": "foo",
+        }
+        with self.assertRaises(pu.MetadataValueError) as ctx:
+            pu.ParsedCommitMetadata.from_dict(raw)
+        err_msg = str(ctx.exception)
+        self.assertIn("patch.cherry must be 'true' or 'false'", err_msg)
+        self.assertIn(
+            "patch.version_range.from must be an integer or 'null'/'none'",
+            err_msg,
+        )
+        self.assertIn(
+            "patch.metadata.original_sha must be a 40-character", err_msg
+        )
+        self.assertIn("Unknown patch metadata key: 'patch.unknown'", err_msg)
+
+    def test_version_range_inversion_raises(self) -> None:
+        raw = {
+            "patch.version_range.from": "200",
+            "patch.version_range.until": "100",
+        }
+        with self.assertRaises(pu.MetadataValueError) as ctx:
+            pu.ParsedCommitMetadata.from_dict(raw)
+        self.assertIn(
+            "patch.version_range.from (200) must be <= "
+            "patch.version_range.until (100)",
+            str(ctx.exception),
+        )
+
+    def test_original_sha_without_cherry_raises(self) -> None:
+        raw = {
+            "patch.cherry": "false",
+            "patch.metadata.original_sha": "a" * 40,
+        }
+        with self.assertRaises(pu.MetadataValueError) as ctx:
+            pu.ParsedCommitMetadata.from_dict(raw)
+        self.assertIn(
+            "patch.metadata.original_sha is present, but patch.cherry is false",
+            str(ctx.exception),
+        )

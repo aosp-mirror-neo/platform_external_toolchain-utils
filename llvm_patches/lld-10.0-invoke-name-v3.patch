@@ -1,0 +1,33 @@
+From ce6570d9af76ef5cafcdb3f01b7f87bb68c61d94 Mon Sep 17 00:00:00 2001
+From: ChromeOS Toolchain Worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Fri, 14 Jun 2024 21:19:58 +0000
+Subject: [PATCH] v3: lld-10.0-invoke-name
+
+LLD uses the argv[0] to get the host system information.
+In standalone toolchain used by Simplechrome, real lld becomes
+lld.elf, so the LLD cannot get the host system informaction
+and dies. see crbug.com/701659
+
+patch.version_range.from: 596125
+
+Change-Id: I983fda09386ce3b704939d4802989f9b1e5dacf6
+---
+ lld/Common/DriverDispatcher.cpp | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/lld/Common/DriverDispatcher.cpp b/lld/Common/DriverDispatcher.cpp
+index 0b71c0809486..b316ce4f09fb 100644
+--- a/lld/Common/DriverDispatcher.cpp
++++ b/lld/Common/DriverDispatcher.cpp
+@@ -31,6 +31,7 @@ static void err(const Twine &s) { llvm::errs() << s << "\n"; }
+ static Flavor getFlavor(StringRef s) {
+   return StringSwitch<Flavor>(s)
+       .CasesLower({"ld", "ld.lld", "gnu"}, Gnu)
++      .CasesLower({"lld.elf", "lld.real", "lld.real.elf"}, Gnu)
+       .CasesLower({"wasm", "ld-wasm"}, Wasm)
+       .CaseLower("link", WinLink)
+       .CasesLower({"ld64", "ld64.lld", "darwin"}, Darwin)
+-- 
+2.54.0.823.g6e5bcc1fc9-goog
+

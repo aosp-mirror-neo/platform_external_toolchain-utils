@@ -26,30 +26,6 @@ func warningSuppressionsForLLVM_r574158(packageNameAndCategory string) []string 
 	// e.g., arm-generic-cq: https://ci.chromium.org/b/8698633379302681905.
 	case "chromeos-base/chromeos-init":
 		return []string{"-Wno-deprecated-declarations"}
-	// Observed and suppressed on 66 builders during testing.
-	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8698633388008551569.
-	case "chromeos-base/dns-proxy":
-		return []string{"-Wno-deprecated-declarations"}
-	// Observed and suppressed on 2 builders during testing.
-	// e.g., tael-cq: https://ci.chromium.org/b/8698633386038394657.
-	case "chromeos-base/mcastd":
-		return []string{"-Wno-deprecated-declarations"}
-	// Observed and suppressed on 2 builders during testing.
-	// e.g., tael-cq: https://ci.chromium.org/b/8698633386038394657.
-	case "chromeos-base/ndproxyd":
-		return []string{"-Wno-deprecated-declarations"}
-	// Observed and suppressed on 68 builders during testing.
-	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8698633388008551569.
-	case "chromeos-base/net-base":
-		return []string{"-Wno-deprecated-declarations", "-Wno-implicit-int-conversion"}
-	// Observed and suppressed on 66 builders during testing.
-	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8698633388008551569.
-	case "chromeos-base/patchpanel":
-		return []string{"-Wno-deprecated-declarations"}
-	// Observed and suppressed on 66 builders during testing.
-	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8698633388008551569.
-	case "chromeos-base/shill":
-		return []string{"-Wno-deprecated-declarations"}
 	// Observed and suppressed on 61 builders during testing.
 	// e.g., amd64-generic-cq: https://ci.chromium.org/b/8698633388008551569.
 	case "chromeos-base/vboot_reference":

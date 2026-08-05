@@ -25,6 +25,7 @@ import tempfile
 
 from cros_utils import cros_image_tools
 from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 from llvm_tools import cros_cls
 
 
@@ -297,7 +298,7 @@ def inspect_gs_impl(
 
 
 def inspect_single_cl(
-    cl: cros_cls.ChangeListURL, artifact: ComparableArtifact
+    cl: gerrit_utils.ChangeListURL, artifact: ComparableArtifact
 ) -> list[tuple[str, str]]:
     """Inspects a single CL for artifacts.
 
@@ -394,14 +395,14 @@ def main(argv: list[str]) -> None:
     cl_parser.set_defaults(func=inspect_cl)
     cl_parser.add_argument(
         "--baseline-cl",
-        type=cros_cls.ChangeListURL.parse_with_patch_set,
+        type=gerrit_utils.ChangeListURL.parse_with_patch_set,
         help="""
         Baseline CL to inspect CQ runs of. This must contain a patchset number.
         """,
     )
     cl_parser.add_argument(
         "--new-cl",
-        type=cros_cls.ChangeListURL.parse_with_patch_set,
+        type=gerrit_utils.ChangeListURL.parse_with_patch_set,
         help="""
         New CL to inspect CQ runs of. This must contain a patchset number. Any
         regressions or wins are reported against this CL (so if you're using

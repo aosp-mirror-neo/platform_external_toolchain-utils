@@ -21,6 +21,7 @@ import re
 import shlex
 import subprocess
 import textwrap
+from typing import Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -90,7 +91,7 @@ class GsProfileCache:
         return sum(len(x) for x in self.profile_revs.values())
 
     @classmethod
-    def fetch(cls) -> "GsProfileCache":
+    def fetch(cls) -> Self:
         stdout = subprocess.run(
             [
                 "gsutil",
@@ -303,32 +304,23 @@ def update_llvm_ebuild_manifest(
 
 
 def create_llvm_pgo_ebuild_update(
+    *,
     chromeos_root: Path,
     chromiumos_overlay: Path,
     profile_cache: GsProfileCache,
+    current_llvm_rev: int,
     dry_run: bool,
 ) -> str | None:
-    current_llvm_sha = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(
-        chromeos_root
-    )
-    current_llvm_rev = (
-        get_llvm_hash.GetCachedUpToDateReadOnlyLLVMRepo().GetRevisionFromHash(
-            current_llvm_sha
-        )
-    )
     logging.info("Current LLVM revision is %d", current_llvm_rev)
-    want_revisions = [current_llvm_rev]
+    if not profile_cache.has_profile_for_rev(current_llvm_rev):
+        raise ValueError(
+            f"Current LLVM revision r{current_llvm_rev} has no profile in GS "
+            "cache."
+        )
 
-    llvm_next_rev = llvm_next.LLVM_NEXT_REV
-    if current_llvm_rev != llvm_next_rev:
-        logging.info("llvm-next rev is r%d", llvm_next_rev)
-        if profile_cache.has_profile_for_rev(llvm_next_rev):
-            want_revisions.append(llvm_next_rev)
-        else:
-            logging.info(
-                "No PGO profile exists for r%d; skip adding to profile list",
-                llvm_next_rev,
-            )
+    want_revisions = sorted(
+        x for x in profile_cache.profile_revs if x >= current_llvm_rev
+    )
 
     want_names = [
         profile_cache.newest_profile_name_for(x) for x in want_revisions
@@ -393,6 +385,15 @@ def main(argv: list[str]) -> None:
         force_generation=opts.force_llvm_next_pgo_generation,
     )
 
+    current_llvm_sha = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(
+        chromiumos_tree
+    )
+    current_llvm_rev = (
+        get_llvm_hash.GetCachedUpToDateReadOnlyLLVMRepo().GetRevisionFromHash(
+            current_llvm_sha
+        )
+    )
+
     # NOTE: `in_dir=chromiumos_tree` here is critical, since this function
     # needs to enter the chroot to run `ebuild manifest`. Hence, the worktree
     # must be trivially reachable from within the chroot.
@@ -400,10 +401,11 @@ def main(argv: list[str]) -> None:
         chromiumos_overlay, in_dir=chromiumos_tree
     ) as worktree:
         maybe_sha = create_llvm_pgo_ebuild_update(
-            chromiumos_tree,
-            worktree,
-            profile_cache,
-            dry_run,
+            chromeos_root=chromiumos_tree,
+            chromiumos_overlay=worktree,
+            profile_cache=profile_cache,
+            current_llvm_rev=current_llvm_rev,
+            dry_run=dry_run,
         )
 
     if not maybe_sha:

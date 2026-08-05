@@ -44,12 +44,15 @@ known_llvm_rev_sha_pairs: tuple[tuple[int, str], ...] = (
     (500000, "173855f9b0bdfe45d71272596b510650bfc1ca33"),
     (525000, "ac3ee1b1aec424c60660fd245f5b53aaffa2f5b1"),
     (550000, "e5bc842a9c56c1d83543f0232a888db6210efd85"),
+    (575000, "d5b170c39bcd18f875d1bb5eb8800ed62a5fb47d"),
+    (600000, "9b12f8fcaeb4e9f8a03de6e982e94e525a9a4dc6"),
+    (625000, "5dfc35a50514aaa62a34cb17f5be5c6396caf4fb"),
 )
 
 # Represents an LLVM git checkout:
 #  - |dir| is the directory of the LLVM checkout
 #  - |remote| is the name of the LLVM remote. Generally it's "origin".
-LLVMConfig = NamedTuple("LLVMConfig", (("remote", str), ("dir", Path | str)))
+LLVMConfig = NamedTuple("LLVMConfig", (("remote", str), ("dir", Path)))
 
 
 class Rev(NamedTuple("Rev", (("branch", str), ("number", int)))):
@@ -94,7 +97,7 @@ def is_git_sha(xs: str) -> bool:
     )
 
 
-def check_output(command: list[str], cwd: Path | str) -> str:
+def check_output(command: list[str], cwd: Path) -> str:
     """Shorthand for subprocess.check_output. Auto-decodes any stdout."""
     result = subprocess.run(
         command,
@@ -429,29 +432,78 @@ def translate_rev_to_sha(llvm_config: LLVMConfig, rev: Rev) -> str:
     assert False, "Couldn't find a base SHA for a rev on main?"
 
 
-def find_root_llvm_dir(root_dir: str = ".") -> str:
-    """Finds the root of an LLVM directory starting at |root_dir|.
-
-    Raises a subprocess.CalledProcessError if no git directory is found.
-    """
-    result = check_output(
-        ["git", "rev-parse", "--show-toplevel"],
-        cwd=root_dir,
+def is_llvm_dir(path: Path) -> bool:
+    """Returns True if `path` is an LLVM repository directory."""
+    return (
+        path.is_dir()
+        and (path / ".git").exists()
+        and (path / "clang").is_dir()
+        and (path / "llvm").is_dir()
+        and (path / "lld").is_dir()
     )
-    return result.strip()
+
+
+def find_root_llvm_dir(root_dir: Path = Path(".")) -> Path:
+    """Finds the root of an LLVM directory using autodetection.
+
+    Prefers PWD > CrOS > Android.
+    Raises ValueError if autodetection fails.
+    """
+    toolchain_utils_root = Path(__file__).resolve().parents[1]
+    candidates = (
+        root_dir,
+        # ChromeOS repo
+        toolchain_utils_root.parent / "llvm-project",
+        # Android repo
+        toolchain_utils_root.parent.parent / "toolchain" / "llvm-project",
+    )
+    result = next((x for x in candidates if is_llvm_dir(x)), None)
+    if result is not None:
+        return result
+    raise ValueError(
+        "Autodetection of LLVM directory failed; pass --llvm_dir to specify one"
+    )
+
+
+def select_preferred_remote(remotes: Iterable[str]) -> str:
+    """Selects the highest-priority remote name from available remotes."""
+    remote_set = set(remotes)
+    for preferred in ("cros", "goog", "origin"):
+        if preferred in remote_set:
+            return preferred
+
+    if len(remote_set) == 1:
+        return remote_set.pop()
+
+    if not remote_set:
+        raise ValueError("No git remotes found; pass --upstream to specify one")
+
+    raise ValueError(
+        "Ambiguous git remotes found; couldn't select a default from "
+        f"{sorted(remote_set)}; pass --upstream to specify one"
+    )
+
+
+def autodetect_remote(llvm_dir: Path) -> str:
+    """Autodetects the git remote name for the given LLVM directory."""
+    remotes_output = check_output(["git", "remote"], cwd=llvm_dir)
+    remotes = [r.strip() for r in remotes_output.splitlines() if r.strip()]
+    return select_preferred_remote(remotes)
 
 
 def main(argv: list[str]) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--llvm_dir",
+        type=Path,
         help="LLVM directory to consult for git history, etc. Autodetected "
         "if cwd is inside of an LLVM tree",
     )
     parser.add_argument(
         "--upstream",
-        default="origin",
-        help="LLVM upstream's remote name. Defaults to %(default)s.",
+        default=None,
+        help="LLVM upstream's remote name. Defaults to autodetected remote "
+        "('cros', 'goog', 'origin', etc.).",
     )
     sha_or_rev = parser.add_mutually_exclusive_group(required=True)
     sha_or_rev.add_argument(
@@ -464,14 +516,19 @@ def main(argv: list[str]) -> None:
     if llvm_dir is None:
         try:
             llvm_dir = find_root_llvm_dir()
-        except subprocess.CalledProcessError:
-            parser.error(
-                "Couldn't autodetect an LLVM tree; please use --llvm_dir"
-            )
+        except ValueError as e:
+            parser.error(str(e))
+
+    remote = opts.upstream
+    if remote is None:
+        try:
+            remote = autodetect_remote(llvm_dir)
+        except ValueError as e:
+            parser.error(str(e))
 
     config = LLVMConfig(
-        remote=opts.upstream,
-        dir=opts.llvm_dir or find_root_llvm_dir(),
+        remote=remote,
+        dir=llvm_dir,
     )
 
     if opts.sha:

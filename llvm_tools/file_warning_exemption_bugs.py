@@ -23,7 +23,7 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Any, Generator
+from typing import Any, Generator, Self
 
 from cros_utils import bugs
 from cros_utils import cros_paths
@@ -84,7 +84,7 @@ class RepoList:
         self._remote_to_local = remote_to_local_map
 
     @classmethod
-    def new_from_repo(cls, cros_root: Path) -> "RepoList":
+    def new_from_repo(cls, cros_root: Path) -> Self:
         # TODO: Ew
         repo_list = subprocess.run(
             ("repo", "list"),
@@ -403,7 +403,11 @@ def format_bug_from_package_warnings(
         component=component or bugs.INTERNAL_CROSTC_COMPONENT,
         assignee=None if component else crostc_contact,
         parent=parent_bug,
-        priority=1 if any(x in severe_warnings for x in warnings) else 2,
+        priority=(
+            bugs.Priority.P1
+            if any(x in severe_warnings for x in warnings)
+            else bugs.Priority.P2
+        ),
     )
 
 

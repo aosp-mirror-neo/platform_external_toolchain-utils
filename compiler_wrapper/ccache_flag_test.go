@@ -214,3 +214,26 @@ func TestCcacheIsDisabledInSrcConfigure(t *testing.T) {
 		}
 	})
 }
+
+func TestCcacheIsDisabledIfBinaryIsMissing(t *testing.T) {
+	withCCacheEnabledTestContext(t, func(ctx *testContext) {
+		ctx.removeFile(ccachePath)
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(gccX86_64, mainCc)))
+		if err := verifyPath(cmd, gccX86_64+".real"); err != nil {
+			t.Error(err)
+		}
+	})
+}
+
+func TestForceCcacheBypassesBinaryMissingCheck(t *testing.T) {
+	withCCacheEnabledTestContext(t, func(ctx *testContext) {
+		ctx.removeFile(ccachePath)
+		ctx.env = append(ctx.env, "COMPILER_WRAPPER_FORCE_CCACHE=1")
+		cmd := ctx.must(callCompiler(ctx, ctx.cfg,
+			ctx.newCommand(gccX86_64, mainCc)))
+		if err := verifyPath(cmd, "/usr/bin/ccache"); err != nil {
+			t.Error(err)
+		}
+	})
+}

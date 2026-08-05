@@ -9,28 +9,36 @@ import logging
 import os
 from pathlib import Path
 import shlex
+import sys
 from typing import Iterable
 
+from cros_utils import gerrit_utils
 from llvm_tools import chroot
 from llvm_tools import cros_cls
 from llvm_tools import get_llvm_hash
 from llvm_tools import llvm_next
 
 
-DEFAULT_LLVM_NEXT_BUILDERS = ("chromeos/staging/staging-build-chromiumos-sdk",)
+class UntrustedCLsError(Exception):
+    """Raised when untrusted CLs are detected and not allowed."""
+
+
+DEFAULT_LLVM_NEXT_BUILDERS = (
+    "chromeos/staging/staging-amd64-generic-asan",
+    "chromeos/staging/staging-amd64-generic-msan-fuzzer",
+    "chromeos/staging/staging-amd64-generic-ubsan",
+    "chromeos/staging/staging-build-chromiumos-sdk",
+)
 
 
 def generate_bb_add_command(
-    use_llvm_next: bool,
-    extra_cls: Iterable[cros_cls.ChangeListURL],
+    extra_cls: Iterable[gerrit_utils.ChangeListURL],
     bots: Iterable[str],
     tags: Iterable[str],
 ) -> list[str]:
     """Generates a `bb add` command.
 
     Args:
-        use_llvm_next: if True, all current llvm-next CLs will be added to the
-            run.
         extra_cls: A list of extra CLs to add to the run.
         bots: Bots that should be spawned by this command, e.g.,
             `chromeos/staging/staging-build-chromiumos-sdk`.
@@ -41,20 +49,13 @@ def generate_bb_add_command(
         A command that would spawn the requested builders in the requested
         configuration.
     """
-    cls: list[cros_cls.ChangeListURL] = []
-    if use_llvm_next:
-        if not llvm_next.LLVM_NEXT_TESTING_CLS:
-            raise ValueError(
-                "llvm-next testing requested, but no llvm-next CLs exist."
-            )
-        cls += llvm_next.LLVM_NEXT_TESTING_CLS
-
+    cls: list[gerrit_utils.ChangeListURL] = []
     if extra_cls:
         cls += extra_cls
 
     cmd = ["bb", "add"]
     for cl in cls:
-        cmd += ("-cl", cl.crrev_url_without_http())
+        cmd += ("-cl", cl.shorthand_url_without_http())
 
     for tag in tags:
         cmd += ("-t", tag)
@@ -64,10 +65,8 @@ def generate_bb_add_command(
 
 def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
     """Returns False if llvm-next testing is likely to be useful."""
-    if not llvm_next.LLVM_NEXT_TESTING_CLS:
-        logging.info(
-            "Tests seem pointless: no llvm-next testing CLs are registered."
-        )
+    if not llvm_next.LLVM_NEXT_MANIFEST_CL:
+        logging.info("Tests seem pointless: LLVM_NEXT_MANIFEST_CL is not set.")
         return True
 
     current_hash = get_llvm_hash.LLVMHash().GetCrOSCurrentLLVMHash(
@@ -84,6 +83,81 @@ def is_pointless_llvm_next_invocation(chromeos_tree: Path) -> bool:
         "Testing seems useful; llvm-next hash is %s", llvm_next.LLVM_NEXT_HASH
     )
     return False
+
+
+def fetch_llvm_next_deps_or_exit(
+    gerrit_client: gerrit_utils.GerritClient,
+    main_cl: gerrit_utils.ChangeListURL,
+    chromeos_tree: Path,
+    *,
+    untrusted_reject: bool,
+    untrusted_ignore: bool,
+) -> list[gerrit_utils.ChangeListURL]:
+    """Fetches dependencies for the main CL and handles untrusted CLs."""
+    logging.info("Fetching dependencies for main CL: %s", main_cl)
+    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+        main_cl, chromeos_tree
+    )
+    owners = cros_cls.fetch_current_toolchain_owners()
+    owners.extend(llvm_next.TRUSTED_UPLOADERS)
+
+    trusted, untrusted = cros_cls.partition_changes_by_uploader_trust(
+        deps,
+        owners,
+        # NOTE: Add `main_cl` here since that always has a patchset, and it's
+        # _theoretically_ possible for it to be untrusted (say someone uploads
+        # it, then leaves the team, so is removed from OWNERS).
+        trusted_allowlist=(
+            llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST + (main_cl,)
+        ),
+    )
+
+    included_changes = list(trusted)
+
+    if untrusted:
+        if untrusted_reject:
+            logging.error("Untrusted CLs detected:")
+            for c in untrusted:
+                logging.error("- %s by %s", c.cl_url, c.uploader)
+            raise UntrustedCLsError(
+                "Aborting due to untrusted CLs "
+                "(requested by --untrusted-reject)"
+            )
+
+        if untrusted_ignore:
+            logging.info("Ignoring untrusted CLs:")
+            for c in untrusted:
+                logging.info("- %s by %s", c.cl_url, c.uploader)
+        else:
+            print("Untrusted CLs detected:")
+            for c in untrusted:
+                print(f"- {c.cl_url} by {c.uploader}")
+
+            try:
+                response = input(
+                    "\n\nAllow run with these untrusted CLs? [y/N]: "
+                )
+            except EOFError:
+                response = "n"
+
+            if response.strip().lower() != "y":
+                raise UntrustedCLsError("Aborted by user.")
+
+            included_changes.extend(untrusted)
+
+    # b/520356087: the order that CLs are specified here is _identical_ to the
+    # order in which they're applied on the bot. `gerrit deps` prints its walk
+    # order by default, which means that we will very often have children
+    # ordered before parents, which leads to merge conflicts on bots.
+    #
+    # We use relation chains to resolve and sort them.
+    with gerrit_utils.default_gerrit_thread_pool() as executor:
+        sorted_changes = gerrit_utils.resolve_and_sort_cl_dependencies(
+            gerrit_client,
+            included_changes,
+            executor=executor,
+        )
+    return [change.cl_url for change in sorted_changes]
 
 
 def parse_opts(argv: list[str]) -> argparse.Namespace:
@@ -120,7 +194,7 @@ def parse_opts(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--cl",
         action="append",
-        type=cros_cls.ChangeListURL.parse,
+        type=gerrit_utils.ChangeListURL.parse,
         help="""
         CL to add to the `bb add` run. May be specified multiple times. In the
         form crrev.com/c/123456.
@@ -141,6 +215,17 @@ def parse_opts(argv: list[str]) -> argparse.Namespace:
         Tag to add to the `bb add` invocation. May be specified multiple times.
         Tags are arbitrary text.
         """,
+    )
+    untrusted_group = parser.add_mutually_exclusive_group()
+    untrusted_group.add_argument(
+        "--untrusted-ignore",
+        action="store_true",
+        help="Ignore untrusted CLs and do not include them in the run.",
+    )
+    untrusted_group.add_argument(
+        "--untrusted-reject",
+        action="store_true",
+        help="Reject the run if there are untrusted CLs.",
     )
     parser.add_argument(
         "bot", nargs="*", default=[], help="Bot(s) to run `bb add` with."
@@ -179,9 +264,30 @@ def main(argv: list[str]) -> None:
         )
         return
 
+    extra_cls = list(opts.cl) if opts.cl else []
+
+    if opts.llvm_next:
+        main_cl = llvm_next.LLVM_NEXT_MANIFEST_CL
+        if not main_cl:
+            logging.error("LLVM_NEXT_MANIFEST_CL is not set in llvm_next.py")
+            sys.exit(1)
+
+        gerrit_client = gerrit_utils.GerritClient.create()
+        try:
+            extra_cls.extend(
+                fetch_llvm_next_deps_or_exit(
+                    gerrit_client,
+                    main_cl,
+                    opts.chromeos_tree,
+                    untrusted_reject=opts.untrusted_reject,
+                    untrusted_ignore=opts.untrusted_ignore,
+                )
+            )
+        except UntrustedCLsError as e:
+            sys.exit(str(e))
+
     cmd = generate_bb_add_command(
-        use_llvm_next=opts.llvm_next,
-        extra_cls=opts.cl,
+        extra_cls=extra_cls,
         bots=opts.bot,
         tags=opts.tag or (),
     )

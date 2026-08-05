@@ -1,0 +1,109 @@
+From 0d4980712cce15b31962da8964c4bbb35c8e1b3c Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Tue, 4 Nov 2025 21:11:03 -0800
+Subject: [PATCH] Revert "IR: Remove null UseList checks in hasNUses methods
+ (#165929)" (#166500)
+
+This reverts commit 93e860e694770f52a9eeecda88ba11173c291ef8.
+
+hasOneUse still has the null check, and it seems bad to be logically
+inconsistent across multiple of these predicate functions.
+
+patch.cherry: true
+patch.metadata.author: Matt Arsenault <Matthew.Arsenault@amd.com>
+patch.metadata.original_sha: 044e0f041d5c02ae3b4e44bab4647008ff497d9f
+patch.platforms: chromiumos
+patch.version_range.from: 596036
+patch.version_range.until: 596190
+
+---
+ llvm/lib/IR/Value.cpp               |  8 +++++++
+ llvm/unittests/IR/ConstantsTest.cpp | 36 ++++++++---------------------
+ 2 files changed, 18 insertions(+), 26 deletions(-)
+
+diff --git a/llvm/lib/IR/Value.cpp b/llvm/lib/IR/Value.cpp
+index 95d61a987f6c..b775cbb0c792 100644
+--- a/llvm/lib/IR/Value.cpp
++++ b/llvm/lib/IR/Value.cpp
+@@ -148,10 +148,18 @@ void Value::destroyValueName() {
+ }
+ 
+ bool Value::hasNUses(unsigned N) const {
++  if (!UseList)
++    return N == 0;
++
++  // TODO: Disallow for ConstantData and remove !UseList check?
+   return hasNItems(use_begin(), use_end(), N);
+ }
+ 
+ bool Value::hasNUsesOrMore(unsigned N) const {
++  // TODO: Disallow for ConstantData and remove !UseList check?
++  if (!UseList)
++    return N == 0;
++
+   return hasNItemsOrMore(use_begin(), use_end(), N);
+ }
+ 
+diff --git a/llvm/unittests/IR/ConstantsTest.cpp b/llvm/unittests/IR/ConstantsTest.cpp
+index 9cb9e1236b2d..6376165cbe76 100644
+--- a/llvm/unittests/IR/ConstantsTest.cpp
++++ b/llvm/unittests/IR/ConstantsTest.cpp
+@@ -29,8 +29,13 @@ TEST(ConstantsTest, UseCounts) {
+ 
+   EXPECT_TRUE(Zero->use_empty());
+   EXPECT_EQ(Zero->getNumUses(), 0u);
++  EXPECT_TRUE(Zero->hasNUses(0));
+   EXPECT_FALSE(Zero->hasOneUse());
+   EXPECT_FALSE(Zero->hasOneUser());
++  EXPECT_FALSE(Zero->hasNUses(1));
++  EXPECT_FALSE(Zero->hasNUsesOrMore(1));
++  EXPECT_FALSE(Zero->hasNUses(2));
++  EXPECT_FALSE(Zero->hasNUsesOrMore(2));
+ 
+   std::unique_ptr<Module> M(new Module("MyModule", Context));
+ 
+@@ -45,36 +50,15 @@ TEST(ConstantsTest, UseCounts) {
+   // Still looks like use_empty with uses.
+   EXPECT_TRUE(Zero->use_empty());
+   EXPECT_EQ(Zero->getNumUses(), 0u);
++  EXPECT_TRUE(Zero->hasNUses(0));
+   EXPECT_FALSE(Zero->hasOneUse());
+   EXPECT_FALSE(Zero->hasOneUser());
++  EXPECT_FALSE(Zero->hasNUses(1));
++  EXPECT_FALSE(Zero->hasNUsesOrMore(1));
++  EXPECT_FALSE(Zero->hasNUses(2));
++  EXPECT_FALSE(Zero->hasNUsesOrMore(2));
+ }
+ 
+-#ifdef GTEST_HAS_DEATH_TEST
+-#ifndef NDEBUG
+-
+-TEST(ConstantsTest, hasNUsesInvalid) {
+-  LLVMContext Context;
+-  Type *Int32Ty = Type::getInt32Ty(Context);
+-  Constant *Zero = ConstantInt::get(Int32Ty, 0);
+-  std::unique_ptr<Module> M(new Module("MyModule", Context));
+-
+-  // Introduce some uses
+-  new GlobalVariable(*M, Int32Ty, /*isConstant=*/false,
+-                     GlobalValue::ExternalLinkage, /*Initializer=*/Zero,
+-                     "gv_user0");
+-  new GlobalVariable(*M, Int32Ty, /*isConstant=*/false,
+-                     GlobalValue::ExternalLinkage, /*Initializer=*/Zero,
+-                     "gv_user1");
+-
+-  for (int I = 0; I != 3; ++I) {
+-    EXPECT_DEATH(Zero->hasNUses(I), "hasUseList\\(\\)");
+-    EXPECT_DEATH(Zero->hasNUsesOrMore(I), "hasUseList\\(\\)");
+-  }
+-}
+-
+-#endif
+-#endif
+-
+ TEST(ConstantsTest, Integer_i1) {
+   LLVMContext Context;
+   IntegerType *Int1 = IntegerType::get(Context, 1);
+-- 
+2.39.5

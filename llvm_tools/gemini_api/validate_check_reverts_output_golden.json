@@ -1,16 +1,18 @@
 {
   "0121a8e4319619527c9c28bbc01c74f794cc2255": [
     {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
       "is_reland": true,
       "is_revert": true,
-      "reverted_prs": [
-        144685
-      ],
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "01472d8e357caa10964241ab50b3449014d1be12": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -19,6 +21,8 @@
   ],
   "0168324523a2f6f804b2c2a2190d659b28456230": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -27,6 +31,8 @@
   ],
   "02f3e95a42d0a9bf84ac5535b74e9f96ef22a8ca": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -35,6 +41,8 @@
   ],
   "02fbb6a290779af31f24d6fffd104675fc10d986": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -43,6 +51,8 @@
   ],
   "04196ba01a4d2ea1649836d769e5651e89c05a82": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -51,6 +61,8 @@
   ],
   "04672e20d43679db4b13b8f9d19e3a2b748bca4f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -59,6 +71,8 @@
   ],
   "05dd957cda663273ae0e5739656ffe701404f37c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -67,6 +81,8 @@
   ],
   "069bf187ccc432fa379287670461462ed5001a04": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -75,14 +91,28 @@
   ],
   "06f06deb774ada5aa37db89fa7b4a88b13163e0d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "06f779b69d8294b296ee9dd14b82f0e2fe59899f": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
   "0720af8c24f1e11217a6492fed5e3f60c0a02a19": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -91,6 +121,8 @@
   ],
   "093395ca6b5c180eabd597236a928c5ce2854260": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -99,6 +131,8 @@
   ],
   "093439c688db8d176081176576011275a1aecf23": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -107,6 +141,8 @@
   ],
   "09dbdf651470bb4c9e5b81986a47f7c495285fbe": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -115,6 +151,8 @@
   ],
   "0a72e6ddac0f9154b806c40992d1616fa86957d8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -123,6 +161,8 @@
   ],
   "0abf4975bbf176d393869d290d55748794e220c4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -131,6 +171,8 @@
   ],
   "0b3ee2093954dd3c5a201eba4b7641adadd9b2c6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -139,6 +181,8 @@
   ],
   "0bcf45ea3458ba79eb4257afcfd6af954292c9ce": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -147,22 +191,52 @@
   ],
   "0bdd312b1d0d4b9d30170f384d44fa017acfb096": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "0c3f51c0427022f16129a6ac4d2a11ad83ae7703": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "4d800633b2683304a5431d002d8ffc40a1815520"
+      ]
+    }
+  ],
   "0cb98c721bb540febab0fc0094388480940c49b0": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "0f679999aae135b388c25fb1acbb030109c6418f": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        198900
+      ],
       "reverted_shas": []
     }
   ],
   "109040acec00e5beaef35e51df3d73d5ba4212a4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -171,6 +245,8 @@
   ],
   "1110e2ff9f8d055af0b81267bf01d720421b4b70": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -179,6 +255,8 @@
   ],
   "11e1d465860903fd9ead27c0c1e60de4439011db": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -187,6 +265,8 @@
   ],
   "13daf3b70c6e8991c846e8384de47c5e84a94480": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -195,6 +275,8 @@
   ],
   "1458eb206fb652358b3ee7e75d95b52f3f4ac333": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -203,6 +285,8 @@
   ],
   "15a705dc931aace6ea2edf895e4258e0c3d825a0": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -211,6 +295,8 @@
   ],
   "184821b63d769e48d8b89f70e8f7a5adbe429fae": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -219,6 +305,8 @@
   ],
   "18e4f775c33af123772409ffde69dd424b98814a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -229,6 +317,8 @@
   ],
   "193995d5a21dc8b923e19d9370aa8e1f374cd940": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -237,14 +327,30 @@
   ],
   "197d1c1570160afbf3c5e03d81d42d124b4e5b44": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "1d5d18924d185a4267462479307f1ff9911cb112": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        99272
+      ],
+      "reverted_shas": []
+    }
+  ],
   "1e2e903684719a0bdf559af261ffff9f551f4ebb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -253,6 +359,8 @@
   ],
   "20051b7d6ed4de4301f05c385d3885696bf364df": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -261,6 +369,8 @@
   ],
   "229ab5aa2b11bb8738db2810677abfc89050ad80": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -269,6 +379,18 @@
   ],
   "229d86026fa0e5d9412a0d5004532f0d9733aac6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "22cc68ca2f384292a05271947e5138f96e734401": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -277,6 +399,8 @@
   ],
   "2422972eeaebe94f591be2325563785ab7254d4e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -285,6 +409,8 @@
   ],
   "246990dc029620619f41b6bd3bd7ba67ada1a384": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -293,6 +419,8 @@
   ],
   "24ea1559d3d0005aefbca2c7a9fad164a8a33632": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -301,6 +429,8 @@
   ],
   "2696e8c1499682f0b1f357d9035ed59f544892f8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -309,6 +439,8 @@
   ],
   "26dde15ed4f1310fa5df3baf03d802ea1cf009b8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -317,6 +449,8 @@
   ],
   "27ed1f99e250c913715ca75c4f33e42d59a06006": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -325,14 +459,42 @@
   ],
   "281e6d2cc498d05f3ca601e3b1d595420e7ed827": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "295d5484c09943d2af2c45c764157dc045d4a0d9": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "2c9efd0177910753008767a8c50e62f676721443"
+      ]
+    }
+  ],
+  "298f1c276f4f9c18b25a79ffe6e619e89c5fbf7e": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        143664
+      ],
+      "reverted_shas": []
+    }
+  ],
   "29cde86ecc81cfe0770bf366ddaec522d3885c75": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -341,6 +503,8 @@
   ],
   "2a5ac19605ae49d6628ac3af55d6b528cb13ed2e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -351,18 +515,70 @@
       ]
     }
   ],
-  "2d4bac867552aa361c16db26a01d36f27507994f": [
+  "2c980310f67c13dd89c8702d40abeab47a4a2b4b": [
     {
-      "is_reland": true,
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
-        139474
+        115885
       ],
+      "reverted_shas": [
+        "584d1a632f3af0daca4db02f7f3b2c7f48ab0ddf"
+      ]
+    }
+  ],
+  "2c9efd0177910753008767a8c50e62f676721443": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        177465
+      ],
+      "reverted_shas": [
+        "c5cb48c39701086393d1177929a328868849fc72"
+      ]
+    }
+  ],
+  "2d4bac867552aa361c16db26a01d36f27507994f": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "2da234946a4f13a27d4322565cb4103caf9cbff1": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        183901
+      ],
+      "reverted_shas": []
+    }
+  ],
+  "2f4cca69c7bd3db5dfb9e7b7258c1cf6e0dc476e": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "2ff44d7d658beca1724f04211e194bf4beb2a1a0": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -371,6 +587,8 @@
   ],
   "314458197e96b2344a47e91d449736c0bfbb5563": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -379,6 +597,28 @@
   ],
   "334d0be2d496af6c511d2efb183b862e7d911329": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "33cef35bfb8bb7077ba19296fd99ba5cc4c4b0cf": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "3462c2b552069cd62dceb006c416ccf9f383f3af": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -387,6 +627,8 @@
   ],
   "351b38f266718d862aa122e56667d6582625c918": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -395,6 +637,8 @@
   ],
   "35f003d13bce7f1a991d6a059c9c25e72009022c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -403,6 +647,8 @@
   ],
   "3769ce013be2879bf0b329c14a16f5cb766f26ce": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -411,6 +657,8 @@
   ],
   "381623eb11cefd3ac21a36d028ba4832643010ef": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -419,6 +667,8 @@
   ],
   "38542efcbabf5ae8ec4b3169321ac793f103bae0": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -427,14 +677,20 @@
   ],
   "3a4d506cb057488ab8dbaf234b7761edb1854be9": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
-      "is_revert": false,
-      "reverted_prs": [],
+      "is_revert": true,
+      "reverted_prs": [
+        147707
+      ],
       "reverted_shas": []
     }
   ],
   "3a561bc66264321d4c9f80d1249cb8fe1fa31e22": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -443,6 +699,8 @@
   ],
   "3b5cc2dc6374a5785741aedb28ad80b7e941b70c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -451,6 +709,8 @@
   ],
   "3d1c1a5277835baa3d71c23b396d2cbe594505d1": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -459,6 +719,8 @@
   ],
   "3d994468098027f9cf550c78a1c91bb266040f61": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [],
@@ -467,8 +729,22 @@
       ]
     }
   ],
+  "3ed48bf648cb6d94d8385c336bc72aadcd59f4f2": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        188526
+      ],
+      "reverted_shas": []
+    }
+  ],
   "3fa34f17e822fbe652e694b7b421ce7108f902df": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -477,6 +753,8 @@
   ],
   "3fbb553f7d31329212b658cca5b9eb5dae4e91b2": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -485,6 +763,8 @@
   ],
   "406d9b1dd6522cf18e61c4c4af66db765de8afed": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -493,6 +773,8 @@
   ],
   "4072a6b85beed8427d14f13248d2f9cfaede489f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -503,6 +785,8 @@
   ],
   "41b5880c957320b1be68cdb642ba735fdd27bb7c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -511,6 +795,8 @@
   ],
   "4394a0ca4a7c0687ea0c73cdf994bb36efbc69f2": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -519,6 +805,8 @@
   ],
   "440a4de55265c67cf41a77e40f96d7c18ed7590a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -527,6 +815,8 @@
   ],
   "44aedacb1b64b415fddfada39eb876602980ea72": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -535,6 +825,8 @@
   ],
   "44af26ea2e0b0fedb74276f9678eba4df5f83aab": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -543,6 +835,8 @@
   ],
   "44fbeb3215f31ace95ea2a7e88121920e813db5d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -551,6 +845,8 @@
   ],
   "469863111f217aeea98d65b30266f28c7b6c1169": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -559,6 +855,8 @@
   ],
   "46a8c094894e22d553cc527f9536b05db53250e8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -567,6 +865,8 @@
   ],
   "474bbc17831e45ae855b7385512d97c519c640fb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -575,6 +875,8 @@
   ],
   "4784585747423a8ed6e3acbe3c8fbe97ba362cc5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -583,6 +885,8 @@
   ],
   "47944d071f27c04c1cccf51926eb14062471f6cc": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -591,6 +895,8 @@
   ],
   "47f54e499210c2a66da0441b7ae54974a57d2182": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -601,6 +907,8 @@
   ],
   "496d31c8a9d69ded50e4aa7fbd5c5ba1ffd3ef2c": [
     {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -611,6 +919,8 @@
   ],
   "49ccf46adc455b64c2be0006092651182b1cb2c4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -619,14 +929,40 @@
   ],
   "4be22dabc58046ddcab449368132754892242250": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "4c7dc9c1783fa10e5e99e28ed25103a046c02c7d": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": false,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "4d800633b2683304a5431d002d8ffc40a1815520": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "8c567e64f808f7a818965c6bc123fedf7db7336f"
+      ]
+    }
+  ],
   "4da745a0f4fad9026dd4a84d4a9f169166575b80": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -635,14 +971,40 @@
   ],
   "4e11f89904dc9b77ef44b01c68742e5b00bfdf21": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "52ff58c3300338876ae63126ce0d33331000f1ba": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        136133
+      ],
+      "reverted_shas": []
+    }
+  ],
   "536e414b14edb2cfea59b0482a5b968ad34953a7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "54381fd81b06a819276b90081672019848765748": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -651,6 +1013,8 @@
   ],
   "55f9eccee9b5ca6102206d4a1aba9ca21070881d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -659,8 +1023,22 @@
       "reverted_shas": []
     }
   ],
+  "560e22926804f6ca818952e815ec63c434460039": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        177131
+      ],
+      "reverted_shas": []
+    }
+  ],
   "565f707beb176c81b3c18651f280304484378f2a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -669,22 +1047,64 @@
   ],
   "5805e887458801f2756d0466b84b712472507f2f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "5a13758207cc0f1e02a0fe0ae492bb98e2d3d070": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        196519
+      ],
       "reverted_shas": []
     }
   ],
   "5a47a1828abeefe72c82f732b446cc319ef65a31": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "5cf20a6c9ed5693e5a075f458380eaea5f3f42c1": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [
+        202500
+      ],
+      "reverted_shas": []
+    }
+  ],
+  "5d4dd5357076de54d70f8621a39626b393a6e110": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "26129766df701d462ed9a6a9a68a88b3564a70bd"
+      ]
+    }
+  ],
   "5dff1ad3a3570f0f5a154590ce43b107dc6c3994": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -693,6 +1113,8 @@
   ],
   "5f864560a6514bb74ecc1e0c7d3ff8c412228bfe": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -701,14 +1123,30 @@
   ],
   "61d569ffc338834cc81cddf31023de41fd3a6be7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "63e6bba0c322b6c07a4c66f09e6fd84e786248e6": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "07cec73dcd095035257eec1f213d273b10988130"
+      ]
+    }
+  ],
   "660555191b3e886a578f3d9bfdcb49877e1c5da0": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -717,6 +1155,8 @@
   ],
   "66392a8d8d81e66ec09452d35c85147dafb07571": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -725,6 +1165,8 @@
   ],
   "66b34bc943644c7e20f5c5c22a706a091dd9b053": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -735,6 +1177,8 @@
   ],
   "6897ca460e6e28bcf76ae941438dd1313426e0bb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -743,6 +1187,8 @@
   ],
   "69235d269b305e25798210d293969efb45ee3f1c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -751,6 +1197,8 @@
   ],
   "69d0bd56ad064df569cd065902fb7036f0311c0a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -759,6 +1207,8 @@
   ],
   "6a32e2225ed42a1cb846d9753c5589e3462924c5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -767,6 +1217,8 @@
   ],
   "6a425f1e54d759ddc22afcbe1df442c7b35077c1": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -775,6 +1227,8 @@
   ],
   "6a45697fa63828c3ad90e2def12dae39b7e83dc5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -783,6 +1237,8 @@
   ],
   "6abf4f376efe9a708587e8f35d30ab850545d92f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -791,6 +1247,8 @@
   ],
   "6c3d62a4b4f15eb001585bf61a8c3f4b9aff8237": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -803,6 +1261,8 @@
   ],
   "6cd6de5bc0c8b09b3a252bfb8a62870c1cdede4c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -811,6 +1271,8 @@
   ],
   "6ce68d3a12fb70a8a1247823e2c90a5a1dd4531d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -819,6 +1281,8 @@
   ],
   "6d231fbb05417a77e8787f625fd14e1a30e27a5b": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -827,6 +1291,8 @@
   ],
   "6ebb8901cc0907ed4ff19444be5c545e918c1b52": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -835,6 +1301,8 @@
   ],
   "6f272d1ecf70fc555efb1a0c601095031d5b2ca9": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -843,6 +1311,8 @@
   ],
   "707447159341f7b5678dee4f47731af50524b9ae": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -851,6 +1321,8 @@
   ],
   "71832a3139b454f8e714ff54e8bb0ea12dc095f5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -859,6 +1331,8 @@
   ],
   "72bc1bea7a28f432658967463af2104db4663156": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -867,14 +1341,20 @@
   ],
   "73ce0aca72348a80dc2c2175516a0993ab8d6be3": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": true,
       "is_reland": false,
-      "is_revert": false,
-      "reverted_prs": [],
+      "is_revert": true,
+      "reverted_prs": [
+        149425
+      ],
       "reverted_shas": []
     }
   ],
   "7402cd6ded243972ab9a70da83845bce66e502c6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -883,14 +1363,28 @@
   ],
   "740f690831a2eb09ba73b4fb5456a37ae62a5051": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "754d3d0d966423f9d308c6823deed55b02bac9f2": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
   "75cc77e55e12d39aed94702b0b1365e39713081e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -903,14 +1397,28 @@
   ],
   "7694856fddbb3fed10076aefec75c9b512cc352e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "76befc86dea9cad6be870c04732379f7ecf596dd": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
   "76d98cfcc40e9a351efc52287338f0fd5d4402fb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -921,6 +1429,18 @@
   ],
   "77c79313d1360b4f44919ddb7993543e3ac0a2b1": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "7803b4a6dda22bc33b3f239b1c2b59b52b98abd0": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -929,24 +1449,40 @@
   ],
   "7a16a1ddb2eaa8c31cd648b0567897f551f8f6c6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
-  "7d2332391f81d44d7c9d1ca40bd5f393c59ad0df": [
+  "7cccf56ce6bb98cd685ad67b8e4db9293768741c": [
     {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
-        151286
+        190926
       ],
+      "reverted_shas": []
+    }
+  ],
+  "7d2332391f81d44d7c9d1ca40bd5f393c59ad0df": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],
   "7d3134f6cc59f47460646a13abcf824bae05d772": [
     {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -957,6 +1493,8 @@
   ],
   "7d886fab74d4037d654d02bed24dd97c0ba863d6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -965,6 +1503,8 @@
   ],
   "7e8a251f751c47f31103db2975a34d1b7780d992": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -975,6 +1515,8 @@
   ],
   "81f3ddf4a2d310a78b6286cf2f5eb527194f014c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -983,6 +1525,8 @@
   ],
   "82046c7f339a74a198ec7b17612243663732c7f7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -991,6 +1535,8 @@
   ],
   "82f5bd68d03c2ef963f5e53843b1c47989dcd5d7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -999,6 +1545,8 @@
   ],
   "8381f95dec6d63158c034f7e173e37d97937b896": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1007,6 +1555,8 @@
   ],
   "83e5a99ff6a5662b6e7fd6a0f9f21d70458022c2": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1015,14 +1565,42 @@
   ],
   "856a8b5ef9f40361f14b488a5dced9e9989f6fa8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "862ba4798e09142ae9cf1f259b94301c7438c156": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [
+        198048
+      ],
+      "reverted_shas": []
+    }
+  ],
+  "86e114a9b24f16d7bb305a0be9cb565bca0b5224": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        175757
+      ],
+      "reverted_shas": []
+    }
+  ],
   "87404eaf0445c7e67091e4e71d6c1cfa6fd0edd4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1031,6 +1609,8 @@
   ],
   "885ddf4a3a4948b67ce5e792a97bf5148e8b479e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1039,14 +1619,40 @@
   ],
   "886b2133e372108da7b19bd2634c28bdbdf8d04a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "88afb5af47a95af41451e835be28093a9d1ab333": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        197728
+      ],
+      "reverted_shas": []
+    }
+  ],
+  "8ec0552a7f1f50986dda6d13eae310d121d7e3ba": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
   "900d20d0dc7b228cba9df98ed3ec713098c79342": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1055,6 +1661,30 @@
   ],
   "910d7e90bfc6aef5f974f0cf4b3fc034a2f4849a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "911841f717eb8acaccf4f3deb5f85fbf6903f55f": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "46fcdf23640ebb76271f91720583b0df6bed4481"
+      ]
+    }
+  ],
+  "914a233a001f67ceebf01344c66e45f00ba9f9f3": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1063,6 +1693,8 @@
   ],
   "9234066476aa82cfac3cee564883a3124df4584e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1071,6 +1703,8 @@
   ],
   "92ac1ac9046d785f5f0c68e2d9f74b05c4db5d9c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1079,6 +1713,8 @@
   ],
   "94c48a21bbdf0589540cb55057c216607e764919": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1087,6 +1723,8 @@
   ],
   "95b16d1264725d8aad5a3b951f444fdec04c2224": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1095,6 +1733,28 @@
   ],
   "95c32bf2d46ddd2c10dae426c75aa4dddcb146df": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "974566914c4e78d53239bfebf3c73d160bed6cc6": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "974b76899953e8f1b3f070c5ce8a3bbbbd29e813": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1103,6 +1763,8 @@
   ],
   "9a592d9a849dacf02ff571c81f2b3a805e9d13e5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1111,6 +1773,8 @@
   ],
   "9f102a90042fd3757c207112cfe64ee10182ace5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1119,6 +1783,18 @@
   ],
   "9faac938e1b03ea23e7212550860f8b8001757e1": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "a03f82d7e582078163bce7ecaf960e8a53fb4744": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1127,6 +1803,8 @@
   ],
   "a04142f11f926d09059614a6170eff35a4ea6ff6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1135,14 +1813,30 @@
   ],
   "a14659a2c8c82804b611925fa7a48fd26ef1d135": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "a14d084bbb1a7261d8a71c56120159abb6af330b": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": false,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [
+        199114
+      ],
+      "reverted_shas": []
+    }
+  ],
   "a196281896de208fca1dde315e377a46ec9a2e66": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1151,6 +1845,8 @@
   ],
   "a3e068552923c0047f8a9c27c6558697b9371ed7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1159,6 +1855,8 @@
   ],
   "a44532544bd96c68ce2bc885d0cc0c4c9116f8b1": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1167,14 +1865,28 @@
   ],
   "a485e0eae01beaf68a94d1f050838866e849bd48": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "a60a5421b60be1bce0272385fa16846ada5eed5e": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
   "a7f1702f2c5d4601de962cde14af35c313c16902": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1183,6 +1895,8 @@
   ],
   "a82ca1b5603a4ed9598b784f703d908f32e970b8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1191,6 +1905,8 @@
   ],
   "a85c725952f7eec54552c195353ff0cb6275a2e0": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [],
@@ -1201,6 +1917,8 @@
   ],
   "a9d491b17f4f0a131f68a5dbdac8d34c7c8427db": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1209,6 +1927,8 @@
   ],
   "abc22f771ebe05c2aeb8386337d9fb8d2bdd1094": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1217,6 +1937,8 @@
   ],
   "acb5d0c211f72ba370bfeea7e5bf3b108f84895a": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1225,6 +1947,8 @@
   ],
   "ad3196d7595dd53c4021b4bf4cd7bcefd85853df": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1233,6 +1957,8 @@
   ],
   "adae37080587bf18da4b1ce3453a671d73bec724": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1241,6 +1967,8 @@
   ],
   "aeeb9b507750553f0e85584bda20b8d2373b3bda": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1249,6 +1977,18 @@
   ],
   "b296ea9c14af60f9b4faa26a39ecc52c1762c794": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "b4b8d4e5d062438289c60a832ec783d34cc31fa4": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1257,6 +1997,8 @@
   ],
   "b5902924b27348dfae35a501f8b6e5b66f3bed46": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1265,6 +2007,8 @@
   ],
   "b800930db22d7735eec1d54cc66530ddab123a4d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1273,6 +2017,8 @@
   ],
   "b8195e3a8e77ec15f6abbcce86d6a51dca13a5c4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1281,14 +2027,30 @@
   ],
   "b83f7f195c64ab1c87ceea9cda9b54eaae893cdb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "b87be02cc74db3a929b4b72a26f2577dc8b7fa11": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [],
+      "reverted_shas": [
+        "1418f80"
+      ]
+    }
+  ],
   "b8ef25aa643761233dc5b74d9fb7c38a2064d9c7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1297,6 +2059,8 @@
   ],
   "b9c328480cc5c9fbc2940ce323a8dcb30a042b58": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1305,6 +2069,8 @@
   ],
   "b9ca01b7464caa211841f88281d0a7ed0a97d634": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1313,6 +2079,8 @@
   ],
   "b9e133d5b6e41b652ba579bcb8850c00f72d0f01": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1321,6 +2089,8 @@
   ],
   "bae8f1336db6a7f3288a7dcf253f2d484743b257": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -1331,6 +2101,8 @@
   ],
   "bc814348ec0412362b062cb2928e5fc76d31bccb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1339,6 +2111,8 @@
   ],
   "bd741975bc666d032665facd19144df9deedc5c8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1347,6 +2121,8 @@
   ],
   "c088b5ffca4c4b81a8fa0e7f006e9391eba1f191": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1355,14 +2131,30 @@
   ],
   "c23b4fbdbb70f04e637b488416d8e42449bfa1fb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "c25e77436ea44b4c980f4974dee8984298d13a08": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        85678
+      ],
+      "reverted_shas": []
+    }
+  ],
   "c2eddec4ff42eca8a93e3f8a0531dfb6e60a61ca": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1371,6 +2163,8 @@
   ],
   "c3103068b713dbed8d8ac75b165086a1a19c89e9": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1379,6 +2173,8 @@
   ],
   "c43c1c0c45fc1ec3fab7abd6e19b318f6468bf28": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1387,6 +2183,8 @@
   ],
   "c4846d29cdefc5fb6858ccf0378a8103b659016b": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1395,6 +2193,8 @@
   ],
   "c7c022948031a3c79b92b1a0497dc75868382d17": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -1407,6 +2207,18 @@
   ],
   "c869ef6ebc4882978252c3a98279928b31b58135": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "c9ab97ff9569842c2bc91e140e6ab24a5fda0351": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1415,6 +2227,8 @@
   ],
   "c9f3a706e7a3d265d995424ac8f3f082ffaf980e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1423,6 +2237,8 @@
   ],
   "ca52d9b8bebd9214db8ab71f87a1d5eb6d2ad42e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1431,6 +2247,8 @@
   ],
   "cae7bebcaa41e4c459e973b9688215f5a57bcb56": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1439,14 +2257,44 @@
   ],
   "cb2d56ce960714ce6fce39e8b846326969a30c2d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "ce1a9fd76640929fe340c5c5d1bb493ea09ca9bc": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": true,
+      "is_revert": true,
+      "reverted_prs": [
+        189150
+      ],
+      "reverted_shas": []
+    }
+  ],
+  "ce553ab69f0f1bad780c6f0f8b4e14d71121b274": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        172313
+      ],
+      "reverted_shas": [
+        "93013817afabe23a07073528481856b3507b6faf"
+      ]
+    }
+  ],
   "ceda56be7f03a790ea777e8b98b419209c3bfa49": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1455,6 +2303,8 @@
   ],
   "cfa00d4dafbc7ffa112ea341c794b7cff7fca713": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1463,6 +2313,8 @@
   ],
   "d09dbdabb93ffdd6df25ae487c95a552f13e5e16": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1471,6 +2323,8 @@
   ],
   "d1b6ce50dffcc70cd1610515527b4645b1136d1c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1479,6 +2333,8 @@
   ],
   "d54aa36146297ddfb764394c4f70b0758b75becd": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1487,14 +2343,30 @@
   ],
   "d618c36cb7a8c7951fb7532c07ea313b2d7ec1a7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "d655054395e2dba2b949e170d7764cc8c9c8a597": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        91506
+      ],
+      "reverted_shas": []
+    }
+  ],
   "d7d0d7a80fc343750bbf85ea8c184737d9c70f62": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1503,14 +2375,30 @@
   ],
   "d897355876287e410d35f1f0ac74d79955d50dd4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "d93788fcbf585e7cd3866b514bad972765b17e8d": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        140700
+      ],
+      "reverted_shas": []
+    }
+  ],
   "d95433bc8131e6c9f175c82f7b26e789084a347f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1519,6 +2407,8 @@
   ],
   "d97f0e93642722380be9ed190c17ea895817c339": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1527,6 +2417,8 @@
   ],
   "d9f9064cfae6929db3f55f6146ee23447b4f9f80": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1535,6 +2427,8 @@
   ],
   "dbfc3ed69088a88bffc20b16ce315746dd30fa28": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1543,6 +2437,8 @@
   ],
   "dddeb07c2ea9bc4e507d3bd34980fa6e9513ed9f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1551,6 +2447,8 @@
   ],
   "de2bac367ff9da74191bd2de130e4a81db07ae08": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1559,6 +2457,8 @@
   ],
   "de72cca671b962d0149cf880ec44b942a58ed843": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1567,6 +2467,8 @@
   ],
   "deced287ad1da9a61302e12e0406f8be36f3831b": [
     {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [
@@ -1579,6 +2481,30 @@
   ],
   "df8da2ff8370fda479b5c118704af4f50e0d3536": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "dff081c26f11e1679411e7c0b4012e6a740b6cc3": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        131759
+      ],
+      "reverted_shas": []
+    }
+  ],
+  "e0d922ee20e1948b2a1a2aa9689ceb14796d2a91": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1587,6 +2513,8 @@
   ],
   "e10fdb989b8c59a8291f1f6931f3adfd374ad840": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1595,6 +2523,8 @@
   ],
   "e1171e6a98f9c1a5cd465a47210b2678631a9c3c": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1603,6 +2533,18 @@
   ],
   "e1d67530065efb64dba2f716a355a40535f4a19d": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "e2061328a8ae51cdf80e211ad27dd13d7bba766d": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1611,6 +2553,8 @@
   ],
   "e368b5343d037c89051097c2a87a6fb76548014e": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1619,6 +2563,8 @@
   ],
   "e83abd774a4f7c09db26b886f8c686cdb373d1f7": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1627,6 +2573,8 @@
   ],
   "e8fc808bf8e78a3c80d1f8e293a92677b92366dd": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -1637,6 +2585,8 @@
   ],
   "e977b28c37c174c1b93ad78314650e03b545f560": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1645,6 +2595,8 @@
   ],
   "e9d71efb833d6f9fafd5cdff0f79d5c19b458a54": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1653,6 +2605,8 @@
   ],
   "eb0ddba26b6a265b44b442ae666db43b9f28b26a": [
     {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": true,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -1661,6 +2615,8 @@
   ],
   "ebaaf4d2fbf389ac3f171245e38c7a63812b43b8": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1669,6 +2625,8 @@
   ],
   "eccc6e22f81141691542f5dd5bbb7996e446a44f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1677,6 +2635,8 @@
   ],
   "ed6cd8f195894e46bbf3d29c0fb639b487c2c4eb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1685,6 +2645,8 @@
   ],
   "ed9a552563e1c8a95249036195f598990a695a95": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1693,6 +2655,8 @@
   ],
   "edad89e4e052b0b7d0fe4943669b3b7c55d837a4": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1701,14 +2665,38 @@
   ],
   "edeee824f044b834ec0bc8380afc345bb1a58f35": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "efad3563ea461025808049e10ef6c5faff5e4b77": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
+  "f190477718c18c1edf32ac37aebbbdf91b6573ab": [
+    {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": false,
+      "reverted_prs": [],
+      "reverted_shas": []
+    }
+  ],
   "f24c50a635cbdbd214e02866a8cb22232862c3ff": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1717,6 +2705,8 @@
   ],
   "f3bf8e01668bfbb32cd17be45507983557b979df": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1725,6 +2715,8 @@
   ],
   "f3db0cb4d8326c4955472742872cb691d17e76c6": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -1733,6 +2725,8 @@
   ],
   "f44d8d583c646baee12646f1609683c9afe48e33": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1741,6 +2735,8 @@
   ],
   "f61526971f9c62118090443c8b97fab07ae9499f": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": true,
       "reverted_prs": [
@@ -1751,6 +2747,8 @@
   ],
   "f68eedde7561cbe36ca775aa2d05de724fe04f96": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1759,6 +2757,8 @@
   ],
   "f72b3e1c07914fdea2fd367dada14b63adef731b": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [],
@@ -1770,6 +2770,8 @@
   ],
   "f73a3028c2d46928280d69d9e953ff79d2eb0fbb": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1778,6 +2780,8 @@
   ],
   "f7c6c7ce361b8664eee962f10803e92661582176": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1786,6 +2790,8 @@
   ],
   "f9b68838f61972fadfbe70787befc3abeb2efcb5": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1794,14 +2800,30 @@
   ],
   "fac7453d2ca7ebe33dec3d60211c0374a2bb69cd": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
       "reverted_shas": []
     }
   ],
+  "fc99b677598162682f845d31fa3ece5ec9d38b2f": [
+    {
+      "android_doesnt_care": true,
+      "chromeos_doesnt_care": false,
+      "is_reland": false,
+      "is_revert": true,
+      "reverted_prs": [
+        182169
+      ],
+      "reverted_shas": []
+    }
+  ],
   "fe899cedac18cf3fcf70c58084a1940936ab9a95": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": true,
       "is_revert": true,
       "reverted_prs": [
@@ -1812,6 +2834,8 @@
   ],
   "fee6e539d0a052ca1f20adf55521856bfc5d5b26": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1820,6 +2844,8 @@
   ],
   "ff0093cecd0c807d122cfb6b74634074c962ade9": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1828,6 +2854,8 @@
   ],
   "ff616a192bb486915200675d7be33dc042deca24": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],
@@ -1836,6 +2864,8 @@
   ],
   "ffdaf85a95026945c654f981b09267ce9f81ae80": [
     {
+      "android_doesnt_care": false,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
       "is_revert": false,
       "reverted_prs": [],

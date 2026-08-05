@@ -31,7 +31,7 @@ import tempfile
 import textwrap
 from typing import Iterable
 
-from cros_utils import gs
+from llvm_tools import chroot
 from llvm_tools import cros_cls
 from llvm_tools import llvm_next
 from llvm_tools import warning_exemption
@@ -282,11 +282,37 @@ def fetch_and_unpack_fatal_warnings_tarballs(
     tmpdir.mkdir(parents=True, exist_ok=True)
 
     tarball_suffix = "fatal_clang_warnings.tar.xz"
-    results = gs.ls(os.path.join(builder_artifacts, f"*.{tarball_suffix}"))
+    ls_result = subprocess.run(
+        (
+            "gcloud",
+            "storage",
+            "ls",
+            os.path.join(builder_artifacts, f"*.{tarball_suffix}"),
+        ),
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if ls_result.returncode:
+        # These both return a non-zero error code, and both could
+        # conceivably be caused by no matches or missing parent dir.
+        if (
+            "One or more URLs matched no object" in ls_result.stderr
+            or "No such file or directory" in ls_result.stderr
+        ):
+            return []
+        logging.error("Failed to list builder artifacts: %s", ls_result.stderr)
+        ls_result.check_returncode()
+
+    results = (
+        line.strip() for line in ls_result.stdout.splitlines() if line.strip()
+    )
 
     unpack_dirs = []
-    for i, result in enumerate(results):
-        gs_path = result.gs_path
+    for i, gs_path in enumerate(results):
         tarball_target = tmpdir / f"{i}_{tarball_suffix}"
         logging.info(
             "Fetching fatal warnings from %s into %s...",
@@ -294,7 +320,7 @@ def fetch_and_unpack_fatal_warnings_tarballs(
             tarball_target,
         )
         gs_result = subprocess.run(
-            (gs.GSUTIL, "cp", gs_path, tarball_target),
+            ("gcloud", "storage", "cp", gs_path, tarball_target),
             check=False,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -505,6 +531,7 @@ def go_fmt_file(contents: str) -> str:
 
 
 def main(argv: list[str]) -> None:
+    chroot.VerifyOutsideChroot()
     opts = parse_args(argv)
 
     logging.basicConfig(

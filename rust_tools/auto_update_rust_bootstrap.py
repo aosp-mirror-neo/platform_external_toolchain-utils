@@ -29,10 +29,11 @@ import re
 import subprocess
 import sys
 import textwrap
-from typing import Callable, Iterable
+from typing import Callable, Iterable, Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
+from cros_utils import gs
 from llvm_tools import chroot
 from rust_tools import copy_rust_bootstrap
 
@@ -61,22 +62,17 @@ class EbuildVersion:
     patch: int
     rev: int
 
-    def prior_minor_version(self) -> "EbuildVersion":
+    def prior_minor_version(self) -> Self:
         """Returns an EbuildVersion with just the major/minor from this one."""
         return dataclasses.replace(self, minor=self.minor - 1)
 
-    def major_minor_only(self) -> "EbuildVersion":
+    def major_minor_only(self) -> Self:
         """Returns an EbuildVersion with just the major/minor from this one."""
         if not self.rev and not self.patch:
             return self
-        return EbuildVersion(
-            major=self.major,
-            minor=self.minor,
-            patch=0,
-            rev=0,
-        )
+        return dataclasses.replace(self, patch=0, rev=0)
 
-    def without_rev(self) -> "EbuildVersion":
+    def without_rev(self) -> Self:
         if not self.rev:
             return self
         return dataclasses.replace(self, rev=0)
@@ -531,17 +527,19 @@ def set_rust_bootstrap_prior_version(
     )
 
 
-def maybe_add_new_rust_bootstrap_version(
+def ensure_rust_bootstrap_version(
     *,
+    target_version: EbuildVersion,
     chromiumos_overlay: Path,
     chromiumos_checkout: Path,
     rust_bootstrap_dir: Path,
     dry_run: bool,
     commit: bool = True,
 ) -> bool:
-    """Ensures that there's a rust-bootstrap-${N} ebuild matching rust-${N}.
+    """Ensures that a rust-bootstrap ebuild for target_version exists.
 
     Args:
+        target_version: The version to ensure exists.
         chromiumos_overlay: Path to chromiumos-overlay.
         chromiumos_checkout: Path to the chromiumos checkout to run chroot
             commands in.
@@ -552,41 +550,59 @@ def maybe_add_new_rust_bootstrap_version(
             `dry_run` is True.
 
     Returns:
-        True if changes were made (or would've been made, in the case of
-        dry_run being True). False otherwise.
+        True if an ebuild was created (or would've been created, in dry_run).
+        False if the ebuild already existed.
+
+    Raises:
+        ValueError: If adding target_version is not possible due to a
+            discontiguous version gap, missing source tarball, or missing
+            baseline ebuilds.
     """
-    # These are always returned in sorted error, so taking the last is the same
-    # as `max()`.
-    (
-        newest_bootstrap_version,
-        newest_bootstrap_ebuild,
-    ) = collect_stable_ebuilds_by_version(rust_bootstrap_dir)[-1]
+    stable_ebuilds = collect_stable_ebuilds_by_version(rust_bootstrap_dir)
+    if not stable_ebuilds:
+        raise ValueError(
+            f"No stable rust-bootstrap ebuilds found in {rust_bootstrap_dir}"
+        )
+    (newest_bootstrap_version, newest_bootstrap_ebuild) = stable_ebuilds[-1]
 
-    logging.info(
-        "Detected newest rust-bootstrap version: %s", newest_bootstrap_version
-    )
-
-    rust_dir = rust_dir_from_rust_bootstrap(rust_bootstrap_dir)
-    newest_rust_version, _ = collect_stable_ebuilds_by_version(rust_dir)[-1]
-    logging.info("Detected newest rust version: %s", newest_rust_version)
-
-    # Generally speaking, we don't care about keeping up with new patch
-    # releases for rust-bootstrap. It's OK to _initially land_ e.g.,
-    # rust-bootstrap-1.73.1, but upgrades from rust-bootstrap-1.73.0 to
-    # rust-bootstrap-1.73.1 are rare, and have added complexity, so should be
-    # done manually. Hence, only check for major/minor version inequality.
     if (
-        newest_rust_version.major_minor_only()
+        target_version.major_minor_only()
         <= newest_bootstrap_version.major_minor_only()
     ):
-        logging.info("No missing rust-bootstrap versions detected.")
+        logging.info(
+            "rust-bootstrap ebuild for %s already exists (newest is %s); NOP.",
+            target_version,
+            newest_bootstrap_version,
+        )
         return False
 
-    # Just copy the old ebuild, tweaking contents slightly as appropriate.
+    newest_maj_min = newest_bootstrap_version.major_minor_only()
+    target_maj_min = target_version.major_minor_only()
+    is_contiguous = (
+        target_maj_min.major == newest_maj_min.major
+        and target_maj_min.minor == newest_maj_min.minor + 1
+    ) or (
+        target_maj_min.major == newest_maj_min.major + 1
+        and target_maj_min.minor == 0
+    )
+    if not is_contiguous:
+        raise ValueError(
+            "Discontiguous version gap: current newest is "
+            f"{newest_bootstrap_version}, cannot jump directly to "
+            f"{target_version}"
+        )
+
+    src_uri = (
+        "gs://chromeos-localmirror/distfiles/"
+        f"rustc-{target_version.without_rev()}-src.tar.gz"
+    )
+    if not gs.ls(src_uri):
+        raise ValueError(f"Rust source tarball not found on mirror: {src_uri}")
+
     prior_ebuild_resolved = newest_bootstrap_ebuild.resolve()
     new_ebuild = (
         rust_bootstrap_dir
-        / f"rust-bootstrap-{newest_rust_version.without_rev()}.ebuild"
+        / f"rust-bootstrap-{target_version.without_rev()}.ebuild"
     )
 
     prior_ebuild_contents = prior_ebuild_resolved.read_text(encoding="utf-8")
@@ -610,15 +626,15 @@ def maybe_add_new_rust_bootstrap_version(
         new_ebuild, chromiumos_checkout=chromiumos_checkout
     )
     if commit:
-        newest_no_rev = newest_rust_version.without_rev()
+        newest_no_rev = target_version.without_rev()
         git_utils.commit_all_changes(
             chromiumos_overlay,
             message=textwrap.dedent(
                 f"""\
                 rust-bootstrap: add version {newest_no_rev}
 
-                Rust is now at {newest_no_rev}; add a rust-bootstrap version so
-                prebuilts can be generated early.
+                Rust {newest_no_rev} sources are now available; add a
+                rust-bootstrap version so prebuilts can be generated early.
 
                 BUG={TRACKING_BUG}
                 TEST=CQ
@@ -809,6 +825,22 @@ def main(argv: list[str]) -> None:
         default=cros_checkout / cros_paths.CHROMIUMOS_OVERLAY,
     )
     parser.add_argument(
+        "--ensure-version",
+        type=parse_raw_ebuild_version,
+        metavar="VERSION",
+        help="Ensure a rust-bootstrap ebuild for a specific version exists.",
+    )
+    parser.add_argument(
+        "--upload-prebuilts",
+        action="store_true",
+        help="Update rust-bootstrap ebuilds with new prebuilts from GS.",
+    )
+    parser.add_argument(
+        "--gc",
+        action="store_true",
+        help="Delete old, unneeded rust-bootstrap ebuilds.",
+    )
+    parser.add_argument(
         "action",
         choices=("dry-run", "commit", "upload"),
         help="""
@@ -818,6 +850,12 @@ def main(argv: list[str]) -> None:
         """,
     )
     opts = parser.parse_args(argv)
+
+    if not (opts.ensure_version or opts.upload_prebuilts or opts.gc):
+        parser.error(
+            "At least one action flag must be specified: "
+            "--ensure-version, --upload-prebuilts, or --gc"
+        )
 
     if opts.action == "dry-run":
         dry_run = True
@@ -836,41 +874,45 @@ def main(argv: list[str]) -> None:
     )
 
     had_recoverable_error = False
-    # Ensure prebuilts are up to date first, since it allows
-    # `ensure_newest_rust_bootstrap_ebuild_exists` to succeed in edge cases.
-    logging.info(
-        "Trying to add new prebuilts to existing rust-bootstrap versions..."
-    )
-    made_changes = maybe_add_newest_prebuilts(
-        copy_rust_bootstrap_script=copy_rust_bootstrap_script,
-        chromiumos_checkout=cros_checkout,
-        chromiumos_overlay=opts.chromiumos_overlay,
-        rust_bootstrap_dir=rust_bootstrap_dir,
-        dry_run=dry_run,
-    )
+    made_changes = False
 
-    logging.info(
-        "Trying to add new rust-bootstrap versions based on available "
-        "src tarballs..."
-    )
-    made_changes |= maybe_add_new_rust_bootstrap_version(
-        chromiumos_overlay=opts.chromiumos_overlay,
-        chromiumos_checkout=cros_checkout,
-        rust_bootstrap_dir=rust_bootstrap_dir,
-        dry_run=dry_run,
-    )
+    if opts.upload_prebuilts:
+        logging.info(
+            "Trying to add new prebuilts to existing rust-bootstrap versions..."
+        )
+        made_changes |= maybe_add_newest_prebuilts(
+            copy_rust_bootstrap_script=copy_rust_bootstrap_script,
+            chromiumos_checkout=cros_checkout,
+            chromiumos_overlay=opts.chromiumos_overlay,
+            rust_bootstrap_dir=rust_bootstrap_dir,
+            dry_run=dry_run,
+        )
 
-    try:
-        logging.info("Trying to delete old rust-bootstrap versions...")
-        made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
+    if opts.ensure_version:
+        logging.info(
+            "Ensuring rust-bootstrap ebuild for version %s...",
+            opts.ensure_version,
+        )
+        made_changes |= ensure_rust_bootstrap_version(
+            target_version=opts.ensure_version,
             chromiumos_overlay=opts.chromiumos_overlay,
             chromiumos_checkout=cros_checkout,
             rust_bootstrap_dir=rust_bootstrap_dir,
             dry_run=dry_run,
         )
-    except OldEbuildIsLinkedToError:
-        logging.exception("An old ebuild is linked to; can't remove it")
-        had_recoverable_error = True
+
+    if opts.gc:
+        try:
+            logging.info("Trying to delete old rust-bootstrap versions...")
+            made_changes |= maybe_delete_old_rust_bootstrap_ebuilds(
+                chromiumos_overlay=opts.chromiumos_overlay,
+                chromiumos_checkout=cros_checkout,
+                rust_bootstrap_dir=rust_bootstrap_dir,
+                dry_run=dry_run,
+            )
+        except OldEbuildIsLinkedToError:
+            logging.exception("An old ebuild is linked to; can't remove it")
+            had_recoverable_error = True
 
     if upload:
         if made_changes:

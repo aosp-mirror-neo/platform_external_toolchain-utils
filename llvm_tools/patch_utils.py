@@ -12,7 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Any, Callable, Generator, IO, Iterable
+from typing import Any, Callable, Generator, IO, Iterable, Self
 
 from llvm_tools import atomic_write_file
 
@@ -23,6 +23,38 @@ HUNK_FAILED_RE = re.compile(r"^Hunk #(\d+) FAILED at.*")
 HUNK_HEADER_RE = re.compile(r"^@@\s+-(\d+),(\d+)\s+\+(\d+),(\d+)\s+@@")
 HUNK_END_RE = re.compile(r"^--\s*$")
 PATCH_SUBFILE_HEADER_RE = re.compile(r"^\+\+\+ [ab]/(.*)$")
+
+# Don't allow patches to have file names longer than this number of
+# characters. We should have some number here as titles
+# can be broken, but we also need it long enough to ensure
+# unique file names.
+_MAX_PATCH_NAME_LENGTH = 128
+# Used for cleaning patch names.
+_REPLACE_REGEX = re.compile(r"\W+")
+
+
+_KNOWN_KEYS = frozenset(
+    (
+        "patch.cherry",
+        "patch.version_range.from",
+        "patch.version_range.until",
+        "patch.metadata.original_sha",
+        "patch.metadata.author",
+        "patch.metadata.info",
+        "patch.platforms",
+    )
+)
+
+
+def _parse_comma_list(
+    commit_metadata: dict[str, str], key: str, default: str
+) -> list[str]:
+    return [
+        p.strip()
+        for p in commit_metadata.get(key, default).split(",")
+        if p.strip()
+    ]
+
 
 # A list of all packages in chromiumos-overlay that deploy subsets of the LLVM
 # source tree we ship.
@@ -157,6 +189,123 @@ class PatchResult:
         return s
 
 
+class MetadataValueError(ValueError):
+    """Raised when commit metadata has validation errors."""
+
+    def __init__(self, complaints: list[str]) -> None:
+        super().__init__("\n".join(complaints))
+        self.complaints = complaints
+
+
+@dataclasses.dataclass(frozen=True)
+class ParsedCommitMetadata:
+    """Structured, validated representation of commit patch metadata."""
+
+    cherry: bool
+    original_sha: str | None
+    author: str
+    info: list[str]
+    platforms: list[str]
+    version_from: int | None
+    version_until: int | None
+
+    @classmethod
+    def from_dict(cls, commit_metadata: dict[str, str]) -> Self:
+        """Parses and validates a commit metadata dictionary.
+
+        Raises:
+            MetadataValueError: If validation fails.
+        """
+
+        # Note on control flow: To ensure users see all metadata issues in a
+        # single pass, this function avoids early exits and collects all
+        # complaints into `errors`. We use safe defaults so validation
+        # continues despite malformed data.
+        errors = []
+
+        def _maybe_string_to_int(key: str) -> int | None:
+            if key not in commit_metadata:
+                return None
+            val = commit_metadata[key].strip()
+            if val.isdigit():
+                return int(val)
+            if val.lower() in ("null", "none"):
+                return None
+            errors.append(
+                f"{key} must be an integer or 'null'/'none', "
+                f"got '{commit_metadata[key]}'"
+            )
+            return None
+
+        # Check patch.cherry
+        cherry = False
+        if "patch.cherry" in commit_metadata:
+            val = commit_metadata["patch.cherry"].strip().lower()
+            if val == "true":
+                cherry = True
+            elif val == "false":
+                cherry = False
+            else:
+                errors.append(
+                    "patch.cherry must be 'true' or 'false', "
+                    f"got '{commit_metadata['patch.cherry']}'"
+                )
+
+        # Check patch.version_range.from and until
+        version_from = _maybe_string_to_int("patch.version_range.from")
+        version_until = _maybe_string_to_int("patch.version_range.until")
+        if (
+            version_from is not None
+            and version_until is not None
+            and version_from > version_until
+        ):
+            errors.append(
+                f"patch.version_range.from ({version_from}) must be "
+                f"<= patch.version_range.until ({version_until})"
+            )
+
+        # Check patch.metadata.original_sha
+        original_sha = commit_metadata.get("patch.metadata.original_sha")
+        if original_sha is not None:
+            original_sha = original_sha.strip()
+            if not re.match(r"^[0-9a-fA-F]{40}$", original_sha):
+                val = commit_metadata["patch.metadata.original_sha"]
+                errors.append(
+                    "patch.metadata.original_sha must be a 40-character "
+                    f"hex SHA, got '{val}'"
+                )
+            if not cherry:
+                errors.append(
+                    "patch.metadata.original_sha is present, "
+                    "but patch.cherry is false"
+                )
+
+        errors.extend(
+            f"Unknown patch metadata key: '{key}'"
+            for key in commit_metadata
+            if key.startswith("patch.") and key not in _KNOWN_KEYS
+        )
+
+        if errors:
+            raise MetadataValueError(errors)
+
+        author = commit_metadata.get("patch.metadata.author", "").strip()
+        info = _parse_comma_list(commit_metadata, "patch.metadata.info", "")
+        platforms = sorted(
+            _parse_comma_list(commit_metadata, "patch.platforms", "chromiumos")
+        )
+
+        return cls(
+            cherry=cherry,
+            original_sha=original_sha,
+            author=author,
+            info=info,
+            platforms=platforms,
+            version_from=version_from,
+            version_until=version_until,
+        )
+
+
 @dataclasses.dataclass
 class PatchEntry:
     """Object mapping of an entry of PATCHES.json."""
@@ -176,7 +325,7 @@ class PatchEntry:
             raise ValueError(f"workdir {self.workdir} is not a directory")
 
     @classmethod
-    def from_dict(cls, workdir: Path, data: dict[str, Any]) -> "PatchEntry":
+    def from_dict(cls, workdir: Path, data: dict[str, Any]) -> Self:
         """Instatiate from a dictionary.
 
         Dictionary must have at least the following key:
@@ -193,6 +342,55 @@ class PatchEntry:
             data.get("platforms"),
             data["rel_patch_path"],
             data.get("version_range"),
+        )
+
+    @classmethod
+    def from_commit_metadata(
+        cls,
+        workdir: Path,
+        commit_metadata: dict[str, str],
+        subject: str,
+        commit_sha: str,
+        rel_patch_path: str | None = None,
+        verify_workdir: bool = True,
+    ) -> Self:
+        """Constructs a PatchEntry from raw commit message metadata.
+
+        If rel_patch_path is not provided, it will be generated from the
+        metadata.
+        """
+        parsed = ParsedCommitMetadata.from_dict(commit_metadata)
+
+        if rel_patch_path is None:
+            if parsed.cherry:
+                patch_name = parsed.original_sha or commit_sha
+                rel_patch_path = f"cherry/{patch_name}.patch"
+            else:
+                cleaned_name = _REPLACE_REGEX.sub("-", subject)[
+                    :_MAX_PATCH_NAME_LENGTH
+                ]
+                rel_patch_path = f"{cleaned_name}.patch"
+
+        metadata: dict[str, Any] = {
+            "info": parsed.info,
+            "title": subject,
+            "author": parsed.author,
+        }
+        if parsed.original_sha:
+            metadata["original_sha"] = parsed.original_sha
+
+        version_range = {
+            "from": parsed.version_from,
+            "until": parsed.version_until,
+        }
+
+        return cls(
+            workdir=workdir,
+            metadata=metadata,
+            platforms=parsed.platforms,
+            rel_patch_path=rel_patch_path,
+            version_range=version_range,
+            verify_workdir=verify_workdir,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -444,9 +642,16 @@ def gnu_patch(
             encoding="utf-8",
             check=True,
             stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             stdin=subprocess.DEVNULL,
         )
     except subprocess.CalledProcessError as e:
+        print(
+            f"Failed to apply patch (via GNU patch).\n"
+            f"stdout:\n{e.stdout}\n"
+            f"stderr:\n{e.stderr}\n===",
+            file=sys.stderr,
+        )
         parsed_hunks = pe.parsed_hunks()
         failed_hunks_id_dict = parse_failed_patch_output(e.stdout)
         failed_hunks = {}
@@ -735,7 +940,13 @@ def _write_json_changes(
     patches: list[dict[str, Any]], file_io: IO[str], indent_len: int = 2
 ) -> None:
     """Write JSON changes to file, does not acquire new file lock."""
-    json.dump(patches, file_io, indent=indent_len, separators=(",", ": "))
+    json.dump(
+        patches,
+        file_io,
+        indent=indent_len,
+        separators=(",", ": "),
+        ensure_ascii=False,
+    )
     # Need to add a newline as json.dump omits it.
     file_io.write("\n")
 

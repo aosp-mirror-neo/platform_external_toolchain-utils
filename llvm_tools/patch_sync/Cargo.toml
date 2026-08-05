@@ -16,6 +16,7 @@ sha2 = "0.9"
 structopt = "0.3"
 time = "0.3"
 scopeguard = "1.1.0"
+const_format = "0.2.36"
 
 [dev-dependencies]
 rand = "0.8"

@@ -1,0 +1,111 @@
+From b33d237404bf9e2429994c80cd6a486122895981 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Thu, 11 Jun 2026 11:40:05 -0600
+Subject: [PATCH] Revert "cros: add user-enumeration patch"
+
+This reverts commit 1819f5522a03e327dc2b90df5471bdf5d45e91f0.
+
+Not sure how this got added, but I'll remove it from PATCHES.json too.
+This should have been removed wholesale a while ago.
+
+BUG=b:476469740
+TEST=None
+
+---
+ clang/lib/Driver/Driver.cpp                  |  9 ----
+ llvm/include/llvm/Support/ChromeOSUserEnum.h | 57 --------------------
+ 2 files changed, 66 deletions(-)
+ delete mode 100644 llvm/include/llvm/Support/ChromeOSUserEnum.h
+
+diff --git a/clang/lib/Driver/Driver.cpp b/clang/lib/Driver/Driver.cpp
+index 17c457fb4baa..bf8679e85034 100644
+--- a/clang/lib/Driver/Driver.cpp
++++ b/clang/lib/Driver/Driver.cpp
+@@ -81,7 +81,6 @@
+ #include "llvm/Option/OptTable.h"
+ #include "llvm/Option/Option.h"
+ #include "llvm/Support/CommandLine.h"
+-#include "llvm/Support/ChromeOSUserEnum.h"
+ #include "llvm/Support/ErrorHandling.h"
+ #include "llvm/Support/ExitCodes.h"
+ #include "llvm/Support/FileSystem.h"
+@@ -1475,14 +1474,6 @@ bool Driver::loadDefaultConfigFiles(llvm::cl::ExpansionContext &ExpCtx) {
+ Compilation *Driver::BuildCompilation(ArrayRef<const char *> ArgList) {
+   llvm::PrettyStackTraceString CrashInfo("Compilation construction");
+ 
+-  if (chromeos_user_enum::shouldCheckForCmdlineFlag()) {
+-    StringRef AckFlag = "-D_CROSTC_IS_AWARE_OF_THIS_USECASE";
+-    bool HasAckFlag =
+-        llvm::any_of(ArgList, [&](const char *A) { return AckFlag == A; });
+-    if (!HasAckFlag)
+-      chromeos_user_enum::complainAboutNoAckAndDie(AckFlag);
+-  }
+-
+   // FIXME: Handle environment options which affect driver behavior, somewhere
+   // (client?). GCC_EXEC_PREFIX, LPATH, CC_PRINT_OPTIONS.
+ 
+diff --git a/llvm/include/llvm/Support/ChromeOSUserEnum.h b/llvm/include/llvm/Support/ChromeOSUserEnum.h
+deleted file mode 100644
+index c30a40544d81..000000000000
+--- a/llvm/include/llvm/Support/ChromeOSUserEnum.h
++++ /dev/null
+@@ -1,57 +0,0 @@
+-#ifndef LLVM_SUPPORT_CHROMEOSUSERENUM_H
+-#define LLVM_SUPPORT_CHROMEOSUSERENUM_H
+-
+-#include "llvm/ADT/StringRef.h"
+-
+-#include <stdio.h>
+-#include <stdlib.h>
+-#include <string>
+-
+-// N.B., To minimize the chance of merge conflicts in cmake files, this is
+-// header-only. The 'inline's below are written for linkage, not performance.
+-namespace chromeos_user_enum {
+-const char ACK_ENV_VAR[] = "CROSTC_IS_AWARE_OF_THIS_USECASE";
+-
+-inline bool isExecutingInPortableEnv() {
+-  // TODO: This may be too tricky?
+-  // This env var is set by shell scripts that invoke portable toolchain
+-  // binaries.
+-  return getenv("LD_ARGV0_REL") != nullptr;
+-}
+-
+-inline bool shouldCheckForCmdlineFlag() {
+-  return isExecutingInPortableEnv() && getenv(ACK_ENV_VAR) == nullptr;
+-}
+-
+-[[noreturn]] inline void complainAboutNoAckAndDie(llvm::StringRef flagToPass) {
+-  std::string s;
+-  s += "Hi!\n";
+-  s += "\n";
+-  s += "We (the CrOS toolchain team) are trying to identify\n";
+-  s += "users of this toolchain outside of ChromeOS.\n";
+-  s += "\n";
+-  s += "If your team/use-case isn't listed on b/396436337,\n";
+-  s += "please comment on that bug to notify us of your usage,\n";
+-  s += "and give us info on how to best contact you. If you\n";
+-  s += "can't access that bug, please instead email\n";
+-  s += "chromeos-toolchain@google.com with this information.\n";
+-  s += "\n";
+-  s += "After you've done this, you can fully bypass this\n";
+-  s += "message by setting the env var '";
+-  s += ACK_ENV_VAR;
+-  s += "=1'.\n";
+-  s += "\n";
+-  if (!flagToPass.empty()) {
+-    s += "Alternatively, you can pass the flag '";
+-    s += flagToPass.str();
+-    s += "' to\n";
+-    s += "this binary\n";
+-    s += "\n";
+-  }
+-  s += "Thanks for helping us determine who's using our tooling!\n";
+-  fprintf(stderr, s.c_str());
+-  exit(1);
+-}
+-} // namespace chromeos_user_enum
+-
+-#endif // LLVM_SUPPORT_CHROMEOSUSERENUM_H
+-- 
+2.39.5

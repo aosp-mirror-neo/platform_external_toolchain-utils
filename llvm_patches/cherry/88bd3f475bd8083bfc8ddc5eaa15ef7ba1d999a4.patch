@@ -1,0 +1,110 @@
+From 44d016d302f29843be72d0b5ba987997dc692851 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Thu, 4 Jun 2026 20:57:43 -0600
+Subject: [PATCH] [clang] Adjust -pedantic-errors -WX/-Wno-error=X interaction
+ (#184756)
+
+While -Wno-long-long suppresses -pedantic-errors diagnostics in both GCC
+and Clang, GCC -Wno-error=long-long emits warnings while Clang still
+emits errors.
+
+```
+% echo 'long long x = 0;' | gcc -std=c89 -pedantic-errors -Wno-error=long-long -x c -fsyntax-only -
+<stdin>:1:6: warning: ISO C90 does not support 'long long' [-Wlong-long]
+% echo 'long long x = 0;' | clang -std=c89 -pedantic-errors -Wno-error=long-long -x c -fsyntax-only -
+<stdin>:1:1: error: 'long long' is an extension when C99 mode is not enabled [-Werror,-Wlong-long]
+    1 | long long x = 0;
+      | ^
+1 error generated.
+```
+
+The order of -pedantic-errors and -Wno-error=long-long does not matter.
+
+Two fixes to how extension diagnostics interact with -pedantic-errors
+in getDiagnosticSeverity():
+
+1. -Wno-error=X now downgrades -pedantic-errors diagnostics to warnings.
+   setDiagnosticGroupWarningAsError() sets HasNoWarningAsError but not
+   IsUser, so the ExtBehavior upgrade would re-promote to error. When
+   HasNoWarningAsError is set, cap the ExtBehavior upgrade at Warning.
+
+2. -Wfoo no longer prevents -pedantic-errors from upgrading to error.
+   Previously, -Wfoo set IsUser which blocked the ExtBehavior upgrade
+   entirely. Now only -Wno-foo (IsUser + Ignored) blocks the upgrade,
+   matching GCC behavior.
+
+```
+% echo 'long long x = 0;' | myclang -std=c89 -pedantic-errors -Wno-error=long-long -x c -fsyntax-only -
+<stdin>:1:1: warning: 'long long' is an extension when C99 mode is not enabled [-Wlong-long]
+    1 | long long x = 0;
+      | ^
+1 warning generated.
+```
+
+Fixes https://github.com/llvm/llvm-project/issues/184250
+
+BUG=b:519694976
+TEST=Built dev-cpp/benchmark for rex with this patch and -Wno-error=c2y-extensions
+
+patch.cherry: true
+patch.metadata.author: Fangrui Song <i@maskray.me>
+patch.metadata.original_sha: 88bd3f475bd8083bfc8ddc5eaa15ef7ba1d999a4
+patch.platforms: chromiumos
+patch.version_range.from: 596125
+patch.version_range.until: 610011
+
+---
+ clang/lib/Basic/DiagnosticIDs.cpp | 13 ++++++++++---
+ clang/test/Misc/diag-mapping.c    |  9 +++++++--
+ 2 files changed, 17 insertions(+), 5 deletions(-)
+
+diff --git a/clang/lib/Basic/DiagnosticIDs.cpp b/clang/lib/Basic/DiagnosticIDs.cpp
+index a1d9d0f34d20..248f8592b02a 100644
+--- a/clang/lib/Basic/DiagnosticIDs.cpp
++++ b/clang/lib/Basic/DiagnosticIDs.cpp
+@@ -500,9 +500,16 @@ DiagnosticIDs::getDiagnosticSeverity(unsigned DiagID, SourceLocation Loc,
+     return diag::Severity::Ignored;
+ 
+   // For extension diagnostics that haven't been explicitly mapped, check if we
+-  // should upgrade the diagnostic.
+-  if (IsExtensionDiag && !Mapping.isUser())
+-    Result = std::max(Result, State->ExtBehavior);
++  // should upgrade the diagnostic. Skip if the user explicitly suppressed it
++  // (e.g. -Wno-foo).
++  if (IsExtensionDiag &&
++      !(Mapping.isUser() && Result == diag::Severity::Ignored)) {
++    if (Mapping.hasNoWarningAsError())
++      Result = std::max(Result,
++                        std::min(State->ExtBehavior, diag::Severity::Warning));
++    else
++      Result = std::max(Result, State->ExtBehavior);
++  }
+ 
+   // At this point, ignored errors can no longer be upgraded.
+   if (Result == diag::Severity::Ignored)
+diff --git a/clang/test/Misc/diag-mapping.c b/clang/test/Misc/diag-mapping.c
+index edc137ec68fe..20b6cccb7788 100644
+--- a/clang/test/Misc/diag-mapping.c
++++ b/clang/test/Misc/diag-mapping.c
+@@ -18,12 +18,17 @@
+ // This should emit an error with -pedantic-errors.
+ // RUN: not %clang_cc1 %s -pedantic-errors 2>&1 | grep "error:"
+ 
+-// This should emit a warning, because -Wfoo overrides -pedantic*.
+-// RUN: %clang_cc1 %s -pedantic-errors -Wextra-tokens 2>&1 | grep "warning:"
++// RUN: %clang_cc1 %s -pedantic -Wno-error=extra-tokens 2>&1 | grep "warning:"
++
++// -Wfoo does not override -pedantic-errors; the diagnostic stays an error.
++// RUN: not %clang_cc1 %s -pedantic-errors -Wextra-tokens 2>&1 | grep "error:"
+ 
+ // This should emit nothing, because -Wno-extra-tokens overrides -pedantic*
+ // RUN: %clang_cc1 %s -pedantic-errors -Wno-extra-tokens 2>&1 | not grep diagnostic
+ 
++// -Wno-error=extra-tokens should downgrade -pedantic-errors to warning.
++// RUN: %clang_cc1 %s -pedantic-errors -Wno-error=extra-tokens 2>&1 | grep "warning:"
++
+ #ifdef foo
+ #endif bad // extension!
+ 
+-- 
+2.39.5

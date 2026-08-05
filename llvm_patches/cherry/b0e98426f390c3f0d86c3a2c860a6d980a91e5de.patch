@@ -1,0 +1,159 @@
+From 1a1446ee1d5dcaace8f14264f52b8aa4ff8e5bd5 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Sun, 7 Dec 2025 22:32:37 -0500
+Subject: [PATCH] Revert "[FMV][AArch64] Add initial AT_HWCAP3 / AT_HWCAP4
+ support (#161595)" (#171071)
+
+Crashing with older glibc.
+
+This reverts commit edb43192516a55165cc4c158eb4fd4b2d81a8fce,
+57b5ba00cb421b9be17bac10036763f42fbe9298 and
+9715ccae1f98162f03ac0884a3dce5045b6b9a6e.
+
+patch.cherry: true
+patch.metadata.author: Brad Smith <brad@comstyle.com>
+patch.metadata.original_sha: b0e98426f390c3f0d86c3a2c860a6d980a91e5de
+patch.platforms: chromiumos
+patch.version_range.from: 593099
+patch.version_range.until: 599761
+
+---
+ compiler-rt/lib/builtins/cpu_model/aarch64.c  |  6 ++++--
+ .../cpu_model/aarch64/fmv/android.inc         |  4 ----
+ .../cpu_model/aarch64/fmv/elf_aux_info.inc    |  6 +-----
+ .../cpu_model/aarch64/fmv/getauxval.inc       |  4 ----
+ .../lib/builtins/cpu_model/aarch64/hwcap.inc  | 20 ++-----------------
+ 5 files changed, 7 insertions(+), 33 deletions(-)
+
+diff --git a/compiler-rt/lib/builtins/cpu_model/aarch64.c b/compiler-rt/lib/builtins/cpu_model/aarch64.c
+index 06bc7c4a8190..119d18b8df8d 100644
+--- a/compiler-rt/lib/builtins/cpu_model/aarch64.c
++++ b/compiler-rt/lib/builtins/cpu_model/aarch64.c
+@@ -19,13 +19,15 @@
+ #error This file is intended only for aarch64-based targets
+ #endif
+ 
++#if __has_include(<sys/ifunc.h>)
++#include <sys/ifunc.h>
++#else
+ typedef struct __ifunc_arg_t {
+   unsigned long _size;
+   unsigned long _hwcap;
+   unsigned long _hwcap2;
+-  unsigned long _hwcap3;
+-  unsigned long _hwcap4;
+ } __ifunc_arg_t;
++#endif // __has_include(<sys/ifunc.h>)
+ 
+ // LSE support detection for out-of-line atomics
+ // using HWCAP and Auxiliary vector
+diff --git a/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/android.inc b/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/android.inc
+index d19beca69058..a9e3594e93c2 100644
+--- a/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/android.inc
++++ b/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/android.inc
+@@ -27,14 +27,10 @@ void CONSTRUCTOR_ATTRIBUTE __init_cpu_features(void) {
+ 
+   unsigned long hwcap = getauxval(AT_HWCAP);
+   unsigned long hwcap2 = getauxval(AT_HWCAP2);
+-  unsigned long hwcap3 = getauxval(AT_HWCAP3);
+-  unsigned long hwcap4 = getauxval(AT_HWCAP4);
+ 
+   __ifunc_arg_t arg;
+   arg._size = sizeof(__ifunc_arg_t);
+   arg._hwcap = hwcap;
+   arg._hwcap2 = hwcap2;
+-  arg._hwcap3 = hwcap3;
+-  arg._hwcap4 = hwcap4;
+   __init_cpu_features_constructor(hwcap | _IFUNC_ARG_HWCAP, &arg);
+ }
+diff --git a/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/elf_aux_info.inc b/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/elf_aux_info.inc
+index 1ada7b69de26..766338142a75 100644
+--- a/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/elf_aux_info.inc
++++ b/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/elf_aux_info.inc
+@@ -7,21 +7,17 @@ void __init_cpu_features_resolver(unsigned long hwcap,
+ }
+ 
+ void CONSTRUCTOR_ATTRIBUTE __init_cpu_features(void) {
+-  unsigned long hwcap, hwcap2, hwcap3, hwcap4 = 0;
++  unsigned long hwcap, hwcap2 = 0;
+   // CPU features already initialized.
+   if (__atomic_load_n(&__aarch64_cpu_features.features, __ATOMIC_RELAXED))
+     return;
+ 
+   elf_aux_info(AT_HWCAP, &hwcap, sizeof hwcap);
+   elf_aux_info(AT_HWCAP2, &hwcap2, sizeof hwcap2);
+-  elf_aux_info(AT_HWCAP3, &hwcap3, sizeof hwcap3);
+-  elf_aux_info(AT_HWCAP4, &hwcap4, sizeof hwcap4);
+ 
+   __ifunc_arg_t arg;
+   arg._size = sizeof(__ifunc_arg_t);
+   arg._hwcap = hwcap;
+   arg._hwcap2 = hwcap2;
+-  arg._hwcap3 = hwcap3;
+-  arg._hwcap4 = hwcap4;
+   __init_cpu_features_constructor(hwcap | _IFUNC_ARG_HWCAP, &arg);
+ }
+diff --git a/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/getauxval.inc b/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/getauxval.inc
+index 6c52c5311bc5..486f77a1e4d2 100644
+--- a/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/getauxval.inc
++++ b/compiler-rt/lib/builtins/cpu_model/aarch64/fmv/getauxval.inc
+@@ -12,14 +12,10 @@ void CONSTRUCTOR_ATTRIBUTE __init_cpu_features(void) {
+ 
+   unsigned long hwcap = getauxval(AT_HWCAP);
+   unsigned long hwcap2 = getauxval(AT_HWCAP2);
+-  unsigned long hwcap3 = getauxval(AT_HWCAP3);
+-  unsigned long hwcap4 = getauxval(AT_HWCAP4);
+ 
+   __ifunc_arg_t arg;
+   arg._size = sizeof(__ifunc_arg_t);
+   arg._hwcap = hwcap;
+   arg._hwcap2 = hwcap2;
+-  arg._hwcap3 = hwcap3;
+-  arg._hwcap4 = hwcap4;
+   __init_cpu_features_constructor(hwcap | _IFUNC_ARG_HWCAP, &arg);
+ }
+diff --git a/compiler-rt/lib/builtins/cpu_model/aarch64/hwcap.inc b/compiler-rt/lib/builtins/cpu_model/aarch64/hwcap.inc
+index 1c53191b84cf..a77fde39de99 100644
+--- a/compiler-rt/lib/builtins/cpu_model/aarch64/hwcap.inc
++++ b/compiler-rt/lib/builtins/cpu_model/aarch64/hwcap.inc
+@@ -2,7 +2,7 @@
+ #define _IFUNC_ARG_HWCAP (1ULL << 62)
+ #endif
+ #ifndef AT_HWCAP
+-#define AT_HWCAP 16 // Linux value
++#define AT_HWCAP 16
+ #endif
+ #ifndef HWCAP_CPUID
+ #define HWCAP_CPUID (1 << 11)
+@@ -90,7 +90,7 @@
+ #endif
+ 
+ #ifndef AT_HWCAP2
+-#define AT_HWCAP2 26 // Linux value
++#define AT_HWCAP2 26
+ #endif
+ #ifndef HWCAP2_DCPODP
+ #define HWCAP2_DCPODP (1 << 0)
+@@ -185,19 +185,3 @@
+ #ifndef HWCAP2_CSSC
+ #define HWCAP2_CSSC (1UL << 34)
+ #endif
+-
+-#ifndef AT_HWCAP3
+-#ifdef __linux__
+-#define AT_HWCAP3 29 // Linux value
+-#else
+-#define AT_HWCAP3 38 // BSD value
+-#endif
+-#endif
+-
+-#ifndef AT_HWCAP4
+-#ifdef __linux__
+-#define AT_HWCAP4 30 // Linux value
+-#else
+-#define AT_HWCAP4 39 // BSD value
+-#endif
+-#endif
+-- 
+2.39.5

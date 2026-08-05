@@ -1,0 +1,403 @@
+From 7cf2d8738cd79af0d891de414fdd1927f951aefa Mon Sep 17 00:00:00 2001
+From: Jordan R Abrahams-Whitehead <ajordanr@google.com>
+Date: Thu, 28 May 2026 00:28:47 +0000
+Subject: [PATCH] [libc++] Add support for picolibc and newlib in
+ RUNTIMES_USE_LIBC (#147956)
+
+This replaces detection of picolibc in libc++ (by checking for and
+including picolibc.h) with using RUNTIMES_USE_LIBC build time option
+intriduced in https://github.com/llvm/llvm-project/pull/134893
+RUNTIMES_USE_LIBC is extended to accept picolibc and newlib.
+
+Detection of picolibc via the header is kept as a deprecated feature to
+avoid breaking builds.
+
+libc++ is updated to use dedicated LIBCXX_LIBC_NEWLIB macro to check for
+newlib specific conditions instead of less informative _NEWLIB_VERSION
+
+---------
+
+Co-authored-by: Louis Dionne <ldionne.2@gmail.com>
+
+patch.cherry: true
+patch.metadata.author: Volodymyr Turanskyy <vturanskyy@gmail.com>
+patch.metadata.original_sha: a6643f27ecdaaff2945a1acd213a745c1526c525
+patch.platforms: chromiumos
+patch.version_range.from: 584947
+patch.version_range.until: 598857
+
+Change-Id: I213f6229402fa3338e290ebf4566d80aea733a7b
+---
+ libcxx/CMakeLists.txt                                | 12 ++++++++++++
+ libcxx/include/__config_site.in                      |  4 ++++
+ libcxx/include/__configuration/platform.h            |  7 -------
+ libcxx/include/__cxx03/__fwd/ios.h                   |  2 +-
+ libcxx/include/__cxx03/__locale                      |  2 +-
+ .../include/__cxx03/__locale_dir/locale_base_api.h   |  2 +-
+ libcxx/include/__cxx03/fstream                       |  2 +-
+ libcxx/include/__cxx03/locale                        |  2 +-
+ libcxx/include/__cxx03/regex                         |  6 ++----
+ libcxx/include/__fwd/ios.h                           |  2 +-
+ libcxx/include/__locale                              |  2 +-
+ libcxx/include/__locale_dir/messages.h               |  2 +-
+ libcxx/include/fstream                               |  4 ++--
+ libcxx/include/regex                                 |  6 ++----
+ libcxx/src/include/config_elast.h                    |  2 +-
+ libcxx/src/locale.cpp                                |  2 +-
+ libcxx/test/libcxx/system_reserved_names.gen.py      |  4 ++--
+ .../syserr.errcat.objects/generic_category.pass.cpp  |  2 +-
+ .../syserr.errcat.objects/system_category.pass.cpp   |  2 +-
+ libcxx/test/support/platform_support.h               |  2 +-
+ libcxx/utils/ci/run-buildbot                         |  1 +
+ runtimes/cmake/Modules/HandleLibC.cmake              |  4 ++--
+ 22 files changed, 40 insertions(+), 34 deletions(-)
+
+diff --git a/libcxx/CMakeLists.txt b/libcxx/CMakeLists.txt
+index 85514cc7547a..b0ca7ef7d4e6 100644
+--- a/libcxx/CMakeLists.txt
++++ b/libcxx/CMakeLists.txt
+@@ -751,6 +751,18 @@ config_define(${LIBCXX_ENABLE_WIDE_CHARACTERS} _LIBCPP_HAS_WIDE_CHARACTERS)
+ config_define(${LIBCXX_ENABLE_TIME_ZONE_DATABASE} _LIBCPP_HAS_TIME_ZONE_DATABASE)
+ config_define(${LIBCXX_ENABLE_VENDOR_AVAILABILITY_ANNOTATIONS} _LIBCPP_HAS_VENDOR_AVAILABILITY_ANNOTATIONS)
+ 
++# Set C library in use
++if (RUNTIMES_USE_LIBC STREQUAL "picolibc")
++  config_define(1 _LIBCPP_LIBC_PICOLIBC)
++  # picolibc is derived from newlib and behaves the same in regards to libc++
++  # so setting both here:
++  # * _LIBCPP_LIBC_NEWLIB is used now
++  # * _LIBCPP_LIBC_PICOLIBC can be used for further customizations later
++  config_define(1 _LIBCPP_LIBC_NEWLIB)
++elseif (RUNTIMES_USE_LIBC STREQUAL "newlib")
++  config_define(1 _LIBCPP_LIBC_NEWLIB)
++endif()
++
+ # TODO: Remove in LLVM 21. We're leaving an error to make this fail explicitly.
+ if (LIBCXX_ENABLE_ASSERTIONS)
+   message(FATAL_ERROR "LIBCXX_ENABLE_ASSERTIONS has been removed. Please use LIBCXX_HARDENING_MODE instead.")
+diff --git a/libcxx/include/__config_site.in b/libcxx/include/__config_site.in
+index b68c0c825836..009bf8aa499d 100644
+--- a/libcxx/include/__config_site.in
++++ b/libcxx/include/__config_site.in
+@@ -41,6 +41,10 @@
+ // Hardening.
+ #cmakedefine _LIBCPP_HARDENING_MODE_DEFAULT @_LIBCPP_HARDENING_MODE_DEFAULT@
+ 
++// C libraries
++#cmakedefine01 _LIBCPP_LIBC_PICOLIBC
++#cmakedefine01 _LIBCPP_LIBC_NEWLIB
++
+ // __USE_MINGW_ANSI_STDIO gets redefined on MinGW
+ #ifdef __clang__
+ #  pragma clang diagnostic push
+diff --git a/libcxx/include/__configuration/platform.h b/libcxx/include/__configuration/platform.h
+index f3c199dee172..8d0f8f63f521 100644
+--- a/libcxx/include/__configuration/platform.h
++++ b/libcxx/include/__configuration/platform.h
+@@ -42,13 +42,6 @@
+ #  endif
+ #endif
+ 
+-// This is required in order for _NEWLIB_VERSION to be defined in places where we use it.
+-// TODO: We shouldn't be including arbitrarily-named headers from libc++ since this can break valid
+-//       user code. Move code paths that need _NEWLIB_VERSION to another customization mechanism.
+-#if __has_include(<picolibc.h>)
+-#  include <picolibc.h>
+-#endif
+-
+ #ifndef __BYTE_ORDER__
+ #  error                                                                                                               \
+       "Your compiler doesn't seem to define __BYTE_ORDER__, which is required by libc++ to know the endianness of your target platform"
+diff --git a/libcxx/include/__cxx03/__fwd/ios.h b/libcxx/include/__cxx03/__fwd/ios.h
+index dc03e8c6bab2..3b33b25bfc1f 100644
+--- a/libcxx/include/__cxx03/__fwd/ios.h
++++ b/libcxx/include/__cxx03/__fwd/ios.h
+@@ -31,7 +31,7 @@ using wios = basic_ios<wchar_t>;
+ template <class _CharT, class _Traits>
+ class _LIBCPP_PREFERRED_NAME(ios) _LIBCPP_IF_WIDE_CHARACTERS(_LIBCPP_PREFERRED_NAME(wios)) basic_ios;
+ 
+-#if defined(_NEWLIB_VERSION)
++#if _LIBCPP_LIBC_NEWLIB
+ // On newlib, off_t is 'long int'
+ using streamoff = long int; // for char_traits in <string>
+ #else
+diff --git a/libcxx/include/__cxx03/__locale b/libcxx/include/__cxx03/__locale
+index d5faa89b99fc..6baec4277180 100644
+--- a/libcxx/include/__cxx03/__locale
++++ b/libcxx/include/__cxx03/__locale
+@@ -384,7 +384,7 @@ public:
+   static const mask xdigit       = _ISXDIGIT;
+   static const mask blank        = _ISBLANK;
+   static const mask __regex_word = 0x8000;
+-#elif defined(_NEWLIB_VERSION)
++#elif _LIBCPP_LIBC_NEWLIB
+   // Same type as Newlib's _ctype_ array in newlib/libc/include/ctype.h.
+   typedef char mask;
+   // In case char is signed, static_cast is needed to avoid warning on
+diff --git a/libcxx/include/__cxx03/__locale_dir/locale_base_api.h b/libcxx/include/__cxx03/__locale_dir/locale_base_api.h
+index a20f0952f52c..3dbce825bc76 100644
+--- a/libcxx/include/__cxx03/__locale_dir/locale_base_api.h
++++ b/libcxx/include/__cxx03/__locale_dir/locale_base_api.h
+@@ -17,7 +17,7 @@
+ #  include <__cxx03/__locale_dir/locale_base_api/android.h>
+ #elif defined(__sun__)
+ #  include <__cxx03/__locale_dir/locale_base_api/solaris.h>
+-#elif defined(_NEWLIB_VERSION)
++#elif _LIBCPP_LIBC_NEWLIB
+ #  include <__cxx03/__locale_dir/locale_base_api/newlib.h>
+ #elif defined(__OpenBSD__)
+ #  include <__cxx03/__locale_dir/locale_base_api/openbsd.h>
+diff --git a/libcxx/include/__cxx03/fstream b/libcxx/include/__cxx03/fstream
+index 44bdabc4602b..4544a975a720 100644
+--- a/libcxx/include/__cxx03/fstream
++++ b/libcxx/include/__cxx03/fstream
+@@ -209,7 +209,7 @@ typedef basic_fstream<wchar_t> wfstream;
+ _LIBCPP_PUSH_MACROS
+ #include <__cxx03/__undef_macros>
+ 
+-#if defined(_LIBCPP_MSVCRT) || defined(_NEWLIB_VERSION)
++#if defined(_LIBCPP_MSVCRT) || _LIBCPP_LIBC_NEWLIB
+ #  define _LIBCPP_HAS_NO_OFF_T_FUNCTIONS
+ #endif
+ 
+diff --git a/libcxx/include/__cxx03/locale b/libcxx/include/__cxx03/locale
+index 64162f5a4ff2..86c0683df411 100644
+--- a/libcxx/include/__cxx03/locale
++++ b/libcxx/include/__cxx03/locale
+@@ -220,7 +220,7 @@ template <class charT> class messages_byname;
+ 
+ #  if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
+ // Most unix variants have catopen.  These are the specific ones that don't.
+-#    if !defined(__BIONIC__) && !defined(_NEWLIB_VERSION) && !defined(__EMSCRIPTEN__)
++#    if !defined(__BIONIC__) && !_LIBCPP_LIBC_NEWLIB && !defined(__EMSCRIPTEN__)
+ #      define _LIBCPP_HAS_CATOPEN 1
+ #      include <nl_types.h>
+ #    endif
+diff --git a/libcxx/include/__cxx03/regex b/libcxx/include/__cxx03/regex
+index b96d59d3a252..980d3f5fe219 100644
+--- a/libcxx/include/__cxx03/regex
++++ b/libcxx/include/__cxx03/regex
+@@ -984,7 +984,7 @@ public:
+   typedef _CharT char_type;
+   typedef basic_string<char_type> string_type;
+   typedef locale locale_type;
+-#if defined(__BIONIC__) || defined(_NEWLIB_VERSION)
++#if defined(__BIONIC__) || _LIBCPP_LIBC_NEWLIB
+   // Originally bionic's ctype_base used its own ctype masks because the
+   // builtin ctype implementation wasn't in libc++ yet. Bionic's ctype mask
+   // was only 8 bits wide and already saturated, so it used a wider type here
+@@ -993,9 +993,7 @@ public:
+   // implementation, but this was not updated to match. Since then Android has
+   // needed to maintain a stable libc++ ABI, and this can't be changed without
+   // an ABI break.
+-  // We also need this workaround for newlib since _NEWLIB_VERSION is not
+-  // defined yet inside __config, so we can't set the
+-  // _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE macro. Additionally, newlib is
++  // We also need this workaround for newlib since newlib is
+   // often used for space constrained environments, so it makes sense not to
+   // duplicate the ctype table.
+   typedef uint16_t char_class_type;
+diff --git a/libcxx/include/__fwd/ios.h b/libcxx/include/__fwd/ios.h
+index 831624f4b1c5..fd6738a6b3ae 100644
+--- a/libcxx/include/__fwd/ios.h
++++ b/libcxx/include/__fwd/ios.h
+@@ -31,7 +31,7 @@ using wios = basic_ios<wchar_t>;
+ template <class _CharT, class _Traits>
+ class _LIBCPP_PREFERRED_NAME(ios) _LIBCPP_IF_WIDE_CHARACTERS(_LIBCPP_PREFERRED_NAME(wios)) basic_ios;
+ 
+-#if defined(_NEWLIB_VERSION)
++#if _LIBCPP_LIBC_NEWLIB
+ // On newlib, off_t is 'long int'
+ using streamoff = long int; // for char_traits in <string>
+ #else
+diff --git a/libcxx/include/__locale b/libcxx/include/__locale
+index 757a53951f66..ad6ac505a864 100644
+--- a/libcxx/include/__locale
++++ b/libcxx/include/__locale
+@@ -389,7 +389,7 @@ public:
+   static const mask xdigit       = _ISXDIGIT;
+   static const mask blank        = _ISBLANK;
+   static const mask __regex_word = 0x8000;
+-#  elif defined(_NEWLIB_VERSION)
++#  elif _LIBCPP_LIBC_NEWLIB
+   // Same type as Newlib's _ctype_ array in newlib/libc/include/ctype.h.
+   typedef char mask;
+   // In case char is signed, static_cast is needed to avoid warning on
+diff --git a/libcxx/include/__locale_dir/messages.h b/libcxx/include/__locale_dir/messages.h
+index c04bf04025ff..686f472840c2 100644
+--- a/libcxx/include/__locale_dir/messages.h
++++ b/libcxx/include/__locale_dir/messages.h
+@@ -22,7 +22,7 @@
+ 
+ #  if defined(__unix__) || (defined(__APPLE__) && defined(__MACH__))
+ // Most unix variants have catopen.  These are the specific ones that don't.
+-#    if !defined(__BIONIC__) && !defined(_NEWLIB_VERSION) && !defined(__EMSCRIPTEN__)
++#    if !defined(__BIONIC__) && !_LIBCPP_LIBC_NEWLIB && !defined(__EMSCRIPTEN__)
+ #      define _LIBCPP_HAS_CATOPEN 1
+ #      include <nl_types.h>
+ #    else
+diff --git a/libcxx/include/fstream b/libcxx/include/fstream
+index 6d3f20fff688..e9de495bb409 100644
+--- a/libcxx/include/fstream
++++ b/libcxx/include/fstream
+@@ -977,7 +977,7 @@ template <class _CharT, class _Traits>
+ int basic_filebuf<_CharT, _Traits>::__fseek(FILE* __file, pos_type __offset, int __whence) {
+ #    if defined(_LIBCPP_MSVCRT_LIKE)
+   return _fseeki64(__file, __offset, __whence);
+-#    elif defined(_NEWLIB_VERSION)
++#    elif _LIBCPP_LIBC_NEWLIB
+   return fseek(__file, __offset, __whence);
+ #    else
+   return ::fseeko(__file, __offset, __whence);
+@@ -988,7 +988,7 @@ template <class _CharT, class _Traits>
+ typename basic_filebuf<_CharT, _Traits>::pos_type basic_filebuf<_CharT, _Traits>::__ftell(FILE* __file) {
+ #    if defined(_LIBCPP_MSVCRT_LIKE)
+   return _ftelli64(__file);
+-#    elif defined(_NEWLIB_VERSION)
++#    elif _LIBCPP_LIBC_NEWLIB
+   return ftell(__file);
+ #    else
+   return ftello(__file);
+diff --git a/libcxx/include/regex b/libcxx/include/regex
+index 9bbc3a69021b..b6c19518be30 100644
+--- a/libcxx/include/regex
++++ b/libcxx/include/regex
+@@ -1004,7 +1004,7 @@ public:
+   typedef _CharT char_type;
+   typedef basic_string<char_type> string_type;
+   typedef locale locale_type;
+-#    if defined(__BIONIC__) || defined(_NEWLIB_VERSION)
++#    if defined(__BIONIC__) || _LIBCPP_LIBC_NEWLIB
+   // Originally bionic's ctype_base used its own ctype masks because the
+   // builtin ctype implementation wasn't in libc++ yet. Bionic's ctype mask
+   // was only 8 bits wide and already saturated, so it used a wider type here
+@@ -1013,9 +1013,7 @@ public:
+   // implementation, but this was not updated to match. Since then Android has
+   // needed to maintain a stable libc++ ABI, and this can't be changed without
+   // an ABI break.
+-  // We also need this workaround for newlib since _NEWLIB_VERSION is not
+-  // defined yet inside __config, so we can't set the
+-  // _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE macro. Additionally, newlib is
++  // We also need this workaround for newlib since newlib is
+   // often used for space constrained environments, so it makes sense not to
+   // duplicate the ctype table.
+   typedef uint16_t char_class_type;
+diff --git a/libcxx/src/include/config_elast.h b/libcxx/src/include/config_elast.h
+index 7edff2d9375d..be665a97bf91 100644
+--- a/libcxx/src/include/config_elast.h
++++ b/libcxx/src/include/config_elast.h
+@@ -23,7 +23,7 @@
+ #  define _LIBCPP_ELAST ELAST
+ #elif defined(__LLVM_LIBC__)
+ // No _LIBCPP_ELAST needed for LLVM libc
+-#elif defined(_NEWLIB_VERSION)
++#elif _LIBCPP_LIBC_NEWLIB
+ #  define _LIBCPP_ELAST __ELASTERROR
+ #elif defined(__NuttX__)
+ // No _LIBCPP_ELAST needed on NuttX
+diff --git a/libcxx/src/locale.cpp b/libcxx/src/locale.cpp
+index da735865c322..7229fd232a66 100644
+--- a/libcxx/src/locale.cpp
++++ b/libcxx/src/locale.cpp
+@@ -933,7 +933,7 @@ const ctype<char>::mask* ctype<char>::classic_table() noexcept {
+   return __pctype_func();
+ #  elif defined(__EMSCRIPTEN__)
+   return *__ctype_b_loc();
+-#  elif defined(_NEWLIB_VERSION)
++#  elif _LIBCPP_LIBC_NEWLIB
+   // Newlib has a 257-entry table in ctype_.c, where (char)0 starts at [1].
+   return _ctype_ + 1;
+ #  elif defined(_AIX)
+diff --git a/libcxx/test/libcxx/system_reserved_names.gen.py b/libcxx/test/libcxx/system_reserved_names.gen.py
+index a4f2928eda33..3a0f8efbbee6 100644
+--- a/libcxx/test/libcxx/system_reserved_names.gen.py
++++ b/libcxx/test/libcxx/system_reserved_names.gen.py
+@@ -78,7 +78,7 @@ for header in public_headers:
+ 
+ // Test that libc++ doesn't use names that collide with FreeBSD system macros.
+ // newlib and picolibc also define these macros
+-#if !defined(__FreeBSD__) && !defined(_NEWLIB_VERSION)
++#if !defined(__FreeBSD__) && !_LIBCPP_LIBC_NEWLIB
+ #  define __null_sentinel SYSTEM_RESERVED_NAME
+ #  define __generic SYSTEM_RESERVED_NAME
+ #endif
+@@ -117,7 +117,7 @@ for header in public_headers:
+ #endif
+ 
+ // Newlib & picolibc use __input as a parameter name of a64l & l64a
+-#ifndef _NEWLIB_VERSION
++#if !_LIBCPP_LIBC_NEWLIB
+ # define __input SYSTEM_RESERVED_NAME
+ #endif
+ #define __output SYSTEM_RESERVED_NAME
+diff --git a/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/generic_category.pass.cpp b/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/generic_category.pass.cpp
+index 542520330401..513af522a658 100644
+--- a/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/generic_category.pass.cpp
++++ b/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/generic_category.pass.cpp
+@@ -48,7 +48,7 @@ int main(int, char**)
+         // responds with an empty message, which we probably want to
+         // treat as a failure code otherwise, but we can detect that
+         // with the preprocessor.
+-#if defined(_NEWLIB_VERSION)
++#if _LIBCPP_LIBC_NEWLIB
+         const bool is_newlib = true;
+ #else
+         const bool is_newlib = false;
+diff --git a/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/system_category.pass.cpp b/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/system_category.pass.cpp
+index 255cbe75e2fa..1803c0a19eb9 100644
+--- a/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/system_category.pass.cpp
++++ b/libcxx/test/std/diagnostics/syserr/syserr.errcat/syserr.errcat.objects/system_category.pass.cpp
+@@ -59,7 +59,7 @@ int main(int, char**) {
+     // responds with an empty message, which we probably want to
+     // treat as a failure code otherwise, but we can detect that
+     // with the preprocessor.
+-#if defined(_NEWLIB_VERSION)
++#if _LIBCPP_LIBC_NEWLIB
+     const bool is_newlib = true;
+ #else
+     const bool is_newlib = false;
+diff --git a/libcxx/test/support/platform_support.h b/libcxx/test/support/platform_support.h
+index 99e60f60c599..b66fdff9b049 100644
+--- a/libcxx/test/support/platform_support.h
++++ b/libcxx/test/support/platform_support.h
+@@ -48,7 +48,7 @@
+ # include <string.h> // strverscmp
+ #endif
+ 
+-#if defined(_NEWLIB_VERSION) && defined(__STRICT_ANSI__)
++#if _LIBCPP_LIBC_NEWLIB && defined(__STRICT_ANSI__)
+ // Newlib provides this, but in the header it's under __STRICT_ANSI__
+ extern "C" {
+   int mkstemp(char*);
+diff --git a/libcxx/utils/ci/run-buildbot b/libcxx/utils/ci/run-buildbot
+index 57ecf1e49dbf..0ffcac80bab0 100755
+--- a/libcxx/utils/ci/run-buildbot
++++ b/libcxx/utils/ci/run-buildbot
+@@ -230,6 +230,7 @@ function test-armv7m-picolibc() {
+         -DLIBUNWIND_TEST_CONFIG="armv7m-picolibc-libunwind.cfg.in" \
+         -DCMAKE_C_FLAGS="${flags}" \
+         -DCMAKE_CXX_FLAGS="${flags}" \
++        -DRUNTIMES_USE_LIBC=picolibc \
+         "${@}"
+ 
+     step "Installing compiler-rt"
+diff --git a/runtimes/cmake/Modules/HandleLibC.cmake b/runtimes/cmake/Modules/HandleLibC.cmake
+index 51fbf04df7e3..23f735aee6c0 100644
+--- a/runtimes/cmake/Modules/HandleLibC.cmake
++++ b/runtimes/cmake/Modules/HandleLibC.cmake
+@@ -10,10 +10,10 @@
+ 
+ include_guard(GLOBAL)
+ 
+-set(RUNTIMES_SUPPORTED_C_LIBRARIES system llvm-libc)
++set(RUNTIMES_SUPPORTED_C_LIBRARIES system llvm-libc picolibc newlib)
+ set(RUNTIMES_USE_LIBC "system" CACHE STRING "Specify C library to use. Supported values are ${RUNTIMES_SUPPORTED_C_LIBRARIES}.")
+ if (NOT "${RUNTIMES_USE_LIBC}" IN_LIST RUNTIMES_SUPPORTED_C_LIBRARIES)
+-  message(FATAL_ERROR "Unsupported C library: '${RUNTIMES_CXX_ABI}'. Supported values are ${RUNTIMES_SUPPORTED_C_LIBRARIES}.")
++  message(FATAL_ERROR "Unsupported C library: '${RUNTIMES_USE_LIBC}'. Supported values are ${RUNTIMES_SUPPORTED_C_LIBRARIES}.")
+ endif()
+ 
+ # Link against a system-provided libc
+-- 
+2.54.0.823.g6e5bcc1fc9-goog
+

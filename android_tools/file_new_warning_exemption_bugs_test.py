@@ -10,7 +10,7 @@ from unittest import mock
 
 from android_tools import file_new_warning_exemption_bugs
 from android_tools import find_owners
-from android_tools import gerrit_utils
+from cros_utils import gerrit_utils
 
 
 class LookupOwnersTest(unittest.TestCase):
@@ -31,9 +31,12 @@ class LookupOwnersTest(unittest.TestCase):
             "a": "owner_a",
             "b": "owner_b",
         }
+        mock_client = mock.MagicMock(spec=gerrit_utils.GerritClient)
 
         owners = file_new_warning_exemption_bugs.lookup_owners_for_git_repos(
-            android_tree, bps
+            mock_client,
+            android_tree,
+            bps,
         )
 
         self.assertEqual(
@@ -45,7 +48,7 @@ class LookupOwnersTest(unittest.TestCase):
         )
 
         # Verify arguments to fetch_all_likely_relevant_code_owners.
-        # It expects (repo_cache, host, check_files)
+        # It expects (gerrit_client, repo_cache, host, check_files)
         # check_files is dict[str, list[str]] (files relative to repo)
         expected_check_files = {
             "a": ["Android.bp", "sub/Android.bp"],
@@ -53,7 +56,8 @@ class LookupOwnersTest(unittest.TestCase):
         }
 
         mock_fetch_owners.assert_called_once_with(
+            mock_client,
             mock_create_repo_cache.return_value,
-            gerrit_utils.INTERNAL_GERRIT_HOST,
+            gerrit_utils.ANDROID_INTERNAL_GERRIT_HOST,
             expected_check_files,
         )

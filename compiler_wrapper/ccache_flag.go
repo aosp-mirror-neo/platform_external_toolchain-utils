@@ -4,6 +4,8 @@
 
 package main
 
+const ccachePath = "/usr/bin/ccache"
+
 func isInConfigureStage(env env) bool {
 	val, present := env.getenv("EBUILD_PHASE")
 	return present && val == "configure"
@@ -24,12 +26,14 @@ func processCCacheFlag(builder *commandBuilder) {
 		return arg.value
 	})
 
+	forceCcache := false
 	if force, present := builder.env.getenv("COMPILER_WRAPPER_FORCE_CCACHE"); present {
 		switch force {
 		case "0":
 			useCCache = false
 		case "1":
 			useCCache = true
+			forceCcache = true
 		}
 	}
 
@@ -37,6 +41,10 @@ func processCCacheFlag(builder *commandBuilder) {
 	// waste of time, since these files are very small. Experimentally, this speeds up
 	// configuring by ~13%.
 	if isInConfigureStage(builder.env) {
+		useCCache = false
+	}
+
+	if useCCache && !forceCcache && !builder.env.fileExists(ccachePath) {
 		useCCache = false
 	}
 
@@ -64,6 +72,6 @@ func processCCacheFlag(builder *commandBuilder) {
 			builder.updateEnv("CCACHE_CPP2=yes")
 		}
 
-		builder.wrapPath("/usr/bin/ccache")
+		builder.wrapPath(ccachePath)
 	}
 }

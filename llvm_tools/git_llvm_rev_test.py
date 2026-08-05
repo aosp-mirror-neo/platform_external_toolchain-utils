@@ -4,10 +4,11 @@
 
 """Tests for git_llvm_rev."""
 
-import unittest
+from unittest import mock
 
 from llvm_tools import get_llvm_hash
 from llvm_tools import git_llvm_rev
+from llvm_tools import test_helpers
 
 
 def get_llvm_config() -> git_llvm_rev.LLVMConfig:
@@ -15,7 +16,7 @@ def get_llvm_config() -> git_llvm_rev.LLVMConfig:
     return git_llvm_rev.LLVMConfig(dir=repo.path, remote=repo.remote)
 
 
-class Test(unittest.TestCase):
+class Test(test_helpers.TempDirTestCase):
     """Test cases for git_llvm_rev."""
 
     def rev_to_sha_with_round_trip(self, rev: git_llvm_rev.Rev) -> str:
@@ -163,6 +164,46 @@ class Test(unittest.TestCase):
             git_llvm_rev.Rev(branch="upstream/release/9.x", number=366427)
         )
         self.assertEqual(sha, "2cf681a11aea459b50d712abc7136f7129e4d57f")
+
+    def test_is_llvm_dir(self) -> None:
+        d = self.make_tempdir()
+        self.assertFalse(git_llvm_rev.is_llvm_dir(d))
+
+        (d / ".git").touch()
+        (d / "clang").mkdir()
+        (d / "llvm").mkdir()
+        (d / "lld").mkdir()
+        self.assertTrue(git_llvm_rev.is_llvm_dir(d))
+
+    def test_select_preferred_remote(self) -> None:
+        self.assertEqual(
+            git_llvm_rev.select_preferred_remote(["cros", "origin"]), "cros"
+        )
+        self.assertEqual(
+            git_llvm_rev.select_preferred_remote(["goog", "origin"]), "goog"
+        )
+        self.assertEqual(
+            git_llvm_rev.select_preferred_remote(["custom"]), "custom"
+        )
+        with self.assertRaises(ValueError):
+            git_llvm_rev.select_preferred_remote(["foo", "bar"])
+        with self.assertRaises(ValueError):
+            git_llvm_rev.select_preferred_remote([])
+
+    def test_autodetect_remote(self) -> None:
+        d = self.make_tempdir()
+        with mock.patch.object(
+            git_llvm_rev, "check_output", return_value="cros\norigin\n"
+        ):
+            self.assertEqual(git_llvm_rev.autodetect_remote(d), "cros")
+
+    def test_find_root_llvm_dir_failure(self) -> None:
+        d = self.make_tempdir()
+        with mock.patch.object(
+            git_llvm_rev, "is_llvm_dir", autospec=True, return_value=False
+        ):
+            with self.assertRaises(ValueError):
+                git_llvm_rev.find_root_llvm_dir(root_dir=d)
 
 
 # FIXME: When release/10.x happens, it may be nice to have a test-case

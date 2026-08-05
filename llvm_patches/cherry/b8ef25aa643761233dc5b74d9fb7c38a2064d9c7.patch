@@ -1,0 +1,299 @@
+From 2d8e8eeb339853dc5756553c8fb31cc897570eef Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Tue, 25 Nov 2025 11:05:13 -0500
+Subject: [PATCH] [PGO] Fix zeroed estimated trip count (#167792)
+
+Before PR #152775, `llvm::getLoopEstimatedTripCount` never returned 0.
+If `llvm::setLoopEstimatedTripCount` were called with 0, it would zero
+branch weights, causing `llvm::getLoopEstimatedTripCount` to return
+`std::nullopt`.
+
+PR #152775 changed that behavior: if `llvm::setLoopEstimatedTripCount`
+is called with 0, it sets `llvm.loop.estimated_trip_count` to 0, causing
+`llvm::getLoopEstimatedTripCount` to return 0. However, it kept
+documentation saying `llvm::getLoopEstimatedTripCount` returns a
+positive count.
+
+Some passes continue to assume `llvm::getLoopEstimatedTripCount` never
+returns 0 and crash if it does, as reported in issue #164254. To restore
+the behavior they expect, this patch changes
+`llvm::getLoopEstimatedTripCount` to return `std::nullopt` when
+`llvm.loop.estimated_trip_count` is 0.
+
+patch.cherry: true
+patch.metadata.author: Joel E. Denny <jdenny.ornl@gmail.com>
+patch.metadata.original_sha: b8ef25aa643761233dc5b74d9fb7c38a2064d9c7
+patch.platforms: chromiumos
+patch.version_range.from: 590166
+patch.version_range.until: 598558
+
+---
+ llvm/docs/LangRef.rst                         | 15 ++++
+ .../include/llvm/Transforms/Utils/LoopUtils.h | 14 ++--
+ llvm/lib/Transforms/Utils/LoopUtils.cpp       | 19 ++++-
+ .../vectorize-zero-estimated-trip-count.ll    | 34 ++++++++
+ .../llvm.loop.estimated_trip_count.ll         | 14 +++-
+ .../Transforms/Utils/LoopUtilsTest.cpp        | 81 +++++++++++++++++++
+ 6 files changed, 169 insertions(+), 8 deletions(-)
+ create mode 100644 llvm/test/Transforms/LoopVectorize/vectorize-zero-estimated-trip-count.ll
+
+diff --git a/llvm/docs/LangRef.rst b/llvm/docs/LangRef.rst
+index b9507a2d054f..26db90967f7e 100644
+--- a/llvm/docs/LangRef.rst
++++ b/llvm/docs/LangRef.rst
+@@ -8033,6 +8033,21 @@ pass should record the new estimates by calling
+ loop, ``llvm::getLoopEstimatedTripCount`` returns its value instead of
+ estimating the trip count from the loop's ``branch_weights`` metadata.
+ 
++Zero
++""""
++
++Some passes set ``llvm.loop.estimated_trip_count`` to 0.  For example, after
++peeling 10 or more iterations from a loop with an estimated trip count of 10,
++``llvm.loop.estimated_trip_count`` becomes 0 on the remaining loop.  It
++indicates that, each time execution reaches the peeled iterations, execution is
++estimated to exit them without reaching the remaining loop's header.
++
++Even if the probability of reaching a loop's header is low, if it is reached, it
++is the start of an iteration.  Consequently, some passes historically assume
++that ``llvm::getLoopEstimatedTripCount`` always returns a positive count or
++``std::nullopt``.  Thus, it returns ``std::nullopt`` when
++``llvm.loop.estimated_trip_count`` is 0.
++
+ '``llvm.licm.disable``' Metadata
+ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ 
+diff --git a/llvm/include/llvm/Transforms/Utils/LoopUtils.h b/llvm/include/llvm/Transforms/Utils/LoopUtils.h
+index 86eb21389756..0afba21dfaf8 100644
+--- a/llvm/include/llvm/Transforms/Utils/LoopUtils.h
++++ b/llvm/include/llvm/Transforms/Utils/LoopUtils.h
+@@ -326,7 +326,10 @@ LLVM_ABI void addStringMetadataToLoop(Loop *TheLoop, const char *MDString,
+ /// - \c std::nullopt, if the implementation is unable to handle the loop form
+ ///   of \p L (e.g., \p L must have a latch block that controls the loop exit).
+ /// - The value of \c llvm.loop.estimated_trip_count from the loop metadata of
+-///   \p L, if that metadata is present.
++///   \p L, if that metadata is present.  In the special case that the value is
++///   zero, return \c std::nullopt instead as that is historically what callers
++///   expect when a loop is estimated to execute no iterations (i.e., its header
++///   is not reached).
+ /// - Else, a new estimate of the trip count from the latch branch weights of
+ ///   \p L.
+ ///
+@@ -353,10 +356,11 @@ getLoopEstimatedTripCount(Loop *L,
+ /// to handle the loop form of \p L (e.g., \p L must have a latch block that
+ /// controls the loop exit).  Otherwise, return true.
+ ///
+-/// In addition, if \p EstimatedLoopInvocationWeight, set the branch weight
+-/// metadata of \p L to reflect that \p L has an estimated
+-/// \p EstimatedTripCount iterations and has \c *EstimatedLoopInvocationWeight
+-/// exit weight through the loop's latch.
++/// In addition, if \p EstimatedLoopInvocationWeight:
++/// - Set the branch weight metadata of \p L to reflect that \p L has an
++///   estimated \p EstimatedTripCount iterations and has
++///   \c *EstimatedLoopInvocationWeight exit weight through the loop's latch.
++/// - If \p EstimatedTripCount is zero, zero the branch weights.
+ ///
+ /// TODO: Eventually, once all passes have migrated away from setting branch
+ /// weights to indicate estimated trip counts, this function will drop the
+diff --git a/llvm/lib/Transforms/Utils/LoopUtils.cpp b/llvm/lib/Transforms/Utils/LoopUtils.cpp
+index 6e60b94be78e..8e2a4f80fce1 100644
+--- a/llvm/lib/Transforms/Utils/LoopUtils.cpp
++++ b/llvm/lib/Transforms/Utils/LoopUtils.cpp
+@@ -913,11 +913,26 @@ llvm::getLoopEstimatedTripCount(Loop *L,
+ 
+   // Return the estimated trip count from metadata unless the metadata is
+   // missing or has no value.
++  //
++  // Some passes set llvm.loop.estimated_trip_count to 0.  For example, after
++  // peeling 10 or more iterations from a loop with an estimated trip count of
++  // 10, llvm.loop.estimated_trip_count becomes 0 on the remaining loop.  It
++  // indicates that, each time execution reaches the peeled iterations,
++  // execution is estimated to exit them without reaching the remaining loop's
++  // header.
++  //
++  // Even if the probability of reaching a loop's header is low, if it is
++  // reached, it is the start of an iteration.  Consequently, some passes
++  // historically assume that llvm::getLoopEstimatedTripCount always returns a
++  // positive count or std::nullopt.  Thus, return std::nullopt when
++  // llvm.loop.estimated_trip_count is 0.
+   if (auto TC = getOptionalIntLoopAttribute(L, LLVMLoopEstimatedTripCount)) {
+     LLVM_DEBUG(dbgs() << "getLoopEstimatedTripCount: "
+                       << LLVMLoopEstimatedTripCount << " metadata has trip "
+-                      << "count of " << *TC << " for " << DbgLoop(L) << "\n");
+-    return TC;
++                      << "count of " << *TC
++                      << (*TC == 0 ? " (returning std::nullopt)" : "")
++                      << " for " << DbgLoop(L) << "\n");
++    return *TC == 0 ? std::nullopt : std::optional(*TC);
+   }
+ 
+   // Estimate the trip count from latch branch weights.
+diff --git a/llvm/test/Transforms/LoopVectorize/vectorize-zero-estimated-trip-count.ll b/llvm/test/Transforms/LoopVectorize/vectorize-zero-estimated-trip-count.ll
+new file mode 100644
+index 000000000000..436324b4bab7
+--- /dev/null
++++ b/llvm/test/Transforms/LoopVectorize/vectorize-zero-estimated-trip-count.ll
+@@ -0,0 +1,34 @@
++; Check that an estimated trip count of zero does not crash or otherwise break
++; LoopVectorize behavior while it tries to create runtime memory checks inside
++; an outer loop.
++
++; RUN: opt -passes=loop-vectorize -S %s | FileCheck %s
++
++target triple = "x86_64-unknown-linux-gnu"
++
++; Look for basic signs that vectorization ran and produced memory checks.
++; CHECK: @test(
++; CHECK: vector.memcheck:
++; CHECK: vector.body:
++; CHECK: inner:
++
++define void @test(ptr addrspace(1) %p, i32 %n) {
++entry:
++  br label %outer
++outer:
++  br label %inner
++inner:
++  %i = phi i32 [ %inc, %inner ], [ 0, %outer ]
++  store i32 0, ptr addrspace(1) %p
++  %load = load i32, ptr addrspace(1) null
++  %inc = add i32 %i, 1
++  %cmp = icmp slt i32 %i, %n
++  br i1 %cmp, label %inner, label %outer.latch
++outer.latch:
++  br i1 %cmp, label %outer, label %exit, !llvm.loop !0
++exit:
++  ret void
++}
++
++!0 = distinct !{!0, !1}
++!1 = !{!"llvm.loop.estimated_trip_count", i32 0}
+diff --git a/llvm/test/Verifier/llvm.loop.estimated_trip_count.ll b/llvm/test/Verifier/llvm.loop.estimated_trip_count.ll
+index b1e456f5b0ad..e0ec110efae8 100644
+--- a/llvm/test/Verifier/llvm.loop.estimated_trip_count.ll
++++ b/llvm/test/Verifier/llvm.loop.estimated_trip_count.ll
+@@ -36,12 +36,24 @@ exit:
+ ; RUN: echo '!1 = !{!"llvm.loop.estimated_trip_count", i16 5}' >> %t
+ ; RUN: %{RUN} GOOD
+ 
+-; i32 value.
++; i32 arbitrary value.
+ ; RUN: cp %s %t
+ ; RUN: chmod u+w %t
+ ; RUN: echo '!1 = !{!"llvm.loop.estimated_trip_count", i32 5}' >> %t
+ ; RUN: %{RUN} GOOD
+ 
++; i32 boundary value of 1.
++; RUN: cp %s %t
++; RUN: chmod u+w %t
++; RUN: echo '!1 = !{!"llvm.loop.estimated_trip_count", i32 1}' >> %t
++; RUN: %{RUN} GOOD
++
++; i32 boundary value of 0.
++; RUN: cp %s %t
++; RUN: chmod u+w %t
++; RUN: echo '!1 = !{!"llvm.loop.estimated_trip_count", i32 0}' >> %t
++; RUN: %{RUN} GOOD
++
+ ; i64 value.
+ ; RUN: cp %s %t
+ ; RUN: chmod u+w %t
+diff --git a/llvm/unittests/Transforms/Utils/LoopUtilsTest.cpp b/llvm/unittests/Transforms/Utils/LoopUtilsTest.cpp
+index ce002e923996..9fc9fb5b5a97 100644
+--- a/llvm/unittests/Transforms/Utils/LoopUtilsTest.cpp
++++ b/llvm/unittests/Transforms/Utils/LoopUtilsTest.cpp
+@@ -14,6 +14,7 @@
+ #include "llvm/AsmParser/Parser.h"
+ #include "llvm/IR/Dominators.h"
+ #include "llvm/IR/Module.h"
++#include "llvm/IR/ProfDataUtils.h"
+ #include "llvm/Support/SourceMgr.h"
+ #include "gtest/gtest.h"
+ 
+@@ -195,3 +196,83 @@ TEST(LoopUtils, nestedLoopSharedLatchEstimatedTripCount) {
+         EXPECT_EQ(getLoopEstimatedTripCount(Outer), std::nullopt);
+       });
+ }
++
++// {get,set}LoopEstimatedTripCount implement special handling of zero.
++TEST(LoopUtils, zeroEstimatedTripCount) {
++  LLVMContext C;
++  const char *IR =
++      "define void @foo(i1 %c) {\n"
++      "entry:\n"
++      "  br label %loop0\n"
++      "loop0:\n"
++      "  br i1 %c, label %loop0, label %loop1\n"
++      "loop1:\n"
++      "  br i1 %c, label %loop1, label %loop2, !llvm.loop !1\n"
++      "loop2:\n"
++      "  br i1 %c, label %loop2, label %exit, !prof !5, !llvm.loop !2\n"
++      "exit:\n"
++      "  ret void\n"
++      "}\n"
++      "!1 = distinct !{!1, !3}\n"
++      "!2 = distinct !{!2, !3, !4}\n"
++      "!3 = !{!\"foo\", i32 5}\n"
++      "!4 = !{!\"llvm.loop.estimated_trip_count\", i32 10}\n"
++      "!5 = !{!\"branch_weights\", i32 1, i32 9}\n"
++      "\n";
++
++  // With EstimatedLoopInvocationWeight, setLoopEstimatedTripCount sets branch
++  // weights and llvm.loop.estimated_trip_count all to 0, so
++  // getLoopEstimatedTripCount returns std::nullopt.  It does not touch other
++  // loop metadata, if any.
++  std::unique_ptr<Module> M = parseIR(C, IR);
++  run(*M, "foo",
++      [&](Function &F, DominatorTree &DT, ScalarEvolution &SE, LoopInfo &LI) {
++        assert(LI.end() - LI.begin() == 3 && "Expected three loops");
++        for (Loop *L : LI) {
++          Instruction &LatchBranch = *L->getLoopLatch()->getTerminator();
++          std::optional<int> Foo = getOptionalIntLoopAttribute(L, "foo");
++
++          EXPECT_EQ(setLoopEstimatedTripCount(
++                        L, 0, /*EstimatedLoopInvocationWeight=*/1),
++                    true);
++
++          SmallVector<uint32_t, 2> Weights;
++          EXPECT_EQ(extractBranchWeights(LatchBranch, Weights), true);
++          EXPECT_EQ(Weights[0], 0u);
++          EXPECT_EQ(Weights[1], 0u);
++          EXPECT_EQ(getOptionalIntLoopAttribute(L, "foo"), Foo);
++          EXPECT_EQ(getOptionalIntLoopAttribute(L, LLVMLoopEstimatedTripCount),
++                    0);
++          EXPECT_EQ(getLoopEstimatedTripCount(L), std::nullopt);
++        }
++      });
++
++  // Without EstimatedLoopInvocationWeight, setLoopEstimatedTripCount sets
++  // llvm.loop.estimated_trip_count to 0, so getLoopEstimatedTripCount returns
++  // std::nullopt.  It does not touch branch weights or other loop metadata, if
++  // any.
++  M = parseIR(C, IR);
++  run(*M, "foo",
++      [&](Function &F, DominatorTree &DT, ScalarEvolution &SE, LoopInfo &LI) {
++        assert(LI.end() - LI.begin() == 3 && "Expected three loops");
++        for (Loop *L : LI) {
++          Instruction &LatchBranch = *L->getLoopLatch()->getTerminator();
++          std::optional<int> Foo = getOptionalIntLoopAttribute(L, "foo");
++          SmallVector<uint32_t, 2> WeightsOld;
++          bool HasWeights = extractBranchWeights(LatchBranch, WeightsOld);
++
++          EXPECT_EQ(setLoopEstimatedTripCount(L, 0), true);
++
++          SmallVector<uint32_t, 2> WeightsNew;
++          EXPECT_EQ(extractBranchWeights(LatchBranch, WeightsNew), HasWeights);
++          if (HasWeights) {
++            EXPECT_EQ(WeightsNew[0], WeightsOld[0]);
++            EXPECT_EQ(WeightsNew[1], WeightsOld[1]);
++          }
++          EXPECT_EQ(getOptionalIntLoopAttribute(L, "foo"), Foo);
++          EXPECT_EQ(getOptionalIntLoopAttribute(L, LLVMLoopEstimatedTripCount),
++                    0);
++          EXPECT_EQ(getLoopEstimatedTripCount(L), std::nullopt);
++        }
++      });
++}
+-- 
+2.39.5

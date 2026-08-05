@@ -1,0 +1,73 @@
+From a6f7f8ac4ae3862e38d6b4a72eeb40386a908645 Mon Sep 17 00:00:00 2001
+From: crostc-worker
+ <crostc-worker@crostc-chrotomation.iam.gserviceaccount.com>
+Date: Sat, 3 Jan 2026 12:56:37 -0800
+Subject: [PATCH] [X86] Avoid assertion failure with implicit immediates for
+ AMX tile dimensions (#174128)
+
+https://github.com/llvm/llvm-project/pull/165556 removed support for
+implicit immediates in
+`llvm/include/llvm/CodeGen/TileShapeInfo.h/.cpp`. Although implicit
+immediates are generally not valid tile dimensions, it is undesirable to
+have assertion failures in syntactically valid code; moreover, implicit
+immediates (especially zero) are commonly encountered when reducing test
+cases.
+
+This patch restores the support for implicit immediates.
+
+Fixes: https://github.com/llvm/llvm-project/issues/174127
+
+patch.cherry: true
+patch.metadata.author: Thurston Dang <thurston@google.com>
+patch.metadata.original_sha: f270256b4393bd2406a503f1fa5d7a8f9a51f91b
+patch.platforms: chromiumos
+patch.version_range.from: 595694
+patch.version_range.until: 601944
+
+---
+ llvm/include/llvm/CodeGen/TileShapeInfo.h | 9 ++++++++-
+ llvm/lib/Target/X86/X86TileConfig.cpp     | 9 ++++++++-
+ 2 files changed, 16 insertions(+), 2 deletions(-)
+
+diff --git a/llvm/include/llvm/CodeGen/TileShapeInfo.h b/llvm/include/llvm/CodeGen/TileShapeInfo.h
+index 24d9de842645..96027a0bd5b2 100644
+--- a/llvm/include/llvm/CodeGen/TileShapeInfo.h
++++ b/llvm/include/llvm/CodeGen/TileShapeInfo.h
+@@ -70,7 +70,14 @@ public:
+       for (const MachineOperand &DefMO : MRI->def_operands(Reg)) {
+         const auto *MI = DefMO.getParent();
+         if (MI->isMoveImmediate()) {
+-          Imm = MI->getOperand(1).getImm();
++          if (MI->getOperand(1).isImm()) {
++            Imm = MI->getOperand(1).getImm();
++          } else {
++            assert(MI->getOperand(1).isImplicit() &&
++                   "Operand 1 is assumed to be implicit.");
++            // The implicit immediate can vary (MOV32r0, MOV32r1, MOV32r_1,
++            // ...) but in any case, is not a valid shape.
++          }
+           break;
+         }
+       }
+diff --git a/llvm/lib/Target/X86/X86TileConfig.cpp b/llvm/lib/Target/X86/X86TileConfig.cpp
+index 09ef8fbc12de..7702a70667eb 100644
+--- a/llvm/lib/Target/X86/X86TileConfig.cpp
++++ b/llvm/lib/Target/X86/X86TileConfig.cpp
+@@ -170,7 +170,14 @@ bool X86TileConfig::runOnMachineFunction(MachineFunction &MF) {
+                    "Cannot initialize with different shapes");
+             continue;
+           }
+-          Imm = DefMI.getOperand(1).getImm();
++          if (DefMI.getOperand(1).isImm()) {
++            Imm = DefMI.getOperand(1).getImm();
++          } else {
++            assert(DefMI.getOpcode() == X86::MOV32r0 &&
++                   "The opcode is assumed to be MOV32r0 if the operand is not "
++                   "immediate.");
++            Imm = 0;
++          }
+ 
+           NewMI = addFrameReference(
+                       BuildMI(MF.front(), ++ConstMI->getIterator(), DL,
+-- 
+2.39.5

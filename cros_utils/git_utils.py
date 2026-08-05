@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import subprocess
 import tempfile
-from typing import Generator, Iterable, Sequence
+from typing import Generator, Iterable, Self, Sequence
 
 
 # Email address used to tag the detective/mage as a reviewer.
@@ -44,7 +44,7 @@ class Channel(enum.Enum):
     STABLE = "stable"
 
     @classmethod
-    def parse(cls, val: str) -> "Channel":
+    def parse(cls, val: str) -> Self:
         for x in cls:
             if val == x.value:
                 return x
@@ -391,7 +391,7 @@ def create_worktree(
             )
 
 
-def resolve_ref(git_dir: Path, ref: str) -> str:
+def resolve_ref(git_dir: Path, ref: str, quiet: bool = False) -> str:
     """Resolves the given ref or SHA shorthand to a full SHA.
 
     Raises:
@@ -403,6 +403,7 @@ def resolve_ref(git_dir: Path, ref: str) -> str:
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL if quiet else None,
         encoding="utf-8",
     ).stdout.strip()
 
@@ -498,6 +499,30 @@ def fetch(
         cwd=git_dir,
         stdin=subprocess.DEVNULL,
     )
+
+
+def check_remote_if_ref_or_sha_exists(
+    git_dir: Path,
+    remote: str,
+    ref_or_sha: str,
+) -> bool:
+    """Queries a remote to check whether a ref or commit SHA exists on it.
+
+    Performs a shallow dry-run fetch (`git fetch --depth=1 --dry-run`) so that
+    no objects are downloaded or written to the local repository.
+    """
+    try:
+        subprocess.run(
+            ("git", "fetch", "--depth=1", "--dry-run", remote, ref_or_sha),
+            check=True,
+            cwd=git_dir,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
 
 
 def checkout(
@@ -740,20 +765,21 @@ def get_commit_timestamp(git_dir: Path, ref: str) -> int:
     return int(stdout)
 
 
+def get_commit_message_body(git_dir: Path, ref: str) -> str:
+    """Return the commit message's body (excluding subject)."""
+    return subprocess.run(
+        ("git", "show", "--format=%b", "-s", ref),
+        cwd=git_dir,
+        encoding="utf-8",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        check=True,
+    ).stdout
+
+
 def get_commit_message_metadata(git_dir: Path, ref: str) -> dict[str, str]:
     """Return footer information for a given commit."""
-    commit_msg = (
-        subprocess.run(
-            ("git", "show", "--format=%b", "-s", ref),
-            cwd=git_dir,
-            encoding="utf-8",
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            check=True,
-        )
-        .stdout.strip()
-        .splitlines()
-    )
+    commit_msg = get_commit_message_body(git_dir, ref).strip().splitlines()
     return parse_message_metadata(commit_msg)
 
 
@@ -761,12 +787,18 @@ def parse_message_metadata(message_lines: Iterable[str]) -> dict[str, str]:
     """Return a dictionary of commit message lines' directives."""
     regex = re.compile(r"([-\w.]+):(.+)")
     result = {}
+    duplicates: set[str] = set()
     for line in message_lines:
         # Must not lstrip the line, as leading whitespace here is important.
         line = line.rstrip()
         if match := regex.match(line):
             key, value = match.groups()
+            if key in result and key.startswith("patch."):
+                duplicates.add(key)
             result[key] = value.strip()
+    if duplicates:
+        dups_str = ", ".join(sorted(duplicates))
+        raise ValueError(f"Duplicate patch metadata key(s) found: {dups_str}")
     return result
 
 
@@ -796,6 +828,36 @@ def merge_base(git_dir: Path, refs: Sequence[str]) -> str | None:
     return None
 
 
+def is_ancestor(
+    git_dir: Path, *, parent: str, child: str, strict: bool = False
+) -> bool:
+    """Returns True if `parent` is an ancestor of `child`.
+
+    Args:
+        git_dir: Root directory for a given local git repository.
+        parent: The potential ancestor commit/ref.
+        child: The potential descendant commit/ref.
+        strict: If True, returns False if `parent` and `child` are equal.
+    """
+    if strict:
+        # Resolve refs to SHAs to check equality accurately.
+        parent_sha = resolve_ref(git_dir, parent)
+        child_sha = resolve_ref(git_dir, child)
+        if parent_sha == child_sha:
+            return False
+
+    return (
+        subprocess.run(
+            ("git", "merge-base", "--is-ancestor", parent, child),
+            cwd=git_dir,
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+        ).returncode
+        == 0
+    )
+
+
 def branch_list(git_dir: Path, glob: str | None = None) -> list[str]:
     """List branches, optionally matching a given glob."""
     addendum = [glob] if glob else []
@@ -823,6 +885,28 @@ def commit_author_email(git_dir: Path, ref: str) -> str:
         encoding="utf-8",
         check=True,
     ).stdout.strip()
+
+
+@dataclasses.dataclass(frozen=True)
+class CommitMetadata:
+    """Metadata associated with a git commit."""
+
+    author: str
+    committer: str
+
+
+def get_commit_metadata(git_dir: Path, ref: str) -> CommitMetadata:
+    """Return the CommitMetadata of a given git ref."""
+    stdout = subprocess.run(
+        ("git", "show", "--format=%an <%ae>%n%cn <%ce>", "-s", ref),
+        cwd=git_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+        check=True,
+    ).stdout.strip()
+    author, committer = stdout.splitlines()
+    return CommitMetadata(author=author, committer=committer)
 
 
 def log(

@@ -35,14 +35,24 @@ import subprocess
 import sys
 import time
 import typing
-from typing import Any, IO
+from typing import Any, IO, Self
 
 # `pylint`, run by `cros lint`, is run in its own Python environment, which does
-# not contain `google.genai`. `mypy` can _see_ the module, but complains that it
-# doesn't have correct typing markers.
+# not contain `google.genai` or `httpx`. `mypy` can _see_ the module, but
+# complains that it doesn't have correct typing markers.
 # pylint:disable=import-error
 from google import genai
 from google.genai import types
+import httpx
+
+
+GEMINI_MODEL = "gemini-3.5-flash"
+PER_FILE_DIFF_BUDGET = 50_000
+
+# b/529292846: Gemini's API was observed to (very rarely) just leave
+# connections hanging for a while. Have a generous timeout for requests to
+# catch this so we can retry.
+_QUERY_TIMEOUT_MILLIS = (2 * 60 + 30) * 1000
 
 
 T = typing.TypeVar("T")
@@ -106,6 +116,74 @@ def get_dict_elem_with_type(
     return typing.cast(T, value)
 
 
+class ParsableFromJSON(typing.Protocol):
+    """Protocol for types that can be parsed from JSON with validation."""
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        """Parses 'untrusted' JSON into an instance of this class."""
+
+
+@dataclasses.dataclass(frozen=True, eq=True)
+class GeminiRevertClassification:
+    """The results of the classification turn."""
+
+    reverted_shas: list[str]
+    reverted_prs: list[int]
+    is_revert: bool
+    is_reland: bool
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        reverted_shas = get_dict_elem_with_type(
+            json_object, "reverted_shas", list[str]
+        )
+        reverted_prs = get_dict_elem_with_type(
+            json_object, "reverted_prs", list[int]
+        )
+        reverted_shas.sort()
+        reverted_prs.sort()
+        return cls(
+            reverted_shas=reverted_shas,
+            reverted_prs=reverted_prs,
+            is_revert=get_dict_elem_with_type(json_object, "is_revert", bool),
+            is_reland=get_dict_elem_with_type(json_object, "is_reland", bool),
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class ChromeOSDoesntCareInference:
+    """Inference result indicating if ChromeOS cares about the commit."""
+
+    chromeos_doesnt_care: bool
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        return cls(
+            chromeos_doesnt_care=get_dict_elem_with_type(
+                json_object, "chromeos_doesnt_care", bool
+            )
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class AndroidDoesntCareInference:
+    """Inference result indicating if Android cares about the commit."""
+
+    android_doesnt_care: bool
+
+    @classmethod
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
+        return cls(
+            android_doesnt_care=get_dict_elem_with_type(
+                json_object, "android_doesnt_care", bool
+            )
+        )
+
+
+InferenceT = typing.TypeVar("InferenceT", bound=ParsableFromJSON)
+
+
 # NOTE: The class docstring and per-field docstrings are sent to Gemini, so
 # they're very descriptive.
 @dataclasses.dataclass(frozen=True, eq=True)
@@ -136,10 +214,18 @@ class GeminiRevertInference:
     whether any SHAs or PRs can be identified for it.
     """
 
+    chromeos_doesnt_care: bool
+    """
+    Indicates whether ChromeOS does not care about this commit.
+    """
+
+    android_doesnt_care: bool
+    """
+    Indicates whether Android does not care about this commit.
+    """
+
     @classmethod
-    def from_json_checked(
-        cls, json_object: dict[str, Any]
-    ) -> "GeminiRevertInference":
+    def from_json_checked(cls, json_object: dict[str, Any]) -> Self:
         """Parses 'untrusted' JSON into an instance of this class.
 
         Gemini can generally be trusted to produce JSON that matches this type's
@@ -164,10 +250,25 @@ class GeminiRevertInference:
             reverted_prs=reverted_prs,
             is_revert=get_dict_elem_with_type(json_object, "is_revert", bool),
             is_reland=get_dict_elem_with_type(json_object, "is_reland", bool),
+            chromeos_doesnt_care=get_dict_elem_with_type(
+                json_object, "chromeos_doesnt_care", bool
+            ),
+            android_doesnt_care=get_dict_elem_with_type(
+                json_object, "android_doesnt_care", bool
+            ),
         )
 
     def to_json(self) -> Any:
         return dataclasses.asdict(self)
+
+
+@dataclasses.dataclass(frozen=True)
+class SystemPrompts:
+    """System prompts for Gemini queries."""
+
+    classification: str
+    cros_doesnt_care: str
+    android_doesnt_care: str
 
 
 class GeminiResponseIsBrokenError(Exception):
@@ -190,8 +291,8 @@ class GeminiResponseIsBrokenError(Exception):
 
 
 def parse_gemini_response(
-    sha: str, response: types.GenerateContentResponse
-) -> GeminiRevertInference:
+    sha: str, response: types.GenerateContentResponse, schema: type[InferenceT]
+) -> InferenceT:
     """Parses the given response from the Gemini API
 
     Raises:
@@ -261,7 +362,7 @@ def parse_gemini_response(
         )
 
     try:
-        return GeminiRevertInference.from_json_checked(parsed_result)
+        return schema.from_json_checked(parsed_result)
     except ValueError as e:
         raise GeminiResponseIsBrokenError(
             f"Gemini produced invalid JSON for query on {sha}: {e}",
@@ -286,22 +387,16 @@ def generate_retry_message(err: GeminiResponseIsBrokenError) -> str:
     )
 
 
-def process_one_sha(
-    client: genai.Client, system_prompt: str, llvm_dir: Path, sha: str
-) -> GeminiRevertInference:
-    """Queries the given genai client for revert info"""
-    commit_info = subprocess.run(
-        ("git", "log", "-n1", "--name-status", sha),
-        check=True,
-        cwd=llvm_dir,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-        errors="replace",
-    ).stdout
-
-    logging.info("Processing commit %s...", sha)
-
+def query_gemini(
+    *,
+    client: genai.Client,
+    system_prompt: str,
+    response_schema: type[InferenceT],
+    prompt_content: str,
+    sha: str,
+    tools: list[Any] | None = None,
+) -> InferenceT:
+    """Queries Gemini and handles retries and errors."""
     # This is in a `range(_)` loop for an unfortunate reason: despite attempts
     # to bring randomness to zero, this API still seems to return slightly
     # random results. The docs also explicitly do _not_ promise determinism:
@@ -318,20 +413,21 @@ def process_one_sha(
 
     chat_config = types.GenerateContentConfig(
         automatic_function_calling=types.AutomaticFunctionCallingConfig(
-            disable=True,
+            disable=not tools,
         ),
         system_instruction=system_prompt,
         response_mime_type="application/json",
-        tool_config=types.ToolConfig(),
-        response_schema=GeminiRevertInference,
+        tools=tools,
+        response_schema=response_schema,
         thinking_config=types.ThinkingConfig(
             include_thoughts=True,
-            # gemini-3-flash experimentally sees meaningfully lower quality
-            # answers with the `low` thinking level. When trying `medium`, genai
-            # 1.54.0 reports API warnings about an invalid thinking level
-            # (despite docs saying that `medium` exists for gemini-3-flash). Use
-            # `high` since that gives the best results for now.
-            thinking_level=types.ThinkingLevel.HIGH,
+            # gemini-3.5-flash experimentally sees meaningfully lower quality
+            # answers with the `low` thinking level. HIGH and MEDIUM give equal
+            # results, and MEDIUM is the default, so use that.
+            #
+            # HACK: Our current version of google-genai is too old to support
+            # MEDIUM. It's the default though, so leave it unspecified.
+            # thinking_level=types.ThinkingLevel.MEDIUM,
         ),
         # Note that this budget **includes** thinking tokens. It was previously
         # 3,000, but this is demonstrably too little in very rare cases:
@@ -339,29 +435,39 @@ def process_one_sha(
         # Gemini bounded in case it somehow starts looping, but otherwise allow
         # it maximum flexibility to produce the tokens it needs.
         max_output_tokens=30_000,
-        # Minimize randomness; just pick the best answer possible.
-        # https://cloud.google.com/vertex-ai/generative-ai/
-        # docs/learn/prompts/adjust-parameter-values
-        temperature=0,
-        top_k=1,
-        top_p=1,
+        # NOTE: New Gemini models strongly recommend not setting
+        # temperature/etc. So don't.
+        # https://ai.google.dev/gemini-api/docs/interactions/whats-new-gemini-3.5#parameter-updates
         seed=0,
+        http_options=types.HttpOptions(
+            timeout=_QUERY_TIMEOUT_MILLIS,
+        ),
     )
 
     for i in range(1, retry_limit + 1):
         logging.info("Attempt %d running Gemini on SHA %s", i, sha)
         chat = client.chats.create(
-            model="gemini-3-flash-preview",
+            model=GEMINI_MODEL,
             config=chat_config,
         )
 
-        response = chat.send_message(commit_info)
+        back_off_secs = i * 2
+        try:
+            response = chat.send_message(prompt_content)
+        except httpx.TimeoutException:
+            logging.exception(
+                "Gemini send_message timed out on attempt %d for SHA %s; "
+                "retrying soon",
+                i,
+                sha,
+            )
+            time.sleep(back_off_secs)
+            continue
 
         # If we hit an error that isn't about response correctness, it's
         # probably a server error. We'll sleep a bit in hopes that that helps.
-        back_off_secs = i * 2
         try:
-            return parse_gemini_response(sha, response)
+            return parse_gemini_response(sha, response, response_schema)
         except GeminiResponseIsBrokenError as e:
             # If there's no partial response (which must be differentiated from
             # an _empty_ one), it's an API error. We can't continue the chat.
@@ -386,9 +492,20 @@ def process_one_sha(
             )
             follow_up_message = generate_retry_message(e)
 
-        response = chat.send_message(follow_up_message)
         try:
-            return parse_gemini_response(sha, response)
+            response = chat.send_message(follow_up_message)
+        except httpx.TimeoutException:
+            logging.exception(
+                "Gemini follow-up send_message timed out on attempt %d "
+                "for SHA %s; retrying soon",
+                i,
+                sha,
+            )
+            time.sleep(back_off_secs)
+            continue
+
+        try:
+            return parse_gemini_response(sha, response, response_schema)
         except GeminiResponseIsBrokenError:
             logging.exception(
                 "Gemini failed on follow-up for attempt %d/SHA %s; retrying "
@@ -399,6 +516,125 @@ def process_one_sha(
             time.sleep(back_off_secs)
 
     raise ValueError(f"Hit Gemini retry limit for SHA {sha}")
+
+
+def get_commit_message(sha: str, llvm_dir: Path) -> str:
+    return subprocess.run(
+        ("git", "log", "-n1", "--format=%B", sha),
+        check=True,
+        cwd=llvm_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    ).stdout
+
+
+def get_name_status(sha: str, llvm_dir: Path) -> str:
+    return subprocess.run(
+        ("git", "diff-tree", "--no-commit-id", "--name-status", "-r", sha),
+        check=True,
+        cwd=llvm_dir,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        encoding="utf-8",
+        errors="replace",
+    ).stdout
+
+
+def process_one_sha(
+    client: genai.Client,
+    system_prompts: SystemPrompts,
+    llvm_dir: Path,
+    sha: str,
+) -> GeminiRevertInference:
+    """Queries the given genai client for revert info"""
+    commit_message = get_commit_message(sha, llvm_dir)
+    name_status = get_name_status(sha, llvm_dir)
+
+    # 1. Query 1: Classification (No tools)
+    classification = query_gemini(
+        client=client,
+        system_prompt=system_prompts.classification,
+        response_schema=GeminiRevertClassification,
+        prompt_content=commit_message,
+        sha=sha,
+    )
+
+    if not classification.is_revert:
+        return GeminiRevertInference(
+            reverted_shas=classification.reverted_shas,
+            reverted_prs=classification.reverted_prs,
+            is_revert=classification.is_revert,
+            is_reland=classification.is_reland,
+            chromeos_doesnt_care=False,
+            android_doesnt_care=False,
+        )
+
+    def git_diff(file_paths: list[str]) -> str:
+        """Returns the git diff for `file_paths` in the current commit.
+
+        Args:
+            file_paths: The list of file paths to inspect.
+        """
+        if not file_paths:
+            return (
+                "Error: file_paths cannot be empty. Please provide at least "
+                "one file path to inspect."
+            )
+
+        results = []
+        for file_path in file_paths:
+            try:
+                result = subprocess.run(
+                    ("git", "diff", f"{sha}~1", sha, "--", file_path),
+                    cwd=llvm_dir,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    check=True,
+                    errors="replace",
+                )
+                output = result.stdout
+                if len(output) > PER_FILE_DIFF_BUDGET:
+                    output = (
+                        output[:PER_FILE_DIFF_BUDGET] + "\n... [TRUNCATED] ..."
+                    )
+                results.append(f"--- Diff for {file_path} ---\n{output}")
+            except subprocess.CalledProcessError as e:
+                results.append(
+                    f"--- Diff for {file_path} ---\n"
+                    f"Error running git diff: {e.output}"
+                )
+        return "\n\n".join(results)
+
+    cros_prompt = f"Commit Msg:\n{commit_message}\nFiles:\n{name_status}"
+    cros_doesnt_care = query_gemini(
+        client=client,
+        system_prompt=system_prompts.cros_doesnt_care,
+        response_schema=ChromeOSDoesntCareInference,
+        prompt_content=cros_prompt,
+        sha=sha,
+        tools=[git_diff],
+    )
+
+    android_doesnt_care = query_gemini(
+        client=client,
+        system_prompt=system_prompts.android_doesnt_care,
+        response_schema=AndroidDoesntCareInference,
+        prompt_content=cros_prompt,
+        sha=sha,
+        tools=[git_diff],
+    )
+
+    return GeminiRevertInference(
+        reverted_shas=classification.reverted_shas,
+        reverted_prs=classification.reverted_prs,
+        is_revert=classification.is_revert,
+        is_reland=classification.is_reland,
+        chromeos_doesnt_care=cros_doesnt_care.chromeos_doesnt_care,
+        android_doesnt_care=android_doesnt_care.android_doesnt_care,
+    )
 
 
 def write_one_result(
@@ -493,8 +729,19 @@ def main(argv: list[str]) -> None:
 
     jobs: int = opts.jobs
     llvm_dir: Path = opts.llvm_dir
-    system_prompt = (my_dir / "check_reverts_system_prompt.md").read_text(
+    shared_items = (my_dir / "shared_dont_care_prompt_items.md").read_text(
         encoding="utf-8"
+    )
+    system_prompts = SystemPrompts(
+        classification=(my_dir / "check_reverts_system_prompt.md").read_text(
+            encoding="utf-8"
+        ),
+        cros_doesnt_care=(my_dir / "chromeos_doesnt_care_system_prompt.md")
+        .read_text(encoding="utf-8")
+        .replace("{shared_dont_care_items}", shared_items),
+        android_doesnt_care=(my_dir / "android_doesnt_care_system_prompt.md")
+        .read_text(encoding="utf-8")
+        .replace("{shared_dont_care_items}", shared_items),
     )
 
     if gemini_api_key := opts.gemini_api_key:
@@ -535,7 +782,7 @@ def main(argv: list[str]) -> None:
             )
 
         sha_result = process_one_sha(
-            client, system_prompt, llvm_dir, sha_to_process
+            client, system_prompts, llvm_dir, sha_to_process
         )
         # N.B., not in a `finally`, since an exception may be raised as a result
         # of this client being in a weird state.

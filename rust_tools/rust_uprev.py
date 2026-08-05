@@ -40,6 +40,7 @@ from cros_utils import cros_paths
 from cros_utils import git_utils
 from llvm_tools import chroot
 from pgo_tools_rust import pgo_rust
+from rust_tools import auto_update_rust_bootstrap
 
 
 T = TypeVar("T")
@@ -146,9 +147,11 @@ class RustVersion(NamedTuple):
         return f"{self.major}.{self.minor}.{self.patch}"
 
     @staticmethod
-    def parse_from_ebuild(ebuild_name: PathOrStr) -> "RustVersion":
+    def parse_from_ebuild(
+        ebuild_name: PathOrStr, package_name: str = "rust"
+    ) -> "RustVersion":
         input_re = re.compile(
-            r"^rust-"
+            r"^" + re.escape(package_name) + r"-"
             r"(?P<major>\d+)\."
             r"(?P<minor>\d+)\."
             r"(?P<patch>\d+)"
@@ -624,7 +627,6 @@ def perform_step(
 
 def create_rust_uprev(
     rust_version: RustVersion,
-    template_version: RustVersion,
     skip_compile: bool,
     run_step: RunStepFn,
 ) -> None:
@@ -641,9 +643,23 @@ def create_rust_uprev(
     # to the mirror.
     run_step("fetch rust distfiles", lambda: fetch_rust_distfiles(rust_version))
     run_step(
+        "ensure rust-bootstrap ebuild for new version",
+        lambda: auto_update_rust_bootstrap.ensure_rust_bootstrap_version(
+            target_version=auto_update_rust_bootstrap.EbuildVersion(
+                rust_version.major, rust_version.minor, rust_version.patch, 0
+            ),
+            chromiumos_overlay=ebuild_prefix(),
+            chromiumos_checkout=get_source_root(),
+            rust_bootstrap_dir=ebuild_prefix() / "dev-lang/rust-bootstrap",
+            dry_run=False,
+        ),
+    )
+    run_step(
         "update cros-rustc.eclass bootstrap version",
         lambda: update_ebuild_variable_version(
-            cros_rustc_eclass(), "BOOTSTRAP_VERSION", template_version
+            cros_rustc_eclass(),
+            "BOOTSTRAP_VERSION",
+            find_bootstrap_version(rust_version),
         ),
     )
 
@@ -739,6 +755,30 @@ def find_stable_rust_version() -> RustVersion:
             f"Expect to find exactly one Rust version; found {rust_versions}"
         )
     return rust_versions[0]
+
+
+def find_bootstrap_version(rust_version: RustVersion) -> RustVersion:
+    """Returns the available rust-bootstrap version for rust_version."""
+    bootstrap_dir = rust_bootstrap_path()
+    target_major = rust_version.major
+    target_minor = rust_version.minor - 1
+    versions = set()
+    for ebuild in bootstrap_dir.iterdir():
+        if ebuild.suffix == ".ebuild":
+            v = RustVersion.parse_from_ebuild(
+                ebuild, package_name="rust-bootstrap"
+            )
+            if v.major == target_major and v.minor == target_minor:
+                versions.add(v)
+    if not versions:
+        raise ValueError(
+            f"Expect to find at least one rust-bootstrap version for "
+            f"{target_major}.{target_minor}"
+        )
+    # It's very unlikely that we have e.g., rust-bootstrap-1.80.1 and
+    # rust-bootstrap-1.80.0, but it's incredibly cheap (and should be correct)
+    # to pick the newest.
+    return max(versions)
 
 
 def find_ebuild_for_rust_version(version: RustVersion) -> Path:
@@ -992,6 +1032,6 @@ def main(argv: list[str]) -> None:
             "build cross compiler",
             lambda: build_cross_compiler(template_version),
         )
-    create_rust_uprev(args.uprev, template_version, args.skip_compile, run_step)
+    create_rust_uprev(args.uprev, args.skip_compile, run_step)
     if not args.no_upload:
         run_step("create rust uprev CL", lambda: create_new_commit(args.uprev))

@@ -26,7 +26,7 @@ This repository contains a collection of scripts and tools for supporting the Ch
 
 -   **Primary Languages:** Python, Rust.
 -   **Python:**
-    -   Dependencies are managed by the ChromeOS chroot and the `check-presubmit.py` script.
+    -   Dependencies are managed by the ChromeOS chroot and the `check-presubmit` script.
     -   Code is type-hinted (`mypy`/`pyright`) and follows Chromium style (`black`).
     -   Scripts are executed via symlinks in `py/bin/` which use `./python_wrapper.py` to handle imports.
 -   **Rust**:
@@ -74,7 +74,19 @@ To execute a Python-based tool, use the symlinks in the `py/bin` directory. For 
     ./run_python_tests.sh llvm_tools/atomic_write_file_test.py
     ```
 
-3.   **When you are done with a series of changes**, you should run `py/bin/toolchain_utils_githooks/check-presubmit` to validate your work. It runs `mypy`, `black --check`, and `cros lint` on your changed files. It also runs all unittests. Passing `--force_autofix` is recommended to have it autoformat your changed files.
-    ```bash
-    py/bin/toolchain_utils_githooks/check-presubmit path/to/changed/file1.py path/to/changed/file2.sh [...]
-    ```
+#### Running all presubmits
+
+`py/bin/toolchain_utils_githooks/check-presubmit` should be used to validate
+your work. It runs lints and tests.
+
+It can be invoked in a few ways, examples below:
+
+```bash
+# Infer the files to run on, and force fixes for things like formatting. This
+# should be your default command.
+$ py/bin/toolchain_utils_githooks/check-presubmit --infer_files --force_autofix
+
+# Run on specific files, no autofixes. This should only be used if you are
+# iterating on a small set of specific files.
+$ py/bin/toolchain_utils_githooks/check-presubmit path/to/file1.py path/to/file2.py path/to/file3.sh
+```

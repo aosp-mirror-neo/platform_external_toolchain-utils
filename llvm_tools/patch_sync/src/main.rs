@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 
+mod git;
 mod llvm_version_extraction;
 mod patch_parsing;
 mod version_control;
@@ -84,8 +85,10 @@ fn show_subcmd(args: ShowOpt) -> Result<()> {
         keep_unmerged,
         sync,
     } = args;
+    let android_git_context = RepoSetupContext::default_android_git_context(&android_checkout_path);
     let ctx = RepoSetupContext {
         cros_checkout: cros_checkout_path,
+        android_git_context,
         android_checkout: android_checkout_path,
         sync_before: sync,
         uprev_ebuilds: false,
@@ -142,8 +145,11 @@ fn transpose_subcmd(args: TransposeOpt) -> Result<()> {
             set_autoreview_topic: !args.no_add_autoreview_topic,
         })
     };
+    let android_git_context =
+        RepoSetupContext::default_android_git_context(&args.android_checkout_path);
     let ctx = RepoSetupContext {
         cros_checkout: args.cros_checkout_path,
+        android_git_context,
         android_checkout: args.android_checkout_path,
         sync_before: args.sync,
         uprev_ebuilds: args.uprev_ebuilds,
@@ -333,7 +339,7 @@ fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) 
                 e
             );
         }
-        ctx.android_repo_upload(&opt.android_reviewers, upload_opts)
+        ctx.android_upload(&opt.android_reviewers, upload_opts)
             .context("uploading android changes")?;
     }
     Ok(())

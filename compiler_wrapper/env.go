@@ -27,6 +27,7 @@ type env interface {
 	run(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error
 	runWithTimeout(cmd *command, duration time.Duration) error
 	exec(cmd *command) error
+	fileExists(path string) bool
 }
 
 type processEnv struct {
@@ -96,6 +97,11 @@ func (env *processEnv) runWithTimeout(cmd *command, duration time.Duration) erro
 
 func (env *processEnv) run(cmd *command, stdin io.Reader, stdout io.Writer, stderr io.Writer) error {
 	return runCmd(env, cmd, stdin, stdout, stderr)
+}
+
+func (env *processEnv) fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 type commandRecordingEnv struct {

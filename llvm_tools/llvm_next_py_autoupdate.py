@@ -14,199 +14,47 @@ It does this by:
 """
 
 import argparse
-import dataclasses
-import json
 import logging
 from pathlib import Path
 import subprocess
 from typing import Iterable
 
 from cros_utils import cros_paths
+from cros_utils import gerrit_utils
 from cros_utils import git_utils
 from llvm_tools import cros_cls
 from llvm_tools import llvm_next
 
 
-@dataclasses.dataclass(frozen=True, eq=True)
-class GerritCLInfo:
-    """Carries relevant info about a CL."""
-
-    is_abandoned_or_merged: bool
-    is_uploader_a_googler: bool
-    most_recent_patch_set: int
-
-
-def parse_direct_owners_from_file(file_contents: str) -> list[str]:
-    """Parses unrestricted OWNERS emails from the given file contents."""
-    results = []
-    for line in file_contents.splitlines():
-        no_comment = line.split("#", 1)[0].strip()
-        # Skip any lines with embedded spaces. There are many directives in
-        # OWNERS files (e.g., includes, per-file owners, etc). All we care
-        # about here is accounts _directly mentioned_ with unrestricted access.
-        if any(c.isspace() for c in no_comment):
-            continue
-        if "@" in no_comment:
-            results.append(no_comment)
-    return results
-
-
-class LazyToolchainOwners:
-    """Caches OWNERS file entries for the toolchain file.
-
-    Used to cheaply (and lossily) check to see if an @chromium email address is
-    a Googler.
-    """
-
-    def __init__(self, owners_file: Path):
-        if not owners_file.exists():
-            raise ValueError(
-                f"Handed path to nonexistent OWNERS file: {owners_file}"
-            )
-        self._owners_file = owners_file
-        self._owners: set[str] | None = None
-
-    def contains(self, email: str) -> bool:
-        """Loads OWNERS, and returns if `email` is directly mentioned in it.
-
-        Repeated calls will reuse cached results of loading OWNERS.
-        """
-        if self._owners is None:
-            self._owners = set(
-                parse_direct_owners_from_file(
-                    self._owners_file.read_text(encoding="utf-8")
-                )
-            )
-        return email in self._owners
-
-
-def fetch_cl_info(
-    toolchain_owners: LazyToolchainOwners, cl: cros_cls.ChangeListURL
-) -> GerritCLInfo:
-    gerrit_stdout = subprocess.run(
-        ("gerrit", "--json", "inspect", cl.gerrit_tool_id),
-        check=True,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    ).stdout
-    gerrit_info = json.loads(gerrit_stdout)[0]
-
-    # cl_status is a ChangeInfo's status:
-    # https://gerrit-review.googlesource.com/Documentation/rest-api-changes.html#change-info
-    cl_status = gerrit_info.get("status")
-    if cl_status not in ("NEW", "MERGED", "ABANDONED"):
-        raise ValueError(f"Unexpected CL status on {cl}: {cl_status!r}")
-
-    current_ps_info = gerrit_info.get("currentPatchSet", {})
-    current_ps_str = current_ps_info.get("number")
-    try:
-        current_ps = int(current_ps_str)
-    except ValueError:
-        current_ps = None
-
-    # Raise this outside of the exception handler, so the backtrace is easier
-    # to understand.
-    if current_ps is None:
-        raise ValueError(
-            f"Unexpected current patch-set number status on {cl}: "
-            f"{current_ps_str!r}"
-        )
-
-    uploader_email = current_ps_info.get("uploader", {}).get("email")
-    if not uploader_email:
-        logging.warning(
-            "Could not determine uploader for %s; assuming non-Googler",
-            cl,
-        )
-        is_uploader_a_googler = False
-    elif uploader_email.endswith("@google.com"):
-        is_uploader_a_googler = True
-    elif uploader_email.endswith("@chromium.org") and toolchain_owners.contains(
-        uploader_email
-    ):
-        logging.info(
-            "Assuming %s is a Googler, as the email is a toolchain OWNER",
-            uploader_email,
-        )
-        is_uploader_a_googler = True
-    else:
-        logging.info(
-            "%s is neither @google nor an OWNER; assuming not-Googler",
-            uploader_email,
-        )
-        is_uploader_a_googler = False
-
-    return GerritCLInfo(
-        is_abandoned_or_merged=cl_status != "NEW",
-        is_uploader_a_googler=is_uploader_a_googler,
-        most_recent_patch_set=current_ps,
-    )
-
-
-def update_testing_url_list(
-    toolchain_owners: LazyToolchainOwners,
-    current_list: Iterable[str],
-) -> tuple[str, list[str]] | None:
-    new_list = []
-    change_descriptions = []
-
-    for url in current_list:
-        cl_url = cros_cls.ChangeListURL.parse(url)
-        cl_info = fetch_cl_info(toolchain_owners, cl_url)
-        if cl_info.is_abandoned_or_merged:
-            logging.info("%s was closed; removing from list", cl_url)
-            change_descriptions.append(f"{cl_url} was closed")
-            continue
-
-        if cl_info.most_recent_patch_set == cl_url.patch_set:
-            logging.info(
-                "%s is alive and at most recent patch-set; nothing to do",
-                cl_url,
-            )
-            # Append the URL verbatim to minimize diffs.
-            new_list.append(url)
-            continue
-
-        if not cl_info.is_uploader_a_googler:
-            logging.warning(
-                "CL %s has newer patch-set, but isn't googler-uploaded. Skip.",
-                cl_url,
-            )
-            # Append the URL verbatim to minimize diffs.
-            new_list.append(url)
-            continue
-
-        logging.info("CL %s patch-set was updated; updating.", cl_url)
-        change_descriptions.append(f"{cl_url} had a patch-set update")
-        new_list.append(
-            str(
-                dataclasses.replace(
-                    cl_url,
-                    patch_set=cl_info.most_recent_patch_set,
-                )
-            )
-        )
-
-    # If there are no change descriptions, no meaningful changes were made.
-    if not change_descriptions:
-        return None
-
-    return "\n".join(f"- {x}" for x in change_descriptions), new_list
-
-
 def write_url_list(
-    llvm_next_py_file_path: Path, new_url_list: list[str]
+    llvm_next_py_file_path: Path,
+    new_manifest_cl: str | None,
+    new_allowlist_urls: list[str],
 ) -> None:
     llvm_next_py = llvm_next_py_file_path.read_text(encoding="utf-8")
-    var_start_string = "\nLLVM_NEXT_TESTING_CL_URLS: tuple[str, ...] = ("
-    testing_cl_urls_start = llvm_next_py.index(var_start_string)
 
-    # In a `cros format`'ed file, are two cases to handle here when finding the
-    # last parenthesis:
-    # 1. it's on the same line
-    # 2. it's on a line of its own
-    # Ignore anything else for simplicity.
-    after_start_paren = testing_cl_urls_start + len(var_start_string)
+    # Replace LLVM_NEXT_MANIFEST_CL. We assume this always takes exactly one
+    # line for simplicity. (If this somehow gets messed up, preuploads should
+    # catch the invalid syntax)
+    manifest_prefix = "_LLVM_NEXT_MANIFEST_CL: str | None = "
+    start_idx = llvm_next_py.index(manifest_prefix)
+    end_line_idx = llvm_next_py.index("\n", start_idx)
+
+    manifest_val_str = repr(new_manifest_cl) if new_manifest_cl else "None"
+    updated_manifest_line = f"{manifest_prefix}{manifest_val_str}"
+
+    llvm_next_py = (
+        llvm_next_py[:start_idx]
+        + updated_manifest_line
+        + llvm_next_py[end_line_idx:]
+    )
+
+    # Replace LLVM_NEXT_TESTING_URL_ALLOWLIST. This can either be a
+    # single-line or multi-line tuple.
+    allowlist_prefix = "_LLVM_NEXT_TESTING_URL_ALLOWLIST: tuple[str, ...] = ("
+    start_idx = llvm_next_py.index(allowlist_prefix)
+
+    after_start_paren = start_idx + len(allowlist_prefix)
     line_end = llvm_next_py.index("\n", after_start_paren)
     same_line_end_paren = llvm_next_py.find(")", after_start_paren, line_end)
     if same_line_end_paren != -1:
@@ -214,30 +62,112 @@ def write_url_list(
     else:
         end_paren = llvm_next_py.index("\n)", after_start_paren)
 
-    # N.B., "," is appended to each element rather than part of `"\n".join`,
-    # since single-elem tuples need it.
-    new_list_contents = "\n".join(repr(x) + "," for x in new_url_list)
-    new_llvm_next_py = "\n".join(
-        (
-            llvm_next_py[:after_start_paren],
-            new_list_contents,
-            llvm_next_py[end_paren:],
-        )
+    new_list_contents = "\n".join(repr(x) + "," for x in new_allowlist_urls)
+    if new_list_contents:
+        new_list_contents = "\n" + new_list_contents + "\n"
+
+    llvm_next_py = (
+        llvm_next_py[:after_start_paren]
+        + new_list_contents
+        + llvm_next_py[end_paren:]
     )
-    llvm_next_py_file_path.write_text(new_llvm_next_py, encoding="utf-8")
+
+    llvm_next_py_file_path.write_text(llvm_next_py, encoding="utf-8")
     subprocess.run(
         ("cros", "format", llvm_next_py_file_path),
         check=True,
     )
 
 
-def main(argv: list[str]) -> None:
-    logging.basicConfig(
-        format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
-        "%(message)s",
-        level=logging.INFO,
+def compute_new_urls(
+    manifest_cl: gerrit_utils.ChangeListURL,
+    is_manifest_closed: bool,
+    all_changes: list[gerrit_utils.CLDetails],
+    owners: list[str],
+    current_allowlist_urls: Iterable[gerrit_utils.ChangeListURL],
+) -> tuple[str | None, list[str]]:
+    """Computes the new manifest CL and allowlist URLs.
+
+    Args:
+        manifest_cl: The current manifest CL URL.
+        is_manifest_closed: True if the manifest CL is closed.
+        all_changes: List of changes including main CL and deps.
+        owners: List of toolchain owners.
+        current_allowlist_urls: An iterable of current testing URL allowlist.
+
+    Returns:
+        A tuple of (new_manifest_cl_str, new_allowlist_urls_strs).
+    """
+    if is_manifest_closed:
+        return None, []
+
+    _, untrusted = cros_cls.partition_changes_by_uploader_trust(
+        all_changes, owners
     )
 
+    allowlist_list = tuple(current_allowlist_urls)
+    allowlist_indices = {cl.cl_id: i for i, cl in enumerate(allowlist_list)}
+
+    # Sort these first preferring existing ordering (to minimize diff), and
+    # second... just choose the CL number for consistency.
+    untrusted.sort(
+        key=lambda c: (
+            allowlist_indices.get(c.cl_url.cl_id, len(allowlist_list)),
+            c.cl_url.cl_id,
+        )
+    )
+    new_manifest_cl_str = str(manifest_cl)
+    new_allowlist_urls: list[str] = []
+
+    for change in untrusted:
+        if change.cl_url.cl_id != manifest_cl.cl_id:
+            new_allowlist_urls.append(str(change.cl_url))
+            continue
+
+        if change.cl_url.patch_set != manifest_cl.patch_set:
+            logging.info(
+                "Manifest CL %s patch-set was updated by untrusted user; "
+                "updating to lock it.",
+                manifest_cl,
+            )
+            new_manifest_cl_str = str(change.cl_url)
+
+    return new_manifest_cl_str, new_allowlist_urls
+
+
+def update_manifest_and_allowlist_urls(
+    manifest_cl: gerrit_utils.ChangeListURL,
+    owners: list[str],
+    chromeos_root: Path,
+) -> tuple[str | None, list[str]]:
+    """Updates manifest and allowlist URLs by fetching deps and partitioning."""
+    deps = cros_cls.fetch_gerrit_deps_of_most_recent_patchset(
+        manifest_cl, chromeos_root
+    )
+
+    main_cl_in_deps = None
+    for change in deps:
+        if change.cl_url.cl_id == manifest_cl.cl_id:
+            main_cl_in_deps = change
+            break
+
+    if not main_cl_in_deps:
+        raise ValueError(f"Main CL {manifest_cl} not found in its own deps!")
+
+    if main_cl_in_deps.status is None:
+        raise ValueError(f"Status not available for main CL {manifest_cl}")
+
+    is_manifest_closed = not main_cl_in_deps.status.is_open()
+    return compute_new_urls(
+        manifest_cl,
+        is_manifest_closed,
+        deps,
+        owners,
+        llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST,
+    )
+
+
+def parse_opts(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -249,28 +179,84 @@ def main(argv: list[str]) -> None:
         Upload changes after making them, auto-add reviewer(s), and hit CQ+1.
         """,
     )
-    opts = parser.parse_args(argv)
+    return parser.parse_args(argv)
 
-    update_result = update_testing_url_list(
-        toolchain_owners=LazyToolchainOwners(
-            owners_file=cros_paths.script_toolchain_utils_root()
-            / "OWNERS.toolchain"
-        ),
-        current_list=llvm_next.LLVM_NEXT_TESTING_CL_URLS,
+
+def main(argv: list[str]) -> None:
+    logging.basicConfig(
+        format=">> %(asctime)s: %(levelname)s: %(filename)s:%(lineno)d: "
+        "%(message)s",
+        level=logging.INFO,
     )
-    if not update_result:
-        logging.info("All URLs are up-to-date.")
-        return
 
-    change_descriptions, new_url_list = update_result
+    opts = parse_opts(argv)
+    chromeos_root = cros_paths.script_chromiumos_checkout_or_exit()
+
+    if not llvm_next.LLVM_NEXT_MANIFEST_CL:
+        if not llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST:
+            logging.info("LLVM_NEXT_MANIFEST_CL is None; doing nothing.")
+            return
+
+        logging.info(
+            "LLVM_NEXT_MANIFEST_CL is None; clearing testing URL allowlist."
+        )
+        new_manifest_cl = None
+        new_allowlist_urls: list[str] = []
+        change_descriptions = (
+            "LLVM_NEXT_MANIFEST_CL is None; clearing testing URL allowlist."
+        )
+    else:
+        manifest_cl = llvm_next.LLVM_NEXT_MANIFEST_CL
+        owners = cros_cls.fetch_current_toolchain_owners()
+        owners.extend(llvm_next.TRUSTED_UPLOADERS)
+
+        new_manifest_cl, new_allowlist_urls = (
+            update_manifest_and_allowlist_urls(
+                manifest_cl, owners, chromeos_root
+            )
+        )
+
+        current_manifest_str = (
+            str(llvm_next.LLVM_NEXT_MANIFEST_CL)
+            if llvm_next.LLVM_NEXT_MANIFEST_CL
+            else None
+        )
+        update_needed = new_manifest_cl != current_manifest_str or set(
+            new_allowlist_urls
+        ) != {str(u) for u in llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST}
+
+        if not update_needed:
+            logging.info("No updates needed to CL lists.")
+            return
+
+        desc_parts = []
+        if new_manifest_cl != current_manifest_str:
+            if new_manifest_cl is None:
+                desc_parts.append(
+                    f"Manifest CL {manifest_cl} was closed; clearing all URLs."
+                )
+            else:
+                desc_parts.append(f"Manifest CL updated to {new_manifest_cl}")
+
+        if set(new_allowlist_urls) != {
+            str(u) for u in llvm_next.LLVM_NEXT_TESTING_URL_ALLOWLIST
+        }:
+            desc_parts.append(
+                "Updated testing URL allowlist based on untrusted deps."
+            )
+
+        change_descriptions = "\n".join(f"- {x}" for x in desc_parts)
+
     logging.info("URL list changed; creating commit...")
     toolchain_utils_root = cros_paths.script_toolchain_utils_root()
     with git_utils.create_worktree(toolchain_utils_root) as worktree:
-        write_url_list(worktree / "llvm_tools" / "llvm_next.py", new_url_list)
+        write_url_list(
+            worktree / "llvm_tools" / "llvm_next.py",
+            new_manifest_cl,
+            new_allowlist_urls,
+        )
         sha = git_utils.commit_all_changes(
             worktree,
-            # Use "\n".join rather than textwrap.dedent, since
-            # `change_descriptions` won't be indented properly
             message="\n".join(
                 (
                     "llvm_tools: autoupdate CL list",
@@ -283,13 +269,13 @@ def main(argv: list[str]) -> None:
             ),
         )
         logging.info("SHA of commit: %s", sha)
-        if opts.upload:
-            cl_list = git_utils.upload_to_gerrit(
-                worktree,
-                remote=git_utils.CROS_EXTERNAL_REMOTE,
-                branch=git_utils.CROS_MAIN_BRANCH,
-            )
-            for cl in cl_list:
-                git_utils.set_autoreview_topic_and_labels(
-                    toolchain_utils_root, cl
-                )
+        if not opts.upload:
+            return
+
+        cl_list = git_utils.upload_to_gerrit(
+            worktree,
+            remote=git_utils.CROS_EXTERNAL_REMOTE,
+            branch=git_utils.CROS_MAIN_BRANCH,
+        )
+        for cl in cl_list:
+            git_utils.set_autoreview_topic_and_labels(toolchain_utils_root, cl)

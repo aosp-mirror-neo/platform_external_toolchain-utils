@@ -1,0 +1,134 @@
+From 5e1058e4a136a40014d33a946f41f1427e6624e3 Mon Sep 17 00:00:00 2001
+From: George Burgess IV <gbiv@google.com>
+Date: Thu, 4 Jun 2026 14:41:51 -0600
+Subject: [PATCH] [libc++] Fix passing through object to comparisons in __tree
+ (#186341)
+
+Fixes #180659
+
+patch.cherry: true
+patch.metadata.author: Nikolas Klauser <nikolasklauser@berlin.de>
+patch.metadata.original_sha: befaa35212dbaac39cd76a8dc748e4df7c90a0d9
+patch.platforms: chromiumos
+patch.version_range.from: 596125
+patch.version_range.until: 611338
+
+BUG=b:520067203
+TEST=sudo emerge dev-util/bazel
+
+---
+ libcxx/include/__tree                         |  4 +--
+ libcxx/include/string                         | 33 ++++++++++++-------
+ ..._transparently_comparable.compile.pass.cpp | 32 ++++++++++++++++++
+ 3 files changed, 56 insertions(+), 13 deletions(-)
+ create mode 100644 libcxx/test/libcxx/type_traits/is_transparently_comparable.compile.pass.cpp
+
+diff --git a/libcxx/include/__tree b/libcxx/include/__tree
+index f3d7c8ccd897..6f21416c83d9 100644
+--- a/libcxx/include/__tree
++++ b/libcxx/include/__tree
+@@ -1793,9 +1793,9 @@ __tree<_Tp, _Compare, _Allocator>::__find_equal(const _Key& __v) {
+   }
+ 
+   __node_base_pointer* __node_ptr = __root_ptr();
+-  auto&& __transparent            = std::__as_transparent<_Key>(value_comp());
++  auto&& __transparent            = std::__as_transparent<key_type>(value_comp());
+   auto __comp =
+-      __lazy_synth_three_way_comparator<__make_transparent_t<_Key, _Compare>, _Key, value_type>(__transparent);
++      __lazy_synth_three_way_comparator<__make_transparent_t<key_type, _Compare>, _Key, value_type>(__transparent);
+ 
+   while (true) {
+     auto __comp_res = __comp(__v, __nd->__get_value());
+diff --git a/libcxx/include/string b/libcxx/include/string
+index ede42467b99f..bdc507d2ee08 100644
+--- a/libcxx/include/string
++++ b/libcxx/include/string
+@@ -625,6 +625,7 @@ basic_string<char32_t> operator""s( const char32_t *str, size_t len );
+ #  include <__string/char_traits.h>
+ #  include <__string/extern_template_lists.h>
+ #  include <__type_traits/conditional.h>
++#  include <__type_traits/desugars_to.h>
+ #  include <__type_traits/enable_if.h>
+ #  include <__type_traits/is_allocator.h>
+ #  include <__type_traits/is_array.h>
+@@ -2575,19 +2576,29 @@ struct __default_three_way_comparator<basic_string<_CharT, _Traits, _Alloc>, bas
+ };
+ #  endif
+ 
+-template <class _Comparator, class _CharT, class _Traits, class _Alloc>
+-inline const bool __is_transparently_comparable_v<_Comparator,
+-                                                  basic_string<_CharT, _Traits, _Alloc>,
+-                                                  const _CharT*,
+-                                                  __enable_if_t<__is_generic_transparent_comparator_v<_Comparator> > > =
+-    true;
++template <class _Comparator, class _CharT2, class _CharT, class _Traits, class _Alloc>
++inline const bool __is_transparently_comparable_v<_Comparator, basic_string<_CharT, _Traits, _Alloc>, _CharT2*> =
++    is_same<_CharT, __remove_cv_t<_CharT2> >::value &&
++    (__desugars_to_v<__less_tag,
++                     _Comparator,
++                     basic_string<_CharT, _Traits, _Alloc>,
++                     basic_string<_CharT, _Traits, _Alloc> > ||
++     __desugars_to_v<__greater_tag,
++                     _Comparator,
++                     basic_string<_CharT, _Traits, _Alloc>,
++                     basic_string<_CharT, _Traits, _Alloc> >);
++
++template <class _Comparator, class _CharT2, class _CharT, class _Traits, class _Alloc>
++inline const bool __is_transparently_comparable_v<_Comparator, _CharT2*, basic_string<_CharT, _Traits, _Alloc> > =
++    __is_transparently_comparable_v<_Comparator, basic_string<_CharT, _Traits, _Alloc>, _CharT2*>;
+ 
+ template <class _Comparator, class _CharT, class _Traits, class _Alloc, size_t _Np>
+-inline const bool __is_transparently_comparable_v<_Comparator,
+-                                                  basic_string<_CharT, _Traits, _Alloc>,
+-                                                  _CharT[_Np],
+-                                                  __enable_if_t<__is_generic_transparent_comparator_v<_Comparator> > > =
+-    true;
++inline const bool __is_transparently_comparable_v<_Comparator, basic_string<_CharT, _Traits, _Alloc>, _CharT[_Np]> =
++    __is_transparently_comparable_v<_Comparator, basic_string<_CharT, _Traits, _Alloc>, const _CharT*>;
++
++template <class _Comparator, class _CharT, class _Traits, class _Alloc, size_t _Np>
++inline const bool __is_transparently_comparable_v<_Comparator, _CharT[_Np], basic_string<_CharT, _Traits, _Alloc> > =
++    __is_transparently_comparable_v<_Comparator, basic_string<_CharT, _Traits, _Alloc>, const _CharT*>;
+ 
+ #  if _LIBCPP_STD_VER >= 17
+ template <class _InputIterator,
+diff --git a/libcxx/test/libcxx/type_traits/is_transparently_comparable.compile.pass.cpp b/libcxx/test/libcxx/type_traits/is_transparently_comparable.compile.pass.cpp
+new file mode 100644
+index 000000000000..8ab8cb0be841
+--- /dev/null
++++ b/libcxx/test/libcxx/type_traits/is_transparently_comparable.compile.pass.cpp
+@@ -0,0 +1,32 @@
++//===----------------------------------------------------------------------===//
++//
++// Part of the LLVM Project, under the Apache License v2.0 with LLVM Exceptions.
++// See https://llvm.org/LICENSE.txt for license information.
++// SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
++//
++//===----------------------------------------------------------------------===//
++
++// Check that `__is_transparently_comparable_v` is true when we expect it to be
++
++#include <functional>
++#include <string>
++#include <__type_traits/desugars_to.h>
++
++static_assert(std::__is_transparently_comparable_v<std::less<std::string>, std::string, const char*>, "");
++static_assert(std::__is_transparently_comparable_v<std::less<std::string>, std::string, char*>, "");
++static_assert(std::__is_transparently_comparable_v<std::less<std::string>, std::string, char[5]>, "");
++
++static_assert(std::__is_transparently_comparable_v<std::less<std::string>, const char*, std::string>, "");
++static_assert(std::__is_transparently_comparable_v<std::less<std::string>, char*, std::string>, "");
++static_assert(std::__is_transparently_comparable_v<std::less<std::string>, char[5], std::string>, "");
++
++static_assert(
++    !std::__is_transparently_comparable_v<std::less<std::reference_wrapper<std::string> >, std::string, char[5]>, "");
++static_assert(
++    !std::__is_transparently_comparable_v<std::less<std::reference_wrapper<std::string> >, char[5], std::string>, "");
++static_assert(
++    !std::__is_transparently_comparable_v<std::less<std::reference_wrapper<std::string> >, std::string, char const*>,
++    "");
++static_assert(
++    !std::__is_transparently_comparable_v<std::less<std::reference_wrapper<std::string> >, char const*, std::string>,
++    "");
+-- 
+2.39.5

@@ -46,6 +46,11 @@ def find_file_to_execute(argv0: str) -> Path:
 
 def main() -> None:
     main_file = find_file_to_execute(sys.argv[1])
+
+    # Modify sys.argv so that the executed module sees the correct program name
+    # and arguments.
+    sys.argv.pop(0)
+
     module_name = main_file.with_suffix("").name
     spec = importlib.util.spec_from_file_location(
         module_name,
@@ -76,7 +81,7 @@ def main() -> None:
     # `main_fn` isn't callable.
     # pylint: disable=not-callable
     if inspect.signature(main_fn).parameters:
-        result = main_fn(sys.argv[2:])
+        result = main_fn(sys.argv[1:])
     else:
         result = main_fn()
     if result:
