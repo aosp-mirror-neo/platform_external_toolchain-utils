@@ -507,6 +507,8 @@ class TestFormatExemptionCommitMessage(unittest.TestCase):
             msg.startswith("mass-exempt -Wgcc-compat\n\nWarnings will soon")
         )
         self.assertNotIn("Warnings exempted:", msg)
+        self.assertIn("Mass warning suppression is used to either make", msg)
+        self.assertIn("global-approval will be used to land", msg)
         self.assertIn("Bug: 12345\n", msg)
 
     def test_multiple_warnings(self) -> None:
@@ -517,6 +519,8 @@ class TestFormatExemptionCommitMessage(unittest.TestCase):
         self.assertIn(
             "Warnings exempted:\n- -Wformat-security\n- -Wgcc-compat\n\n", msg
         )
+        self.assertIn("Mass warning suppression is used to either make", msg)
+        self.assertIn("global-approval will be used to land", msg)
         self.assertIn("Bug: 12345\n", msg)
 
     def test_deduplication_and_sorting(self) -> None:
@@ -525,6 +529,8 @@ class TestFormatExemptionCommitMessage(unittest.TestCase):
         )
         self.assertTrue(msg.startswith("mass-exempt 2 warnings\n\n"))
         self.assertIn("Warnings exempted:\n- -Wbar\n- -Wfoo\n\n", msg)
+        self.assertIn("Mass warning suppression is used to either make", msg)
+        self.assertIn("global-approval will be used to land", msg)
 
     def test_for_soong_single_warning(self) -> None:
         msg = pa.format_exemption_commit_message(
@@ -537,6 +543,8 @@ class TestFormatExemptionCommitMessage(unittest.TestCase):
         )
         self.assertNotIn("Warnings exempted:", msg)
         self.assertNotIn("Flag: EXEMPT BUGFIX", msg)
+        self.assertNotIn("Mass warning suppression is used to either make", msg)
+        self.assertNotIn("global-approval will be used to land", msg)
         self.assertIn("See go/android-llvm-warning-suppression", msg)
         self.assertIn("Bug: 12345\n", msg)
 
@@ -549,6 +557,8 @@ class TestFormatExemptionCommitMessage(unittest.TestCase):
             "Warnings exempted:\n- -Wformat-security\n- -Wgcc-compat\n\n", msg
         )
         self.assertNotIn("Flag: EXEMPT BUGFIX", msg)
+        self.assertNotIn("Mass warning suppression is used to either make", msg)
+        self.assertNotIn("global-approval will be used to land", msg)
         self.assertIn("See go/android-llvm-warning-suppression", msg)
         self.assertIn("Bug: 12345\n", msg)
 
