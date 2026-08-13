@@ -571,14 +571,24 @@ class TestUpdateGlobalGoContent(unittest.TestCase):
         updated = pa.update_global_go_content(
             initial, 12345, ["foo", "-Wbar", "-Wno-baz"]
         )
-        self.assertIn(
-            "// Temporarily force no-error for these as part of suppression "
-            "for b/12345",
-            updated,
+        # Reflowing the comment is pretty ugly.
+        # pylint: disable=line-too-long
+        expected = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tnoOverrideGlobalCflags = []string{
+            \t\t"-Werror=address-of-temporary",
+            // Temporarily force no-error for these as part of suppression for b/12345
+            "-Wno-error=bar",
+            "-Wno-error=baz",
+            "-Wno-error=foo",
+            \t}
+            )
+            """
         )
-        self.assertIn('"-Wno-error=bar",', updated)
-        self.assertIn('"-Wno-error=baz",', updated)
-        self.assertIn('"-Wno-error=foo",', updated)
+        self.assertEqual(updated, expected)
 
     def test_update_global_go_content_missing_start_brace(self) -> None:
         initial = "package config\n"
@@ -595,17 +605,29 @@ class TestUpdateGlobalGoContent(unittest.TestCase):
             pa.update_global_go_content(initial, 12345, ["foo"])
 
     def test_update_global_go_content_single_warning(self) -> None:
-        initial = (
-            "package config\n\nvar noOverrideGlobalCflags = []string{\n}\n"
+        initial = textwrap.dedent(
+            """\
+            package config
+
+            var noOverrideGlobalCflags = []string{
+            }
+            """
         )
         updated = pa.update_global_go_content(initial, 12345, ["foo"])
-        self.assertIn(
-            "// Temporarily force no-error for this as part of suppression "
-            "for b/12345",
-            updated,
+        expected = textwrap.dedent(
+            """\
+            package config
+
+            var noOverrideGlobalCflags = []string{
+            """
+            "// Temporarily force no-error for this as part of "
+            "suppression for b/12345\n"
+            """\
+            "-Wno-error=foo",
+            }
+            """
         )
-        self.assertIn('"-Wno-error=foo",', updated)
-        self.assertTrue(updated.endswith("}\n"))
+        self.assertEqual(updated, expected)
 
     def test_update_global_go_content_comment_occurrence_not_confused(
         self,
@@ -623,6 +645,66 @@ class TestUpdateGlobalGoContent(unittest.TestCase):
         )
         updated = pa.update_global_go_content(initial, 12345, ["foo"])
         self.assertIn('"-Wno-error=foo",', updated)
+
+    def test_update_global_go_content_converts_existing_flags_and_appends_new(
+        self,
+    ) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tcommonGlobalCflags = []string{
+            \t\t"-Wno-flag-in-other-slice",
+            \t}
+
+            \tnoOverrideGlobalCflags = []string{
+            \t\t// -Wno-commented-out-flag should be ignored
+            \t\t"-Werror=address-of-temporary",
+            \t\t"-Wno-incompatible-pointer-types",
+            \t\t"-Wno-c2y-extensions", // http://b/493691159
+            \t}
+            )
+            """
+        )
+        updated = pa.update_global_go_content(
+            initial,
+            12345,
+            [
+                "flag-in-other-slice",
+                "-Wno-incompatible-pointer-types",
+                "-Wc2y-extensions",
+                "-Wcommented-out-flag",
+                "new-flag",
+            ],
+        )
+        # Reflowing the comments here is pretty ugly.
+        # pylint: disable=line-too-long
+        expected = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tcommonGlobalCflags = []string{
+            \t\t"-Wno-flag-in-other-slice",
+            \t}
+
+            \tnoOverrideGlobalCflags = []string{
+            \t\t// -Wno-commented-out-flag should be ignored
+            \t\t"-Werror=address-of-temporary",
+            // Temporarily force no-error for this as part of suppression for b/12345
+            "-Wno-error=incompatible-pointer-types",
+            // Temporarily force no-error for this as part of suppression for b/12345
+            "-Wno-error=c2y-extensions", // http://b/493691159
+            // Temporarily force no-error for these as part of suppression for b/12345
+            "-Wno-error=commented-out-flag",
+            "-Wno-error=flag-in-other-slice",
+            "-Wno-error=new-flag",
+            \t}
+            )
+            """
+        )
+        self.assertEqual(updated, expected)
 
 
 class TestAddGlobalNoErrorPostflags(test_helpers.TempDirTestCase):

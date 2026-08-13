@@ -649,6 +649,7 @@ _NO_OVERRIDE_GLOBAL_CFLAGS_START = re.compile(
     r"^\s*(?:var\s+)?noOverrideGlobalCflags\s*=\s*\[\]string\{", re.MULTILINE
 )
 _NO_OVERRIDE_GLOBAL_CFLAGS_END = re.compile(r"^\s*\}", re.MULTILINE)
+_WNO_FLAG_RE = re.compile(r'^\s*"-Wno-([^"=]+)"(.*)$', re.MULTILINE)
 _GOFMT_BIN = Path("prebuilts") / "go" / "linux-x86" / "bin" / "gofmt"
 
 
@@ -658,6 +659,11 @@ def update_global_go_content(
     warning_names: Iterable[str],
 ) -> str:
     """Updates global.go content with -Wno-error=<warning> postflags.
+
+    For each warning, if an existing -Wno-<warning> is present in
+    noOverrideGlobalCflags, it is converted in-place to -Wno-error=<warning>
+    with a suppression comment preceding it. Otherwise, -Wno-error=<warning> is
+    appended to noOverrideGlobalCflags.
 
     Returns:
         Updated content string.
@@ -680,19 +686,41 @@ def update_global_go_content(
     if not match_end:
         raise ValueError("Closing brace for noOverrideGlobalCflags not found")
 
-    this_or_these = "this" if len(unique_core_warnings) == 1 else "these"
-    lines_to_insert = [
-        f"// Temporarily force no-error for {this_or_these} as part of "
-        f"suppression for b/{bug_number}"
-    ]
-    for core_w in unique_core_warnings:
-        lines_to_insert.append(f'"-Wno-error={core_w}",')
+    # N.B., Since we always `gofmt` this file, we don't need to care about
+    # matching leading spaces here.
+    def format_suppression_comment(count: int) -> str:
+        this_or_these = "this" if count == 1 else "these"
+        return (
+            f"// Temporarily force no-error for {this_or_these} as part of "
+            f"suppression for b/{bug_number}"
+        )
 
-    insertion_text = "\n".join(lines_to_insert) + "\n"
+    slice_body = content[match_start.end() : match_end.start()]
+    warnings_to_convert = set(unique_core_warnings)
+    converted_warnings: set[str] = set()
+
+    def replace_wno_flag(m: re.Match[str]) -> str:
+        w = m.group(1)
+        if w not in warnings_to_convert:
+            return m.group(0)
+        converted_warnings.add(w)
+        rest = m.group(2)
+        return f'{format_suppression_comment(1)}\n"-Wno-error={w}"{rest}'
+
+    slice_body = _WNO_FLAG_RE.sub(replace_wno_flag, slice_body)
+
+    warnings_to_append = [
+        w for w in unique_core_warnings if w not in converted_warnings
+    ]
+    if warnings_to_append:
+        lines_to_insert = [format_suppression_comment(len(warnings_to_append))]
+        for core_w in warnings_to_append:
+            lines_to_insert.append(f'"-Wno-error={core_w}",')
+
+        slice_body += "\n".join(lines_to_insert) + "\n"
+
     return (
-        content[: match_end.start()]
-        + insertion_text
-        + content[match_end.start() :]
+        content[: match_start.end()] + slice_body + content[match_end.start() :]
     )
 
 
