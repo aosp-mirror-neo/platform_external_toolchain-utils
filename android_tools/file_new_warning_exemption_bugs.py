@@ -7,7 +7,6 @@
 import argparse
 import logging
 from pathlib import Path
-import re
 import shlex
 import sys
 from typing import Iterable, Mapping
@@ -15,24 +14,9 @@ from typing import Iterable, Mapping
 from android_tools import android_paths
 from android_tools import find_owners
 from android_tools import parse_and_apply_warning_exemptions
+from android_tools import warning_suppression
 from cros_utils import bugs
 from cros_utils import gerrit_utils
-
-
-TARGET_DIR_RE = re.compile(r"//([^:]+):")
-
-
-def convert_target_to_android_bp(target: str) -> Path:
-    """Infers an Android.bp file path from a target."""
-    target_match = TARGET_DIR_RE.match(target)
-    if not target_match:
-        raise ValueError(f"Target {target!r} doesn't match {TARGET_DIR_RE}")
-
-    # This match ends up being e.g., `bionic/libc` when given the target
-    # `bionic/libc:libc`. `:libc` says "the libc target in the Android.bp
-    # existing in `bionic/libc`.
-    target_dir = Path(target_match.group(1))
-    return target_dir / "Android.bp"
 
 
 def format_bug_body(
@@ -95,7 +79,7 @@ def lookup_owners_for_git_repos(
     deduped_android_bps = {}
     for git_repo, targets in targets_by_repo.items():
         deduped_android_bps[git_repo] = {
-            convert_target_to_android_bp(x) for x in targets
+            warning_suppression.convert_target_to_android_bp(x) for x in targets
         }
 
     android_bp_files_by_repo = {

@@ -8,8 +8,11 @@ import json
 from pathlib import Path
 import textwrap
 from typing import Any
+import unittest
+from unittest import mock
 
 from android_tools import parse_and_apply_warning_exemptions as pa
+from android_tools import warning_suppression
 from llvm_tools import test_helpers
 from llvm_tools import warning_exemption
 
@@ -94,6 +97,19 @@ class TestInferTargetFromCmdline(test_helpers.TempDirTestCase):
             "bionic/libc/bionic/sigprocmask.c",
         ]
         self.assertIsNone(pa.infer_target_from_cmdline(cmd))
+
+    def test_infer_target_from_cmdline_hidl(self) -> None:
+        cmd = [
+            "clang",
+            "-o",
+            EXAMPLE_OUT_FILE,
+            "some/hidl/file.cpp",
+            warning_suppression.HIDL_BUILD_MARKER_FLAG,
+        ]
+        self.assertEqual(
+            pa.infer_target_from_cmdline(cmd),
+            warning_suppression.HIDL_DEFAULTS_TARGET,
+        )
 
 
 class TestParseOneWarningReport(test_helpers.TempDirTestCase):
@@ -256,13 +272,13 @@ class TestAddSuppressionCommentsToDiff(test_helpers.TempDirTestCase):
             @@ -1,2 +1,4 @@
              cc_library {
                  name: "libfoo",
-            +// Temporarily suppressed for b/12345
+            +// Bulk-suppressed; see b/12345 for details
             +    cflags: ["-Wno-foo"],
              }
             @@ -10,3 +12,5 @@
              cc_library {
                  name: "libbar",
-            +// Temporarily suppressed for b/12345
+            +// Bulk-suppressed; see b/12345 for details
             +    cflags: ["-Wno-bar"],
              } """
         )
@@ -465,3 +481,282 @@ class TestPopulateAndWriteSummary(test_helpers.TempDirTestCase):
             },
         )
         self.assertEqual(summary, expected_summary)
+
+
+class TestExtractCoreWarningName(unittest.TestCase):
+    """Tests for extract_core_warning_name."""
+
+    def test_extract_core_warning_name(self) -> None:
+        self.assertEqual(pa.extract_core_warning_name("-Wno-foo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("-Wfoo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("-Werror=foo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("-Wno-error=foo"), "foo")
+        self.assertEqual(pa.extract_core_warning_name("foo"), "foo")
+
+
+class TestFormatExemptionCommitMessage(unittest.TestCase):
+    """Tests for format_exemption_commit_message."""
+
+    def test_empty_warnings_raises(self) -> None:
+        with self.assertRaises(ValueError):
+            pa.format_exemption_commit_message(12345, [])
+
+    def test_single_warning(self) -> None:
+        msg = pa.format_exemption_commit_message(12345, ["gcc-compat"])
+        self.assertTrue(
+            msg.startswith("mass-exempt -Wgcc-compat\n\nWarnings will soon")
+        )
+        self.assertNotIn("Warnings exempted:", msg)
+        self.assertIn("Mass warning suppression is used to either make", msg)
+        self.assertIn("global-approval will be used to land", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+    def test_multiple_warnings(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["gcc-compat", "format-security"]
+        )
+        self.assertTrue(msg.startswith("mass-exempt 2 warnings\n\n"))
+        self.assertIn(
+            "Warnings exempted:\n- -Wformat-security\n- -Wgcc-compat\n\n", msg
+        )
+        self.assertIn("Mass warning suppression is used to either make", msg)
+        self.assertIn("global-approval will be used to land", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+    def test_deduplication_and_sorting(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["-Wno-foo", "foo", "-Wbar"]
+        )
+        self.assertTrue(msg.startswith("mass-exempt 2 warnings\n\n"))
+        self.assertIn("Warnings exempted:\n- -Wbar\n- -Wfoo\n\n", msg)
+        self.assertIn("Mass warning suppression is used to either make", msg)
+        self.assertIn("global-approval will be used to land", msg)
+
+    def test_for_soong_single_warning(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["gcc-compat"], for_soong=True
+        )
+        self.assertTrue(
+            msg.startswith(
+                "cc: set no-error for -Wgcc-compat\n\nSet -Wno-error"
+            )
+        )
+        self.assertNotIn("Warnings exempted:", msg)
+        self.assertNotIn("Flag: EXEMPT BUGFIX", msg)
+        self.assertNotIn("Mass warning suppression is used to either make", msg)
+        self.assertNotIn("global-approval will be used to land", msg)
+        self.assertIn("See go/android-llvm-warning-suppression", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+    def test_for_soong_multiple_warnings(self) -> None:
+        msg = pa.format_exemption_commit_message(
+            12345, ["gcc-compat", "format-security"], for_soong=True
+        )
+        self.assertTrue(msg.startswith("cc: set no-error for 2 warnings\n\n"))
+        self.assertIn(
+            "Warnings exempted:\n- -Wformat-security\n- -Wgcc-compat\n\n", msg
+        )
+        self.assertNotIn("Flag: EXEMPT BUGFIX", msg)
+        self.assertNotIn("Mass warning suppression is used to either make", msg)
+        self.assertNotIn("global-approval will be used to land", msg)
+        self.assertIn("See go/android-llvm-warning-suppression", msg)
+        self.assertIn("Bug: 12345\n", msg)
+
+
+class TestUpdateGlobalGoContent(unittest.TestCase):
+    """Tests for update_global_go_content."""
+
+    def test_update_global_go_content_success(self) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tnoOverrideGlobalCflags = []string{
+            \t\t"-Werror=address-of-temporary",
+            \t}
+            )
+            """
+        )
+        updated = pa.update_global_go_content(
+            initial, 12345, ["foo", "-Wbar", "-Wno-baz"]
+        )
+        # Reflowing the comment is pretty ugly.
+        # pylint: disable=line-too-long
+        expected = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tnoOverrideGlobalCflags = []string{
+            \t\t"-Werror=address-of-temporary",
+            // Temporarily force no-error for these as part of suppression for b/12345
+            "-Wno-error=bar",
+            "-Wno-error=baz",
+            "-Wno-error=foo",
+            \t}
+            )
+            """
+        )
+        self.assertEqual(updated, expected)
+
+    def test_update_global_go_content_missing_start_brace(self) -> None:
+        initial = "package config\n"
+        with self.assertRaisesRegex(
+            ValueError, "noOverrideGlobalCflags not found in content"
+        ):
+            pa.update_global_go_content(initial, 12345, ["foo"])
+
+    def test_update_global_go_content_missing_end_brace(self) -> None:
+        initial = "package config\nvar noOverrideGlobalCflags = []string{\n"
+        with self.assertRaisesRegex(
+            ValueError, "Closing brace for noOverrideGlobalCflags not found"
+        ):
+            pa.update_global_go_content(initial, 12345, ["foo"])
+
+    def test_update_global_go_content_single_warning(self) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+
+            var noOverrideGlobalCflags = []string{
+            }
+            """
+        )
+        updated = pa.update_global_go_content(initial, 12345, ["foo"])
+        expected = textwrap.dedent(
+            """\
+            package config
+
+            var noOverrideGlobalCflags = []string{
+            """
+            "// Temporarily force no-error for this as part of "
+            "suppression for b/12345\n"
+            """\
+            "-Wno-error=foo",
+            }
+            """
+        )
+        self.assertEqual(updated, expected)
+
+    def test_update_global_go_content_comment_occurrence_not_confused(
+        self,
+    ) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+            // -Wno-error=foo in comment should not prevent adding to slice
+            var (
+            \tnoOverrideGlobalCflags = []string{
+            \t\t"-Werror=address-of-temporary",
+            \t}
+            )
+            """
+        )
+        updated = pa.update_global_go_content(initial, 12345, ["foo"])
+        self.assertIn('"-Wno-error=foo",', updated)
+
+    def test_update_global_go_content_converts_existing_flags_and_appends_new(
+        self,
+    ) -> None:
+        initial = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tcommonGlobalCflags = []string{
+            \t\t"-Wno-flag-in-other-slice",
+            \t}
+
+            \tnoOverrideGlobalCflags = []string{
+            \t\t// -Wno-commented-out-flag should be ignored
+            \t\t"-Werror=address-of-temporary",
+            \t\t"-Wno-incompatible-pointer-types",
+            \t\t"-Wno-c2y-extensions", // http://b/493691159
+            \t}
+            )
+            """
+        )
+        updated = pa.update_global_go_content(
+            initial,
+            12345,
+            [
+                "flag-in-other-slice",
+                "-Wno-incompatible-pointer-types",
+                "-Wc2y-extensions",
+                "-Wcommented-out-flag",
+                "new-flag",
+            ],
+        )
+        # Reflowing the comments here is pretty ugly.
+        # pylint: disable=line-too-long
+        expected = textwrap.dedent(
+            """\
+            package config
+
+            var (
+            \tcommonGlobalCflags = []string{
+            \t\t"-Wno-flag-in-other-slice",
+            \t}
+
+            \tnoOverrideGlobalCflags = []string{
+            \t\t// -Wno-commented-out-flag should be ignored
+            \t\t"-Werror=address-of-temporary",
+            // Temporarily force no-error for this as part of suppression for b/12345
+            "-Wno-error=incompatible-pointer-types",
+            // Temporarily force no-error for this as part of suppression for b/12345
+            "-Wno-error=c2y-extensions", // http://b/493691159
+            // Temporarily force no-error for these as part of suppression for b/12345
+            "-Wno-error=commented-out-flag",
+            "-Wno-error=flag-in-other-slice",
+            "-Wno-error=new-flag",
+            \t}
+            )
+            """
+        )
+        self.assertEqual(updated, expected)
+
+
+class TestAddGlobalNoErrorPostflags(test_helpers.TempDirTestCase):
+    """Tests for add_global_no_error_postflags."""
+
+    def test_add_global_no_error_postflags_success(self) -> None:
+        android_tree = self.make_tempdir()
+        global_go_dir = android_tree / "build/soong/cc/config"
+        global_go_dir.mkdir(parents=True)
+        global_go_file = global_go_dir / "global.go"
+        global_go_file.write_text(
+            textwrap.dedent(
+                """\
+                package config
+
+                var (
+                \tnoOverrideGlobalCflags = []string{
+                \t\t"-Werror=address-of-temporary",
+                \t}
+                )
+                """
+            ),
+            encoding="utf-8",
+        )
+
+        with mock.patch.object(pa, "checked_subprocess_run"):
+            result = pa.add_global_no_error_postflags(
+                android_tree, 12345, ["foo", "-Wbar", "-Wno-baz"]
+            )
+        self.assertEqual(result, Path("build/soong/cc/config/global.go"))
+
+        content = global_go_file.read_text(encoding="utf-8")
+        self.assertIn(
+            "// Temporarily force no-error for these as part of suppression "
+            "for b/12345",
+            content,
+        )
+        self.assertIn('"-Wno-error=bar",', content)
+        self.assertIn('"-Wno-error=baz",', content)
+        self.assertIn('"-Wno-error=foo",', content)
+
+    def test_add_global_no_error_postflags_missing_file(self) -> None:
+        android_tree = self.make_tempdir()
+        with self.assertRaises(FileNotFoundError):
+            pa.add_global_no_error_postflags(android_tree, 12345, ["foo"])

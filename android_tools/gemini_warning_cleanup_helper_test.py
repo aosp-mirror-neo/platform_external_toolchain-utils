@@ -1,16 +1,16 @@
-# Copyright 2025 The ChromiumOS Authors
+# Copyright 2026 The ChromiumOS Authors
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-"""Tests for clean_warning_exemptions_with_gemini."""
+"""Tests for gemini_warning_cleanup_helper."""
 
 import textwrap
+import unittest
 
-from android_tools import clean_warning_exemptions_with_gemini as clean_warnings
-from llvm_tools import test_helpers
+from android_tools import gemini_warning_cleanup_helper as clean_warnings
 
 
-class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
+class TestRemoveBlankLinesFromDiff(unittest.TestCase):
     """Tests for remove_blank_lines_from_diff."""
 
     def test_remove_blank_lines_from_diff_basic_example(self) -> None:
@@ -159,10 +159,6 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             +foo
             """
         )
-        # While hunks with no diff are errors, files with no hunks are not.
-        # Realistically, the result of blank line removal will only ever be seen
-        # by git (& humans when debugging), so live with this ugliness until
-        # there's a reason not to.
         expected_diff = textwrap.dedent(
             """
             diff --git a/... b/...
@@ -252,8 +248,30 @@ class TestRemoveBlankLinesFromDiff(test_helpers.TempDirTestCase):
             "",
         )
 
+    def test_remove_blank_lines_with_orphaned_no_newline(self) -> None:
+        """Test that \\ No newline at end of file is not orphaned.
 
-class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
+        It should not be left in the diff if the hunk is dropped.
+        """
+        diff = textwrap.dedent(
+            r"""
+            diff --git a/foo b/foo
+            --- a/foo
+            +++ b/foo
+            @@ -1,2 +1,3 @@
+             cc_defaults {
+            +
+             }
+            \ No newline at end of file
+            """
+        )
+        self.assertEqual(
+            clean_warnings.remove_blank_lines_from_diff(diff).strip(),
+            "",
+        )
+
+
+class TestDiffTriviallyHasNoDedupePotential(unittest.TestCase):
     """Tests for diff_trivially_has_no_dedupe_potential."""
 
     def test_no_hunk(self) -> None:
@@ -289,14 +307,14 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,6 +1,8 @@
-             cc_library {
-               name: "foo",
+              cc_library {
+                name: "foo",
             +  cflags: ["-Wno-bar"],
-             }
-             cc_library {
-               name: "foo",
+              }
+              cc_library {
+                name: "foo",
             +  cflags: ["-Wno-baz"],
-             }
+              }
             """
         )
         self.assertTrue(
@@ -309,14 +327,14 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,6 +1,8 @@
-             cc_library {
-               name: "foo",
+              cc_library {
+                name: "foo",
             +  cflags: ["-Wno-bar"],
-             }
-             cc_library {
-               name: "foo",
+              }
+              cc_library {
+                name: "foo",
             +  cflags: ["-Wno-bar"],
-             }
+              }
             """
         )
         self.assertFalse(
@@ -329,15 +347,15 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,3 +1,4 @@
-             cc_library {
-               name: "foo",
+              cc_library {
+                name: "foo",
             +  cflags: ["-Wno-bar"],
-             }
+              }
             @@ -10,3 +11,4 @@
-             cc_library {
-               name: "bar",
+              cc_library {
+                name: "bar",
             +  cflags: ["-Wno-bar"],
-             }
+              }
             """
         )
         self.assertFalse(
@@ -350,10 +368,10 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
             --- a/some/file.bp
             +++ b/some/file.bp
             @@ -1,4 +1,3 @@
-             cc_library {
-               name: "foo",
+              cc_library {
+                name: "foo",
             -  cflags: ["-Wno-bar"],
-             }
+              }
             """
         )
         self.assertTrue(
@@ -361,7 +379,7 @@ class TestDiffTriviallyHasNoDedupePotential(test_helpers.TempDirTestCase):
         )
 
 
-class TestIterateDiffPieces(test_helpers.TempDirTestCase):
+class TestIterateDiffPieces(unittest.TestCase):
     """Tests for iterate_diff_pieces."""
 
     def test_empty_diff(self) -> None:
@@ -405,7 +423,7 @@ class TestIterateDiffPieces(test_helpers.TempDirTestCase):
         self.assertEqual(pieces, expected_pieces)
 
 
-class TestDiffHunkParsing(test_helpers.TempDirTestCase):
+class TestDiffHunkParsing(unittest.TestCase):
     """Tests for diff hunk parsing."""
 
     def test_no_newline_at_end_of_file_old(self) -> None:
@@ -420,8 +438,6 @@ class TestDiffHunkParsing(test_helpers.TempDirTestCase):
             +}
             """
         )
-        # Just ensure this doesn't throw; it'll do so if it can't consume
-        # exactly the number of lines specified by the hunk header.
         clean_warnings.DiffHunk.parse(diff.lstrip().split("\n"))
 
     def test_no_newline_at_end_of_file_new(self) -> None:
@@ -436,5 +452,4 @@ class TestDiffHunkParsing(test_helpers.TempDirTestCase):
             \ No newline at end of file
             """
         )
-        # Just ensure this doesn't throw; same reason as above.
         clean_warnings.DiffHunk.parse(diff.lstrip().split("\n"))

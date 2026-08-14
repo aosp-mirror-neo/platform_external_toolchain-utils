@@ -22,10 +22,9 @@ import textwrap
 
 from android_tools import android_paths
 from android_tools import bp_tools
+from android_tools import warning_suppression
 from cros_utils import git_utils
 
-
-_HIDL_MARKER_FLAG = "-D_ANDROID_HIDL_BUILD=1"
 
 _ANDROID_INTERNAL_REMOTE = "goog"
 _SUPPRESS_WARNING_FLAG = "-D_ANDROID_FORCE_DISABLE_WERROR=/dev/stdout"
@@ -154,11 +153,11 @@ def create_hidl_helper_cl_commit_in_worktree_of(
                 bp_tools.bpmodify_path(android_tree),
                 "-w",
                 "-m",
-                "hidl-module-defaults",
+                warning_suppression.HIDL_MODULE_DEFAULTS_TARGET_NAME,
                 "-property",
                 "cflags",
                 "-add-literal",
-                f'"{_HIDL_MARKER_FLAG}"',
+                f'"{warning_suppression.HIDL_BUILD_MARKER_FLAG}"',
                 android_bp,
             ),
             check=True,

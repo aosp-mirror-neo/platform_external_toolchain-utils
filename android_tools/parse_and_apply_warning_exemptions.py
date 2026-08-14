@@ -47,6 +47,7 @@ from typing import DefaultDict, Iterable, Self, Sequence
 
 from android_tools import android_paths
 from android_tools import bp_tools
+from android_tools import warning_suppression
 from cros_utils import git_utils
 from llvm_tools import warning_exemption
 
@@ -93,6 +94,18 @@ def infer_target_from_cmdline(command: list[str]) -> str | None:
             output_file,
         )
         return None
+
+    # b/476408642#comment11 (and following comments): All HIDL builds should
+    # conform to all of the above, but the hidl `cc_library` target is
+    # synthesized to have _the same name_ as the corresponding `hidl_interface`
+    # target.
+    #
+    # `hidl_interface` targets can't have cflags added, and all of the generated
+    # code is seemingly the responsibility of the hidl maintainers, so have a
+    # special case here to return the `cc_defaults` that all hidl-synthesized
+    # `cc_library`s inherit.
+    if warning_suppression.HIDL_BUILD_MARKER_FLAG in command:
+        return warning_suppression.HIDL_DEFAULTS_TARGET
 
     target_path_and_variant = output_file[len(prefix) : obj_location]
     target_path_no_colon = os.path.dirname(target_path_and_variant)
@@ -430,7 +443,7 @@ def add_suppression_comments_to_diff(
     # This is the comment to add before every warning suppression. `bpfmt` is
     # expected to indent it properly. It's kept short because it may need to be
     # indented a fair amount, and don't want to go over the line limit.
-    add_comemnt = f"+// Temporarily suppressed for b/{bug_number}\n"
+    add_comment = f"+// Bulk-suppressed; see b/{bug_number} for details\n"
 
     # Since these diffs are well-formed (and have no commentary at the top), we
     # can assume that all lines are either metadata, or start with one of ("-",
@@ -448,7 +461,7 @@ def add_suppression_comments_to_diff(
             if hunk_line.startswith("+"):
                 if any(x in hunk_line for x in exempted_literals):
                     added_lines += 1
-                    new_hunk_lines.append(add_comemnt)
+                    new_hunk_lines.append(add_comment)
             new_hunk_lines.append(hunk_line)
         new_hunk_header = update_hunk_header_for_added_lines(
             hunk_header, added_lines, preexisting_added_lines
@@ -615,16 +628,212 @@ def map_files_to_git_repos(
     """
 
     def get_file_toplevel(f: Path) -> Path:
-        toplevel = checked_subprocess_run(
-            ("git", "rev-parse", "--show-toplevel"),
-            cwd=(android_tree / f).parent,
-        ).strip()
-        return Path(toplevel).relative_to(android_tree)
+        toplevel = git_utils.find_git_repo_above((android_tree / f).parent)
+        return toplevel.relative_to(android_tree)
 
     # These `--show-toplevel` invocations are pretty fast, but we already have a
     # thread pool anyway, so use it.
     toplevels = thread_pool.map(get_file_toplevel, files)
     return dict(zip(files, toplevels))
+
+
+def extract_core_warning_name(warning_flag: str) -> str:
+    """Extracts core warning name from string like '-Wno-foo' or '-Wfoo'."""
+    for prefix in ("-Wno-error=", "-Werror=", "-Wno-", "-W"):
+        if warning_flag.startswith(prefix):
+            return warning_flag.removeprefix(prefix)
+    return warning_flag
+
+
+_NO_OVERRIDE_GLOBAL_CFLAGS_START = re.compile(
+    r"^\s*(?:var\s+)?noOverrideGlobalCflags\s*=\s*\[\]string\{", re.MULTILINE
+)
+_NO_OVERRIDE_GLOBAL_CFLAGS_END = re.compile(r"^\s*\}", re.MULTILINE)
+_WNO_FLAG_RE = re.compile(r'^\s*"-Wno-([^"=]+)"(.*)$', re.MULTILINE)
+_GOFMT_BIN = Path("prebuilts") / "go" / "linux-x86" / "bin" / "gofmt"
+
+
+def update_global_go_content(
+    content: str,
+    bug_number: int,
+    warning_names: Iterable[str],
+) -> str:
+    """Updates global.go content with -Wno-error=<warning> postflags.
+
+    For each warning, if an existing -Wno-<warning> is present in
+    noOverrideGlobalCflags, it is converted in-place to -Wno-error=<warning>
+    with a suppression comment preceding it. Otherwise, -Wno-error=<warning> is
+    appended to noOverrideGlobalCflags.
+
+    Returns:
+        Updated content string.
+    """
+    unique_core_warnings = sorted(
+        {
+            core_w
+            for w in warning_names
+            if (core_w := extract_core_warning_name(w))
+        }
+    )
+
+    match_start = _NO_OVERRIDE_GLOBAL_CFLAGS_START.search(content)
+    if not match_start:
+        raise ValueError("noOverrideGlobalCflags not found in content")
+
+    match_end = _NO_OVERRIDE_GLOBAL_CFLAGS_END.search(
+        content, match_start.end()
+    )
+    if not match_end:
+        raise ValueError("Closing brace for noOverrideGlobalCflags not found")
+
+    # N.B., Since we always `gofmt` this file, we don't need to care about
+    # matching leading spaces here.
+    def format_suppression_comment(count: int) -> str:
+        this_or_these = "this" if count == 1 else "these"
+        return (
+            f"// Temporarily force no-error for {this_or_these} as part of "
+            f"suppression for b/{bug_number}"
+        )
+
+    slice_body = content[match_start.end() : match_end.start()]
+    warnings_to_convert = set(unique_core_warnings)
+    converted_warnings: set[str] = set()
+
+    def replace_wno_flag(m: re.Match[str]) -> str:
+        w = m.group(1)
+        if w not in warnings_to_convert:
+            return m.group(0)
+        converted_warnings.add(w)
+        rest = m.group(2)
+        return f'{format_suppression_comment(1)}\n"-Wno-error={w}"{rest}'
+
+    slice_body = _WNO_FLAG_RE.sub(replace_wno_flag, slice_body)
+
+    warnings_to_append = [
+        w for w in unique_core_warnings if w not in converted_warnings
+    ]
+    if warnings_to_append:
+        lines_to_insert = [format_suppression_comment(len(warnings_to_append))]
+        for core_w in warnings_to_append:
+            lines_to_insert.append(f'"-Wno-error={core_w}",')
+
+        slice_body += "\n".join(lines_to_insert) + "\n"
+
+    return (
+        content[: match_start.end()] + slice_body + content[match_end.start() :]
+    )
+
+
+def add_global_no_error_postflags(
+    android_tree: Path,
+    bug_number: int,
+    warning_names: Iterable[str],
+) -> Path:
+    """Adds -Wno-error=<warning> flags to noOverrideGlobalCflags in build/soong.
+
+    Returns:
+        Path to global.go relative to android_tree.
+    """
+    global_go_rel = Path("build/soong/cc/config/global.go")
+    global_go_path = android_tree / global_go_rel
+    content = global_go_path.read_text(encoding="utf-8")
+
+    new_content = update_global_go_content(content, bug_number, warning_names)
+
+    global_go_path.write_text(new_content, encoding="utf-8")
+    logging.info("Updated -Wno-error flags in %s", global_go_path)
+
+    gofmt_bin = android_tree / _GOFMT_BIN
+    checked_subprocess_run((gofmt_bin, "-w", global_go_path), cwd=android_tree)
+
+    return global_go_rel
+
+
+def format_exemption_commit_message(
+    bug_number: int,
+    warning_names: Iterable[str],
+    for_soong: bool = False,
+) -> str:
+    """Formats a commit message for warning exemptions."""
+    formatted_warnings = sorted(
+        {
+            f"-W{core_w}"
+            for w in warning_names
+            if (core_w := extract_core_warning_name(w))
+        }
+    )
+
+    if not formatted_warnings:
+        raise ValueError("No warnings provided")
+    if len(formatted_warnings) == 1:
+        desc = formatted_warnings[0]
+    else:
+        desc = f"{len(formatted_warnings)} warnings"
+
+    prefix = "cc: set no-error for " if for_soong else "mass-exempt "
+    subject = f"{prefix}{desc}"
+
+    warnings_section = (
+        ["Warnings exempted:", *(f"- {w}" for w in formatted_warnings), ""]
+        if len(formatted_warnings) > 1
+        else []
+    )
+
+    if for_soong:
+        explanation = [
+            "Set -Wno-error for these temporarily in case CI didn't catch",
+            "everything. See go/android-llvm-warning-suppression for",
+            "more details.",
+            "",
+            f"Bug: {bug_number}",
+            "Test: TreeHugger",
+        ]
+    else:
+        explanation = [
+            "Warnings will soon be introduced here due to a larger change.",
+            "Preemptively suppress those. Please see the bug or contact the",
+            "author for more information & notes on how to remove these",
+            "suppressions.",
+            "",
+            "Mass warning suppression is used to either make",
+            "global warning flags local, or to prepare for warnings",
+            "introduced in toolchain upgrades. Hence, this",
+            "is no functional change.",
+            "",
+            "No action required; global-approval will be used to land",
+            "this if no unresolved comments are left within 2 business",
+            "days.",
+            "",
+            "Use 'EXEMPT BUGFIX' for Flag, since this CL only disables",
+            "warnings (soon to be build errors, if not for this CL) here.",
+            "It would be nice to fix these, but disabling them is a nop.",
+            "",
+            f"Bug: {bug_number}",
+            "Test: TreeHugger",
+            "Flag: EXEMPT BUGFIX",
+        ]
+
+    body_lines = (
+        subject,
+        "",
+        *warnings_section,
+        *explanation,
+    )
+    return "\n".join(body_lines) + "\n"
+
+
+def map_repos_to_warnings(
+    updated_targets: dict[str, list[str]],
+    file_to_repo: dict[Path, Path],
+) -> dict[Path, set[str]]:
+    """Maps repo paths to the set of warnings exempted within them."""
+    bp_to_targets = group_targets_by_bp_file(updated_targets)
+    repo_to_warnings: dict[Path, set[str]] = collections.defaultdict(set)
+    for bp_path, target_tuples in bp_to_targets.items():
+        repo = file_to_repo[bp_path]
+        for _, full_target in target_tuples:
+            repo_to_warnings[repo].update(updated_targets[full_target])
+    return repo_to_warnings
 
 
 def commit_new_exemptions(
@@ -634,6 +843,7 @@ def commit_new_exemptions(
     updated_android_bp_files: list[Path],
     branch_name: str,
     file_to_repo: dict[Path, Path],
+    updated_targets: dict[str, list[str]],
 ) -> list[Path]:
     """Commits all new exemptions.
 
@@ -643,28 +853,27 @@ def commit_new_exemptions(
     rel_git_repos = sorted({file_to_repo[f] for f in updated_android_bp_files})
     git_repos = [android_tree / x for x in rel_git_repos]
 
-    exemption_commit_message = textwrap.dedent(
-        f"""\
-        automatically add warning exemptions
+    repo_to_warnings = map_repos_to_warnings(updated_targets, file_to_repo)
 
-        Warnings will soon be introduced here due to a larger change.
-        Preemptively suppress those. Please see the bug or contact the author
-        for more information & notes on how to remove these suppressions.
-
-        Use 'EXEMPT BUGFIX' for Flag, since this CL only disables warnings (soon
-        to be build errors, if not for this CL) here. It would be nice to fix
-        these, but disabling them is a nop.
-
-        Bug: {bug_number}
-        Test: TreeHugger
-        Flag: EXEMPT BUGFIX
-        """
-    )
+    global_go_rel = Path("build/soong/cc/config/global.go")
+    soong_global_modified = global_go_rel in updated_android_bp_files
+    if soong_global_modified:
+        soong_repo = Path("build/soong")
+        for target_warnings in updated_targets.values():
+            repo_to_warnings[soong_repo].update(target_warnings)
 
     def do_commit(repo: Path) -> None:
+        rel_repo = repo.relative_to(android_tree)
+        warnings = repo_to_warnings.get(rel_repo)
+        if not warnings:
+            raise ValueError(f"No warnings found for repository {rel_repo}")
+        for_soong = soong_global_modified and rel_repo == Path("build/soong")
+        message = format_exemption_commit_message(
+            bug_number, warnings, for_soong=for_soong
+        )
         git_utils.commit_all_changes(
             git_dir=repo,
-            message=exemption_commit_message,
+            message=message,
             quiet=True,
         )
         git_utils.create_branch(repo, branch_name)
@@ -999,6 +1208,17 @@ def main(argv: list[str]) -> None:
             android_tree, thread_pool, apply_results.successfully_updated_files
         )
 
+        all_warnings: set[str] = set()
+        for target_warnings in apply_results.updated_targets.values():
+            all_warnings.update(target_warnings)
+
+        if all_warnings:
+            soong_file = add_global_no_error_postflags(
+                android_tree, bug_number, all_warnings
+            )
+            apply_results.successfully_updated_files.append(soong_file)
+            file_to_repo[soong_file] = Path("build/soong")
+
         repos_with_commit = commit_new_exemptions(
             bug_number,
             android_tree,
@@ -1006,6 +1226,7 @@ def main(argv: list[str]) -> None:
             updated_android_bp_files=apply_results.successfully_updated_files,
             branch_name=branch_name,
             file_to_repo=file_to_repo,
+            updated_targets=apply_results.updated_targets,
         )
         logging.info(
             "Successfully made commits in %d repos", len(repos_with_commit)
