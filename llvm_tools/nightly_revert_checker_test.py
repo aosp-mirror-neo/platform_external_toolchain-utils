@@ -4,6 +4,7 @@
 
 """Tests for nightly_revert_checker."""
 
+from pathlib import Path
 import subprocess
 import textwrap
 import time
@@ -20,7 +21,7 @@ from llvm_tools import nightly_revert_checker
 
 ARBITRARY_LLVM_CONFIG = git_llvm_rev.LLVMConfig(
     remote="/remote/that/does/not/exist",
-    dir="/dir/that/does/not/exist",
+    dir=Path("/dir/that/does/not/exist"),
 )
 
 

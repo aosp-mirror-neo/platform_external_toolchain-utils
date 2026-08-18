@@ -53,7 +53,7 @@ def GetVersionFrom(src_dir: Path | str, git_hash: str) -> int:
     """
 
     version = git_llvm_rev.translate_sha_to_rev(
-        git_llvm_rev.LLVMConfig(remote="origin", dir=src_dir), git_hash
+        git_llvm_rev.LLVMConfig(remote="origin", dir=Path(src_dir)), git_hash
     )
     # Note: branches aren't supported
     assert version.branch == git_llvm_rev.MAIN_BRANCH, version.branch
@@ -75,7 +75,7 @@ def GetGitHashFrom(src_dir: Path | str, version: int) -> str:
     """
 
     return git_llvm_rev.translate_rev_to_sha(
-        git_llvm_rev.LLVMConfig(remote="origin", dir=src_dir),
+        git_llvm_rev.LLVMConfig(remote="origin", dir=Path(src_dir)),
         git_llvm_rev.Rev(branch=git_llvm_rev.MAIN_BRANCH, number=version),
     )
 
