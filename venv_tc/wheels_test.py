@@ -8,6 +8,7 @@ import hashlib
 import multiprocessing.pool
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import time
 import unittest
@@ -15,6 +16,10 @@ from unittest import mock
 
 from llvm_tools import test_helpers
 from venv_tc import wheels
+
+
+# Protected access in tests is fine.
+# pylint: disable=protected-access
 
 
 class WheelsTest(test_helpers.TempDirTestCase):
@@ -320,14 +325,41 @@ class WheelsTest(test_helpers.TempDirTestCase):
 class GsOperationsTest(unittest.TestCase):
     """Tests for gs:// helper functions in wheels."""
 
+    def setUp(self) -> None:
+        wheels.get_gs_tool.cache_clear()
+        self.addCleanup(wheels.get_gs_tool.cache_clear)
+
+    @mock.patch.object(shutil, "which", autospec=True)
+    def test_get_gs_tool_prefers_gcloud_then_gsutil(
+        self, mock_which: mock.MagicMock
+    ) -> None:
+        mock_which.side_effect = lambda name: (
+            f"/usr/bin/{name}" if name in ("gcloud", "gsutil") else None
+        )
+        self.assertEqual(wheels.get_gs_tool(), wheels.GsTool.GCLOUD)
+
+        wheels.get_gs_tool.cache_clear()
+        mock_which.side_effect = lambda name: (
+            "/usr/bin/gsutil" if name == "gsutil" else None
+        )
+        self.assertEqual(wheels.get_gs_tool(), wheels.GsTool.GSUTIL)
+
+        wheels.get_gs_tool.cache_clear()
+        mock_which.side_effect = lambda name: (
+            "/usr/bin/gsutil.py" if name == "gsutil.py" else None
+        )
+        self.assertEqual(wheels.get_gs_tool(), wheels.GsTool.GSUTIL_PY)
+
+        wheels.get_gs_tool.cache_clear()
+        mock_which.side_effect = lambda _: None
+        with self.assertRaises(ValueError):
+            wheels.get_gs_tool()
+
     @mock.patch.object(subprocess, "run", autospec=True)
-    @mock.patch.object(wheels, "get_gs_executable", autospec=True)
-    def test_list_wheels_in_gs_parses_lines(
+    def test_list_wheels_in_gs_parses_lines_gcloud(
         self,
-        mock_get_gs_exe: mock.MagicMock,
         mock_run: mock.MagicMock,
     ) -> None:
-        mock_get_gs_exe.return_value = "gsutil"
         mock_run.return_value = subprocess.CompletedProcess(
             args=(),
             returncode=0,
@@ -337,4 +369,76 @@ class GsOperationsTest(unittest.TestCase):
             ),
             stderr="",
         )
-        self.assertEqual(wheels.list_wheels_in_gs(), ["a.whl", "b.whl"])
+        self.assertEqual(
+            wheels.list_wheels_in_gs(gs_tool=wheels.GsTool.GCLOUD),
+            ["a.whl", "b.whl"],
+        )
+        mock_run.assert_called_once_with(
+            ("gcloud", "storage", "ls", wheels._GS_WHEEL_LOCATION),
+            check=False,
+            encoding="utf-8",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_list_wheels_in_gs_handles_no_matches_gsutil(
+        self,
+        mock_run: mock.MagicMock,
+    ) -> None:
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=(),
+            returncode=1,
+            stdout="",
+            stderr="CommandException: One or more URLs matched no objects.\n",
+        )
+        self.assertEqual(
+            wheels.list_wheels_in_gs(gs_tool=wheels.GsTool.GSUTIL), []
+        )
+        mock_run.assert_called_once_with(
+            ("gsutil", "ls", wheels._GS_WHEEL_LOCATION),
+            check=False,
+            encoding="utf-8",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_upload_new_wheels_to_gs_commands(
+        self,
+        mock_run: mock.MagicMock,
+    ) -> None:
+        wheel_dir = Path("/fake/wheels")
+        wheels.upload_new_wheels_to_gs(wheel_dir, gs_tool=wheels.GsTool.GCLOUD)
+        mock_run.assert_called_once_with(
+            (
+                "gcloud",
+                "storage",
+                "rsync",
+                "--predefined-acl=publicRead",
+                "--no-clobber",
+                wheel_dir,
+                wheels._GS_WHEEL_LOCATION,
+            ),
+            check=True,
+            stdin=subprocess.DEVNULL,
+        )
+
+        mock_run.reset_mock()
+        wheels.upload_new_wheels_to_gs(wheel_dir, gs_tool=wheels.GsTool.GSUTIL)
+        mock_run.assert_called_once_with(
+            (
+                "gsutil",
+                "-m",
+                "rsync",
+                "-a",
+                "public-read",
+                "-i",
+                wheel_dir,
+                wheels._GS_WHEEL_LOCATION,
+            ),
+            check=True,
+            stdin=subprocess.DEVNULL,
+        )

@@ -17,6 +17,7 @@ This tool is a one-stop-shop to manage `wheels/`. That is, it can:
 # imports from Python's stdlib.
 import argparse
 import dataclasses
+import enum
 import functools
 import hashlib
 import json
@@ -71,13 +72,21 @@ class WheelManifest:
         return dataclasses.asdict(self)
 
 
+class GsTool(enum.StrEnum):
+    """Tool used to interact with gs://."""
+
+    GCLOUD = "gcloud"
+    GSUTIL = "gsutil"
+    GSUTIL_PY = "gsutil.py"
+
+
 @functools.cache
-def get_gs_executable() -> str:
-    options = ("gsutil", "gsutil.py")
-    for o in options:
-        if shutil.which(o):
-            return o
-    raise ValueError(f"No gsutil could be found on $PATH; tried {options}")
+def get_gs_tool() -> GsTool:
+    for tool in GsTool:
+        if shutil.which(tool):
+            return tool
+    options = tuple(x.value for x in GsTool)
+    raise ValueError(f"No gs tool could be found on $PATH; tried {options}")
 
 
 def get_wheel_dir(venv_dir: Path) -> Path:
@@ -150,10 +159,17 @@ def populate_wheels_subdir_with_pip(venv_dir: Path, wheel_dir: Path) -> None:
             )
 
 
-def list_wheels_in_gs() -> list[str]:
+def list_wheels_in_gs(gs_tool: GsTool | None = None) -> list[str]:
     logging.info("Finding wheels in gs://...")
+    if gs_tool is None:
+        gs_tool = get_gs_tool()
+    if gs_tool == GsTool.GCLOUD:
+        cmd: tuple[str, ...] = ("gcloud", "storage", "ls", _GS_WHEEL_LOCATION)
+    else:
+        cmd = (gs_tool, "ls", _GS_WHEEL_LOCATION)
+
     gs_run = subprocess.run(
-        (get_gs_executable(), "ls", _GS_WHEEL_LOCATION),
+        cmd,
         check=False,
         encoding="utf-8",
         stdin=subprocess.DEVNULL,
@@ -162,8 +178,8 @@ def list_wheels_in_gs() -> list[str]:
     )
 
     if gs_run.returncode:
-        # `gsutil ls` exits unsuccessfully if nothing matches.
-        # Turn that into an empty list.
+        # `gcloud storage ls` and `gsutil ls` exit unsuccessfully if nothing
+        # matches. Turn that into an empty list.
         if "One or more URLs matched no objects" in gs_run.stderr:
             return []
         logging.error("gs failed; stderr: %s", gs_run.stderr)
@@ -173,10 +189,26 @@ def list_wheels_in_gs() -> list[str]:
     return [os.path.basename(x) for x in trimmed_lines if x]
 
 
-def upload_new_wheels_to_gs(wheel_dir: Path) -> None:
-    subprocess.run(
-        (
-            get_gs_executable(),
+def upload_new_wheels_to_gs(
+    wheel_dir: Path, gs_tool: GsTool | None = None
+) -> None:
+    if gs_tool is None:
+        gs_tool = get_gs_tool()
+    if gs_tool == GsTool.GCLOUD:
+        cmd: tuple[str | Path, ...] = (
+            "gcloud",
+            "storage",
+            "rsync",
+            # Make them readable by everyone.
+            "--predefined-acl=publicRead",
+            # Never overwrite files that exist in the bucket.
+            "--no-clobber",
+            wheel_dir,
+            _GS_WHEEL_LOCATION,
+        )
+    else:
+        cmd = (
+            gs_tool,
             # Use multiple threads.
             "-m",
             "rsync",
@@ -187,7 +219,9 @@ def upload_new_wheels_to_gs(wheel_dir: Path) -> None:
             "-i",
             wheel_dir,
             _GS_WHEEL_LOCATION,
-        ),
+        )
+    subprocess.run(
+        cmd,
         check=True,
         stdin=subprocess.DEVNULL,
     )
