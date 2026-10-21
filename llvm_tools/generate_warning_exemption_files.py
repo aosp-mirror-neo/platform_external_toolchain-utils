@@ -31,6 +31,7 @@ import tempfile
 import textwrap
 from typing import Iterable, Mapping
 
+from cros_utils import gs
 from llvm_tools import chroot
 from llvm_tools import cros_cls
 from llvm_tools import llvm_next
@@ -311,58 +312,18 @@ def fetch_and_unpack_fatal_warnings_tarballs(
     tmpdir.mkdir(parents=True, exist_ok=True)
 
     tarball_suffix = "fatal_clang_warnings.tar.xz"
-    ls_result = subprocess.run(
-        (
-            "gcloud",
-            "storage",
-            "ls",
-            os.path.join(builder_artifacts, f"*.{tarball_suffix}"),
-        ),
-        check=False,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if ls_result.returncode:
-        # These both return a non-zero error code, and both could
-        # conceivably be caused by no matches or missing parent dir.
-        if (
-            "One or more URLs matched no object" in ls_result.stderr
-            or "No such file or directory" in ls_result.stderr
-        ):
-            return []
-        logging.error("Failed to list builder artifacts: %s", ls_result.stderr)
-        ls_result.check_returncode()
-
-    results = (
-        line.strip() for line in ls_result.stdout.splitlines() if line.strip()
-    )
+    entries = gs.ls(os.path.join(builder_artifacts, f"*.{tarball_suffix}"))
 
     unpack_dirs = []
-    for i, gs_path in enumerate(results):
+    for i, entry in enumerate(entries):
+        gs_path = entry.gs_path
         tarball_target = tmpdir / f"{i}_{tarball_suffix}"
         logging.info(
             "Fetching fatal warnings from %s into %s...",
             gs_path,
             tarball_target,
         )
-        gs_result = subprocess.run(
-            ("gcloud", "storage", "cp", gs_path, tarball_target),
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            encoding="utf-8",
-            errors="replace",
-        )
-
-        if gs_result.returncode:
-            logging.error(
-                "Failed fetching %s; gs stderr: %r", gs_path, gs_result.stderr
-            )
-            gs_result.check_returncode()
+        gs.cp(gs_path, tarball_target)
 
         unpack_dir = tmpdir / f"{i}_unpack"
         unpack_dir.mkdir()

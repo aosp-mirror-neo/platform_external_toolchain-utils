@@ -41,6 +41,7 @@ import threading
 from typing import Any, Counter, DefaultDict, IO, Iterable, Self
 
 from cros_utils import gerrit_utils
+from cros_utils import gs
 from llvm_tools import cros_cls
 
 
@@ -304,18 +305,12 @@ def fetch_werror_tarball_links(
         else:
             logging.info("%s had no output artifacts; ignoring", builder_name)
 
-    gsutil_stdout = subprocess.run(
-        ["gsutil", "-m", "ls"] + artifacts_links,
-        check=True,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    ).stdout
-
+    if not artifacts_links:
+        return []
     return [
-        x
-        for x in gsutil_stdout.splitlines()
-        if x.endswith(".fatal_clang_warnings.tar.xz")
+        x.gs_path
+        for x in gs.ls(artifacts_links[0], *artifacts_links[1:])
+        if x.gs_path.endswith(".fatal_clang_warnings.tar.xz")
     ]
 
 
@@ -367,15 +362,7 @@ def download_and_unpack_werror_tarballs(
         file_targ = download_dir / os.path.basename(gs_url)
         try:
             with download_limiter:
-                subprocess.run(
-                    ["gsutil", "cp", gs_url, file_targ],
-                    check=True,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.PIPE,
-                    encoding="utf-8",
-                    errors="replace",
-                )
+                gs.cp(gs_url, file_targ)
 
             # N.B., file_targ is absolute, so running with `file_targ` while
             # changing `cwd` is safe.

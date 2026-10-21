@@ -39,6 +39,7 @@ class Test(unittest.TestCase):
         run_mock.return_value = subprocess.CompletedProcess(
             args=[],
             returncode=1,
+            stdout="",
             stderr="\nCommandException: One or more URLs matched no objects.\n",
         )
         self.assertEqual(
@@ -154,6 +155,76 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
                     gs_path="gs://here/5.4/R124-15786.10-1709548729.gcov.xz",
                 ),
             ],
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_ls_works_with_subdirs_only_without_total(
+        self, run_mock: mock.MagicMock
+    ) -> None:
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="""
+                             gs://here/5.4/
+                             gs://here/5.10/
+""",
+        )
+        self.assertEqual(
+            gs.ls("gs://here/"),
+            [
+                gs.GsEntry(
+                    last_modified=None,
+                    gs_path="gs://here/5.4/",
+                ),
+                gs.GsEntry(
+                    last_modified=None,
+                    gs_path="gs://here/5.10/",
+                ),
+            ],
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_ls_works_with_multiple_urls_partial_match(
+        self, run_mock: mock.MagicMock
+    ) -> None:
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="""
+753112  2024-03-04T10:38:50Z gs://here/5.4/R124-15786.10-1709548729.gcov.xz
+TOTAL: 1 objects, 753112 bytes (735.46 KiB)
+""",
+            stderr="CommandException: One or more URLs matched no objects.\n",
+        )
+        self.assertEqual(
+            gs.ls(
+                "gs://here/5.4/R124-15786.10-1709548729.gcov.xz",
+                "gs://here/does/not/exist",
+            ),
+            [
+                gs.GsEntry(
+                    last_modified=gs._datetime_from_gs_time(
+                        "2024-03-04T10:38:50Z"
+                    ),
+                    gs_path="gs://here/5.4/R124-15786.10-1709548729.gcov.xz",
+                ),
+            ],
+        )
+        run_mock.assert_called_once_with(
+            (
+                gs.GSUTIL,
+                "-m",
+                "ls",
+                "-l",
+                "gs://here/5.4/R124-15786.10-1709548729.gcov.xz",
+                "gs://here/does/not/exist",
+            ),
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="replace",
         )
 
     def test_build_cp_command_options(self) -> None:

@@ -15,7 +15,6 @@ import concurrent.futures
 import logging
 from pathlib import Path
 import re
-import subprocess
 
 from cros_utils import cros_paths
 from cros_utils import gs
@@ -61,29 +60,15 @@ def parse_sdk_version_conf_contents(conf_path: Path, content: str) -> str:
     return tc_path
 
 
-def gs_url_exists(gs_url: str, gsutil_bin: str = gs.GSUTIL) -> bool:
-    """Checks if a Google Storage URL exists."""
-    cmd = (gsutil_bin, "ls", gs_url)
-    result = subprocess.run(
-        cmd,
-        check=False,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    return result.returncode == 0
-
-
 def _check_target_url(
     target: str,
     tc_path: str,
-    gsutil_bin: str,
 ) -> str | None:
     """Checks if the toolchain URL for a single target exists in GS."""
     rel_path = tc_path.replace("%(target)s", target)
     gs_url = f"gs://{SDK_BUCKET}/{rel_path}"
     logging.info("Checking %s ...", gs_url)
-    if not gs_url_exists(gs_url, gsutil_bin=gsutil_bin):
+    if not gs.ls(gs_url):
         return f"Missing toolchain tarball for target {target!r}: {gs_url}"
     return None
 
@@ -91,7 +76,6 @@ def _check_target_url(
 def verify_toolchain_urls(
     tc_path: str,
     targets: Iterable[str] = TARGETS,
-    gsutil_bin: str = gs.GSUTIL,
 ) -> list[str]:
     """Verifies that toolchain tarballs exist for all specified targets."""
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -100,7 +84,6 @@ def verify_toolchain_urls(
                 _check_target_url,
                 target,
                 tc_path,
-                gsutil_bin,
             )
             for target in targets
         ]

@@ -26,6 +26,7 @@ import tempfile
 from cros_utils import cros_image_tools
 from cros_utils import cros_paths
 from cros_utils import gerrit_utils
+from cros_utils import gs
 from llvm_tools import cros_cls
 
 
@@ -60,11 +61,7 @@ class ComparableArtifact(abc.ABC):
         ) as tempdir_str:
             into = Path(tempdir_str)
             local_file = into / os.path.basename(gs_url)
-            subprocess.run(
-                ["gsutil", "cp", gs_url, local_file],
-                check=True,
-                stdin=subprocess.DEVNULL,
-            )
+            gs.cp(gs_url, local_file)
             return self._measure_artifact_size(local_file)
 
     def compare_size_from_gs(self, baseline: str, new: str) -> SizeDiffInfo:
@@ -176,32 +173,6 @@ def is_probably_non_production_builder(builder_name: str) -> bool:
     )
 
 
-def try_gsutil_ls(paths: list[str]) -> list[str]:
-    """Returns all of the paths `gsutil` matches from `paths`.
-
-    Ignores errors from gsutil about paths not existing.
-    """
-    result = subprocess.run(
-        ["gsutil", "-m", "ls"] + paths,
-        # If any URI doesn't exist, gsutil will fail. Ignore the failure.
-        check=False,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if result.returncode:
-        # Ensure the error message is what's expected, rather than e.g.,
-        # invalid credentials.
-        err_msg = "CommandException: One or more URLs matched no objects"
-        if err_msg not in result.stderr:
-            logging.error(
-                "gsutil had unexpected output; stderr: %r", result.stderr
-            )
-            result.check_returncode()
-    return [x.strip() for x in result.stdout.splitlines()]
-
-
 def find_size_diffable_cq_artifacts(
     cq_build_ids: list[cros_cls.BuildID],
     artifact_name: str,
@@ -241,12 +212,15 @@ def find_size_diffable_cq_artifacts(
             logging.info("No children of CQ run %d had artifacts", cq_build_id)
             continue
 
-        available_artifacts = try_gsutil_ls(
-            [
-                os.path.join(artifacts_link, artifact_name)
-                for _, artifacts_link in artifact_dir_links
-            ]
-        )
+        available_artifacts = [
+            x.gs_path
+            for x in gs.ls(
+                *(
+                    os.path.join(artifacts_link, artifact_name)
+                    for _, artifacts_link in artifact_dir_links
+                )
+            )
+        ]
         if not available_artifacts:
             logging.info(
                 "No children of CQ run %d produced a(n) %s",
@@ -261,7 +235,7 @@ def find_size_diffable_cq_artifacts(
             available_artifacts,
         )
 
-        # Match the artifacts up with their builders. `try_gsutil_ls` will
+        # Match the artifacts up with their builders. `gs.ls` will
         # return _some subset_ of the requested artifacts in _some order_.
         builder_dirs = {
             gs_path: cq_builder for cq_builder, gs_path in artifact_dir_links

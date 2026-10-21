@@ -11,6 +11,7 @@ import subprocess
 import textwrap
 from unittest import mock
 
+from cros_utils import gs
 from llvm_tools import test_helpers
 from llvm_tools import werror_logs
 
@@ -362,8 +363,11 @@ class Test(test_helpers.TempDirTestCase):
             "staryu-cq",
         )
 
-    @mock.patch.object(subprocess, "run")
-    def test_tarball_downloading_works(self, run_mock: mock.MagicMock) -> None:
+    @mock.patch.object(gs, "cp", autospec=True)
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_tarball_downloading_works(
+        self, run_mock: mock.MagicMock, cp_mock: mock.MagicMock
+    ) -> None:
         tempdir = self.make_tempdir()
         unpack_dir = tempdir / "unpack"
         download_dir = tempdir / "download"
@@ -384,43 +388,31 @@ class Test(test_helpers.TempDirTestCase):
         # Just verify that this executed the correct commands. Normally this is
         # a bit fragile, but given that this function internally is pretty
         # complex (starting up a threadpool, etc), extra checking is nice.
-        want_gsutil_commands = [
-            [
-                "gsutil",
-                "cp",
+        want_cp_calls = [
+            (
                 gs_url,
                 download_dir / name / os.path.basename(gs_url),
-            ]
+            )
             for name, gs_url in named_gs_urls
         ]
         want_untar_commands = [
-            ["tar", "xaf", gsutil_command[-1]]
-            for gsutil_command in want_gsutil_commands
+            ["tar", "xaf", cp_call[-1]] for cp_call in want_cp_calls
         ]
 
-        cmds = []
-        for call_args in run_mock.call_args_list:
-            call_positional_args = call_args[0]
-            cmd = call_positional_args[0]
-            cmds.append(cmd)
-        cmds.sort()
-        self.assertEqual(
-            cmds, sorted(want_gsutil_commands + want_untar_commands)
-        )
+        cp_calls = sorted(call_args[0] for call_args in cp_mock.call_args_list)
+        self.assertEqual(cp_calls, sorted(want_cp_calls))
 
-    @mock.patch.object(subprocess, "run")
+        cmds = sorted(call_args[0][0] for call_args in run_mock.call_args_list)
+        self.assertEqual(cmds, sorted(want_untar_commands))
+
+    @mock.patch.object(gs, "cp", autospec=True)
     def test_tarball_downloading_fails_if_exceptions_are_raised(
-        self, run_mock: mock.MagicMock
+        self, cp_mock: mock.MagicMock
     ) -> None:
         self.silence_logs()
-
-        def raise_exception(
-            *_args: object, check: bool = False, **_kwargs: object
-        ) -> None:
-            self.assertTrue(check)
-            raise subprocess.CalledProcessError(returncode=1, cmd=[])
-
-        run_mock.side_effect = raise_exception
+        cp_mock.side_effect = subprocess.CalledProcessError(
+            returncode=1, cmd=[]
+        )
         tempdir = self.make_tempdir()
         unpack_dir = tempdir / "unpack"
         download_dir = tempdir / "download"
@@ -434,4 +426,4 @@ class Test(test_helpers.TempDirTestCase):
             werror_logs.download_and_unpack_werror_tarballs(
                 unpack_dir, download_dir, gs_urls
             )
-        self.assertEqual(run_mock.call_count, 3)
+        self.assertEqual(cp_mock.call_count, 3)

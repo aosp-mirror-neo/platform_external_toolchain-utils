@@ -15,42 +15,18 @@ import logging
 import os
 from pathlib import Path
 import shutil
-import subprocess
+import sys
 import tempfile
+
+from cros_utils import gs
 
 
 def fetch_all_sdk_manifest_paths() -> list[str]:
     """Fetches all paths of SDK manifests; newer = later in the return value."""
-    results = subprocess.run(
-        ["gsutil", "ls", "gs://chromiumos-sdk/cros-sdk-20??.*.Manifest"],
-        check=True,
-        stdout=subprocess.PIPE,
-        encoding="utf-8",
-    ).stdout
     # These are named so that sorted order == newest last.
-    return sorted(x.strip() for x in results.splitlines())
-
-
-def fetch_manifests_into(into_dir: Path, manifests: list[str]) -> None:
-    # Wrap this in a `try` block because gsutil likes to print to stdout *and*
-    # stderr even on success, so we silence them & only print on failure.
-    try:
-        subprocess.run(
-            [
-                "gsutil",
-                "-m",
-                "cp",
-                "-I",
-                str(into_dir),
-            ],
-            check=True,
-            input="\n".join(manifests),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            encoding="utf-8",
-        )
-    except subprocess.CalledProcessError as e:
-        logging.exception("gsutil failed; output:\n%s", e.stdout)
+    return sorted(
+        x.gs_path for x in gs.ls("gs://chromiumos-sdk/cros-sdk-20??.*.Manifest")
+    )
 
 
 def load_manifest_versions(manifest: Path) -> dict[str, str]:
@@ -87,6 +63,8 @@ def main(argv: list[str]) -> None:
     logging.debug("Fetching SDK manifests")
     manifest_paths = fetch_all_sdk_manifest_paths()
     logging.debug("%d SDK manifests fetched", len(manifest_paths))
+    if not manifest_paths:
+        sys.exit("No SDK manifests found")
 
     number = args.number
     if number:
@@ -95,7 +73,7 @@ def main(argv: list[str]) -> None:
     tempdir = Path(tempfile.mkdtemp(prefix="cros-sdk-rolls"))
     try:
         logging.debug("Working in tempdir %r", tempdir)
-        fetch_manifests_into(tempdir, manifest_paths)
+        gs.cp_many(manifest_paths, tempdir)
 
         for path in manifest_paths:
             basename = os.path.basename(path)

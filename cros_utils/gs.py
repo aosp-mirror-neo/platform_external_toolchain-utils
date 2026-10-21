@@ -27,6 +27,12 @@ GSUTIL = "gsutil" if shutil.which("gsutil") else "gsutil.py"
 PathOrStr = str | os.PathLike
 _PathOrStrT = TypeVar("_PathOrStrT", bound=PathOrStr)
 
+_LS_LINE_RE = re.compile(
+    # Entries may start with a size and mod date before the gs:// URL, or
+    # consist solely of a gs:// URL.
+    r"(?:\d+\s+(\S+T\S+)\s+)?(gs://.+)"
+)
+
 
 @dataclasses.dataclass(frozen=True)
 class GsEntry:
@@ -49,19 +55,13 @@ def _datetime_from_gs_time(timestamp_str: str) -> datetime.datetime:
 def _parse_ls_output(stdout: str) -> list[GsEntry]:
     """Parses output of `gsutil ls`."""
     stdout_lines = stdout.splitlines()
-    # Ignore the last line, since that's always "TOTAL:"
-    stdout_lines.pop()
+    if not stdout_lines:
+        return []
+    # `gsutil ls -l` ends with a "TOTAL:" summary line when any files are
+    # listed, but omits it when only subdirectories are listed.
+    if stdout_lines[-1].strip().startswith("TOTAL:"):
+        stdout_lines.pop()
 
-    line_re = re.compile(
-        # Entries can take one of two forms:
-        r"(?:"
-        # 1. The entry has a size, mod date, and name
-        r"\d+\s+(\S+T\S+)\s+(gs://.+)"
-        r"|"
-        # 2. The entry has none of those, and is just a gs URL.
-        r"(gs://.+)"
-        r")"
-    )
     results = []
 
     for line in stdout_lines:
@@ -73,34 +73,38 @@ def _parse_ls_output(stdout: str) -> list[GsEntry]:
         line = line.strip()
         if not line:
             continue
-        m = line_re.fullmatch(line)
+        m = _LS_LINE_RE.fullmatch(line)
         if m is None:
             raise ValueError(f"Unexpected line from gs: {line!r}")
-        timestamp_str, gs_url, alt_gs_url = m.groups()
+        timestamp_str, gs_path = m.groups()
         if timestamp_str:
             last_modified = _datetime_from_gs_time(timestamp_str)
-            gs_path = gs_url
         else:
             last_modified = None
-            gs_path = alt_gs_url
         results.append(GsEntry(last_modified=last_modified, gs_path=gs_path))
     return results
 
 
-def ls(gs_url: str) -> list[GsEntry]:
-    """Runs `gsutil ls` on the given `path`.
+def ls(gs_url: str, *args: str) -> list[GsEntry]:
+    """Runs `gsutil ls` on the given URL(s).
 
     Globs are forwarded to gs://
 
+    Args:
+        gs_url: The first URL to list.
+        *args: Additional URLs to list.
+
     Returns:
-        A list of GsEntrys matching `path`. If the list is entry, no paths
-        matched the URL.
+        A list of GsEntrys matching the given URL(s). If the list is empty, no
+        paths matched the URL(s).
     """
     cmd = (
         GSUTIL,
+        *(("-m",) if args else ()),
         "ls",
         "-l",
         gs_url,
+        *args,
     )
     result = subprocess.run(
         cmd,
@@ -109,15 +113,18 @@ def ls(gs_url: str) -> list[GsEntry]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         encoding="utf-8",
+        errors="replace",
     )
 
     if result.returncode:
-        # If nothing could be found, gsutil will exit after printing this.
-        if "One or more URLs matched no objects." in result.stderr:
-            return []
-        logging.error("%s failed; stderr:\n%s", shlex.join(cmd), result.stderr)
-        result.check_returncode()
-        assert False, "unreachable"
+        # If one or more URLs could not be found, gsutil will exit 1 after
+        # printing this to stderr (while still writing any matched objects to
+        # stdout when multiple URLs are passed).
+        if "One or more URLs matched no objects." not in result.stderr:
+            logging.error(
+                "%s failed; stderr:\n%s", shlex.join(cmd), result.stderr
+            )
+            result.check_returncode()
     return _parse_ls_output(result.stdout)
 
 
