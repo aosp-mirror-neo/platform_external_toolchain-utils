@@ -12,6 +12,8 @@ import subprocess
 import sys
 import tempfile
 
+from cros_utils import gs
+
 
 _CREATE_LLVM_PROF = "create_llvm_prof"
 _GS_PREFIX = "gs://"
@@ -19,7 +21,7 @@ _GS_PREFIX = "gs://"
 
 def _fetch_gs_artifact(remote_name: str, local_name: str) -> None:
     assert remote_name.startswith(_GS_PREFIX)
-    subprocess.check_call(["gsutil", "cp", remote_name, local_name])
+    gs.cp(remote_name, local_name)
 
 
 def _fetch_and_maybe_unpack(remote_name: str, local_name: str) -> None:

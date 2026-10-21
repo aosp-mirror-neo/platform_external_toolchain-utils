@@ -7,7 +7,6 @@
 import datetime
 from pathlib import Path
 import shutil
-import subprocess
 import tempfile
 import textwrap
 import unittest
@@ -15,6 +14,7 @@ from unittest import mock
 
 from afdo_tools import update_kernel_afdo
 from cros_utils import git_utils
+from cros_utils import gs
 
 
 class Test(unittest.TestCase):
@@ -115,20 +115,18 @@ class Test(unittest.TestCase):
             {kernel_5_15: "bar"},
         )
 
-    @mock.patch.object(subprocess, "run")
+    @mock.patch.object(gs, "ls", autospec=True)
     def test_kernel_profile_fetcher_caches_urls(
-        self, subprocess_run: mock.MagicMock
+        self, gs_ls_mock: mock.MagicMock
     ) -> None:
-        subprocess_run.return_value = subprocess.CompletedProcess(
-            args=[],
-            returncode=0,
-            # Don't use textwrap.dedent; linter complains about the line being
-            # too long in that case.
-            stdout="""
-753112  2024-03-04T10:38:50Z gs://here/5.4/R124-15786.10-1709548729.afdo.xz
-TOTAL: 2 objects, 1234 bytes (1.1KiB)
-""",
-        )
+        gs_ls_mock.return_value = [
+            gs.GsEntry(
+                last_modified=datetime.datetime(
+                    2024, 3, 4, 10, 38, 50, tzinfo=datetime.timezone.utc
+                ),
+                gs_path="gs://here/5.4/R124-15786.10-1709548729.afdo.xz",
+            )
+        ]
 
         fetcher = update_kernel_afdo.KernelProfileFetcher()
         # Fetch these twice, and assert both that:
@@ -139,7 +137,7 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
         del result[:]
         result = fetcher.fetch("gs://here/5.4")
         self.assertEqual(len(result), 1)
-        subprocess_run.assert_called_once()
+        gs_ls_mock.assert_called_once_with("gs://here/5.4")
 
     @mock.patch.object(update_kernel_afdo.KernelProfileFetcher, "fetch")
     def test_newest_afdo_artifact_finding_works(

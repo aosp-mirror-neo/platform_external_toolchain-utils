@@ -28,13 +28,6 @@ from cros_utils import gs
 # Folks who should be on the CC-line of any CLs that get uploaded.
 CL_CC = ("gbiv@chromium.org",)
 
-# Determine which gsutil to use.
-# 'gsutil.py' is provided by depot_tools, whereas 'gsutil'
-# is provided by either https://cloud.google.com/sdk/docs/install, or
-# the 'google-cloud-cli' package. Since we need depot_tools to even
-# use 'repo', 'gsutil.py' is guaranteed to exist.
-GSUTIL = "gsutil.py"
-
 
 class Arch(enum.Enum):
     """An enum for CPU architectures."""
