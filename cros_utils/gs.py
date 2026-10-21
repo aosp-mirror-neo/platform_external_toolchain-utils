@@ -133,6 +133,8 @@ def build_cp_many_command(
     dest: PathOrStr,
     *,
     recursive: bool = False,
+    overwrite: bool = False,
+    public_read: bool = False,
 ) -> list[str]:
     """Builds a command to copy `sources` to `dest`."""
     if not sources:
@@ -144,6 +146,10 @@ def build_cp_many_command(
     cmd.append("cp")
     if recursive:
         cmd.append("-r")
+    if not overwrite:
+        cmd.append("-n")
+    if public_read:
+        cmd.extend(("-a", "public-read"))
     cmd.extend(os.fspath(x) for x in sources)
     cmd.append(os.fspath(dest))
     return cmd
@@ -154,12 +160,16 @@ def build_cp_command(
     dest: PathOrStr,
     *,
     recursive: bool = False,
+    overwrite: bool = False,
+    public_read: bool = False,
 ) -> list[str]:
     """Builds a command to copy `source` to `dest`."""
     return build_cp_many_command(
         (source,),
         dest,
         recursive=recursive,
+        overwrite=overwrite,
+        public_read=public_read,
     )
 
 
@@ -168,12 +178,16 @@ def cp_many(
     dest: PathOrStr,
     *,
     recursive: bool = False,
+    overwrite: bool = False,
+    public_read: bool = False,
 ) -> None:
     """Copies `sources` to `dest` using `gsutil cp`."""
     cmd = build_cp_many_command(
         sources,
         dest,
         recursive=recursive,
+        overwrite=overwrite,
+        public_read=public_read,
     )
     try:
         subprocess.run(
@@ -200,12 +214,16 @@ def cp(
     dest: PathOrStr,
     *,
     recursive: bool = False,
+    overwrite: bool = False,
+    public_read: bool = False,
 ) -> None:
     """Copies `source` to `dest` using `gsutil cp`."""
     cp_many(
         (source,),
         dest,
         recursive=recursive,
+        overwrite=overwrite,
+        public_read=public_read,
     )
 
 

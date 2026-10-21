@@ -17,6 +17,7 @@ import shutil
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
+from cros_utils import gs
 from llvm_tools import chroot
 from llvm_tools import get_llvm_hash
 from pgo_tools import pgo_utils
@@ -149,23 +150,12 @@ def translate_chroot_path_to_out_of_chroot(
     return repo_root / info.out_dir_name / str(path)[1:]
 
 
-def determine_upload_command(
-    profile_path: Path, rev: int, suffix: str
-) -> pgo_utils.Command:
-    """Returns a command that can be used to upload our PGO profile."""
+def determine_upload_location(rev: int, suffix: str) -> str:
+    """Returns the gs:// location to upload our PGO profile to."""
     profile_name = f"llvm-profdata-r{rev}"
     if suffix:
         profile_name += f"-{suffix}"
-    upload_target = f"gs://chromeos-localmirror/distfiles/{profile_name}.xz"
-    return [
-        "gsutil.py",
-        "cp",
-        "-n",
-        "-a",
-        "public-read",
-        profile_path,
-        upload_target,
-    ]
+    return f"gs://chromeos-localmirror/distfiles/{profile_name}.xz"
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -296,15 +286,23 @@ def main(argv: list[str]) -> None:
             shutil.copyfile(profile_path, opts.output)
 
         compressed_profile_path = compress_pgo_profile(profile_path)
-        upload_command = determine_upload_command(
-            compressed_profile_path, rev, opts.profile_suffix
+        upload_location = determine_upload_location(rev, opts.profile_suffix)
+        friendly_upload_command = shlex.join(
+            gs.build_cp_command(
+                compressed_profile_path,
+                upload_location,
+                public_read=True,
+            )
         )
-        friendly_upload_command = shlex.join(str(x) for x in upload_command)
         if opts.upload:
             logging.info(
                 "Running `%s` to upload the profile...", friendly_upload_command
             )
-            pgo_utils.run(upload_command)
+            gs.cp(
+                compressed_profile_path,
+                upload_location,
+                public_read=True,
+            )
         else:
             logging.info(
                 "To upload the profile, run %r in %r",

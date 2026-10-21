@@ -116,6 +116,7 @@ import sys
 from typing import Any, cast, Iterator, Mapping, Sequence
 
 from cros_utils import cros_paths
+from cros_utils import gs
 from llvm_tools import chroot
 
 
@@ -225,7 +226,7 @@ def download_unpack_crate(*, crate_name: str, crate_version: str) -> None:
         local_path / f"{crate_name}-{crate_version}", ignore_errors=True
     )
     with chdir(local_path):
-        run(["gsutil", "cp", f"gs:/{gs_path}", "."])
+        gs.cp(f"gs:/{gs_path}", ".", overwrite=True)
         run(["tar", "xaf", f"{filename_no_extension}.tar.xz"])
 
 
@@ -349,16 +350,7 @@ def merge_profdata(
 def do_upload_profdata(*, source: Path, dest: PurePosixPath) -> None:
     new_path = source.parent / (source.name + ".xz")
     run(["xz", "--keep", "--compress", "--force", source])
-    upload_file(source=new_path, dest=dest, public_read=True)
-
-
-def upload_file(
-    *, source: Path, dest: PurePosixPath, public_read: bool = False
-) -> None:
-    if public_read:
-        run(["gsutil", "cp", "-a", "public-read", source, f"gs:/{dest}"])
-    else:
-        run(["gsutil", "cp", source, f"gs:/{dest}"])
+    gs.cp(new_path, f"gs:/{dest}", public_read=True)
 
 
 def maybe_download_crate(*, crate_name: str, crate_version: str) -> None:
@@ -465,9 +457,7 @@ def benchmark_nopgo(args: argparse.Namespace) -> None:
     )
     logging.info("Uploading benchmark data")
     for file in time_directory.iterdir():
-        upload_file(
-            source=time_directory / file.name, dest=dest_directory / file.name
-        )
+        gs.cp(time_directory / file.name, f"gs:/{dest_directory / file.name}")
 
 
 def benchmark_pgo(args: argparse.Namespace) -> None:
@@ -535,9 +525,7 @@ def benchmark_pgo(args: argparse.Namespace) -> None:
     )
     logging.info("Uploading benchmark data")
     for file in time_directory.iterdir():
-        upload_file(
-            source=time_directory / file.name, dest=dest_directory / file.name
-        )
+        gs.cp(time_directory / file.name, f"gs:/{dest_directory / file.name}")
 
 
 def upload_profdata_impl(

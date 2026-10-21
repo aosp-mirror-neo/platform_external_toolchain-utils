@@ -28,6 +28,7 @@ import tempfile
 import textwrap
 from typing import Generator
 
+from cros_utils import gs
 from pgo_tools import pgo_utils
 
 
@@ -276,14 +277,7 @@ def fetch_workloads_into(target_dir: Path) -> None:
 
     def fetch_and_extract(gs_url: str, into_dir: Path) -> None:
         tgz_full = target_dir / os.path.basename(gs_url)
-        pgo_utils.run(
-            [
-                "gsutil",
-                "cp",
-                gs_url,
-                tgz_full,
-            ],
-        )
+        gs.cp(gs_url, tgz_full)
         into_dir.mkdir()
 
         pgo_utils.run(

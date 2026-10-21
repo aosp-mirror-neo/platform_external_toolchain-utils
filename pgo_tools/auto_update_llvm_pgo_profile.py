@@ -25,6 +25,7 @@ from typing import Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
+from cros_utils import gs
 from llvm_tools import chroot
 from llvm_tools import get_llvm_hash
 from llvm_tools import llvm_next
@@ -33,6 +34,11 @@ from pgo_tools import pgo_utils
 
 PROFDATA_REV_PREFIX = "gs://chromeos-localmirror/distfiles/llvm-profdata-r"
 PROFDATA_REV_SUFFIX = ".xz"
+PROFDATA_GS_RE = re.compile(
+    re.escape(PROFDATA_REV_PREFIX)
+    + r"(\d+)(?:-(.+))?"
+    + re.escape(PROFDATA_REV_SUFFIX)
+)
 
 # Path to LLVM's 9999 ebuild from chromiumos-overlay
 LLVM_EBUILD_SUBPATH = Path("sys-devel", "llvm", "llvm-9999.ebuild")
@@ -92,30 +98,14 @@ class GsProfileCache:
 
     @classmethod
     def fetch(cls) -> Self:
-        stdout = subprocess.run(
-            [
-                "gsutil",
-                "ls",
-                f"{PROFDATA_REV_PREFIX}*{PROFDATA_REV_SUFFIX}",
-            ],
-            check=True,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            encoding="utf-8",
-        ).stdout.strip()
-
-        prof_re = re.compile(
-            re.escape(PROFDATA_REV_PREFIX)
-            + r"(\d+)(?:-(.+))?"
-            + re.escape(PROFDATA_REV_SUFFIX)
-        )
+        entries = gs.ls(f"{PROFDATA_REV_PREFIX}*{PROFDATA_REV_SUFFIX}")
         profiles = collections.defaultdict(list)
-        for line in stdout.splitlines():
-            m = prof_re.fullmatch(line)
+        for entry in entries:
+            m = PROFDATA_GS_RE.fullmatch(entry.gs_path)
             if not m:
-                if not line.strip():
-                    continue
-                raise ValueError(f"Unparseable line from gs://: {line!r}")
+                raise ValueError(
+                    f"Unparseable path from gs://: {entry.gs_path!r}"
+                )
             profile_rev, suffix = m.groups()
             profiles[int(profile_rev)].append(suffix if suffix else "")
 

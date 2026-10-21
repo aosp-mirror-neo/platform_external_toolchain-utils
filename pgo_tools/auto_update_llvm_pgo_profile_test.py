@@ -5,11 +5,10 @@
 """Tests for auto_update_llvm_pgo_profile."""
 
 from pathlib import Path
-import subprocess
-import textwrap
 from unittest import mock
 
 from cros_utils import git_utils
+from cros_utils import gs
 from llvm_tools import test_helpers
 from pgo_tools import auto_update_llvm_pgo_profile
 
@@ -79,18 +78,36 @@ class Test(test_helpers.TempDirTestCase):
         self.assertIn("\n\t516548\n", new_contents)
         self.assertIn("\n\t516549-v3\n", new_contents)
 
-    @mock.patch.object(subprocess, "run")
-    def test_gs_parsing_works(self, mock_run: mock.MagicMock) -> None:
-        run_return = mock.MagicMock()
-        run_return.stdout = textwrap.dedent(
-            """\
-            gs://chromeos-localmirror/distfiles/llvm-profdata-r1234-v1.xz
-            gs://chromeos-localmirror/distfiles/llvm-profdata-r1235.xz
-            gs://chromeos-localmirror/distfiles/llvm-profdata-r1235-v2.xz
-            gs://chromeos-localmirror/distfiles/llvm-profdata-r5678.xz
-            """
-        )
-        mock_run.return_value = run_return
+    @mock.patch.object(gs, "ls", autospec=True)
+    def test_gs_parsing_works(self, mock_ls: mock.MagicMock) -> None:
+        mock_ls.return_value = [
+            gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/"
+                    "llvm-profdata-r1234-v1.xz"
+                ),
+            ),
+            gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/llvm-profdata-r1235.xz"
+                ),
+            ),
+            gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/"
+                    "llvm-profdata-r1235-v2.xz"
+                ),
+            ),
+            gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/llvm-profdata-r5678.xz"
+                ),
+            ),
+        ]
         cache = auto_update_llvm_pgo_profile.GsProfileCache.fetch()
         self.assertEqual(cache.num_profiles(), 4)
         self.assertTrue(cache.has_profile_for_rev(1234))

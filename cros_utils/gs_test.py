@@ -230,23 +230,27 @@ TOTAL: 1 objects, 753112 bytes (735.46 KiB)
     def test_build_cp_command_options(self) -> None:
         self.assertEqual(
             gs.build_cp_command("gs://src", Path("/dst")),
-            [gs.GSUTIL, "cp", "gs://src", "/dst"],
+            [gs.GSUTIL, "cp", "-n", "gs://src", "/dst"],
         )
         self.assertEqual(
             gs.build_cp_command("gs://src", Path("/dst"), recursive=True),
-            [gs.GSUTIL, "-m", "cp", "-r", "gs://src", "/dst"],
+            [gs.GSUTIL, "-m", "cp", "-r", "-n", "gs://src", "/dst"],
         )
         self.assertEqual(
             gs.build_cp_many_command(
                 ["gs://src1", "gs://src2"],
                 Path("/dst"),
                 recursive=True,
+                overwrite=True,
+                public_read=True,
             ),
             [
                 gs.GSUTIL,
                 "-m",
                 "cp",
                 "-r",
+                "-a",
+                "public-read",
                 "gs://src1",
                 "gs://src2",
                 "/dst",
