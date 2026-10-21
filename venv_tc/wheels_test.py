@@ -8,7 +8,9 @@ import hashlib
 import multiprocessing.pool
 import os
 from pathlib import Path
+import subprocess
 import time
+import unittest
 from unittest import mock
 
 from llvm_tools import test_helpers
@@ -313,3 +315,26 @@ class WheelsTest(test_helpers.TempDirTestCase):
         self.assertTrue(valid_file.exists())
         self.assertTrue(nonstale_file.exists())
         self.mock_fetch.assert_not_called()
+
+
+class GsOperationsTest(unittest.TestCase):
+    """Tests for gs:// helper functions in wheels."""
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    @mock.patch.object(wheels, "get_gs_executable", autospec=True)
+    def test_list_wheels_in_gs_parses_lines(
+        self,
+        mock_get_gs_exe: mock.MagicMock,
+        mock_run: mock.MagicMock,
+    ) -> None:
+        mock_get_gs_exe.return_value = "gsutil"
+        mock_run.return_value = subprocess.CompletedProcess(
+            args=(),
+            returncode=0,
+            stdout=(
+                "gs://chromeos-localmirror/crostc/python-wheels/v1/a.whl\n"
+                "gs://chromeos-localmirror/crostc/python-wheels/v1/b.whl\n"
+            ),
+            stderr="",
+        )
+        self.assertEqual(wheels.list_wheels_in_gs(), ["a.whl", "b.whl"])

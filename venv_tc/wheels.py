@@ -169,7 +169,7 @@ def list_wheels_in_gs() -> list[str]:
         logging.error("gs failed; stderr: %s", gs_run.stderr)
         gs_run.check_returncode()
 
-    trimmed_lines = (x.strip() for x in gs_run.stdout)
+    trimmed_lines = (x.strip() for x in gs_run.stdout.splitlines())
     return [os.path.basename(x) for x in trimmed_lines if x]
 
 
