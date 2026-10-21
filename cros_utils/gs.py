@@ -4,23 +4,28 @@
 
 """Utilities for interacting with gs://."""
 
+from collections.abc import Generator
 import contextlib
 import dataclasses
 import datetime
 import io
 import logging
+import os
 import re
 import shlex
 import shutil
 import subprocess
 import tempfile
-from typing import Generator, IO
+from typing import IO, TypeVar
 
 
 # Determine which gsutil to use.
 # In some environments (host machines), `gsutil` is provided on $PATH. If that
 # fails and depot_tools is on $PATH, gsutil.py also works.
 GSUTIL = "gsutil" if shutil.which("gsutil") else "gsutil.py"
+
+PathOrStr = str | os.PathLike
+_PathOrStrT = TypeVar("_PathOrStrT", bound=PathOrStr)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -114,6 +119,87 @@ def ls(gs_url: str) -> list[GsEntry]:
         result.check_returncode()
         assert False, "unreachable"
     return _parse_ls_output(result.stdout)
+
+
+def build_cp_many_command(
+    sources: list[_PathOrStrT] | tuple[PathOrStr, ...],
+    dest: PathOrStr,
+    *,
+    recursive: bool = False,
+) -> list[str]:
+    """Builds a command to copy `sources` to `dest`."""
+    if not sources:
+        raise ValueError("sources must not be empty")
+
+    cmd = [GSUTIL]
+    if recursive or len(sources) > 1:
+        cmd.append("-m")
+    cmd.append("cp")
+    if recursive:
+        cmd.append("-r")
+    cmd.extend(os.fspath(x) for x in sources)
+    cmd.append(os.fspath(dest))
+    return cmd
+
+
+def build_cp_command(
+    source: PathOrStr,
+    dest: PathOrStr,
+    *,
+    recursive: bool = False,
+) -> list[str]:
+    """Builds a command to copy `source` to `dest`."""
+    return build_cp_many_command(
+        (source,),
+        dest,
+        recursive=recursive,
+    )
+
+
+def cp_many(
+    sources: list[_PathOrStrT] | tuple[PathOrStr, ...],
+    dest: PathOrStr,
+    *,
+    recursive: bool = False,
+) -> None:
+    """Copies `sources` to `dest` using `gsutil cp`."""
+    cmd = build_cp_many_command(
+        sources,
+        dest,
+        recursive=recursive,
+    )
+    try:
+        subprocess.run(
+            cmd,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except subprocess.CalledProcessError as e:
+        logging.error(
+            "%s failed; stdout:\n%s\nstderr:\n%s",
+            shlex.join(cmd),
+            e.stdout,
+            e.stderr,
+        )
+        raise
+
+
+def cp(
+    source: PathOrStr,
+    dest: PathOrStr,
+    *,
+    recursive: bool = False,
+) -> None:
+    """Copies `source` to `dest` using `gsutil cp`."""
+    cp_many(
+        (source,),
+        dest,
+        recursive=recursive,
+    )
 
 
 # Please keep this subclass around even if nothing matches on it; its name

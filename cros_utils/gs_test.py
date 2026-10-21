@@ -5,6 +5,7 @@
 """Tests for the gs module."""
 
 import datetime
+from pathlib import Path
 import subprocess
 import unittest
 from unittest import mock
@@ -152,5 +153,31 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
                     ),
                     gs_path="gs://here/5.4/R124-15786.10-1709548729.gcov.xz",
                 ),
+            ],
+        )
+
+    def test_build_cp_command_options(self) -> None:
+        self.assertEqual(
+            gs.build_cp_command("gs://src", Path("/dst")),
+            [gs.GSUTIL, "cp", "gs://src", "/dst"],
+        )
+        self.assertEqual(
+            gs.build_cp_command("gs://src", Path("/dst"), recursive=True),
+            [gs.GSUTIL, "-m", "cp", "-r", "gs://src", "/dst"],
+        )
+        self.assertEqual(
+            gs.build_cp_many_command(
+                ["gs://src1", "gs://src2"],
+                Path("/dst"),
+                recursive=True,
+            ),
+            [
+                gs.GSUTIL,
+                "-m",
+                "cp",
+                "-r",
+                "gs://src1",
+                "gs://src2",
+                "/dst",
             ],
         )

@@ -18,6 +18,8 @@ import subprocess
 import tempfile
 from typing import Any, Sequence
 
+from cros_utils import gs
+
 
 ABIS = (
     "aarch64-cros-linux-gnu",
@@ -97,7 +99,7 @@ def check_abi(
                 artifact_path,
                 tmpdir,
             )
-            run(["gsutil.py", "cp", artifact_path, tmpdir])
+            gs.cp(artifact_path, tmpdir)
 
             logging.info("Extracting the toolchain %s", toolchain_name)
             run(["tar", "-axf", tmpdir / toolchain_name])

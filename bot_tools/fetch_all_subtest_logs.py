@@ -16,6 +16,8 @@ import shlex
 import subprocess
 from typing import Any, Iterable
 
+from cros_utils import gs
+
 
 def get_bb_output(subcmd: list[str]) -> str:
     return subprocess.run(
@@ -107,12 +109,12 @@ def find_all_gs_log_test_links(cq_orchestrator_id: int) -> list[str]:
 def download_gs_logs_to(
     output_dir: Path, gs_logs: list[str], dry_run: bool = False
 ) -> None:
-    gsutil_command = ["gsutil", "-m", "cp", "-r"] + gs_logs + [str(output_dir)]
-    logging.info("Running `%s`...", shlex.join(gsutil_command))
+    cp_command = gs.build_cp_many_command(gs_logs, output_dir, recursive=True)
+    logging.info("Running `%s`...", shlex.join(cp_command))
     if dry_run:
         logging.info("--dry-run passed; running skipped")
     else:
-        subprocess.run(gsutil_command, check=True)
+        gs.cp_many(gs_logs, output_dir, recursive=True)
 
 
 def main(argv: list[str]) -> None:

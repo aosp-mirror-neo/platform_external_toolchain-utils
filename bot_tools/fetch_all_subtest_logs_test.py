@@ -5,26 +5,30 @@
 """Tests for fetch_all_subtest_logs.py."""
 
 from pathlib import Path
-import subprocess
 import unittest
 from unittest import mock
 
 # Rename this, since its original name (& function names) lead to lines that're
 # too long.
 from bot_tools import fetch_all_subtest_logs as main
+from cros_utils import gs
 
 
 class Test(unittest.TestCase):
     """Tests for fetch_all_subtest_logs."""
 
-    @mock.patch.object(subprocess, "run")
+    @mock.patch.object(gs, "cp_many", autospec=True)
     def test_log_downloading_doesnt_crash(
-        self, subprocess_run_mock: mock.MagicMock
+        self, gs_cp_many_mock: mock.MagicMock
     ) -> None:
         main.download_gs_logs_to(
             Path("/path/does/not/exist"), gs_logs=["gs://foo", "gs://bar"]
         )
-        subprocess_run_mock.assert_called_once()
+        gs_cp_many_mock.assert_called_once_with(
+            ["gs://foo", "gs://bar"],
+            Path("/path/does/not/exist"),
+            recursive=True,
+        )
 
     @mock.patch.object(main, "get_bb_json_output")
     def test_find_cros_test_platform_raises_if_none_found(
