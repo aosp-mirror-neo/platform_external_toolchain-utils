@@ -38,6 +38,7 @@ import urllib.request
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
+from cros_utils import gs
 from llvm_tools import chroot
 from pgo_tools_rust import pgo_rust
 from rust_tools import auto_update_rust_bootstrap
@@ -89,7 +90,6 @@ def rust_path() -> Path:
 
 EQUERY = "equery"
 GPG = "gpg"
-GSUTIL = "gsutil.py"
 MIRROR_PATH = "gs://chromeos-localmirror/distfiles"
 # Keyserver to use with GPG. Not all keyservers have Rust's signing key;
 # this must be set to a keyserver that does.
@@ -123,17 +123,6 @@ class SignatureVerificationError(Exception):
         super(SignatureVerificationError, self).__init__()
         self.message = message
         self.path = path
-
-
-def get_command_output_unchecked(command: Command) -> tuple[str, str]:
-    proc = subprocess.run(
-        command,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        encoding="utf-8",
-    )
-    return proc.stdout.strip(), proc.stderr.strip()
 
 
 class RustVersion(NamedTuple):
@@ -379,10 +368,9 @@ def fetch_distfile_from_mirror(name: str) -> None:
     """
     mirror_file = MIRROR_PATH + "/" + name
     local_file = get_distdir() / name
-    cmd: Command = [GSUTIL, "cp", mirror_file, local_file]
-    logging.info("Running %r", cmd)
-    rc = subprocess.call(cmd)
-    if rc != 0:
+    try:
+        gs.cp(mirror_file, local_file, overwrite=True)
+    except subprocess.CalledProcessError:
         logging.error(
             """Could not fetch %s
 
@@ -405,31 +393,16 @@ it to the local mirror using gsutil cp.
             name,
             name,
         )
-        raise Exception(f"Could not fetch {mirror_file}")
-    # Check that the ACL allows allUsers READER access.
-    # If we get an AccessDeniedAcception here, that also
-    # counts as a success, because we were able to fetch
-    # the file as a non-owner.
-    cmd = (GSUTIL, "acl", "get", mirror_file)
-    logging.info("Running %r", cmd)
-    output, stderr = get_command_output_unchecked(cmd)
-    if "AccessDeniedException:" in stderr:
-        return
-
-    try:
-        acl = json.loads(output)
-    except Exception:
-        logging.error("Failed parsing output from acl get:\n%r", output)
         raise
-
-    allusers_is_reader = any(
-        x["entity"] == "allUsers" and x["role"] == "READER" for x in acl
-    )
-
-    if not allusers_is_reader:
-        raise Exception(
-            "Could not verify that allUsers has READER permission; "
-            f"ACL object:\n{acl}"
+    # Only object owners can view ACLs; since we just fetched `mirror_file`
+    # above, `LACKS_PERMISSION` (non-owner) also counts as readable.
+    if (
+        gs.check_world_readable(mirror_file)
+        == gs.WorldReadableStatus.NOT_GRANTED
+    ):
+        raise ValueError(
+            "Could not verify that allUsers has READER permission on "
+            f"{mirror_file}"
         )
 
 
@@ -511,24 +484,7 @@ def get_distdir() -> Path:
 
 def mirror_has_file(name: str) -> bool:
     """Checks if the mirror has the named file."""
-    mirror_file = MIRROR_PATH + "/" + name
-    cmd: Command = [GSUTIL, "ls", mirror_file]
-    proc = subprocess.run(
-        cmd,
-        check=False,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        encoding="utf-8",
-    )
-    if "URLs matched no objects" in proc.stdout:
-        return False
-    elif proc.returncode == 0:
-        return True
-
-    raise Exception(
-        "Unexpected result from gsutil ls:"
-        f" rc {proc.returncode} output:\n{proc.stdout}"
-    )
+    return bool(gs.ls(f"{MIRROR_PATH}/{name}"))
 
 
 def mirror_rust_source(version: RustVersion) -> None:
@@ -546,10 +502,7 @@ def mirror_rust_source(version: RustVersion) -> None:
     local_path = get_distdir() / filename
     mirror_path = f"{MIRROR_PATH}/{filename}"
     fetch_rust_src_from_upstream(uri, local_path)
-    subprocess.run(
-        [GSUTIL, "cp", "-a", "public-read", local_path, mirror_path],
-        check=True,
-    )
+    gs.cp(local_path, mirror_path, public_read=True)
 
 
 def update_rust_packages(

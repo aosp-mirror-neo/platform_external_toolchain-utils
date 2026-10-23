@@ -8,7 +8,9 @@ from collections.abc import Generator
 import contextlib
 import dataclasses
 import datetime
+import enum
 import io
+import json
 import logging
 import os
 import re
@@ -128,6 +130,23 @@ def ls(gs_url: str, *args: str) -> list[GsEntry]:
     return _parse_ls_output(result.stdout)
 
 
+def cat(gs_url: str) -> str:
+    """Returns the text contents of the file at `gs_url`."""
+    cmd = (GSUTIL, "cat", gs_url)
+    try:
+        return subprocess.run(
+            cmd,
+            check=True,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            encoding="utf-8",
+        ).stdout
+    except subprocess.CalledProcessError as e:
+        e.add_note(f"stderr:\n{e.stderr}")
+        raise
+
+
 def build_cp_many_command(
     sources: list[_PathOrStrT] | tuple[PathOrStr, ...],
     dest: PathOrStr,
@@ -225,6 +244,56 @@ def cp(
         overwrite=overwrite,
         public_read=public_read,
     )
+
+
+class WorldReadableStatus(enum.Enum):
+    """Whether a gs:// object's ACL grants `allUsers` `READER` permission."""
+
+    GRANTED = enum.auto()
+    NOT_GRANTED = enum.auto()
+    LACKS_PERMISSION = enum.auto()
+
+
+def check_world_readable(gs_url: str) -> WorldReadableStatus:
+    """Checks whether `gs_url`'s ACL grants `allUsers` `READER` permission.
+
+    Returns:
+        `WorldReadableStatus.GRANTED` if the object's ACL grants `allUsers`
+        `READER` permission, `WorldReadableStatus.NOT_GRANTED` if the ACL is
+        visible and does not grant `allUsers` `READER`, or
+        `WorldReadableStatus.LACKS_PERMISSION` if the caller lacks permission to
+        inspect the object's ACL (only object owners can view ACLs).
+    """
+    cmd = (GSUTIL, "acl", "get", gs_url)
+    result = subprocess.run(
+        cmd,
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    if result.returncode:
+        if "AccessDeniedException:" in result.stderr:
+            return WorldReadableStatus.LACKS_PERMISSION
+        try:
+            result.check_returncode()
+        except subprocess.CalledProcessError as e:
+            e.add_note(f"stderr:\n{result.stderr}")
+            raise
+
+    try:
+        acl = json.loads(result.stdout)
+    except Exception as e:
+        e.add_note(f"Failed parsing output from acl get:\n{result.stdout!r}")
+        raise
+
+    if any(
+        x.get("entity") == "allUsers" and x.get("role") == "READER" for x in acl
+    ):
+        return WorldReadableStatus.GRANTED
+    logging.debug("%s is not world-readable; ACL:\n%s", gs_url, acl)
+    return WorldReadableStatus.NOT_GRANTED
 
 
 # Please keep this subclass around even if nothing matches on it; its name

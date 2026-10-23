@@ -227,6 +227,15 @@ TOTAL: 1 objects, 753112 bytes (735.46 KiB)
             errors="replace",
         )
 
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_cat_returns_stdout(self, run_mock: mock.MagicMock) -> None:
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout="hello world\n",
+        )
+        self.assertEqual(gs.cat("gs://bucket/file"), "hello world\n")
+
     def test_build_cp_command_options(self) -> None:
         self.assertEqual(
             gs.build_cp_command("gs://src", Path("/dst")),
@@ -255,4 +264,47 @@ TOTAL: 1 objects, 753112 bytes (735.46 KiB)
                 "gs://src2",
                 "/dst",
             ],
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_check_world_readable_access_denied(
+        self, run_mock: mock.MagicMock
+    ) -> None:
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr="AccessDeniedException: 403 Access denied.\n",
+        )
+        self.assertIs(
+            gs.check_world_readable("gs://bucket/file"),
+            gs.WorldReadableStatus.LACKS_PERMISSION,
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_check_world_readable_ok(self, run_mock: mock.MagicMock) -> None:
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='[ { "entity": "allUsers", "role": "READER" } ]',
+            stderr="",
+        )
+        self.assertIs(
+            gs.check_world_readable("gs://bucket/file"),
+            gs.WorldReadableStatus.GRANTED,
+        )
+
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_check_world_readable_missing_reader(
+        self, run_mock: mock.MagicMock
+    ) -> None:
+        run_mock.return_value = subprocess.CompletedProcess(
+            args=[],
+            returncode=0,
+            stdout='[ { "entity": "___fake@google.com", "role": "OWNER" } ]',
+            stderr="",
+        )
+        self.assertIs(
+            gs.check_world_readable("gs://bucket/file"),
+            gs.WorldReadableStatus.NOT_GRANTED,
         )

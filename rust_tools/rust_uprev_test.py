@@ -8,20 +8,15 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
-from typing import Any, NoReturn
+from typing import Any
 import unittest
 from unittest import mock
 import urllib.request
 
 from cros_utils import git_utils
+from cros_utils import gs
 from llvm_tools import test_helpers
 from rust_tools import rust_uprev
-
-
-def _fail_command(cmd: list[str], *_: object, **__: object) -> NoReturn:
-    err = subprocess.CalledProcessError(returncode=1, cmd=cmd)
-    err.stderr = b"mock failure"
-    raise err
 
 
 def start_mock(obj: unittest.TestCase, *args: Any, **kwargs: Any) -> mock.Mock:
@@ -57,55 +52,68 @@ class FetchDistfileTest(unittest.TestCase):
     @mock.patch.object(
         rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
     )
-    @mock.patch.object(subprocess, "call", side_effect=_fail_command)
+    @mock.patch.object(
+        gs,
+        "cp",
+        autospec=True,
+        side_effect=subprocess.CalledProcessError(returncode=1, cmd=[]),
+    )
     def test_fetch_difstfile_fail(self, *_: object) -> None:
         with self.assertRaises(subprocess.CalledProcessError):
             rust_uprev.fetch_distfile_from_mirror("test_distfile.tar.gz")
 
     @mock.patch.object(
-        rust_uprev,
-        "get_command_output_unchecked",
-        return_value=("", "AccessDeniedException: Access denied."),
+        gs,
+        "check_world_readable",
+        autospec=True,
+        return_value=gs.WorldReadableStatus.GRANTED,
     )
     @mock.patch.object(
         rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
     )
-    @mock.patch.object(subprocess, "call", return_value=0)
-    def test_fetch_distfile_acl_access_denied(self, *_: object) -> None:
+    @mock.patch.object(gs, "cp", autospec=True)
+    def test_fetch_distfile_acl_ok(
+        self,
+        mock_cp: mock.MagicMock,
+        _mock_distdir: mock.MagicMock,
+        mock_check_readable: mock.MagicMock,
+    ) -> None:
+        rust_uprev.fetch_distfile_from_mirror("test_distfile.tar.gz")
+        mock_cp.assert_called_once_with(
+            "gs://chromeos-localmirror/distfiles/test_distfile.tar.gz",
+            Path("/fake/distfiles/test_distfile.tar.gz"),
+            overwrite=True,
+        )
+        mock_check_readable.assert_called_once_with(
+            "gs://chromeos-localmirror/distfiles/test_distfile.tar.gz"
+        )
+
+    @mock.patch.object(
+        gs,
+        "check_world_readable",
+        autospec=True,
+        return_value=gs.WorldReadableStatus.LACKS_PERMISSION,
+    )
+    @mock.patch.object(
+        rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
+    )
+    @mock.patch.object(gs, "cp", autospec=True)
+    def test_fetch_distfile_acl_non_owner_ok(self, *_: object) -> None:
         rust_uprev.fetch_distfile_from_mirror("test_distfile.tar.gz")
 
     @mock.patch.object(
-        rust_uprev,
-        "get_command_output_unchecked",
-        return_value=('[ { "entity": "allUsers", "role": "READER" } ]', ""),
+        gs,
+        "check_world_readable",
+        autospec=True,
+        return_value=gs.WorldReadableStatus.NOT_GRANTED,
     )
     @mock.patch.object(
         rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
     )
-    @mock.patch.object(subprocess, "call", return_value=0)
-    def test_fetch_distfile_acl_ok(self, *_: object) -> None:
-        rust_uprev.fetch_distfile_from_mirror("test_distfile.tar.gz")
-
-    @mock.patch.object(
-        rust_uprev,
-        "get_command_output_unchecked",
-        return_value=(
-            '[ { "entity": "___fake@google.com", "role": "OWNER" } ]',
-            "",
-        ),
-    )
-    @mock.patch.object(
-        rust_uprev, "get_distdir", return_value=Path("/fake/distfiles")
-    )
-    @mock.patch.object(subprocess, "call", return_value=0)
+    @mock.patch.object(gs, "cp", autospec=True)
     def test_fetch_distfile_acl_wrong(self, *_: object) -> None:
-        with self.assertRaisesRegex(Exception, "allUsers.*READER"):
-            with self.assertLogs(level="ERROR") as log:
-                rust_uprev.fetch_distfile_from_mirror("test_distfile.tar.gz")
-                self.assertIn(
-                    '[ { "entity": "___fake@google.com", "role": "OWNER" } ]',
-                    "\n".join(log.output),
-                )
+        with self.assertRaisesRegex(ValueError, "allUsers.*READER"):
+            rust_uprev.fetch_distfile_from_mirror("test_distfile.tar.gz")
 
 
 class FetchRustSrcFromUpstreamTest(unittest.TestCase):
@@ -373,21 +381,22 @@ class FindBootstrapVersionTest(test_helpers.TempDirTestCase):
 class MirrorHasFileTest(unittest.TestCase):
     """Tests for rust_uprev.mirror_has_file."""
 
-    @mock.patch.object(subprocess, "run")
-    def test_no(self, mock_run: mock.Mock) -> None:
-        mock_run.return_value = mock.Mock(
-            returncode=1,
-            stdout="CommandException: One or more URLs matched no objects.",
-        )
+    @mock.patch.object(gs, "ls", autospec=True)
+    def test_no(self, mock_ls: mock.Mock) -> None:
+        mock_ls.return_value = []
         self.assertFalse(rust_uprev.mirror_has_file("rustc-1.69.0-src.tar.gz"))
 
-    @mock.patch.object(subprocess, "run")
-    def test_yes(self, mock_run: mock.Mock) -> None:
-        mock_run.return_value = mock.Mock(
-            returncode=0,
-            # pylint: disable=line-too-long
-            stdout="gs://chromeos-localmirror/distfiles/rustc-1.69.0-src.tar.gz",
-        )
+    @mock.patch.object(gs, "ls", autospec=True)
+    def test_yes(self, mock_ls: mock.Mock) -> None:
+        mock_ls.return_value = [
+            gs.GsEntry(
+                last_modified=None,
+                gs_path=(
+                    "gs://chromeos-localmirror/distfiles/"
+                    "rustc-1.69.0-src.tar.gz"
+                ),
+            )
+        ]
         self.assertTrue(rust_uprev.mirror_has_file("rustc-1.69.0-src.tar.gz"))
 
 
@@ -395,7 +404,6 @@ class MirrorRustSourceTest(unittest.TestCase):
     """Tests for rust_uprev.mirror_rust_source."""
 
     def setUp(self) -> None:
-        start_mock(self, rust_uprev, "GSUTIL", "gsutil")
         start_mock(self, rust_uprev, "MIRROR_PATH", "fakegs://fakemirror/")
         start_mock(
             self,
@@ -413,10 +421,11 @@ class MirrorRustSourceTest(unittest.TestCase):
             rust_uprev,
             "fetch_rust_src_from_upstream",
         )
-        self.mock_subprocess_run = start_mock(
+        self.mock_gs_cp = start_mock(
             self,
-            subprocess,
-            "run",
+            gs,
+            "cp",
+            autospec=True,
         )
 
     def test_already_present(self) -> None:
@@ -425,27 +434,18 @@ class MirrorRustSourceTest(unittest.TestCase):
             rust_uprev.RustVersion.parse("1.67.3"),
         )
         self.mock_fetch_rust_src_from_upstream.assert_not_called()
-        self.mock_subprocess_run.assert_not_called()
+        self.mock_gs_cp.assert_not_called()
 
     def test_fetch_and_upload(self) -> None:
         self.mock_mirror_has_file.return_value = False
         rust_uprev.mirror_rust_source(
             rust_uprev.RustVersion.parse("1.67.3"),
         )
-        self.mock_fetch_rust_src_from_upstream.called_once()
-        self.mock_subprocess_run.has_calls(
-            [
-                (
-                    [
-                        "gsutil",
-                        "cp",
-                        "-a",
-                        "public-read",
-                        "/fake/distdir/rustc-1.67.3-src.tar.gz",
-                        "fakegs://fakemirror/rustc-1.67.3-src.tar.gz",
-                    ]
-                ),
-            ]
+        self.mock_fetch_rust_src_from_upstream.assert_called_once()
+        self.mock_gs_cp.assert_called_once_with(
+            Path("/fake/distfiles/rustc-1.67.3-src.tar.gz"),
+            "fakegs://fakemirror//rustc-1.67.3-src.tar.gz",
+            public_read=True,
         )
 
 

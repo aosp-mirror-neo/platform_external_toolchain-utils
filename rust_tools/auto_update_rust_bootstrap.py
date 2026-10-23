@@ -48,6 +48,7 @@ RUST_BOOTSTRAP_THIS_VERSION_PREBUILT_NAME_REGEX = re.compile(
 RUST_BOOTSTRAP_PRIOR_VERSION_REGEX = re.compile(
     r'^(PRIOR_RUST_BOOTSTRAP_VERSION=")([^"]*)(")', re.MULTILINE
 )
+LATEST_SDK_REGEX = re.compile(r'^LATEST_SDK="([0-9\.]+)"$')
 
 
 @dataclasses.dataclass(frozen=True, eq=True, order=True)
@@ -88,17 +89,10 @@ class EbuildVersion:
 def fetch_most_recent_sdk_version() -> str:
     """Fetches the most recent official SDK version from gs://."""
     latest_file_loc = "gs://chromiumos-sdk/cros-sdk-latest.conf"
-    sdk_latest_file = subprocess.run(
-        ["gsutil", "cat", latest_file_loc],
-        check=True,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    ).stdout.strip()
+    sdk_latest_file = gs.cat(latest_file_loc).strip()
 
-    latest_sdk_re = re.compile(r'^LATEST_SDK="([0-9\.]+)"$')
     for line in sdk_latest_file.splitlines():
-        m = latest_sdk_re.match(line)
+        m = LATEST_SDK_REGEX.match(line)
         if m:
             latest_version = m.group(1)
             logging.info("Detected latest SDK version: %r", latest_version)
@@ -114,29 +108,25 @@ def find_rust_bootstrap_prebuilt(version: EbuildVersion) -> str | None:
     sdk_version = fetch_most_recent_sdk_version()
 
     # Search for all rust-bootstrap versions rather than specifically
-    # `version`, since gsutil will exit(1) if no matches are found. exit(1) is
-    # desirable if _no rust boostrap artifacts at all exist_, but substantially
-    # less so if this function seeks to just `return False`.
+    # `version` so we can distinguish "no rust-bootstrap artifacts exist at
+    # all" (an error) from "this specific version has no prebuilt yet".
     gs_glob = (
         f"gs://chromeos-prebuilt/board/amd64-host/chroot-{sdk_version}"
         "/packages/dev-lang/rust-bootstrap-*tbz2"
     )
 
     logging.info("Searching %s for rust-bootstrap version %s", gs_glob, version)
-    results = subprocess.run(
-        ["gsutil", "ls", gs_glob],
-        check=True,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.PIPE,
-    ).stdout.strip()
+    entries = gs.ls(gs_glob)
+    if not entries:
+        raise ValueError(
+            f"No rust-bootstrap artifacts found matching {gs_glob}"
+        )
 
     binpkg_name_re = re.compile(
         r"rust-bootstrap-" + re.escape(str(version)) + r"\.tbz2$"
     )
-    result_lines = results.splitlines()
-    for line in result_lines:
-        result = line.strip()
+    result_lines = [x.gs_path for x in entries]
+    for result in result_lines:
         if binpkg_name_re.search(result):
             logging.info("Found rust-bootstrap prebuilt: %s", result)
             return result
@@ -219,16 +209,7 @@ def maybe_copy_prebuilt_to_localmirror(
     copy_rust_bootstrap_script: Path, prebuilt_gs_path: str, dry_run: bool
 ) -> bool:
     upload_to = copy_rust_bootstrap.determine_target_path(prebuilt_gs_path)
-    result = subprocess.run(
-        ["gsutil", "ls", upload_to],
-        check=False,
-        encoding="utf-8",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-
-    if not result.returncode:
+    if gs.ls(upload_to):
         logging.info("Artifact at %s already exists", upload_to)
         return False
 

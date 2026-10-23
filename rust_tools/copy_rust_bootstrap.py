@@ -20,6 +20,7 @@ import tempfile
 from typing import Sequence
 
 from cros_utils import cros_paths
+from cros_utils import gs
 from llvm_tools import chroot
 
 
@@ -57,16 +58,6 @@ def determine_target_path(sdk_path: str) -> str:
 
     file_name = Path(sdk_path[len(gs_prefix) :]).name
     return _LOCALMIRROR_ROOT + file_name
-
-
-def _download(remote_path: str, local_file: Path) -> None:
-    """Downloads the given gs:// path to the given local file."""
-    logging.info("Downloading %s -> %s", remote_path, local_file)
-    subprocess.run(
-        ["gsutil", "cp", remote_path, str(local_file)],
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
 
 
 def _debinpkgify_in_chroot(
@@ -113,24 +104,6 @@ def _debinpkgify_in_chroot(
         chromiumos_checkout,
     )
     return tbz2_file
-
-
-def _upload(local_file: Path, remote_path: str) -> None:
-    """Uploads the local file to the given gs:// path."""
-    logging.info("Uploading %s -> %s", local_file, remote_path)
-    subprocess.run(
-        (
-            "gsutil",
-            "cp",
-            "-a",
-            "public-read",
-            "-n",
-            str(local_file),
-            remote_path,
-        ),
-        check=True,
-        stdin=subprocess.DEVNULL,
-    )
 
 
 def main(argv: list[str]) -> None:
@@ -186,7 +159,8 @@ def main(argv: list[str]) -> None:
         download_path = host_tmpdir / "sdk_artifact"
         workdir_path = host_tmpdir / "workdir"
         workdir_path.mkdir(parents=True)
-        _download(opts.sdk_artifact, download_path)
+        logging.info("Downloading %s -> %s", opts.sdk_artifact, download_path)
+        gs.cp(opts.sdk_artifact, download_path)
         chroot_download_path = host_tmp_path_to_chroot(download_path)
         chroot_workdir_path = host_tmp_path_to_chroot(workdir_path)
         chroot_file_to_upload = _debinpkgify_in_chroot(
@@ -202,4 +176,5 @@ def main(argv: list[str]) -> None:
                 target_path,
             )
         else:
-            _upload(file_to_upload, target_path)
+            logging.info("Uploading %s -> %s", file_to_upload, target_path)
+            gs.cp(file_to_upload, target_path, public_read=True)
