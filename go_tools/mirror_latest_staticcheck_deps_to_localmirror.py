@@ -281,36 +281,18 @@ def try_download_from_gs(gs_url: str) -> bytes | None:
     """Downloads `gs_url` and returns its raw bytes, or None if not present."""
     if not gs.ls(gs_url):
         return None
-    with tempfile.NamedTemporaryFile(prefix="cros_go_gs_") as tmp_file:
-        subprocess.run(
-            (gs.GSUTIL, "-q", "cp", gs_url, tmp_file.name),
-            check=True,
-            stdin=subprocess.DEVNULL,
-        )
-        return Path(tmp_file.name).read_bytes()
+    with tempfile.TemporaryDirectory(prefix="cros_go_gs_") as tmp_dir:
+        dst = Path(tmp_dir) / "archive"
+        gs.cp(gs_url, dst)
+        return dst.read_bytes()
 
 
 def upload_to_gs(data: bytes, gs_url: str) -> None:
     """Uploads `data` to `gs_url` with public-read ACL and no-clobber."""
-    with tempfile.NamedTemporaryFile(prefix="cros_go_upload_") as tmp_file:
-        Path(tmp_file.name).write_bytes(data)
-        subprocess.run(
-            (
-                gs.GSUTIL,
-                "-q",
-                # Require generation 0 so gsutil fails rather than overwriting
-                # an existing object on localmirror.
-                "-h",
-                "x-goog-if-generation-match:0",
-                "cp",
-                "-a",
-                "public-read",
-                tmp_file.name,
-                gs_url,
-            ),
-            check=True,
-            stdin=subprocess.DEVNULL,
-        )
+    with tempfile.TemporaryDirectory(prefix="cros_go_upload_") as tmp_dir:
+        src = Path(tmp_dir) / "archive"
+        src.write_bytes(data)
+        gs.cp(src, gs_url, public_read=True)
 
 
 def verify_tarball_bytes(

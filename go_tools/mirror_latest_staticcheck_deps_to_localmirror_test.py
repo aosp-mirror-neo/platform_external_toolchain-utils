@@ -6,10 +6,12 @@
 
 import gzip
 import io
+from pathlib import Path
 import tarfile
 import unittest
 from unittest import mock
 
+from cros_utils import gs
 from go_tools import mirror_latest_staticcheck_deps_to_localmirror as mirror_sc
 
 
@@ -218,6 +220,67 @@ class Test(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "Unknown package"):
             mirror_sc.select_packages(["nonexistent"])
+
+    @mock.patch.object(gs, "cp", autospec=True)
+    @mock.patch.object(gs, "ls", autospec=True)
+    def test_try_download_from_gs_returns_none_when_missing(
+        self,
+        mock_ls: mock.MagicMock,
+        mock_cp: mock.MagicMock,
+    ) -> None:
+        mock_ls.return_value = []
+        self.assertIsNone(
+            mirror_sc.try_download_from_gs("gs://bucket/missing.tar.gz")
+        )
+        mock_ls.assert_called_once_with("gs://bucket/missing.tar.gz")
+        mock_cp.assert_not_called()
+
+    @mock.patch.object(gs, "cp", autospec=True)
+    @mock.patch.object(gs, "ls", autospec=True)
+    def test_try_download_from_gs_downloads_when_present(
+        self,
+        mock_ls: mock.MagicMock,
+        mock_cp: mock.MagicMock,
+    ) -> None:
+        mock_ls.return_value = [
+            gs.GsEntry(
+                last_modified=None,
+                gs_path="gs://bucket/present.tar.gz",
+            )
+        ]
+
+        def fake_cp(src: gs.PathOrStr, dst: gs.PathOrStr) -> None:
+            self.assertEqual(src, "gs://bucket/present.tar.gz")
+            Path(dst).write_bytes(b"downloaded-bytes")
+
+        mock_cp.side_effect = fake_cp
+        self.assertEqual(
+            mirror_sc.try_download_from_gs("gs://bucket/present.tar.gz"),
+            b"downloaded-bytes",
+        )
+        mock_cp.assert_called_once()
+
+    @mock.patch.object(gs, "cp", autospec=True)
+    def test_upload_to_gs_writes_bytes_and_uploads_public_read(
+        self,
+        mock_cp: mock.MagicMock,
+    ) -> None:
+        uploaded_bytes: list[bytes] = []
+
+        def fake_cp(
+            src: gs.PathOrStr,
+            dst: gs.PathOrStr,
+            *,
+            public_read: bool = False,
+        ) -> None:
+            self.assertEqual(dst, "gs://bucket/out.tar.gz")
+            self.assertTrue(public_read)
+            uploaded_bytes.append(Path(src).read_bytes())
+
+        mock_cp.side_effect = fake_cp
+        mirror_sc.upload_to_gs(b"upload-payload", "gs://bucket/out.tar.gz")
+        self.assertEqual(uploaded_bytes, [b"upload-payload"])
+        mock_cp.assert_called_once()
 
     def test_parse_args_requires_mode(self) -> None:
         with self.assertRaises(SystemExit):
