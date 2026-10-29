@@ -1339,5 +1339,21 @@
       "from": 612910,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "28999cd08f23dd7baeb63b7ca4addef4214999e3",
+      "title": "[UPSTREAM] [ARM] Fix miscompile in MAC for 64b values (#231702)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/28999cd08f23dd7baeb63b7ca4addef4214999e3.patch",
+    "version_range": {
+      "from": 614150,
+      "until": 640673
+    }
   }
 ]
