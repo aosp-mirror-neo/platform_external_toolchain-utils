@@ -70,18 +70,12 @@ class KernelVersion:
         return cls(major=int(m.group(1)), minor=int(m.group(2)))
 
 
-ARM_KERNEL_5_15 = (Arch.ARM, KernelVersion(5, 15))
+ARM_KERNEL_6_6 = (Arch.ARM, KernelVersion(6, 6))
 
 # Versions that rolling should be skipped on, for one reason or another.
 SKIPPED_VERSIONS: dict[int, Iterable[tuple[Arch, KernelVersion]]] = {
-    # Kernel tracing was disabled on ARM in 114, b/275560674
-    114: (ARM_KERNEL_5_15,),
-    115: (ARM_KERNEL_5_15,),
-    # Kernel profiles are no longer generated as of M126. Don't complain about
-    # them.
-    124: (ARM_KERNEL_5_15,),
-    125: (ARM_KERNEL_5_15,),
-    126: (ARM_KERNEL_5_15,),
+    # Missing scoped_seqlock backport broke 6.6 AFDO builds in 156, b/579865428
+    156: (ARM_KERNEL_6_6,),
 }
 
 
