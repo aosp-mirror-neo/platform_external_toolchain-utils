@@ -8,18 +8,17 @@ Sends an email if something interesting (probably) happened.
 """
 
 import argparse
-import itertools
 import json
 import logging
 import pathlib
 import re
 import shutil
 import subprocess
-import time
 from typing import Any, Iterable, NamedTuple, Optional
 
 from cros_utils import bugs
 from cros_utils import email_sender
+from cros_utils import git_utils
 from cros_utils import tiny_render
 
 
@@ -129,31 +128,6 @@ class GitCommit(NamedTuple):
 
     sha: str
     subject: str
-
-
-def update_git_repo(git_dir: pathlib.Path) -> None:
-    """Updates the repo at `git_dir`, retrying a few times on failure."""
-    for i in itertools.count(start=1):
-        result = subprocess.run(
-            ["git", "fetch", "origin"],
-            check=False,
-            cwd=str(git_dir),
-            stdin=None,
-        )
-
-        if not result.returncode:
-            break
-
-        if i == 5:
-            # 5 attempts is too many. Something else may be wrong.
-            result.check_returncode()
-
-        sleep_time = 60 * i
-        logging.error(
-            "Failed updating gentoo's repo; will try again in %ds...",
-            sleep_time,
-        )
-        time.sleep(sleep_time)
 
 
 def get_new_gentoo_commits(
@@ -373,7 +347,7 @@ def main(argv: list[str]) -> None:
     logging.info("Most recent Rust release is %s", most_recent_release)
 
     logging.info("Fetching new commits from Gentoo")
-    update_git_repo(gentoo_subdir)
+    git_utils.fetch(gentoo_subdir, remote="origin")
     new_commits = get_new_gentoo_commits(
         gentoo_subdir, prior_state.last_gentoo_sha
     )

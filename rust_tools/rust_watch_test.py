@@ -4,11 +4,8 @@
 
 """Tests for rust_watch.py."""
 
-import logging
 import pathlib
 import subprocess
-import time
-from typing import Any, NoReturn
 import unittest
 import unittest.mock
 
@@ -18,16 +15,6 @@ from rust_tools import rust_watch
 
 class Test(unittest.TestCase):
     """Tests."""
-
-    def _silence_logs(self) -> None:
-        """Silences all log output until the end of the current test."""
-
-        def should_log(_record: logging.LogRecord) -> bool:
-            return False
-
-        logger = logging.root
-        logger.addFilter(should_log)
-        self.addCleanup(logger.removeFilter, should_log)
 
     def test_release_version_parsing(self) -> None:
         self.assertEqual(
@@ -48,41 +35,6 @@ class Test(unittest.TestCase):
         )
 
         self.assertEqual(rust_watch.State.from_json(state.to_json()), state)
-
-    @unittest.mock.patch.object(subprocess, "run")
-    @unittest.mock.patch.object(time, "sleep")
-    def test_update_git_repo_tries_again_on_failure(
-        self,
-        sleep_mock: unittest.mock.Mock,
-        run_mock: unittest.mock.Mock,
-    ) -> None:
-        self._silence_logs()
-
-        oh_no_error = ValueError("oh no")
-
-        def check_returncode() -> NoReturn:
-            raise oh_no_error
-
-        run_call_count = 0
-
-        def run_sideeffect(*_args: Any, **_kwargs: Any) -> unittest.mock.Mock:
-            nonlocal run_call_count
-            run_call_count += 1
-            result = unittest.mock.Mock()
-            result.returncode = 1
-            result.check_returncode = check_returncode
-            return result
-
-        run_mock.side_effect = run_sideeffect
-
-        with self.assertRaises(ValueError) as raised:
-            rust_watch.update_git_repo(pathlib.Path("/does/not/exist/at/all"))
-
-        self.assertIs(raised.exception, oh_no_error)
-        self.assertEqual(run_call_count, 5)
-
-        sleep_timings = [unittest.mock.call(60 * i) for i in range(1, 5)]
-        self.assertEqual(sleep_mock.mock_calls, sleep_timings)
 
     @unittest.mock.patch.object(subprocess, "run")
     def test_get_new_gentoo_commits_functions(

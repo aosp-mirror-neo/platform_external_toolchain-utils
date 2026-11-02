@@ -5,7 +5,8 @@
 """Attributes/utilities for the LLVM repo that's bundled with ChromeOS"""
 
 from pathlib import Path
-import subprocess
+
+from cros_utils import git_utils
 
 
 # Git remote to query/fetch for upstream.
@@ -24,9 +25,4 @@ def try_get_path() -> Path | None:
 
 def fetch_upstream(repo_path: Path) -> None:
     """Runs `git fetch` for the upstream branch in the given repo."""
-    subprocess.run(
-        ["git", "fetch", UPSTREAM_REMOTE, UPSTREAM_MAIN],
-        check=True,
-        cwd=repo_path,
-        stdin=subprocess.DEVNULL,
-    )
+    git_utils.fetch(repo_path, remote=UPSTREAM_REMOTE, branch=UPSTREAM_MAIN)

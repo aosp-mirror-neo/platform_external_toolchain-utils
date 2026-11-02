@@ -161,15 +161,6 @@ def git_checkout(git_dir: Path, branch: git_utils.ChannelBranch) -> None:
     )
 
 
-def git_fetch(git_dir: Path) -> None:
-    subprocess.run(
-        ["git", "fetch"],
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
-    )
-
-
 @dataclasses.dataclass(frozen=True, eq=True, order=True)
 class ArchUpdateConfig:
     """The AFDO update config for one architecture."""
@@ -647,7 +638,7 @@ def main(argv: list[str]) -> None:
 
     if opts.fetch:
         logging.info("Fetching in %s...", toolchain_utils)
-        git_fetch(toolchain_utils)
+        git_utils.fetch(toolchain_utils)
 
     selection_info = ProfileSelectionInfo(
         now=datetime.datetime.now(datetime.timezone.utc),
