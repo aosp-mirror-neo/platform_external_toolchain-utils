@@ -36,9 +36,9 @@ The data provided is the commit message produced by `git log -n1 --format=%B`.
    or "effectively revert" another commit. In these cases, you should
    **try to determine the purpose of the near-revert**. If the commit message
    offers clear indications that the logic being essentially reverted somehow
-   **meaningfully broke functionality**, then you should treat the commit as a
-   revert. If the 'effectively revert' seems less functionally impactful,
-   `is_revert` should be false.
+   **meaningfully broke functionality or failed to fix a bug**, then you should
+   treat the commit as a revert. If the 'effectively revert' seems less
+   functionally impactful, `is_revert` should be false.
 
 # Examples
 

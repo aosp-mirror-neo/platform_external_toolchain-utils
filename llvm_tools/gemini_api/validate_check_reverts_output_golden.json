@@ -1354,12 +1354,10 @@
   "73ce0aca72348a80dc2c2175516a0993ab8d6be3": [
     {
       "android_doesnt_care": false,
-      "chromeos_doesnt_care": true,
+      "chromeos_doesnt_care": false,
       "is_reland": false,
-      "is_revert": true,
-      "reverted_prs": [
-        149425
-      ],
+      "is_revert": false,
+      "reverted_prs": [],
       "reverted_shas": []
     }
   ],

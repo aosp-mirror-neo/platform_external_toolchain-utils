@@ -14,7 +14,7 @@
   affect libclc.
 - COFF/DirectX-specific: Paths with `/Target/DirectX/`, `/DirectX/`, or
   COFF/DirectX-specific files.
-- MLIR-specific: Paths with `mlir/`, or generic files where changes only
-  affect MLIR.
+- MLIR-specific: Paths with `mlir/`, or other files (such as build or test
+  tooling configs) where changes only affect or are made to support MLIR.
 - MIPS-specific: Paths with `/Target/Mips/` or `/Mips/`, or generic files where
   changes only affect MIPS.

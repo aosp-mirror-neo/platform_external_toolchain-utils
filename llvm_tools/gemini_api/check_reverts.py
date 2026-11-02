@@ -46,7 +46,7 @@ from google.genai import types
 import httpx
 
 
-GEMINI_MODEL = "gemini-3.5-flash"
+GEMINI_MODEL = "gemini-3.8-flash"
 PER_FILE_DIFF_BUDGET = 50_000
 
 # b/529292846: Gemini's API was observed to (very rarely) just leave
