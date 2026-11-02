@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
-from typing import Iterable, Self
+from typing import Iterable, Mapping, Self
 
 from cros_utils import cros_paths
 from cros_utils import git_utils
@@ -70,12 +70,24 @@ class KernelVersion:
         return cls(major=int(m.group(1)), minor=int(m.group(2)))
 
 
+AMD64_KERNEL_5_4 = (Arch.AMD64, KernelVersion(5, 4))
 ARM_KERNEL_6_6 = (Arch.ARM, KernelVersion(6, 6))
 
-# Versions that rolling should be skipped on, for one reason or another.
+# Versions that rolling should be skipped on for a specific milestone, for one
+# reason or another.
 SKIPPED_VERSIONS: dict[int, Iterable[tuple[Arch, KernelVersion]]] = {
     # Missing scoped_seqlock backport broke 6.6 AFDO builds in 156, b/579865428
     156: (ARM_KERNEL_6_6,),
+}
+
+# Versions that rolling should be skipped on across an entire channel.
+SKIPPED_CHANNEL_VERSIONS: dict[
+    git_utils.Channel, Iterable[tuple[Arch, KernelVersion]]
+] = {
+    # All remaining 5.4 ChromeOS boards (fizz, kalista, nami) are in Extended
+    # Support, so they skip Stable and only ship on canary/dev/beta and
+    # LTC/LTS; see b/579865428.
+    git_utils.Channel.STABLE: (AMD64_KERNEL_5_4,),
 }
 
 
@@ -468,7 +480,10 @@ def update_afdo_for_channel(
     selection_info: ProfileSelectionInfo,
     channel: git_utils.Channel,
     branch: git_utils.ChannelBranch,
-    skipped_versions: dict[int, Iterable[tuple[Arch, KernelVersion]]],
+    skipped_versions: Mapping[int, Iterable[tuple[Arch, KernelVersion]]],
+    skipped_channel_versions: Mapping[
+        git_utils.Channel, Iterable[tuple[Arch, KernelVersion]]
+    ],
 ) -> UpdateResult:
     """Updates AFDO on the given channel."""
     git_checkout(toolchain_utils, branch)
@@ -477,7 +492,10 @@ def update_afdo_for_channel(
         toolchain_utils / "afdo_tools" / "update_kernel_afdo.cfg",
     )
 
-    to_skip = skipped_versions.get(branch.release_number)
+    to_skip = {
+        *skipped_versions.get(branch.release_number, ()),
+        *skipped_channel_versions.get(channel, ()),
+    }
     made_changes = False
     had_failures = False
     for arch, cfg in update_cfgs.items():
@@ -486,11 +504,12 @@ def update_afdo_for_channel(
             cfg.versions_to_track,
         )
         for kernel_version in cfg.versions_to_track:
-            if to_skip and (arch, kernel_version) in to_skip:
+            if (arch, kernel_version) in to_skip:
                 logging.info(
-                    "%s/%s on M%d is in the skip list; ignoring it.",
+                    "%s/%s on %s (M%d) is in the skip list; ignoring it.",
                     arch,
                     kernel_version,
+                    channel,
                     branch.release_number,
                 )
                 continue
@@ -661,6 +680,7 @@ def main(argv: list[str]) -> None:
                 channel,
                 branch,
                 SKIPPED_VERSIONS,
+                SKIPPED_CHANNEL_VERSIONS,
             )
             had_failures = had_failures or result.had_failures
             if not result.made_changes:

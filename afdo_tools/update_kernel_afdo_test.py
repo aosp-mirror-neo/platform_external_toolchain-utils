@@ -14,6 +14,7 @@ import unittest
 from unittest import mock
 
 from afdo_tools import update_kernel_afdo
+from cros_utils import git_utils
 
 
 class Test(unittest.TestCase):
@@ -195,4 +196,84 @@ TOTAL: 2 objects, 1234 bytes (1.1KiB)
         )
         self.assertFalse(
             update_kernel_afdo.write_afdo_descriptor_file(file_path, contents)
+        )
+
+    @mock.patch.object(update_kernel_afdo, "git_checkout", autospec=True)
+    def test_update_afdo_for_channel_respects_skip_lists(
+        self,
+        git_checkout: mock.MagicMock,
+    ) -> None:
+        tmpdir = self.make_tempdir()
+        cfg_file = tmpdir / "afdo_tools" / "update_kernel_afdo.cfg"
+        cfg_file.parent.mkdir()
+        cfg_file.write_text(
+            textwrap.dedent(
+                """
+                AMD_KVERS="5.4 5.10 6.6"
+                ARM_KVERS=""
+                AMD_METADATA_FILE="amd.json"
+                ARM_METADATA_FILE="arm.json"
+                """
+            ),
+            encoding="utf-8",
+        )
+        (tmpdir / "arm.json").write_text("{}\n", encoding="utf-8")
+        kver_5_4 = update_kernel_afdo.KernelVersion(5, 4)
+        kver_5_10 = update_kernel_afdo.KernelVersion(5, 10)
+        kver_6_6 = update_kernel_afdo.KernelVersion(6, 6)
+        amd_metadata = tmpdir / "amd.json"
+        update_kernel_afdo.write_afdo_descriptor_file(
+            amd_metadata,
+            {kver_5_4: "old-5_4", kver_5_10: "old-5_10", kver_6_6: "old-6_6"},
+        )
+
+        now = datetime.datetime(2026, 11, 2, tzinfo=datetime.timezone.utc)
+        fresh = update_kernel_afdo.KernelGsProfile.from_file_name(
+            now - datetime.timedelta(days=1),
+            "R156-16836.19-1792976627.afdo.xz",
+        )
+
+        def fake_fetch(gs_url: str) -> list[update_kernel_afdo.KernelGsProfile]:
+            if gs_url.endswith("/amd64/6.6"):
+                return [fresh]
+            self.fail(f"Unexpected fetch for skipped URL: {gs_url}")
+
+        fetcher = mock.create_autospec(
+            update_kernel_afdo.KernelProfileFetcher, instance=True
+        )
+        fetcher.fetch.side_effect = fake_fetch
+        amd64_6_6 = (update_kernel_afdo.Arch.AMD64, kver_6_6)
+        result = update_kernel_afdo.update_afdo_for_channel(
+            fetcher,
+            tmpdir,
+            update_kernel_afdo.ProfileSelectionInfo(
+                now=now,
+                max_profile_age=datetime.timedelta(days=10),
+            ),
+            git_utils.Channel.STABLE,
+            git_utils.ChannelBranch("cros", 156, "release-R156-16836.B"),
+            skipped_versions={
+                156: ((update_kernel_afdo.Arch.AMD64, kver_5_10),),
+                154: (amd64_6_6,),
+            },
+            skipped_channel_versions=(
+                update_kernel_afdo.SKIPPED_CHANNEL_VERSIONS
+                | {git_utils.Channel.BETA: (amd64_6_6,)}
+            ),
+        )
+        git_checkout.assert_called_once()
+        self.assertEqual(
+            result,
+            update_kernel_afdo.UpdateResult(
+                made_changes=True,
+                had_failures=False,
+            ),
+        )
+        self.assertEqual(
+            update_kernel_afdo.read_afdo_descriptor_file(amd_metadata),
+            {
+                kver_5_4: "old-5_4",
+                kver_5_10: "old-5_10",
+                kver_6_6: fresh.file_name_no_suffix,
+            },
         )
