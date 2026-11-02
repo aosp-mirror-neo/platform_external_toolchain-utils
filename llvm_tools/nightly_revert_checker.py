@@ -356,6 +356,21 @@ def reverts_old_commit(
         return False
 
 
+def should_ignore_revert(
+    llvm_config: git_llvm_rev.LLVMConfig,
+    revert_sha: str,
+    reverted_shas: list[str],
+) -> bool:
+    """Returns True if heuristics say to ignore `revert_sha`."""
+    if not git_utils.list_files_changed_by_commit(llvm_config.dir, revert_sha):
+        logging.info("Ignoring revert %s; commit is empty", revert_sha)
+        return True
+    if reverts_old_commit(llvm_config, revert_sha, reverted_shas):
+        logging.info("Heuristics say to ignore revert %s", revert_sha)
+        return True
+    return False
+
+
 def update_new_state_head_info(
     # Require kwargs because this takes two states, and messing up order can be
     # subtle.
@@ -452,12 +467,13 @@ def locate_new_reverts_across_shas(
             logging.info("...All of which have been reported.")
             continue
 
-        filtered_new_reverts = []
-        for x in new_reverts:
-            if reverts_old_commit(llvm_config, x.revert_sha, x.reverted_shas):
-                logging.info("Heuristics say to ignore revert %s", x.revert_sha)
-            else:
-                filtered_new_reverts.append(x)
+        filtered_new_reverts = [
+            x
+            for x in new_reverts
+            if not should_ignore_revert(
+                llvm_config, x.revert_sha, x.reverted_shas
+            )
+        ]
 
         if filtered_new_reverts:
             revert_infos.append(

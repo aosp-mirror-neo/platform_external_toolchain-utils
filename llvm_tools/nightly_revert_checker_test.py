@@ -519,3 +519,48 @@ class RevertsOldCommitTest(unittest.TestCase):
                 reverted_shas=["reverted_sha"],
             )
         )
+
+
+@mock.patch.object(
+    nightly_revert_checker.git_utils,
+    "list_files_changed_by_commit",
+    autospec=True,
+)
+class ShouldIgnoreRevertTest(unittest.TestCase):
+    """Tests for should_ignore_revert."""
+
+    # b/579360055: rarely, reverts will be completely empty.
+    def test_ignores_empty_commit(
+        self,
+        mock_list_files: mock.Mock,
+    ) -> None:
+        mock_list_files.return_value = []
+        self.assertTrue(
+            nightly_revert_checker.should_ignore_revert(
+                llvm_config=ARBITRARY_LLVM_CONFIG,
+                revert_sha="revert_sha",
+                reverted_shas=["reverted_sha"],
+            )
+        )
+
+    @mock.patch.object(
+        nightly_revert_checker,
+        "reverts_old_commit",
+        autospec=True,
+    )
+    def test_delegates_non_empty_commit_to_reverts_old_commit(
+        self,
+        mock_reverts_old_commit: mock.Mock,
+        mock_list_files: mock.Mock,
+    ) -> None:
+        mock_list_files.return_value = ["clang/lib/Foo.cpp"]
+        for is_old in (False, True):
+            mock_reverts_old_commit.return_value = is_old
+            self.assertEqual(
+                nightly_revert_checker.should_ignore_revert(
+                    llvm_config=ARBITRARY_LLVM_CONFIG,
+                    revert_sha="revert_sha",
+                    reverted_shas=["reverted_sha"],
+                ),
+                is_old,
+            )
