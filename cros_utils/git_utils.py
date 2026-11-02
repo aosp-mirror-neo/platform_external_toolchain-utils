@@ -11,8 +11,10 @@ import logging
 import os
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import tempfile
+import time
 from typing import Generator, Iterable, Self, Sequence
 
 
@@ -486,30 +488,53 @@ def amend_head_with_all_changes(git_dir: Path, quiet: bool = False) -> str:
 
 
 def fetch(
-    git_dir: Path, remote: str | None = None, branch: str | None = None
+    git_dir: Path,
+    remote: str | None = None,
+    branch: str | None = None,
+    max_attempts: int = 5,
 ) -> None:
-    """Runs `git fetch`.
+    """Runs `git fetch`, retrying a few times on failure.
 
     Args:
         git_dir: Directory to execute in.
         remote: If specified, only the given remote will be fetched.
         branch: If specified, only the given branch will be fetched. If branch
             is specified, remote must be, also.
+        max_attempts: Maximum number of attempts before propagating failure.
     """
     if branch and not remote:
         raise ValueError("If `branch` is specified, `remote` must also be.")
+    if max_attempts < 1:
+        raise ValueError(f"`max_attempts` must be >= 1; got {max_attempts}")
 
     cmd = ["git", "fetch"]
     if remote:
         cmd.append(remote)
         if branch:
             cmd.append(branch)
-    subprocess.run(
-        cmd,
-        check=True,
-        cwd=git_dir,
-        stdin=subprocess.DEVNULL,
-    )
+
+    for i in range(1, max_attempts + 1):
+        try:
+            subprocess.run(
+                cmd,
+                check=True,
+                cwd=git_dir,
+                stdin=subprocess.DEVNULL,
+            )
+            return
+        except subprocess.CalledProcessError:
+            if i == max_attempts:
+                raise
+            sleep_time = 2**i
+            logging.warning(
+                "`%s` in %s failed (attempt %d/%d); retrying in %ds...",
+                shlex.join(cmd),
+                git_dir,
+                i,
+                max_attempts,
+                sleep_time,
+            )
+            time.sleep(sleep_time)
 
 
 def check_remote_if_ref_or_sha_exists(

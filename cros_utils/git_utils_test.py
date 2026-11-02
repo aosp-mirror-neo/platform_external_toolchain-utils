@@ -8,6 +8,7 @@ from pathlib import Path
 import re
 import subprocess
 import textwrap
+import time
 from unittest import mock
 
 from cros_utils import git_utils
@@ -220,6 +221,42 @@ class Test(test_helpers.TempDirTestCase):
             git_utils.check_remote_if_ref_or_sha_exists(
                 fake_dir, "cros", "a" * 40
             )
+        )
+
+    @mock.patch.object(time, "sleep", autospec=True)
+    @mock.patch.object(subprocess, "run", autospec=True)
+    def test_fetch_retries_on_failure(
+        self, mock_run: mock.MagicMock, mock_sleep: mock.MagicMock
+    ) -> None:
+        """Test fetch retries transient failures up to max attempts."""
+        fake_dir = Path("/fake/dir")
+        err = subprocess.CalledProcessError(returncode=128, cmd="git fetch")
+        mock_run.side_effect = [
+            err,
+            err,
+            subprocess.CompletedProcess(args=[], returncode=0),
+        ]
+        git_utils.fetch(fake_dir, remote="cros")
+        self.assertEqual(mock_run.call_count, 3)
+        mock_run.assert_called_with(
+            ["git", "fetch", "cros"],
+            check=True,
+            cwd=fake_dir,
+            stdin=subprocess.DEVNULL,
+        )
+        self.assertEqual(mock_sleep.mock_calls, [mock.call(2), mock.call(4)])
+
+        mock_run.reset_mock()
+        mock_sleep.reset_mock()
+        mock_run.side_effect = err
+        with self.assertRaises(subprocess.CalledProcessError):
+            git_utils.fetch(
+                fake_dir, remote="cros", branch="main", max_attempts=3
+            )
+        self.assertEqual(mock_run.call_count, 3)
+        self.assertEqual(
+            mock_sleep.mock_calls,
+            [mock.call(2), mock.call(4)],
         )
 
     def test_channel_parsing(self) -> None:
