@@ -1,0 +1,127 @@
+From e6418edc315d7f926f44d3a3823209e8e67557f9 Mon Sep 17 00:00:00 2001
+From: Grace Cham <hscham@chromium.org>
+Date: Wed, 4 Nov 2026 15:56:04 -0700
+Subject: [PATCH] v10: Crash when dereferencing nullopt for std::optional
+
+Original author hscham <hscham@chromium.org>.
+
+TODO(b/192529039): this is a temporary patch to address security
+concerns when migrating base:Optional and absl::optional to
+std::optional. libcxx upstream is working on decoupling hardening and
+debugging asserts and this patch should be replaced by the upstream
+patch upon completion.
+
+patch.cherry: false
+patch.metadata.author: Grace Cham <hscham@chromium.org>
+patch.platforms: chromiumos
+patch.version_range.from: 639965
+patch.version_range.until: null
+
+Change-Id: Ia6f2437ec6ac072c88a39207eb1fc27e444796a8
+---
+ libcxx/include/__optional/optional.h     | 25 ++++++++++++++++++++++++
+ libcxx/include/__optional/optional_ref.h |  9 +++++++++
+ 2 files changed, 34 insertions(+)
+
+diff --git a/libcxx/include/__optional/optional.h b/libcxx/include/__optional/optional.h
+index 52f3bde864f9..517d80cb6319 100644
+--- a/libcxx/include/__optional/optional.h
++++ b/libcxx/include/__optional/optional.h
+@@ -55,6 +55,7 @@
+ #include <__utility/in_place.h>
+ #include <__utility/move.h>
+ #include <initializer_list>
++#include <stdio.h>
+ 
+ #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
+ #  pragma GCC system_header
+@@ -517,30 +518,54 @@ public:
+   // [optional.observe]
+   [[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr const _Tp& operator*() const& noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator* called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator* called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return this->__val_;
+   }
+ 
+   [[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr _Tp& operator*() & noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator* called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator* called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return this->__val_;
+   }
+ 
+   [[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr _Tp&& operator*() && noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator* called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator* called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return std::move(this->__val_);
+   }
+ 
+   [[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr const _Tp&& operator*() const&& noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator* called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator* called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return std::move(this->__val_);
+   }
+   _LIBCPP_HIDE_FROM_ABI constexpr add_pointer_t<_Tp const> operator->() const noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator-> called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator-> called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return std::addressof(this->__val_);
+   }
+ 
+   _LIBCPP_HIDE_FROM_ABI constexpr add_pointer_t<_Tp> operator->() noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator-> called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator-> called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return std::addressof(this->__val_);
+   }
+ 
+diff --git a/libcxx/include/__optional/optional_ref.h b/libcxx/include/__optional/optional_ref.h
+index 93ce0a9fa674..fda97b68ef12 100644
+--- a/libcxx/include/__optional/optional_ref.h
++++ b/libcxx/include/__optional/optional_ref.h
+@@ -40,6 +40,7 @@
+ #include <__utility/in_place.h>
+ #include <__utility/move.h>
+ #include <__utility/swap.h>
++#include <stdio.h>
+ 
+ #if !defined(_LIBCPP_HAS_NO_PRAGMA_SYSTEM_HEADER)
+ #  pragma GCC system_header
+@@ -212,11 +213,19 @@ public:
+   // [optional.ref.observe]
+   _LIBCPP_HIDE_FROM_ABI constexpr add_pointer_t<_Tp> operator->() const noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator-> called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator-> called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return __value_;
+   }
+ 
+   [[nodiscard]] _LIBCPP_HIDE_FROM_ABI constexpr _Tp& operator*() const noexcept {
+     _LIBCPP_ASSERT_VALID_ELEMENT_ACCESS(this->has_value(), "optional operator* called on a disengaged value");
++    if (!this->has_value()) {
++      fprintf(stderr, "optional operator* called on a disengaged value\n");
++      __builtin_trap();
++    }
+     return *__value_;
+   }
+ 
+-- 
+2.56.0.398.g882cbad275-goog
+

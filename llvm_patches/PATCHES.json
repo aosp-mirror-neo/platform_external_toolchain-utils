@@ -71,6 +71,21 @@
     "rel_patch_path": "llvm-3.9-dwarf-version.patch",
     "version_range": {
       "from": 0,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "Caroline Tice <cmtice@google.com>",
+      "info": [],
+      "title": "v2: llvm-3.9-dwarf-version"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v2-llvm-3-9-dwarf-version.patch",
+    "version_range": {
+      "from": 639965,
       "until": null
     }
   },
@@ -146,6 +161,21 @@
     "rel_patch_path": "v9-Crash-when-dereferencing-nullopt-for-std-optional.patch",
     "version_range": {
       "from": 614150,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "Grace Cham <hscham@chromium.org>",
+      "info": [],
+      "title": "v10: Crash when dereferencing nullopt for std::optional"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v10-Crash-when-dereferencing-nullopt-for-std-optional.patch",
+    "version_range": {
+      "from": 639965,
       "until": null
     }
   },
@@ -178,6 +208,21 @@
     "rel_patch_path": "Disable-vfork-events-v2.patch",
     "version_range": {
       "from": 547379,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "Emre Kultursay <emrekultursay@google.com>",
+      "info": [],
+      "title": "v3: Disable vfork events"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v3-Disable-vfork-events.patch",
+    "version_range": {
+      "from": 639965,
       "until": null
     }
   },
@@ -254,6 +299,21 @@
     "rel_patch_path": "Ignore-inlinable-calls-if-unrolling-is-forced-v2.patch",
     "version_range": {
       "from": 614150,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "George Burgess IV <gbiv@google.com>",
+      "info": [],
+      "title": "v3: [LoopUnroll] Ignore inlinable calls if unrolling is forced"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v3-LoopUnroll-Ignore-inlinable-calls-if-unrolling-is-forced.patch",
+    "version_range": {
+      "from": 639965,
       "until": null
     }
   },
@@ -424,6 +484,21 @@
     "rel_patch_path": "v2-Disable-unsigned-integer-overflow-checks-for-s.patch",
     "version_range": {
       "from": 596125,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
+      "info": [],
+      "title": "v3: Disable unsigned-integer-overflow checks for std::sort"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v3-Disable-unsigned-integer-overflow-checks-for-std-sort.patch",
+    "version_range": {
+      "from": 639965,
       "until": null
     }
   },
@@ -469,7 +544,7 @@
     "rel_patch_path": "Make-_LIBCPP_MAKE_OVERRIDABLE_FUNCTION-a-no-op-on-baremetal-v2.patch",
     "version_range": {
       "from": 614150,
-      "until": null
+      "until": 625768
     }
   },
   {
@@ -606,6 +681,21 @@
     "rel_patch_path": "Add-fexperimental-gccadjacent-flag-v3.patch",
     "version_range": {
       "from": 614150,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "Jordan Abrahams-Whitehead <ajordanr@google.com>",
+      "info": [],
+      "title": "v4: [clang][Driver] Add -fexperimental-gccadjacent flag"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "v4-clang-Driver-Add-fexperimental-gccadjacent-flag.patch",
+    "version_range": {
+      "from": 639965,
       "until": null
     }
   },
@@ -1337,7 +1427,23 @@
     "rel_patch_path": "-compiler-rt-ARM-Supersede-arm-aeabi_drsub-c-with-arm-adddf3-S.patch",
     "version_range": {
       "from": 612910,
-      "until": null
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "author": "Sharjeel Khan <sharjeelkhan@google.com>",
+      "info": [],
+      "original_sha": "c5a8ee04c5cbd8bbd7019b25026eeb466a1276c6",
+      "title": "[compiler-rt][ARM] Mark optimized FP add/sub asm as superseding aeabi_[df]rsub.c (#230739)"
+    },
+    "platforms": [
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/c5a8ee04c5cbd8bbd7019b25026eeb466a1276c6.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 640057
     }
   },
   {
