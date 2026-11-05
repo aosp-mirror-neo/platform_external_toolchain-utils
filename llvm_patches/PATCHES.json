@@ -1461,5 +1461,21 @@
       "from": 614150,
       "until": 640673
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "283045b7b4106a16231757ac2d8d70cc98197c69",
+      "title": "[BACKPORT] [BPF] Expand atomicrmw sub into atomicrmw add of negated value (#236193)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/283045b7b4106a16231757ac2d8d70cc98197c69.patch",
+    "version_range": {
+      "from": 614150,
+      "until": 644335
+    }
   }
 ]
