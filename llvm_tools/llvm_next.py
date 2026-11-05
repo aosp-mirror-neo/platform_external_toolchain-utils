@@ -7,8 +7,8 @@
 from cros_utils import gerrit_utils
 
 
-LLVM_NEXT_HASH = "2cf353b5e8560723409f3f9164bddec76f499963"
-LLVM_NEXT_REV = 614150
+LLVM_NEXT_HASH = "2e0d9e12b36e853d9b108c4da09509cd54d1f3f9"
+LLVM_NEXT_REV = 639965
 
 # Group of people who are not in OWNERS, but can be trusted by bb_add.py and
 # llvm_next_py_autoupdate.py if they're the uploader of CLs.
@@ -23,7 +23,7 @@ TRUSTED_UPLOADERS: tuple[str, ...] = (
 #
 # Please note that these are (somewhat) automatically curated. See
 # llvm_next_py_autoupdate.py.
-_LLVM_NEXT_MANIFEST_CL: str | None = "https://crrev.com/i/9819715/12"
+_LLVM_NEXT_MANIFEST_CL: str | None = "https://crrev.com/i/10068307/1"
 # These are CLs that need to run in llvm-next bot invocations that aren't
 # uploaded by individuals in the global allowlist.
 # pylint: disable=line-too-long
