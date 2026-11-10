@@ -1,0 +1,53 @@
+From 6888747765724390a597b2103ea0da90eb1ec466 Mon Sep 17 00:00:00 2001
+From: Younan Zhang <zyn7109@gmail.com>
+Date: Thu, 29 Oct 2026 18:16:03 +0800
+Subject: [PATCH] [Clang][NFC] Don't create RecoveryExprs when checking CCE
+ (#236631)
+
+The previous fix seems a layer violation and we shouldn't let
+RecoveryExprs sneak into BuildConvertedConstantExpression.
+
+This reverts both fba1a4b1292 and 9472490520b while keeping their tests.
+---
+ clang/lib/Sema/SemaDeclCXX.cpp  |  2 +-
+ clang/lib/Sema/SemaOverload.cpp | 11 -----------
+ 2 files changed, 1 insertion(+), 12 deletions(-)
+
+diff --git a/clang/lib/Sema/SemaDeclCXX.cpp b/clang/lib/Sema/SemaDeclCXX.cpp
+index 0fe0daa71c1b..7670b0fb22c0 100644
+--- a/clang/lib/Sema/SemaDeclCXX.cpp
++++ b/clang/lib/Sema/SemaDeclCXX.cpp
+@@ -14196,7 +14196,7 @@ bool Sema::tryResolveExplicitSpecifier(ExplicitSpecifier &ExplicitSpec) {
+ 
+ ExplicitSpecifier Sema::ActOnExplicitBoolSpecifier(Expr *ExplicitExpr) {
+   ExplicitSpecifier ES(ExplicitExpr, ExplicitSpecKind::Unresolved);
+-  if (!ExplicitExpr->isTypeDependent())
++  if (!ExplicitExpr->isTypeDependent() && !ExplicitExpr->containsErrors())
+     tryResolveExplicitSpecifier(ES);
+   return ES;
+ }
+diff --git a/clang/lib/Sema/SemaOverload.cpp b/clang/lib/Sema/SemaOverload.cpp
+index c56f8127834a..8219d5568bdf 100644
+--- a/clang/lib/Sema/SemaOverload.cpp
++++ b/clang/lib/Sema/SemaOverload.cpp
+@@ -6587,17 +6587,6 @@ static ExprResult BuildConvertedConstantExpression(Sema &S, Expr *From,
+   if (checkPlaceholderForOverload(S, From))
+     return ExprError();
+ 
+-  if (From->containsErrors()) {
+-    if (S.Context.hasSameType(From->getType(), T))
+-      return From;
+-
+-    // The expression already has errors, so the correct cast kind can't be
+-    // determined. Use RecoveryExpr to keep the expected type T and mark the
+-    // result as invalid, preventing further cascading errors.
+-    return S.CreateRecoveryExpr(From->getBeginLoc(), From->getEndLoc(), {From},
+-                                T);
+-  }
+-
+   // C++1z [expr.const]p3:
+   //  A converted constant expression of type T is an expression,
+   //  implicitly converted to type T, where the converted
+-- 
+2.56.0.506.g506a7eabc5-goog
+

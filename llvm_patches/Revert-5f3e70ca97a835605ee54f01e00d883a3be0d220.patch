@@ -1,0 +1,174 @@
+From 19f1a683ab44a0f1f7e9091de7265db5f36e58d2 Mon Sep 17 00:00:00 2001
+From: Yabin Cui <yabinc@google.com>
+Date: Mon, 9 Nov 2026 21:42:59 +0000
+Subject: [PATCH] Revert "[BOLT] Instrument static PIEs through entry point
+ (#204475)"
+
+This reverts commit 5f3e70ca97a835605ee54f01e00d883a3be0d220.
+---
+ bolt/lib/Rewrite/RewriteInstance.cpp          | 12 ++-----
+ bolt/test/AArch64/instrument-no-fini.s        |  8 ++---
+ bolt/test/X86/instrument-no-fini.s            |  8 ++---
+ bolt/test/X86/instrument-static-pie.s         | 34 -------------------
+ .../runtime/X86/instrument-wrong-target.s     | 16 ++++++++-
+ 5 files changed, 23 insertions(+), 55 deletions(-)
+ delete mode 100644 bolt/test/X86/instrument-static-pie.s
+
+diff --git a/bolt/lib/Rewrite/RewriteInstance.cpp b/bolt/lib/Rewrite/RewriteInstance.cpp
+index b2455dc3f29e..bc7a26764e55 100644
+--- a/bolt/lib/Rewrite/RewriteInstance.cpp
++++ b/bolt/lib/Rewrite/RewriteInstance.cpp
+@@ -38,7 +38,6 @@
+ #include "bolt/Utils/Utils.h"
+ #include "llvm/ADT/AddressRanges.h"
+ #include "llvm/ADT/STLExtras.h"
+-#include "llvm/BinaryFormat/ELF.h"
+ #include "llvm/DebugInfo/DWARF/DWARFContext.h"
+ #include "llvm/DebugInfo/DWARF/DWARFDebugFrame.h"
+ #include "llvm/MC/MCAsmBackend.h"
+@@ -2732,7 +2731,7 @@ void RewriteInstance::adjustCommandLineOptions() {
+   }
+ 
+   if (opts::Instrument && opts::RuntimeLibInitHook == opts::RLIH_ENTRY_POINT &&
+-      !BC->HasInterpHeader && !BC->IsStaticExecutable) {
++      !BC->HasInterpHeader) {
+     BC->errs()
+         << "BOLT-WARNING: adjusted runtime-lib-init-hook to 'init' due to "
+            "absence of INTERP header\n";
+@@ -6640,6 +6639,7 @@ Error RewriteInstance::readELFDynamic(ELFObjectFile<ELFT> *File) {
+ 
+   if (!DynamicPhdr) {
+     BC->outs() << "BOLT-INFO: static input executable detected\n";
++    // TODO: static PIE executable might have dynamic header
+     BC->IsStaticExecutable = true;
+     return Error::success();
+   }
+@@ -6656,14 +6656,6 @@ Error RewriteInstance::readELFDynamic(ELFObjectFile<ELFT> *File) {
+ 
+   for (const Elf_Dyn &Dyn : DynamicEntries) {
+     switch (Dyn.d_tag) {
+-    case ELF::DT_FLAGS_1: {
+-      auto Flags = Dyn.getVal();
+-      if (Flags & ELF::DF_1_PIE && !BC->HasInterpHeader) {
+-        BC->outs() << "BOLT-INFO: static pie executable detected\n";
+-        BC->IsStaticExecutable = true;
+-      }
+-      break;
+-    }
+     case ELF::DT_INIT:
+       BC->InitAddress = Dyn.getPtr();
+       break;
+diff --git a/bolt/test/AArch64/instrument-no-fini.s b/bolt/test/AArch64/instrument-no-fini.s
+index 4f6ead7820f3..526ce11080f4 100644
+--- a/bolt/test/AArch64/instrument-no-fini.s
++++ b/bolt/test/AArch64/instrument-no-fini.s
+@@ -3,12 +3,10 @@
+ # REQUIRES: system-linux,bolt-runtime,target=aarch64{{.*}}
+ 
+ # RUN: llvm-mc -triple aarch64 -filetype=obj %s -o %t.o
+-# RUN: %clang -nostartfiles -nostdlib -Wl,-q -Wl,-pie -o %t.exe %t.o
++# RUN: ld.lld -q -pie -o %t.exe %t.o
+ # RUN: llvm-readelf -d %t.exe | FileCheck --check-prefix=CHECK-NO-FINI %s
+-# RUN: not llvm-bolt --instrument --runtime-lib-init-hook=init -o %t.out %t.exe 2>&1 \
+-# RUN:   | FileCheck %s --check-prefix=CHECK-BOLT-FAIL
+-# RUN: llvm-bolt --instrument --runtime-lib-init-hook=init --instrumentation-sleep-time=1 -o %t.out %t.exe 2>&1 \
+-# RUN:   | FileCheck %s --check-prefix=CHECK-BOLT-PASS
++# RUN: not llvm-bolt --instrument -o %t.out %t.exe 2>&1 | FileCheck %s --check-prefix=CHECK-BOLT-FAIL
++# RUN: llvm-bolt --instrument --instrumentation-sleep-time=1 -o %t.out %t.exe 2>&1 | FileCheck %s --check-prefix=CHECK-BOLT-PASS
+ 
+ # CHECK-NO-FINI: INIT
+ # CHECK-NO-FINI-NOT: FINI
+diff --git a/bolt/test/X86/instrument-no-fini.s b/bolt/test/X86/instrument-no-fini.s
+index f16d37721146..fff23761d149 100644
+--- a/bolt/test/X86/instrument-no-fini.s
++++ b/bolt/test/X86/instrument-no-fini.s
+@@ -3,12 +3,10 @@
+ # REQUIRES: system-linux,bolt-runtime,target=x86_64-{{.*}}
+ 
+ # RUN: llvm-mc -triple x86_64 -filetype=obj %s -o %t.o
+-# RUN: %clang -nostartfiles -nostdlib -Wl,-q -Wl,-pie -o %t.exe %t.o
++# RUN: ld.lld -q -pie -o %t.exe %t.o
+ # RUN: llvm-readelf -d %t.exe | FileCheck --check-prefix=CHECK-NO-FINI %s
+-# RUN: not llvm-bolt --instrument --runtime-lib-init-hook=init -o %t.out %t.exe 2>&1 \
+-# RUN:   | FileCheck %s --check-prefix=CHECK-BOLT-FAIL
+-# RUN: llvm-bolt --instrument --runtime-lib-init-hook=init --instrumentation-sleep-time=1 -o %t.out %t.exe 2>&1 \
+-# RUN:   | FileCheck %s --check-prefix=CHECK-BOLT-PASS
++# RUN: not llvm-bolt --instrument -o %t.out %t.exe 2>&1 | FileCheck %s --check-prefix=CHECK-BOLT-FAIL
++# RUN: llvm-bolt --instrument --instrumentation-sleep-time=1 -o %t.out %t.exe 2>&1 | FileCheck %s --check-prefix=CHECK-BOLT-PASS
+ 
+ # CHECK-NO-FINI: INIT
+ # CHECK-NO-FINI-NOT: FINI
+diff --git a/bolt/test/X86/instrument-static-pie.s b/bolt/test/X86/instrument-static-pie.s
+deleted file mode 100644
+index ab4e162439c1..000000000000
+--- a/bolt/test/X86/instrument-static-pie.s
++++ /dev/null
+@@ -1,34 +0,0 @@
+-# Test that BOLT will instrument a statically linked PIE using entry point
+-# patching.
+-
+-# REQUIRES: system-linux,bolt-runtime,target=x86_64-{{.*}}
+-
+-# RUN: llvm-mc -triple x86_64 -filetype=obj %s -o %t.o
+-# Using lld directly and not specifying and interpreter effectlively generates a static pie.
+-# RUN: ld.lld -q -pie -o %t.exe %t.o
+-# RUN: llvm-bolt --instrument --instrumentation-sleep-time=1 \
+-# RUN:   -o %t.out %t.exe 2>&1 | FileCheck %s
+-
+-# CHECK: static pie executable detected
+-# CHECK: runtime library initialization was hooked via ELF Header Entry Point
+-
+-    .text
+-    .globl _start
+-    .type _start, %function
+-_start:
+-    # BOLT errs when instrumenting without relocations; create a dummy one.
+-    .reloc 0, R_X86_64_NONE
+-    retq
+-    .size _start, .-_start
+-
+-    .globl _init
+-    .type _init, %function
+-_init:
+-    ret
+-    .size _init, .-_init
+-
+-    .globl _fini
+-    .type _fini, %function
+-_fini:
+-    ret
+-    .size _fini, .-_fini
+diff --git a/bolt/test/runtime/X86/instrument-wrong-target.s b/bolt/test/runtime/X86/instrument-wrong-target.s
+index 1fb15a2a359f..fa40d43f10a0 100644
+--- a/bolt/test/runtime/X86/instrument-wrong-target.s
++++ b/bolt/test/runtime/X86/instrument-wrong-target.s
+@@ -6,7 +6,7 @@
+ 
+ # RUN: llvm-mc -triple aarch64 -filetype=obj %s -o %t.o
+ # RUN: ld.lld -q -pie -o %t.exe %t.o
+-# RUN: not llvm-bolt --instrument --instrumentation-sleep-time=1 -o %t.out %t.exe 2>&1 | FileCheck %s
++# RUN: not llvm-bolt --instrument -o %t.out %t.exe 2>&1 | FileCheck %s
+ 
+ # CHECK: BOLT-ERROR: linking object with arch x86_64 into context with arch aarch64
+ 
+@@ -18,3 +18,17 @@ _start:
+     .reloc 0, R_AARCH64_NONE
+     ret
+     .size _start, .-_start
++
++    .globl _init
++    .type _init, %function
++    # Force DT_INIT to be created (needed for instrumentation).
++_init:
++    ret
++    .size _init, .-_init
++
++    .globl _fini
++    .type _fini, %function
++    # Force DT_FINI to be created (needed for instrumentation).
++_fini:
++    ret
++    .size _fini, .-_fini
+-- 
+2.56.0.506.g506a7eabc5-goog
+

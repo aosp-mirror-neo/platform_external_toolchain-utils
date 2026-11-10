@@ -1,0 +1,52 @@
+From a3b1ac95386d2987e02a0a126e58af5e7e395530 Mon Sep 17 00:00:00 2001
+From: Vedant Paranjape <veparanjape@microsoft.com>
+Date: Tue, 20 Oct 2026 10:01:14 -0700
+Subject: [PATCH] [VPlan] Match induction before querying truncate lane usage
+ (#233651)
+
+Only query a truncate's lane usage after establishing that its operand
+is an optimizable induction. Lane usage is irrelevant when the operand
+cannot be narrowed, so checking induction eligibility first avoids
+unnecessary use-chain traversal. Truncates without a matching induction
+are rejected regardless of lane usage; matching candidates still undergo
+the same lane-use and profitability checks before any transformation.
+Reordering the checks therefore preserves the narrowing decision in all
+cases.
+
+Assisted-By: Opus 5.5
+Change-Id: Iebb28bbca0cd53ec426462fc1f0d2534855d3685
+---
+ llvm/lib/Transforms/Vectorize/VPlanTransforms.cpp | 10 +++++-----
+ 1 file changed, 5 insertions(+), 5 deletions(-)
+
+diff --git a/llvm/lib/Transforms/Vectorize/VPlanTransforms.cpp b/llvm/lib/Transforms/Vectorize/VPlanTransforms.cpp
+index b709fe6d3015..04c884be905c 100644
+--- a/llvm/lib/Transforms/Vectorize/VPlanTransforms.cpp
++++ b/llvm/lib/Transforms/Vectorize/VPlanTransforms.cpp
+@@ -6222,11 +6222,6 @@ void VPlanTransforms::narrowInductionTruncates(VPlan &Plan, VFRange &Range,
+       if (!Trunc)
+         continue;
+ 
+-      // A truncate that is not widened is left to the scalarization decisions
+-      // made earlier.
+-      if (vputils::onlyFirstLaneUsed(&VPI))
+-        continue;
+-
+       VPValue *Op = VPI.getOperand(0);
+       auto *WideIV = getOptimizableIVOf(Op, PSE);
+       if (!WideIV)
+@@ -6238,6 +6233,11 @@ void VPlanTransforms::narrowInductionTruncates(VPlan &Plan, VFRange &Range,
+       if (Op != WideIV)
+         continue;
+ 
++      // A truncate that is not widened is left to the scalarization decisions
++      // made earlier.
++      if (vputils::onlyFirstLaneUsed(&VPI))
++        continue;
++
+       // Replacing a free truncate would add an induction update instruction to
+       // each iteration of the loop. The canonical induction is exempt, as it
+       // needs an update instruction regardless.
+-- 
+2.56.0.506.g506a7eabc5-goog
+

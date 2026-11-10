@@ -1,0 +1,33 @@
+From d9a50081748a471bdfc5ba787faf3b7fbacf0c05 Mon Sep 17 00:00:00 2001
+From: Alex Langford <alangford@apple.com>
+Date: Thu, 15 Oct 2026 13:50:16 -0700
+Subject: [PATCH] Revert "[LLDB] Remove fallthrough (#216398)" (#232476)
+
+This reverts commit 99690a356c8c059db73786adecd827d7f20e3297.
+
+This commit broke lldb-defines.h. The version defines are never filled
+in because the unifdef copy_command overrides calling the
+version-header-fix script. This does mean that you can't remove any SWIG
+preprocessor macros from lldb-defines right now, but there are none
+currently.
+---
+ lldb/source/API/CMakeLists.txt | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/lldb/source/API/CMakeLists.txt b/lldb/source/API/CMakeLists.txt
+index ddbb8958cd60..eb81fa93c49f 100644
+--- a/lldb/source/API/CMakeLists.txt
++++ b/lldb/source/API/CMakeLists.txt
+@@ -322,8 +322,7 @@ foreach(header
+         ${LLDB_SOURCE_DIR}/scripts/version-header-fix.py
+         -i ${header} -o ${staged_header}
+         -m ${LLDB_VERSION_MAJOR} -n ${LLDB_VERSION_MINOR} -p ${LLDB_VERSION_PATCH})
+-  endif()
+-  if(unifdef_EXECUTABLE)
++  elseif(unifdef_EXECUTABLE)
+     # unifdef returns 0 when the file is unchanged and 1 if something was changed.
+     # That means if we successfully remove SWIG code, the build system believes
+     # that the command has failed and stops. This is undesirable.
+-- 
+2.56.0.506.g506a7eabc5-goog
+

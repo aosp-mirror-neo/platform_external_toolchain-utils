@@ -1475,7 +1475,133 @@
     "rel_patch_path": "cherry/283045b7b4106a16231757ac2d8d70cc98197c69.patch",
     "version_range": {
       "from": 614150,
+      "until": 639965
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "7a1683619a2da444be4a9ddd039432c903d983f9",
+      "title": "[UPSTREAM] [libcxx] Fix -Wshift-counter-overfliw in cxx03 bitset (#230208)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/7a1683619a2da444be4a9ddd039432c903d983f9.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 640154
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "d9a50081748a471bdfc5ba787faf3b7fbacf0c05",
+      "title": "[UPSTREAM] Revert \"[LLDB] Remove fallthrough (#216398)\" (#232476)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/d9a50081748a471bdfc5ba787faf3b7fbacf0c05.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 640740
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "3adc3bc8d91fc9e76ac204e32569f362d248b532",
+      "title": "[BACKPORT] [VPlan] Match induction before querying truncate lane usage (#233651)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/3adc3bc8d91fc9e76ac204e32569f362d248b532.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 641501
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "22db5ec393d1ce4b2a0cebd7494a248155c4dbb4",
+      "title": "[UPSTREAM] Revert \"[compiler-rt] Restrict __gnu_h2f_ieee and __gnu_f2h_ieee to arm32 EABI\" (#235018)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/22db5ec393d1ce4b2a0cebd7494a248155c4dbb4.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 642297
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "6888747765724390a597b2103ea0da90eb1ec466",
+      "title": "[UPSTREAM] [Clang][NFC] Don't create RecoveryExprs when checking CCE (#236631)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/6888747765724390a597b2103ea0da90eb1ec466.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 643098
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "283045b7b4106a16231757ac2d8d70cc98197c69",
+      "title": "[BACKPORT] [BPF] Expand atomicrmw sub into atomicrmw add of negated value (#236193)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/283045b7b4106a16231757ac2d8d70cc98197c69-v2.patch",
+    "version_range": {
+      "from": 639965,
       "until": 644335
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Revert \"[ConstraintElim] Bound IVs by compares of the phi in header/latch. (#226297)\""
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Revert-3b5fbbd0b5f867347258deed7d0f3c3e90fb1c9e.patch",
+    "version_range": {
+      "from": 639965,
+      "until": null
+    }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "title": "Revert \"[BOLT] Instrument static PIEs through entry point (#204475)\""
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "Revert-5f3e70ca97a835605ee54f01e00d883a3be0d220.patch",
+    "version_range": {
+      "from": 639965,
+      "until": null
     }
   }
 ]

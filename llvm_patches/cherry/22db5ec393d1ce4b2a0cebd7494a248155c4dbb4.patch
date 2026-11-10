@@ -1,0 +1,60 @@
+From 22db5ec393d1ce4b2a0cebd7494a248155c4dbb4 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Martin=20Storsj=C3=B6?= <martin@martin.st>
+Date: Sat, 24 Oct 2026 00:25:43 +0300
+Subject: [PATCH] Revert "[compiler-rt] Restrict __gnu_h2f_ieee and
+ __gnu_f2h_ieee to arm32 EABI" (#235018)
+
+Reverts llvm/llvm-project#220170.
+
+It turns out that LLVM can produce calls to `__gnu_h2f_ieee` and
+`__gnu_f2h_ieee` when targeting at least Windows/arm, even if that isn't
+an EABI target - contrary to what was said in #220170.
+
+Reverting the change to builtins, expose these functions for non-EABI
+targets (like before) until we can avoid emitting the calls to them.
+---
+ compiler-rt/lib/builtins/extendhfsf2.c | 2 +-
+ compiler-rt/lib/builtins/truncsfhf2.c  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/compiler-rt/lib/builtins/extendhfsf2.c b/compiler-rt/lib/builtins/extendhfsf2.c
+index 528bac332544..376ca040f1b9 100644
+--- a/compiler-rt/lib/builtins/extendhfsf2.c
++++ b/compiler-rt/lib/builtins/extendhfsf2.c
+@@ -16,13 +16,13 @@ COMPILER_RT_ABI NOINLINE float __extendhfsf2(src_t a) {
+   return __extendXfYf2__(a);
+ }
+ 
+-#if defined(__ARM_EABI__)
+ // arm32-gnueabi-only routine that uses integers in the signature. This should
+ // be gnueabi-specific, but LLVM currently emits it on more eabi platforms.
+ COMPILER_RT_ABI uint32_t __gnu_h2f_ieee(uint16_t a) {
+   return dstToRep(__extendhfsf2(srcFromRep(a)));
+ }
+ 
++#if defined(__ARM_EABI__)
+ #if defined(COMPILER_RT_ARMHF_TARGET)
+ AEABI_RTABI float __aeabi_h2f(src_t a) { return __extendhfsf2(a); }
+ #else
+diff --git a/compiler-rt/lib/builtins/truncsfhf2.c b/compiler-rt/lib/builtins/truncsfhf2.c
+index fd59604a1018..095fd504d204 100644
+--- a/compiler-rt/lib/builtins/truncsfhf2.c
++++ b/compiler-rt/lib/builtins/truncsfhf2.c
+@@ -16,13 +16,13 @@ COMPILER_RT_ABI NOINLINE dst_t __truncsfhf2(float a) {
+   return __truncXfYf2__(a);
+ }
+ 
+-#if defined(__ARM_EABI__)
+ // arm32-gnueabi-only routine that uses integers in the signature. This should
+ // be gnueabi-specific, but LLVM currently emits it on more eabi platforms.
+ COMPILER_RT_ABI uint16_t __gnu_f2h_ieee(uint32_t a) {
+   return dstToRep(__truncsfhf2(srcFromRep(a)));
+ }
+ 
++#if defined(__ARM_EABI__)
+ #if defined(COMPILER_RT_ARMHF_TARGET)
+ AEABI_RTABI dst_t __aeabi_f2h(float a) { return __truncsfhf2(a); }
+ #else
+-- 
+2.56.0.506.g506a7eabc5-goog
+
