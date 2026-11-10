@@ -210,7 +210,7 @@ def file_bug(title: str, body: str) -> None:
     """Files update bugs with the given title/body."""
     # (component, optional_assignee)
     targets = (
-        (bugs.WellKnownComponents.CrOSToolchainPublic, "gbiv@google.com"),
+        (bugs.WellKnownComponents.CrOSToolchainPrivate, "gbiv@google.com"),
         # b/269170429: Some Android folks said they wanted this before, and
         # figuring out the correct way to apply permissions has been a pain. No
         # one seems to be missing these notifications & the Android Rust folks
