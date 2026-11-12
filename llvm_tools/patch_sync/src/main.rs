@@ -303,17 +303,21 @@ fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) 
     scopeguard::defer! {
         ctx.cleanup();
     }
+    let has_cros_changes = !opt.new_cros_patches.is_empty() || !opt.cros_version_updates.is_empty();
+    let has_android_changes =
+        !opt.new_android_patches.is_empty() || !opt.android_version_updates.is_empty();
+
     // Transpose Patches -----------------------------------------------------
     let mut cur_android_collection = opt.cur_android_collection;
     let mut cur_cros_collection = opt.cur_cros_collection;
     // Apply any version ranges and new patches, then write out.
-    if !opt.new_cros_patches.is_empty() || !opt.cros_version_updates.is_empty() {
+    if has_cros_changes {
         cur_android_collection =
             cur_android_collection.update_version_ranges(&opt.cros_version_updates);
         opt.new_cros_patches
             .transpose_write(&mut cur_android_collection)?;
     }
-    if !opt.new_android_patches.is_empty() || !opt.android_version_updates.is_empty() {
+    if has_android_changes {
         cur_cros_collection =
             cur_cros_collection.update_version_ranges(&opt.android_version_updates);
         opt.new_android_patches
@@ -329,13 +333,13 @@ fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) 
     };
 
     // Commit and upload for review ------------------------------------------
-    // Note we want to check if the android patches are empty for CrOS, and
+    // Note we want to check if the android changes are non-empty for CrOS, and
     // vice versa. This is a little counterintuitive.
-    if !opt.new_android_patches.is_empty() {
+    if has_android_changes {
         ctx.cros_repo_upload(&opt.cros_reviewers, upload_opts)
             .context("uploading chromiumos changes")?;
     }
-    if !opt.new_cros_patches.is_empty() {
+    if has_cros_changes {
         if let Err(e) = llvm_version_extraction::sort_android_patches(&ctx.android_checkout) {
             eprintln!(
                 "Couldn't sort Android patches; continuing. Caused by: {}",
@@ -348,7 +352,8 @@ fn modify_repos(ctx: &RepoSetupContext, commit_opt: &CommitOpt, opt: ModifyOpt) 
     Ok(())
 }
 
-/// Filter version changes that can't apply to a given collection.
+/// Filter version changes that can't apply to a given collection, or whose
+/// target version range is already present on the other platform.
 fn filter_version_changes<T>(
     version_updates: T,
     other_platform_collection: &PatchCollection,
@@ -358,11 +363,13 @@ where
 {
     version_updates
         .into_iter()
-        .filter(|(rel_patch_path, _)| {
-            other_platform_collection
-                .patches
-                .iter()
-                .any(|p| &p.rel_patch_path == rel_patch_path)
+        .filter(|(rel_patch_path, version_range)| {
+            let new_from = version_range.and_then(|x| x.from);
+            let new_until = version_range.and_then(|x| x.until);
+            other_platform_collection.patches.iter().any(|p| {
+                &p.rel_patch_path == rel_patch_path
+                    && (p.get_from_version() != new_from || p.get_until_version() != new_until)
+            })
         })
         .collect()
 }
@@ -470,4 +477,85 @@ enum Opt {
         #[structopt(long)]
         no_add_autoreview_topic: bool,
     },
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    fn make_patch(rel_patch_path: &str, version_range: Option<VersionRange>) -> PatchDictSchema {
+        PatchDictSchema {
+            metadata: None,
+            platforms: Default::default(),
+            rel_patch_path: rel_patch_path.to_string(),
+            version_range,
+        }
+    }
+
+    #[test]
+    fn test_filter_version_changes() {
+        let other = PatchCollection {
+            patches: vec![
+                make_patch(
+                    "different.patch",
+                    Some(VersionRange {
+                        from: Some(100),
+                        until: None,
+                    }),
+                ),
+                make_patch(
+                    "already_synced.patch",
+                    Some(VersionRange {
+                        from: Some(100),
+                        until: Some(200),
+                    }),
+                ),
+                make_patch("null_equiv.patch", None),
+            ],
+            workdir: PathBuf::new(),
+            indent_len: 2,
+        };
+
+        let updates = [
+            (
+                "missing.patch".to_string(),
+                Some(VersionRange {
+                    from: Some(100),
+                    until: Some(200),
+                }),
+            ),
+            (
+                "different.patch".to_string(),
+                Some(VersionRange {
+                    from: Some(100),
+                    until: Some(200),
+                }),
+            ),
+            (
+                "already_synced.patch".to_string(),
+                Some(VersionRange {
+                    from: Some(100),
+                    until: Some(200),
+                }),
+            ),
+            (
+                "null_equiv.patch".to_string(),
+                Some(VersionRange {
+                    from: None,
+                    until: None,
+                }),
+            ),
+        ];
+
+        assert_eq!(
+            filter_version_changes(updates, &other),
+            &[(
+                "different.patch".to_string(),
+                Some(VersionRange {
+                    from: Some(100),
+                    until: Some(200),
+                }),
+            )]
+        );
+    }
 }
