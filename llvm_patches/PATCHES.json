@@ -621,7 +621,7 @@
     "rel_patch_path": "Revert-Check-for-unsupported-target-options-even-with-Qunused-arguments-141698-.patch",
     "version_range": {
       "from": 577011,
-      "until": null
+      "until": 577012
     }
   },
   {
