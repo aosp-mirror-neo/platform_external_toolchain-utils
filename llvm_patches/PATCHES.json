@@ -1603,5 +1603,21 @@
       "from": 639965,
       "until": null
     }
+  },
+  {
+    "metadata": {
+      "info": [],
+      "original_sha": "e79ba212575a7b27f3d55a4abdcd141dcb21d135",
+      "title": "[UPSTREAM] [BPF] Wrap both cross-BB icmp conditions in BPFAdjustOpt (#231257)"
+    },
+    "platforms": [
+      "android",
+      "chromiumos"
+    ],
+    "rel_patch_path": "cherry/e79ba212575a7b27f3d55a4abdcd141dcb21d135.patch",
+    "version_range": {
+      "from": 639965,
+      "until": 645681
+    }
   }
 ]
